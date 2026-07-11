@@ -15,6 +15,10 @@ describe('paddle health', () => {
     expect(applyDamage(createHealth(), 10).defeated).toBe(true);
   });
 
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid damage %s', (amount) => {
+    expect(() => applyDamage(createHealth(), amount)).toThrow(RangeError);
+  });
+
   it('makes a breach hurt more than a normal bullet', () => {
     expect(breachDamage('basic')).toBe(2);
     expect(breachDamage('armored')).toBe(4);

@@ -7,6 +7,7 @@ const MAX_SPEED = 820;
 const MIN_VERTICAL_RATIO = 0.25;
 
 export function paddleBounce(offset: number, speed: number): Vector {
+  if (!Number.isFinite(speed) || speed <= 0) throw new RangeError('speed must be finite and positive');
   const clamped = Math.max(-1, Math.min(1, offset));
   const x = speed * 0.9 * clamped;
   const minimumY = speed * MIN_VERTICAL_RATIO;

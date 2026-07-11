@@ -156,6 +156,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private showDefeat(): void {
+    if (this.defeated) return;
     this.defeated = true;
     this.physics.pause();
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94).setDepth(20);

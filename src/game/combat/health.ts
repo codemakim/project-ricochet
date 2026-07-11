@@ -12,6 +12,7 @@ export function createHealth(): HealthState {
 }
 
 export function applyDamage(state: HealthState, amount: number): HealthState {
+  if (!Number.isFinite(amount) || amount < 0) throw new RangeError('damage must be finite and non-negative');
   const absorbed = Math.min(state.shield, amount);
   const shield = state.shield - absorbed;
   const current = Math.max(0, state.current - (amount - absorbed));
