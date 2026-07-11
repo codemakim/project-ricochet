@@ -765,7 +765,7 @@ Verify in a browser:
 1. Dragging moves the paddle relatively and does not teleport it to the finger.
 2. The ball bounces from the floor and remains in play.
 3. Paddle contact turns the ball cyan.
-4. Charged hits kill the 2-HP enemy faster.
+4. Charged hits kill the 3-HP enemy faster.
 5. Enemies reaching the lower line disappear and remove 2 HP.
 6. Enemy bullets remove 1 HP and respect the 500ms invulnerability window.
 7. At 0 HP the scene pauses and the restart control creates a fresh run.
