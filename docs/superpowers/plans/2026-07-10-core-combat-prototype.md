@@ -46,7 +46,7 @@ Each milestone must remain directly playable. Do not begin milestone 2 until thi
 - Create: `src/game/constants.ts`
 - Create: `src/main.ts`
 - Create: `src/game/constants.test.ts`
-- Create: `.gitignore`
+- Modify: `.gitignore`
 
 **Interfaces:**
 - Consumes: none
@@ -125,6 +125,8 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 .DS_Store
+.worktrees/
+.superpowers/
 ```
 
 - [ ] **Step 2: Install the locked dependencies**
