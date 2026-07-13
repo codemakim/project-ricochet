@@ -306,7 +306,7 @@ export class OrbManager {
       if (id === undefined) continue;
       const state = snapshot[id];
       if (state?.state === 'active') {
-        this.synchronizeOwnedSprite(sprite, id);
+        this.synchronizeOwnedBody(sprite, id);
       }
     }
     this.store.update(nowMs, deltaMs, playerPosition, aim);
@@ -374,6 +374,12 @@ export class OrbManager {
   private synchronizeOwnedSprite(sprite: OrbSprite, id: number): void {
     const body = sprite.body as Phaser.Physics.Arcade.Body;
     this.store.synchronizeActive(id, sprite, body.velocity);
+  }
+
+  private synchronizeOwnedBody(sprite: OrbSprite, id: number): void {
+    const body = sprite.body as Phaser.Physics.Arcade.Body;
+    if (body.gameObject !== sprite) return;
+    this.store.synchronizeActive(id, body.center, body.velocity);
   }
 
   private resolveOwnedOrb(orb: OrbSprite | number): { id: number; sprite: OrbSprite } | null {

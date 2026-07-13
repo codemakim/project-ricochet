@@ -58,7 +58,11 @@ class FakeSprite {
   destroy(): void { this.destroyed = true; }
 }
 
-function createManager(homeOnBottomHit = true) {
+function createManager(
+  homeOnBottomHit = true,
+  hasFixedTerrainLineOfSight: () => boolean = () => false,
+  autoReturnAfterMs: number | null = null,
+) {
   const world = new FakeWorld();
   const sprites: FakeSprite[] = [];
   const scene = {
@@ -74,8 +78,8 @@ function createManager(homeOnBottomHit = true) {
     },
   } as unknown as Phaser.Scene;
   const manager = new OrbManager(scene, {
-    settings: { ...EXPERIMENT_DEFAULTS, homeOnBottomHit },
-    hasFixedTerrainLineOfSight: () => false,
+    settings: { ...EXPERIMENT_DEFAULTS, homeOnBottomHit, autoReturnAfterMs },
+    hasFixedTerrainLineOfSight,
   });
   return { manager, sprites, world };
 }
@@ -280,6 +284,7 @@ describe('OrbManager Phaser adapter', () => {
     manager.update(0, 0, player, up);
     const sprite = sprites[0]!;
     sprite.setPosition(88, 99);
+    sprite.body.center = { x: 88, y: 99 };
     sprite.body.setVelocity(-222, 123);
 
     manager.update(1, 1, player, up);
@@ -298,8 +303,10 @@ describe('OrbManager Phaser adapter', () => {
     const first = sprites[0]!;
     const second = sprites[1]!;
     first.setPosition(11, 22);
+    first.body.center = { x: 11, y: 22 };
     first.body.setVelocity(33, 44);
     second.setPosition(55, 66);
+    second.body.center = { x: 55, y: 66 };
     second.body.setVelocity(77, 88);
     second.orbId = 0;
 
@@ -307,6 +314,44 @@ describe('OrbManager Phaser adapter', () => {
 
     expect(manager.getSnapshot()[0]).toMatchObject({ position: { x: 11, y: 22 }, velocity: { x: 33, y: 44 } });
     expect(manager.getSnapshot()[1]).toMatchObject({ position: { x: 55, y: 66 }, velocity: { x: 77, y: 88 } });
+  });
+
+  it('uses current body center so stale sprite coordinates do not trigger proximity recovery', () => {
+    const { manager, sprites } = createManager(true, () => true);
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    sprite.setPosition(100, 170);
+    sprite.body.center = { x: 300, y: 400 };
+    sprite.body.setVelocity(-222, 123);
+    sprite.orbId = 2;
+
+    manager.update(1, 1, player, up);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      state: 'active',
+      position: { x: 300, y: 400 },
+      velocity: { x: -222, y: 123 },
+    });
+  });
+
+  it('starts timeout return from current body center instead of stale sprite coordinates', () => {
+    const { manager, sprites } = createManager(true, () => false, 1);
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    sprite.setPosition(100, 170);
+    sprite.body.center = { x: 320, y: 500 };
+    sprite.body.setVelocity(40, -300);
+    sprite.orbId = 2;
+
+    manager.update(1, 1, player, up);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      state: 'timeout-returning',
+      position: { x: 320, y: 500 },
+      lastRecoverySource: 'timeoutRecall',
+    });
   });
 
   it('ignores foreign and malformed physics objects without mutation or exceptions', () => {
