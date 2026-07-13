@@ -20,6 +20,17 @@ describe('launch queue', () => {
     expect(queue.drain(50)).toEqual([5]);
   });
 
+  it('preserves absolute deadlines across a large update jump', () => {
+    const queue = new LaunchQueue(100);
+    queue.enqueue(1);
+    queue.enqueue(2);
+    queue.enqueue(3);
+
+    expect(queue.drain(0)).toEqual([1]);
+    expect(queue.drain(350)).toEqual([2]);
+    expect(queue.drain(351)).toEqual([3]);
+  });
+
   it('clear removes queued IDs and resets the release timer', () => {
     const queue = new LaunchQueue(100);
     queue.enqueue(2);

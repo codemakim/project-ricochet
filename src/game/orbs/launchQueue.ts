@@ -21,7 +21,9 @@ export class LaunchQueue {
     const id = this.ids.shift();
     if (id === undefined) return [];
     this.queued.delete(id);
-    this.nextReleaseMs = this.ids.length === 0 ? undefined : nowMs + this.intervalMs;
+    this.nextReleaseMs = this.ids.length === 0
+      ? undefined
+      : (this.nextReleaseMs ?? nowMs) + this.intervalMs;
     return [id];
   }
 

@@ -263,16 +263,32 @@ export interface OrbManagerOptions extends OrbCallbacks {
 export class OrbManager {
   private readonly store: OrbStore;
   private readonly sprites: OrbSprite[];
+  private readonly spriteIds = new Map<OrbSprite, number>();
+  private readonly world: Phaser.Physics.Arcade.World;
+  private readonly onWorldBounds = (
+    body: Phaser.Physics.Arcade.Body,
+    _up: boolean,
+    down: boolean,
+  ): void => {
+    if (!down) return;
+    const sprite = body?.gameObject as OrbSprite | undefined;
+    if (!sprite || sprite.body !== body || !this.spriteIds.has(sprite)) return;
+    this.beginFloorRecall(sprite);
+  };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
     this.store = new OrbStore(options.settings, options, options.hasFixedTerrainLineOfSight);
+    this.world = scene.physics.world;
     const textureKey = options.textureKey ?? 'orb';
     this.sprites = this.store.getSnapshot().map(({ id }) => {
       const sprite = scene.physics.add.sprite(0, 0, textureKey) as OrbSprite;
       sprite.orbId = id;
       sprite.setCircle(ORB_RADIUS).setBounce(1, 1).setCollideWorldBounds(true).setVisible(false);
+      (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
+      this.spriteIds.set(sprite, id);
       return sprite;
     });
+    this.world.on('worldbounds', this.onWorldBounds);
     this.synchronizeSprites();
   }
 
@@ -281,11 +297,11 @@ export class OrbManager {
   }
 
   update(nowMs: number, deltaMs: number, playerPosition: Vector, aim: Vector): void {
+    const snapshot = this.store.getSnapshot();
     for (const sprite of this.sprites) {
-      const state = this.store.getSnapshot()[sprite.orbId];
+      const state = snapshot[sprite.orbId];
       if (state?.state === 'active') {
-        const body = sprite.body as Phaser.Physics.Arcade.Body;
-        this.store.synchronizeActive(sprite.orbId, sprite, body.velocity);
+        this.synchronizeOwnedSprite(sprite, sprite.orbId);
       }
     }
     this.store.update(nowMs, deltaMs, playerPosition, aim);
@@ -293,11 +309,21 @@ export class OrbManager {
   }
 
   beginProximityRecovery(orb: OrbSprite | number): boolean {
-    return this.store.beginProximityRecovery(this.orbId(orb));
+    const owned = this.resolveOwnedOrb(orb);
+    if (!owned) return false;
+    this.synchronizeOwnedSprite(owned.sprite, owned.id);
+    const changed = this.store.beginProximityRecovery(owned.id);
+    if (changed) this.synchronizeSprites();
+    return changed;
   }
 
   beginFloorRecall(orb: OrbSprite | number): boolean {
-    return this.store.beginFloorRecall(this.orbId(orb));
+    const owned = this.resolveOwnedOrb(orb);
+    if (!owned) return false;
+    this.synchronizeOwnedSprite(owned.sprite, owned.id);
+    const changed = this.store.beginFloorRecall(owned.id);
+    if (changed) this.synchronizeSprites();
+    return changed;
   }
 
   handleEnemyHit(
@@ -307,7 +333,9 @@ export class OrbManager {
     nowMs: number,
     piercing: boolean,
   ): HitResult | null {
-    return this.store.handleEnemyHit(this.orbId(orb), enemyId, enemyHp, nowMs, piercing);
+    const owned = this.resolveOwnedOrb(orb);
+    if (!owned) return null;
+    return this.store.handleEnemyHit(owned.id, enemyId, enemyHp, nowMs, piercing);
   }
 
   getSprites(): readonly OrbSprite[] {
@@ -319,8 +347,10 @@ export class OrbManager {
   }
 
   destroy(): void {
+    this.world.off('worldbounds', this.onWorldBounds);
     this.store.destroy();
     for (const sprite of this.sprites) sprite.destroy();
+    this.spriteIds.clear();
   }
 
   private synchronizeSprites(): void {
@@ -336,7 +366,18 @@ export class OrbManager {
     }
   }
 
-  private orbId(orb: OrbSprite | number): number {
-    return typeof orb === 'number' ? orb : orb.orbId;
+  private synchronizeOwnedSprite(sprite: OrbSprite, id: number): void {
+    const body = sprite.body as Phaser.Physics.Arcade.Body;
+    this.store.synchronizeActive(id, sprite, body.velocity);
+  }
+
+  private resolveOwnedOrb(orb: OrbSprite | number): { id: number; sprite: OrbSprite } | null {
+    if (typeof orb === 'number') {
+      if (!Number.isInteger(orb)) return null;
+      const sprite = this.sprites[orb];
+      return sprite ? { id: orb, sprite } : null;
+    }
+    const id = this.spriteIds.get(orb);
+    return id === undefined ? null : { id, sprite: orb };
   }
 }

@@ -1,9 +1,83 @@
+import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { EXPERIMENT_DEFAULTS, ORB_SPEED, PLAYER_RADIUS } from '../constants';
-import { OrbStore } from './OrbManager';
+import { OrbManager, OrbStore } from './OrbManager';
 
 const player = { x: 100, y: 200 };
 const up = { x: 0, y: -1 };
+
+type WorldBoundsListener = (body: FakeBody, up: boolean, down: boolean, left: boolean, right: boolean) => void;
+
+class FakeWorld {
+  private readonly listeners = new Set<WorldBoundsListener>();
+
+  on(event: string, listener: WorldBoundsListener): void {
+    if (event === 'worldbounds') this.listeners.add(listener);
+  }
+
+  off(event: string, listener: WorldBoundsListener): void {
+    if (event === 'worldbounds') this.listeners.delete(listener);
+  }
+
+  emit(body: FakeBody, down: boolean): void {
+    for (const listener of this.listeners) listener(body, false, down, false, false);
+  }
+
+  listenerCount(): number {
+    return this.listeners.size;
+  }
+}
+
+class FakeBody {
+  enable = true;
+  onWorldBounds = false;
+  velocity = { x: 0, y: 0 };
+
+  constructor(readonly gameObject: FakeSprite | object) {}
+
+  setVelocity(x: number, y: number): this {
+    this.velocity = { x, y };
+    return this;
+  }
+}
+
+class FakeSprite {
+  orbId = -1;
+  x = 0;
+  y = 0;
+  visible = true;
+  destroyed = false;
+  readonly body = new FakeBody(this);
+
+  setCircle(): this { return this; }
+  setBounce(): this { return this; }
+  setCollideWorldBounds(): this { return this; }
+  setVisible(visible: boolean): this { this.visible = visible; return this; }
+  setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
+  destroy(): void { this.destroyed = true; }
+}
+
+function createManager(homeOnBottomHit = true) {
+  const world = new FakeWorld();
+  const sprites: FakeSprite[] = [];
+  const scene = {
+    physics: {
+      world,
+      add: {
+        sprite: () => {
+          const sprite = new FakeSprite();
+          sprites.push(sprite);
+          return sprite;
+        },
+      },
+    },
+  } as unknown as Phaser.Scene;
+  const manager = new OrbManager(scene, {
+    settings: { ...EXPERIMENT_DEFAULTS, homeOnBottomHit },
+    hasFixedTerrainLineOfSight: () => false,
+  });
+  return { manager, sprites, world };
+}
 
 describe('OrbStore', () => {
   it('queues the three permanent orbs once and releases them 100ms apart', () => {
@@ -141,5 +215,103 @@ describe('OrbStore', () => {
       position: { x: 42, y: 84 },
       velocity: { x: -300, y: 200 },
     });
+  });
+});
+
+describe('OrbManager Phaser adapter', () => {
+  it('owns bottom world-bound recall and disables the body immediately from the exact contact position', () => {
+    const { manager, sprites, world } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    expect(sprite.body.onWorldBounds).toBe(true);
+    sprite.setPosition(47, 798);
+    sprite.body.setVelocity(20, 400);
+
+    world.emit(sprite.body, true);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      state: 'floor-returning',
+      position: { x: 47, y: 798 },
+      damageEnabled: false,
+      collisionEnabled: false,
+    });
+    expect(sprite.body.enable).toBe(false);
+  });
+
+  it('retains bottom bounce when floor recall is disabled', () => {
+    const { manager, sprites, world } = createManager(false);
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+
+    world.emit(sprite.body, true);
+
+    expect(manager.getSnapshot()[0]?.state).toBe('active');
+    expect(sprite.body.enable).toBe(true);
+  });
+
+  it('synchronizes public recovery starts and applies body state immediately', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    manager.update(100, 100, player, up);
+    const sprite = sprites[0]!;
+    sprite.setPosition(61, 222);
+    sprite.body.setVelocity(-30, 90);
+
+    expect(manager.beginProximityRecovery(sprite as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({ state: 'attracting', position: { x: 61, y: 222 } });
+    expect(sprite.body.enable).toBe(false);
+
+    const second = sprites[1]!;
+    second.setPosition(77, 798);
+    expect(manager.beginFloorRecall(1)).toBe(true);
+    expect(manager.getSnapshot()[1]).toMatchObject({ state: 'floor-returning', position: { x: 77, y: 798 } });
+    expect(second.body.enable).toBe(false);
+  });
+
+  it('preserves reflected Phaser velocity during update', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    sprite.setPosition(88, 99);
+    sprite.body.setVelocity(-222, 123);
+
+    manager.update(1, 1, player, up);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      position: { x: 88, y: 99 },
+      velocity: { x: -222, y: 123 },
+    });
+  });
+
+  it('ignores foreign and malformed physics objects without mutation or exceptions', () => {
+    const { manager, sprites, world } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const before = manager.getSnapshot();
+    const foreign = new FakeSprite();
+    foreign.orbId = 0;
+
+    expect(() => world.emit(foreign.body, true)).not.toThrow();
+    expect(() => world.emit(new FakeBody({ orbId: 0 }), true)).not.toThrow();
+    expect(manager.beginFloorRecall(foreign as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(false);
+    expect(manager.beginFloorRecall(999)).toBe(false);
+    expect(manager.handleEnemyHit(foreign as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number }, 1, 3, 1, false)).toBeNull();
+    expect(manager.getSnapshot()).toEqual(before);
+    expect(sprites[0]!.body.enable).toBe(true);
+  });
+
+  it('removes the worldbounds listener and destroys owned sprites', () => {
+    const { manager, sprites, world } = createManager();
+    expect(world.listenerCount()).toBe(1);
+
+    manager.destroy();
+
+    expect(world.listenerCount()).toBe(0);
+    expect(sprites.every((sprite) => sprite.destroyed)).toBe(true);
   });
 });
