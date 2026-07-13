@@ -282,6 +282,11 @@ for (const passThroughOnKill of [false, true]) {
     expect(after.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
     expect(orb.charges).toBe(chargeBefore - 1);
     expect(orb.velocity.y < 0).toBe(passThroughOnKill);
+
+    await page.waitForTimeout(120);
+    const stable = await snapshot(page);
+    expect(stable.enemies.length).toBe(before.enemies.length - 1);
+    expect(stable.orbs[0]!.charges).toBe(chargeBefore - 1);
   });
 }
 
