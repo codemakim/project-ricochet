@@ -1,5 +1,7 @@
 # Core Combat Prototype Implementation Plan
 
+> **상태:** 구현 완료 후 플레이테스트에서 대체됨. 이 계획을 다시 실행하지 않는다. 후속 작업은 [2026-07-13 코어 리디자인](../specs/2026-07-13-project-ricochet-core-redesign.md) 승인 뒤 새 구현 계획으로 진행한다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a browser-playable vertical combat prototype that proves paddle movement, bottom-safe ball bouncing, paddle charging, descending enemies, enemy shots, breach damage, health, defeat, and restart.
