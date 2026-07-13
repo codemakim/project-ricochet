@@ -1,4 +1,4 @@
-export type EnemyKind = 'basic' | 'armored';
+import type { EnemyKind } from '../enemies/enemyRules';
 
 export interface HealthState {
   current: number;
@@ -17,6 +17,10 @@ export function applyDamage(state: HealthState, amount: number): HealthState {
   const shield = state.shield - absorbed;
   const current = Math.max(0, state.current - (amount - absorbed));
   return { ...state, shield, current, defeated: current === 0 };
+}
+
+export function canTakeDamage(now: number, invulnerableUntil: number): boolean {
+  return now >= invulnerableUntil;
 }
 
 export function breachDamage(kind: EnemyKind): number {

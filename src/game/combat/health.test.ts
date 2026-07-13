@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { applyDamage, breachDamage, createHealth } from './health';
+import { applyDamage, breachDamage, canTakeDamage, createHealth } from './health';
 
-describe('paddle health', () => {
+describe('player health', () => {
   it('starts at ten health with no shield', () => {
     expect(createHealth()).toEqual({ current: 10, maximum: 10, shield: 0, defeated: false });
   });
@@ -22,5 +22,11 @@ describe('paddle health', () => {
   it('makes a breach hurt more than a normal bullet', () => {
     expect(breachDamage('basic')).toBe(2);
     expect(breachDamage('armored')).toBe(4);
+    expect(breachDamage('shooter')).toBe(2);
+  });
+
+  it('allows damage exactly when invulnerability expires', () => {
+    expect(canTakeDamage(1599, 1600)).toBe(false);
+    expect(canTakeDamage(1600, 1600)).toBe(true);
   });
 });

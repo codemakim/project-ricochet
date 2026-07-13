@@ -18,5 +18,6 @@ const game = new Phaser.Game({
 });
 
 if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
-  Object.assign(window, { __RICHOCHET_GAME__: game });
+  const developmentWindow = window as typeof window & { __RICHOCHET_GAME__?: Phaser.Game };
+  developmentWindow.__RICHOCHET_GAME__ = game;
 }
