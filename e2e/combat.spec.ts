@@ -70,6 +70,13 @@ function clientPoint(
   };
 }
 
+function orbStateCounts(current: CombatSnapshot): { active: number; queued: number } {
+  return {
+    active: current.orbs.filter((orb) => orb.state === 'active').length,
+    queued: current.orbs.filter((orb) => orb.state === 'queued').length,
+  };
+}
+
 async function dispatchTouchPointers(
   page: Page,
   events: Array<{ type: 'pointerdown' | 'pointermove' | 'pointerup'; pointerId: number; point: Vector }>,
@@ -132,6 +139,25 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
   const aimPoint = clientPoint(box, { x: before.player.x + 100, y: before.player.y - 100 });
 
   await page.mouse.move(aimPoint.x, aimPoint.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 90,
+  }).toEqual({ active: 1, queued: 2 });
+  const firstLaunch = await snapshot(page);
+  expect(firstLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 140,
+  }).toEqual({ active: 2, queued: 1 });
+  const secondLaunch = await snapshot(page);
+  expect(secondLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 140,
+  }).toEqual({ active: 3, queued: 0 });
+  const thirdLaunch = await snapshot(page);
+  expect(thirdLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
+
   await page.keyboard.down('KeyW');
   await page.keyboard.down('KeyD');
   await page.waitForTimeout(250);
@@ -230,9 +256,13 @@ for (const passThroughOnKill of [false, true]) {
     const target = before.enemies
       .filter((enemy) => enemy.kind === 'basic' && enemy.position.y === bottomY)
       .sort((left, right) => Math.abs(left.position.x - 225) - Math.abs(right.position.x - 225))[0]!;
-    const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+    const aim = clientPoint(box, { x: before.player.x + 100, y: before.player.y - 100 });
     await page.mouse.move(aim.x, aim.y);
-    await page.waitForTimeout(40);
+    await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+      intervals: [5],
+      timeout: 90,
+    }).toEqual({ active: 1, queued: 2 });
+    const chargeBefore = (await snapshot(page)).orbs[0]!.charges;
     await sceneCall(page, (scene) => {
       const basics = scene.getDebugSnapshot().enemies.filter((candidate) => candidate.kind === 'basic');
       const bottomY = Math.max(...basics.map((candidate) => candidate.position.y));
@@ -242,12 +272,15 @@ for (const passThroughOnKill of [false, true]) {
       scene.debugPlaceOrb(0, { x: enemy.position.x, y: enemy.position.y + 24 });
     });
 
-    await expect.poll(async () => (await snapshot(page)).enemies.some((enemy) => enemy.id === target.id)).toBe(false);
-    await page.waitForTimeout(30);
+    await expect.poll(async () => (await snapshot(page)).enemies.some((enemy) => enemy.id === target.id), {
+      intervals: [5],
+      timeout: 90,
+    }).toBe(false);
     const after = await snapshot(page);
     const orb = after.orbs[0]!;
-    expect(after.enemies.length).toBeLessThan(before.enemies.length);
+    expect(after.enemies.length).toBe(before.enemies.length - 1);
     expect(after.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
+    expect(orb.charges).toBe(chargeBefore - 1);
     expect(orb.velocity.y < 0).toBe(passThroughOnKill);
   });
 }
@@ -255,10 +288,20 @@ for (const passThroughOnKill of [false, true]) {
 test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
   await page.clock.install();
   await loadCanvas(page);
-  await page.clock.runFor(5_000);
-  const after = await snapshot(page);
-  expect(after.activeShooters).toBeLessThanOrEqual(2);
-  expect(after.bullets).toBeLessThanOrEqual(12);
+  const initial = await snapshot(page);
+  let peakShooters = 0;
+  let peakBullets = 0;
+  for (let elapsed = 250; elapsed <= 5_000; elapsed += 250) {
+    await page.clock.runFor(250);
+    const sample = await snapshot(page);
+    peakShooters = Math.max(peakShooters, sample.activeShooters);
+    peakBullets = Math.max(peakBullets, sample.bullets);
+  }
+  const final = await snapshot(page);
+  expect(final.enemies[0]!.position.y).toBeGreaterThan(initial.enemies[0]!.position.y);
+  expect(Math.max(peakShooters, peakBullets)).toBeGreaterThan(0);
+  expect(peakShooters).toBeLessThanOrEqual(2);
+  expect(peakBullets).toBeLessThanOrEqual(12);
 });
 
 test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
@@ -281,17 +324,26 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(hidden.enemies[0]!.position.y);
 });
 
-test('@desktop ignores duplicate same-frame defeat damage and restarts once', async ({ page }) => {
+test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => {
     scene.debugSetHealth(2);
-    scene.debugDamage(2);
-    scene.debugDamage(2);
+    scene.debugDamage(1);
   });
+  expect((await snapshot(page)).health.current).toBe(1);
+
+  await sceneCall(page, (scene) => scene.debugDamage(1));
+  expect((await snapshot(page)).health.current).toBe(1);
+  await page.waitForTimeout(250);
+  await sceneCall(page, (scene) => scene.debugDamage(1));
+  expect((await snapshot(page)).health.current).toBe(1);
+  await page.waitForTimeout(370);
+  await sceneCall(page, (scene) => scene.debugDamage(1));
 
   const defeated = await snapshot(page);
   expect(defeated.health.current).toBe(0);
   expect(defeated.defeated).toBe(true);
+  await sceneCall(page, (scene) => scene.debugDamage(1));
   const panelCount = await page.evaluate(() => {
     const game = (window as unknown as {
       __RICHOCHET_GAME__: { scene: { getScene(key: string): { children: { list: Array<{ text?: string }> } } } };
