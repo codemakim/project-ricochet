@@ -363,8 +363,10 @@ export class OrbManager {
       const sprite = this.sprites[state.id];
       if (!sprite) continue;
       const visible = state.state !== 'stored' && state.state !== 'queued';
-      sprite.setVisible(visible).setPosition(state.position.x, state.position.y);
       const body = sprite.body as Phaser.Physics.Arcade.Body;
+      const activeBodyOwnsPosition = state.state === 'active' && body.enable;
+      sprite.setVisible(visible);
+      if (!activeBodyOwnsPosition) sprite.setPosition(state.position.x, state.position.y);
       body.enable = state.collisionEnabled;
       if (state.collisionEnabled) body.setVelocity(state.velocity.x, state.velocity.y);
       else body.setVelocity(0, 0);

@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, PLAYER_RADIUS } from '../constants';
+import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
@@ -203,7 +203,7 @@ export class EnemyManager {
     );
     player.setPosition(
       clamp(player.x + direction.x * CONTACT_SEPARATION, PLAYER_RADIUS, GAME_WIDTH - PLAYER_RADIUS),
-      clamp(player.y + direction.y * CONTACT_SEPARATION, PLAYER_RADIUS, GAME_HEIGHT - PLAYER_RADIUS),
+      clamp(player.y + direction.y * CONTACT_SEPARATION, PLAYER_MIN_Y, GAME_HEIGHT - PLAYER_RADIUS),
     );
     this.options.onContact(1);
   }

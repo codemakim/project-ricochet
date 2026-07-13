@@ -48,13 +48,19 @@ class FakeSprite {
   y = 0;
   visible = true;
   destroyed = false;
+  setPositionCalls = 0;
   readonly body = new FakeBody(this);
 
   setCircle(): this { return this; }
   setBounce(): this { return this; }
   setCollideWorldBounds(): this { return this; }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
-  setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
+  setPosition(x: number, y: number): this {
+    this.setPositionCalls += 1;
+    this.x = x;
+    this.y = y;
+    return this;
+  }
   destroy(): void { this.destroyed = true; }
 }
 
@@ -224,6 +230,31 @@ describe('OrbStore', () => {
 });
 
 describe('OrbManager Phaser adapter', () => {
+  it('positions a launch once but leaves an enabled active sprite for Body.postUpdate', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    const callsAfterLaunch = sprite.setPositionCalls;
+
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 170 });
+    expect(sprite.body.enable).toBe(true);
+
+    // World.update has advanced the authoritative body, while the sprite still
+    // awaits Body.postUpdate. Writing the body center into the sprite here would
+    // make Body.postUpdate add the same movement a second time.
+    sprite.body.center = { x: 112, y: 146 };
+    sprite.body.setVelocity(40, -300);
+    manager.update(1, 1, player, up);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      position: { x: 112, y: 146 },
+      velocity: { x: 40, y: -300 },
+    });
+    expect(sprite.setPositionCalls).toBe(callsAfterLaunch);
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 170 });
+  });
+
   it('owns bottom world-bound recall and disables the body immediately from the exact contact position', () => {
     const { manager, sprites, world } = createManager();
     manager.activateAim();

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import { GAME_HEIGHT, PLAYER_RADIUS } from '../constants';
+import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import type { OrbManager } from '../orbs/OrbManager';
 import { EnemyManager } from './EnemyManager';
 
@@ -139,8 +139,8 @@ class FakeCollider {
   trigger(first: FakeSprite, second: FakeSprite): boolean {
     const accepted = this.process?.(first, second) ?? true;
     if (!accepted) return false;
+    // Model a vertical face: reverse normal x, preserve tangential y.
     first.body.velocity.x *= -1;
-    first.body.velocity.y *= -1;
     this.callback?.(first, second);
     return true;
   }
@@ -272,7 +272,7 @@ describe('EnemyManager', () => {
     handleEnemyHit.mockReturnValueOnce({ charges: 1, damage: 1, reflect: true });
     expect(orbCollider.trigger(orb, reflectedEnemy)).toBe(true);
     expect(handleEnemyHit).toHaveBeenCalledTimes(2);
-    expect(orb.body.velocity).toEqual({ x: -50, y: 100 });
+    expect(orb.body.velocity).toEqual({ x: -50, y: -100 });
     expect(reflectedEnemy.destroyed).toBe(true);
   });
 
@@ -302,6 +302,16 @@ describe('EnemyManager', () => {
     overlaps[1]!.trigger(player, bullet);
     expect(bullet.destroyed).toBe(true);
     expect(onBulletHit).toHaveBeenCalledWith(1);
+  });
+
+  it('never separates contact above the player movement area', () => {
+    const { player, groups, overlaps } = createBoundary();
+    player.setPosition(225, PLAYER_MIN_Y + 1);
+    groups[0]!.children[0]!.setPosition(225, PLAYER_MIN_Y + 2);
+
+    overlaps[0]!.trigger(player, groups[0]!.children[0]!);
+
+    expect(player.y).toBe(PLAYER_MIN_Y);
   });
 
   it('destroys owned objects, colliders, listeners, and timers', () => {
