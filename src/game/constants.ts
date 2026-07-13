@@ -1,5 +1,7 @@
 export const GAME_WIDTH = 450;
 export const GAME_HEIGHT = 800;
+export const PADDLE_Y = 720;
+export const FLOOR_Y = 798;
 export const PLAYER_RADIUS = 18;
 export const PLAYER_SPEED = 420;
 export const PLAYER_MIN_Y = 98;
