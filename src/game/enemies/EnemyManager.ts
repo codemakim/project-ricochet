@@ -42,6 +42,8 @@ export interface EnemyManagerOptions {
 }
 
 export class EnemyManager {
+  declare debugFreezeEnemies?: () => void;
+
   private readonly enemyGroup: Phaser.Physics.Arcade.Group;
   private readonly bulletGroup: Phaser.Physics.Arcade.Group;
   private readonly colliders: Phaser.Physics.Arcade.Collider[] = [];
@@ -104,6 +106,12 @@ export class EnemyManager {
       loop: true,
       callback: () => this.beginShooterWarnings(),
     });
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugFreezeEnemies = () => {
+        if (this.destroyed) return;
+        for (const enemy of this.enemies.values()) enemy.setVelocityY(0);
+      };
+    }
   }
 
   update(): void {
@@ -182,6 +190,7 @@ export class EnemyManager {
     const result = this.pendingReflections.get(key);
     if (!result) return;
     this.pendingReflections.delete(key);
+    this.options.orbManager.synchronizeOrb(orb);
     this.applyHit(enemy, result);
   }
 

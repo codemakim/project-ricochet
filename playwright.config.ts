@@ -11,7 +11,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    { name: 'desktop-chromium', grep: /@desktop/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile-chromium', grep: /@mobile/, use: { ...devices['Pixel 7'] } },
   ],
 });

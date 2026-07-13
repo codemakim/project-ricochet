@@ -182,6 +182,7 @@ function createBoundary() {
   const orbManager = {
     getSprites: () => [orb],
     handleEnemyHit,
+    synchronizeOrb: vi.fn(),
   } as unknown as OrbManager;
   const onContact = vi.fn();
   const onBreach = vi.fn();
@@ -197,6 +198,16 @@ function createBoundary() {
 }
 
 describe('EnemyManager', () => {
+  it('freezes enemy descent without pausing shooter timers', () => {
+    const { manager, groups, time } = createBoundary();
+
+    manager.debugFreezeEnemies!();
+
+    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 0)).toBe(true);
+    time.advance(1300);
+    expect(manager.getSnapshot().activeShooters).toBe(2);
+  });
+
   it('creates the fixed formation with stable IDs and descent velocities', () => {
     const { manager, groups } = createBoundary();
     const snapshot = manager.getSnapshot();

@@ -1,48 +1,307 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('loads a portrait canvas and accepts a horizontal drag', async ({ page }) => {
-  await page.goto('/');
+interface Vector {
+  x: number;
+  y: number;
+}
+
+interface OrbSnapshot {
+  id: number;
+  state: string;
+  charges: number;
+  damageEnabled: boolean;
+  collisionEnabled: boolean;
+  position: Vector;
+  velocity: Vector;
+  lastRecoverySource: string | null;
+}
+
+interface CombatSnapshot {
+  player: Vector;
+  aim: Vector;
+  health: { current: number; maximum: number; shield: number; defeated: boolean };
+  defeated: boolean;
+  orbs: OrbSnapshot[];
+  enemies: Array<{ id: number; kind: string; hp: number; position: Vector; warning: boolean }>;
+  activeShooters: number;
+  bullets: number;
+  experiment: { passThroughOnKill: boolean; homeOnBottomHit: boolean; autoReturnAfterMs: number | null };
+}
+
+interface DevelopmentScene {
+  getDebugSnapshot(): CombatSnapshot;
+  debugPlaceOrb(id: number, position: Vector): boolean;
+  debugFreezeEnemies(): void;
+  debugSetHealth(value: number): void;
+  debugDamage(amount: number): void;
+}
+
+async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {
+  return page.evaluate((source) => {
+    const game = (window as unknown as {
+      __RICHOCHET_GAME__: { scene: { getScene(key: string): DevelopmentScene } };
+    }).__RICHOCHET_GAME__;
+    const scene = game.scene.getScene('combat');
+    return (0, eval)(`(${source})`)(scene) as T;
+  }, callback.toString());
+}
+
+async function snapshot(page: Page): Promise<CombatSnapshot> {
+  return sceneCall(page, (scene) => scene.getDebugSnapshot());
+}
+
+async function loadCanvas(page: Page, search = '') {
+  await page.goto(`/${search}`);
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
-
+  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(20);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
-  expect(box!.height).toBeGreaterThan(box!.width);
+  return { canvas, box: box! };
+}
 
-  const initialX = await page.evaluate(() => {
-    const game = (window as unknown as { __RICHOCHET_GAME__: { scene: { getScene(key: string): unknown } } }).__RICHOCHET_GAME__;
-    return (game.scene.getScene('combat') as { paddle: { x: number } }).paddle.x;
-  });
+function clientPoint(
+  box: { x: number; y: number; width: number; height: number },
+  world: Vector,
+): Vector {
+  return {
+    x: box.x + world.x / 450 * box.width,
+    y: box.y + world.y / 800 * box.height,
+  };
+}
 
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height * 0.97);
-  await page.mouse.down();
-  await page.mouse.move(box!.x + box!.width * 0.75, box!.y + box!.height * 0.97, { steps: 5 });
-  await page.mouse.up();
-  const movedX = await page.evaluate(() => {
-    const game = (window as unknown as { __RICHOCHET_GAME__: { scene: { getScene(key: string): unknown } } }).__RICHOCHET_GAME__;
-    return (game.scene.getScene('combat') as { paddle: { x: number } }).paddle.x;
-  });
-  expect(movedX).toBeGreaterThan(initialX);
-  expect(movedX).toBeGreaterThanOrEqual(48);
-  expect(movedX).toBeLessThanOrEqual(402);
+async function dispatchTouchPointers(
+  page: Page,
+  events: Array<{ type: 'pointerdown' | 'pointermove' | 'pointerup'; pointerId: number; point: Vector }>,
+): Promise<void> {
+  await page.evaluate((inputEvents) => {
+    const canvas = document.querySelector<HTMLCanvasElement>('#game-root canvas')!;
+    const stateWindow = window as typeof window & { __TEST_TOUCHES__?: Record<number, Vector> };
+    const active = stateWindow.__TEST_TOUCHES__ ??= {};
+    const makeTouch = (identifier: number, point: Vector) => new Touch({
+      identifier,
+      target: canvas,
+      clientX: point.x,
+      clientY: point.y,
+      pageX: point.x,
+      pageY: point.y,
+      screenX: point.x,
+      screenY: point.y,
+      radiusX: 1,
+      radiusY: 1,
+      force: 0.5,
+    });
+
+    for (const input of inputEvents) {
+      canvas.dispatchEvent(new PointerEvent(input.type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: input.pointerId,
+        pointerType: 'touch',
+        isPrimary: input.pointerId === 41,
+        button: 0,
+        buttons: input.type === 'pointerup' ? 0 : 1,
+        clientX: input.point.x,
+        clientY: input.point.y,
+        pressure: input.type === 'pointerup' ? 0 : 0.5,
+      }));
+
+      const changed = makeTouch(input.pointerId, input.point);
+      if (input.type === 'pointerup') delete active[input.pointerId];
+      else active[input.pointerId] = input.point;
+      const touches = Object.entries(active).map(([id, point]) => makeTouch(Number(id), point));
+      const touchType = input.type === 'pointerdown'
+        ? 'touchstart'
+        : input.type === 'pointermove' ? 'touchmove' : 'touchend';
+      canvas.dispatchEvent(new TouchEvent(touchType, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        touches,
+        targetTouches: touches,
+        changedTouches: [changed],
+      }));
+    }
+  }, events);
+}
+
+test('@desktop moves, retains mouse aim, and launches three permanent orbs', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  const before = await snapshot(page);
+  const aimPoint = clientPoint(box, { x: before.player.x + 100, y: before.player.y - 100 });
+
+  await page.mouse.move(aimPoint.x, aimPoint.y);
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('KeyD');
+  await page.waitForTimeout(250);
+  await page.keyboard.up('KeyW');
+  await page.keyboard.up('KeyD');
+  await page.mouse.move(box.x + box.width - 2, box.y + 2);
+  await page.waitForTimeout(260);
+
+  const after = await snapshot(page);
+  expect(after.player.x).toBeGreaterThan(before.player.x);
+  expect(after.player.y).toBeLessThan(before.player.y);
+  expect(after.aim.x).toBeGreaterThan(0);
+  expect(after.aim.y).toBeLessThan(0);
+  expect(after.orbs).toHaveLength(3);
+  expect(after.orbs.every((orb) => orb.state !== 'stored')).toBe(true);
+  expect(box.height).toBeGreaterThan(box.width);
 });
 
-test('shows one defeat presentation when two enemies breach together', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('#game-root canvas')).toBeVisible();
+test('@mobile supports simultaneous touch movement and retained aim', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  const before = await snapshot(page);
+  const touches = {
+    moveStart: { x: box.x + box.width * 0.22, y: box.y + box.height * 0.78 },
+    moveEnd: { x: box.x + box.width * 0.34, y: box.y + box.height * 0.66 },
+    aimStart: { x: box.x + box.width * 0.78, y: box.y + box.height * 0.78 },
+    aimEnd: { x: box.x + box.width * 0.66, y: box.y + box.height * 0.66 },
+  };
 
-  const defeatLabels = await page.evaluate(() => {
-    const game = (window as unknown as { __RICHOCHET_GAME__: { scene: { getScene(key: string): unknown } } }).__RICHOCHET_GAME__;
-    const scene = game.scene.getScene('combat') as {
-      children: { list: Array<{ text?: string }> };
-      damagePaddle(amount: number): void;
-      health: { current: number; maximum: number; shield: number; defeated: boolean };
-    };
-    scene.health = { current: 2, maximum: 10, shield: 0, defeated: false };
-    scene.damagePaddle(2);
-    scene.damagePaddle(2);
-    return scene.children.list.filter((child) => child.text === 'SYSTEM DOWN').length;
+  await dispatchTouchPointers(page, [
+    { type: 'pointerdown', pointerId: 41, point: touches.moveStart },
+    { type: 'pointerdown', pointerId: 77, point: touches.aimStart },
+    { type: 'pointermove', pointerId: 41, point: touches.moveEnd },
+    { type: 'pointermove', pointerId: 77, point: touches.aimEnd },
+  ]);
+  await page.waitForTimeout(250);
+  await dispatchTouchPointers(page, [
+    { type: 'pointerup', pointerId: 41, point: touches.moveEnd },
+    { type: 'pointerup', pointerId: 77, point: touches.aimEnd },
+  ]);
+  await page.waitForTimeout(260);
+
+  const after = await snapshot(page);
+  expect(after.player.x).toBeGreaterThan(before.player.x);
+  expect(after.player.y).toBeLessThan(before.player.y);
+  expect(after.aim.x).toBeLessThan(0);
+  expect(after.aim.y).toBeLessThan(0);
+  expect(after.orbs).toHaveLength(3);
+  expect(after.orbs.every((orb) => orb.state === 'active')).toBe(true);
+});
+
+test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  const initial = await snapshot(page);
+  const upward = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
+  await page.mouse.move(upward.x, upward.y);
+  await page.waitForTimeout(240);
+
+  const launched = await snapshot(page);
+  await sceneCall(page, (scene) => {
+    const current = scene.getDebugSnapshot();
+    const active = current.orbs.find((orb) => orb.state === 'active')!;
+    scene.debugPlaceOrb(active.id, { x: current.player.x + 5, y: current.player.y });
+  });
+  await page.waitForTimeout(250);
+  const proximitySnapshot = await snapshot(page);
+  const proximity = proximitySnapshot.orbs.find((orb) => orb.lastRecoverySource === 'proximity')!;
+  expect(proximity.lastRecoverySource).toBe('proximity');
+  expect(proximity.charges).toBe(3);
+  expect(['active', 'queued']).toContain(proximity.state);
+
+  const floorId = await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find(
+      (orb) => orb.state === 'active' && orb.lastRecoverySource !== 'proximity',
+    )!;
+    if (!scene.debugPlaceOrb(active.id, { x: 225, y: 799 })) throw new Error('active floor orb required');
+    return active.id;
+  });
+  await page.waitForTimeout(40);
+  const returning = (await snapshot(page)).orbs[floorId]!;
+  expect(returning.lastRecoverySource).toBe('floorRecall');
+  expect(returning.collisionEnabled).toBe(false);
+  expect(returning.damageEnabled).toBe(false);
+  await expect.poll(async () => {
+    const orb = (await snapshot(page)).orbs[floorId]!;
+    return { state: orb.state, charges: orb.charges, source: orb.lastRecoverySource };
+  }).toMatchObject({ state: 'active', charges: 3, source: 'floorRecall' });
+  expect(launched.orbs).toHaveLength(3);
+});
+
+for (const passThroughOnKill of [false, true]) {
+  test(`@desktop kills through Arcade collision with passThroughOnKill=${passThroughOnKill}`, async ({ page }) => {
+    const { box } = await loadCanvas(page, `?passThroughOnKill=${passThroughOnKill}`);
+    await sceneCall(page, (scene) => scene.debugFreezeEnemies());
+    const before = await snapshot(page);
+    const bottomY = Math.max(...before.enemies.filter((enemy) => enemy.kind === 'basic').map((enemy) => enemy.position.y));
+    const target = before.enemies
+      .filter((enemy) => enemy.kind === 'basic' && enemy.position.y === bottomY)
+      .sort((left, right) => Math.abs(left.position.x - 225) - Math.abs(right.position.x - 225))[0]!;
+    const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+    await page.mouse.move(aim.x, aim.y);
+    await page.waitForTimeout(40);
+    await sceneCall(page, (scene) => {
+      const basics = scene.getDebugSnapshot().enemies.filter((candidate) => candidate.kind === 'basic');
+      const bottomY = Math.max(...basics.map((candidate) => candidate.position.y));
+      const enemy = basics
+        .filter((candidate) => candidate.position.y === bottomY)
+        .sort((left, right) => Math.abs(left.position.x - 225) - Math.abs(right.position.x - 225))[0]!;
+      scene.debugPlaceOrb(0, { x: enemy.position.x, y: enemy.position.y + 24 });
+    });
+
+    await expect.poll(async () => (await snapshot(page)).enemies.some((enemy) => enemy.id === target.id)).toBe(false);
+    await page.waitForTimeout(30);
+    const after = await snapshot(page);
+    const orb = after.orbs[0]!;
+    expect(after.enemies.length).toBeLessThan(before.enemies.length);
+    expect(after.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
+    expect(orb.velocity.y < 0).toBe(passThroughOnKill);
+  });
+}
+
+test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+  await page.clock.runFor(5_000);
+  const after = await snapshot(page);
+  expect(after.activeShooters).toBeLessThanOrEqual(2);
+  expect(after.bullets).toBeLessThanOrEqual(12);
+});
+
+test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
+  await loadCanvas(page);
+  const before = await snapshot(page);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(250);
+  const hidden = await snapshot(page);
+  expect(hidden.enemies[0]!.position.y - before.enemies[0]!.position.y).toBeLessThan(1);
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(120);
+  const resumed = await snapshot(page);
+  expect(resumed.enemies[0]!.position.y).toBeGreaterThan(hidden.enemies[0]!.position.y);
+});
+
+test('@desktop ignores duplicate same-frame defeat damage and restarts once', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugSetHealth(2);
+    scene.debugDamage(2);
+    scene.debugDamage(2);
   });
 
-  expect(defeatLabels).toBe(1);
+  const defeated = await snapshot(page);
+  expect(defeated.health.current).toBe(0);
+  expect(defeated.defeated).toBe(true);
+  const panelCount = await page.evaluate(() => {
+    const game = (window as unknown as {
+      __RICHOCHET_GAME__: { scene: { getScene(key: string): { children: { list: Array<{ text?: string }> } } } };
+    }).__RICHOCHET_GAME__;
+    return game.scene.getScene('combat').children.list.filter((child) => child.text === 'SYSTEM DOWN').length;
+  });
+  expect(panelCount).toBe(1);
+
+  const restart = clientPoint(box, { x: 225, y: 436 });
+  await page.mouse.click(restart.x, restart.y);
+  await expect.poll(async () => (await snapshot(page)).defeated).toBe(false);
+  expect((await snapshot(page)).health.current).toBe(10);
 });

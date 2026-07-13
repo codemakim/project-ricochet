@@ -19,7 +19,7 @@ import {
 
 export const ORB_RADIUS = 8;
 
-const SPAWN_CLEARANCE = PLAYER_RADIUS + ORB_RADIUS + 4;
+const SPAWN_CLEARANCE = Math.max(PLAYER_RADIUS + ORB_RADIUS + 4, ORB_PICKUP_RADIUS + 1);
 const ATTRACTION_DURATION_MS = 100;
 const RECALL_SPEED = ORB_SPEED;
 const HIT_COOLDOWN_MS = 80;
@@ -261,6 +261,8 @@ export interface OrbManagerOptions extends OrbCallbacks {
 }
 
 export class OrbManager {
+  declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
+
   private readonly store: OrbStore;
   private readonly sprites: OrbSprite[];
   private readonly spriteIds = new Map<OrbSprite, number>();
@@ -293,6 +295,20 @@ export class OrbManager {
     });
     this.world.on('worldbounds', this.onWorldBounds);
     this.synchronizeSprites();
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugPlaceOrb = (id, position) => {
+        const owned = this.resolveOwnedOrb(id);
+        const state = this.store.getSnapshot()[id];
+        if (!owned || state?.state !== 'active') return false;
+        const body = owned.sprite.body as Phaser.Physics.Arcade.Body;
+        const velocity = { x: body.velocity.x, y: body.velocity.y };
+        owned.sprite.setPosition(position.x, position.y);
+        body.reset(position.x, position.y);
+        body.setVelocity(velocity.x, velocity.y);
+        this.store.synchronizeActive(id, position, velocity);
+        return true;
+      };
+    }
   }
 
   activateAim(): void {
@@ -349,6 +365,13 @@ export class OrbManager {
 
   getSnapshot(): OrbSnapshot[] {
     return this.store.getSnapshot();
+  }
+
+  synchronizeOrb(orb: OrbSprite): boolean {
+    const owned = this.resolveOwnedOrb(orb);
+    if (!owned) return false;
+    this.synchronizeOwnedBody(owned.sprite, owned.id);
+    return true;
   }
 
   destroy(): void {

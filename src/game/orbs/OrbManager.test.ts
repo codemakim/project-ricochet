@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import { EXPERIMENT_DEFAULTS, ORB_SPEED, PLAYER_RADIUS } from '../constants';
+import { EXPERIMENT_DEFAULTS, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
 import { OrbManager, OrbStore } from './OrbManager';
 
 const player = { x: 100, y: 200 };
@@ -39,6 +39,10 @@ class FakeBody {
   setVelocity(x: number, y: number): this {
     this.velocity = { x, y };
     return this;
+  }
+
+  reset(x: number, y: number): void {
+    this.center = { x, y };
   }
 }
 
@@ -107,7 +111,7 @@ describe('OrbStore', () => {
     store.update(0, 0, player, up);
     expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'queued', 'queued']);
     expect(store.getSnapshot()[0]).toMatchObject({
-      position: { x: 100, y: 170 },
+      position: { x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 },
       velocity: { x: 0, y: -ORB_SPEED },
     });
 
@@ -179,7 +183,7 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()[0]).toMatchObject({
       state: 'active',
       charges: 3,
-      position: { x: player.x + PLAYER_RADIUS + 8 + 4, y: player.y },
+      position: { x: player.x + ORB_PICKUP_RADIUS + 1, y: player.y },
       velocity: { x: ORB_SPEED, y: 0 },
     });
   });
@@ -230,6 +234,23 @@ describe('OrbStore', () => {
 });
 
 describe('OrbManager Phaser adapter', () => {
+  it('places only an active owned orb while retaining its velocity', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    sprite.body.setVelocity(40, -300);
+
+    expect(manager.debugPlaceOrb!(0, { x: 42, y: 84 })).toBe(true);
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      state: 'active',
+      position: { x: 42, y: 84 },
+      velocity: { x: 40, y: -300 },
+    });
+    expect(sprite.body.center).toEqual({ x: 42, y: 84 });
+    expect(manager.debugPlaceOrb!(1, { x: 1, y: 2 })).toBe(false);
+  });
+
   it('positions a launch once but leaves an enabled active sprite for Body.postUpdate', () => {
     const { manager, sprites } = createManager();
     manager.activateAim();
@@ -237,7 +258,7 @@ describe('OrbManager Phaser adapter', () => {
     const sprite = sprites[0]!;
     const callsAfterLaunch = sprite.setPositionCalls;
 
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 170 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 });
     expect(sprite.body.enable).toBe(true);
 
     // World.update has advanced the authoritative body, while the sprite still
@@ -252,7 +273,7 @@ describe('OrbManager Phaser adapter', () => {
       velocity: { x: 40, y: -300 },
     });
     expect(sprite.setPositionCalls).toBe(callsAfterLaunch);
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 170 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 });
   });
 
   it('owns bottom world-bound recall and disables the body immediately from the exact contact position', () => {
@@ -323,6 +344,21 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.getSnapshot()[0]).toMatchObject({
       position: { x: 88, y: 99 },
       velocity: { x: -222, y: 123 },
+    });
+  });
+
+  it('synchronizes reflected body velocity immediately after an Arcade collision', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    const sprite = sprites[0]!;
+    sprite.body.center = { x: 88, y: 99 };
+    sprite.body.setVelocity(20, 300);
+
+    expect(manager.synchronizeOrb(sprite as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      position: { x: 88, y: 99 },
+      velocity: { x: 20, y: 300 },
     });
   });
 

@@ -36,6 +36,11 @@ export interface CombatDebugSnapshot {
 }
 
 export class CombatScene extends Phaser.Scene {
+  declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
+  declare debugFreezeEnemies?: () => void;
+  declare debugSetHealth?: (value: number) => void;
+  declare debugDamage?: (amount: number) => void;
+
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
   private orbManager?: OrbManager;
@@ -78,6 +83,24 @@ export class CombatScene extends Phaser.Scene {
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
     });
+
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugPlaceOrb = (id, position) => {
+        return this.orbManager?.debugPlaceOrb?.(id, position) ?? false;
+      };
+      this.debugFreezeEnemies = () => {
+        this.enemyManager?.debugFreezeEnemies?.();
+      };
+      this.debugSetHealth = (value) => {
+        if (!Number.isFinite(value)) throw new RangeError('health must be finite');
+        const current = Math.max(0, Math.min(this.health.maximum, value));
+        this.health = { ...this.health, current, defeated: current === 0 };
+        this.defeated = false;
+        this.invulnerableUntil = 0;
+        this.updateHealthText();
+      };
+      this.debugDamage = (amount) => this.damagePlayer(amount);
+    }
 
     this.aimGuide = this.add.graphics().setDepth(5);
     this.healthText = this.add.text(16, 16, '', { color: '#dff7ff', fontSize: '20px' }).setDepth(10);
