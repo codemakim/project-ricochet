@@ -272,8 +272,11 @@ export class OrbManager {
   ): void => {
     if (!down) return;
     const sprite = body?.gameObject as OrbSprite | undefined;
-    if (!sprite || sprite.body !== body || !this.spriteIds.has(sprite)) return;
-    this.beginFloorRecall(sprite);
+    if (!sprite || sprite.body !== body) return;
+    const id = this.spriteIds.get(sprite);
+    if (id === undefined) return;
+    this.store.synchronizeActive(id, body.center, body.velocity);
+    if (this.store.beginFloorRecall(id)) this.synchronizeSprites();
   };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
@@ -299,9 +302,11 @@ export class OrbManager {
   update(nowMs: number, deltaMs: number, playerPosition: Vector, aim: Vector): void {
     const snapshot = this.store.getSnapshot();
     for (const sprite of this.sprites) {
-      const state = snapshot[sprite.orbId];
+      const id = this.spriteIds.get(sprite);
+      if (id === undefined) continue;
+      const state = snapshot[id];
       if (state?.state === 'active') {
-        this.synchronizeOwnedSprite(sprite, sprite.orbId);
+        this.synchronizeOwnedSprite(sprite, id);
       }
     }
     this.store.update(nowMs, deltaMs, playerPosition, aim);

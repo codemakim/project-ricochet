@@ -32,6 +32,7 @@ class FakeBody {
   enable = true;
   onWorldBounds = false;
   velocity = { x: 0, y: 0 };
+  center = { x: 0, y: 0 };
 
   constructor(readonly gameObject: FakeSprite | object) {}
 
@@ -225,7 +226,8 @@ describe('OrbManager Phaser adapter', () => {
     manager.update(0, 0, player, up);
     const sprite = sprites[0]!;
     expect(sprite.body.onWorldBounds).toBe(true);
-    sprite.setPosition(47, 798);
+    sprite.setPosition(47, 700);
+    sprite.body.center = { x: 47, y: 798 };
     sprite.body.setVelocity(20, 400);
 
     world.emit(sprite.body, true);
@@ -286,6 +288,25 @@ describe('OrbManager Phaser adapter', () => {
       position: { x: 88, y: 99 },
       velocity: { x: -222, y: 123 },
     });
+  });
+
+  it('uses private sprite identity instead of mutable orbId during update ingestion', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    manager.update(100, 100, player, up);
+    const first = sprites[0]!;
+    const second = sprites[1]!;
+    first.setPosition(11, 22);
+    first.body.setVelocity(33, 44);
+    second.setPosition(55, 66);
+    second.body.setVelocity(77, 88);
+    second.orbId = 0;
+
+    manager.update(101, 1, player, up);
+
+    expect(manager.getSnapshot()[0]).toMatchObject({ position: { x: 11, y: 22 }, velocity: { x: 33, y: 44 } });
+    expect(manager.getSnapshot()[1]).toMatchObject({ position: { x: 55, y: 66 }, velocity: { x: 77, y: 88 } });
   });
 
   it('ignores foreign and malformed physics objects without mutation or exceptions', () => {
