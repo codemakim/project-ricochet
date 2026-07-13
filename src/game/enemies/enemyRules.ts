@@ -28,7 +28,7 @@ export function createPrototypeFormation(): EnemySpec[] {
       x: 36 + column * 54,
       y,
       column,
-      speed: 26,
+      speed: 22,
     })),
   );
 }

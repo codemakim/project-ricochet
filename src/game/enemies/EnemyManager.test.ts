@@ -214,7 +214,7 @@ describe('EnemyManager', () => {
 
     expect(snapshot.enemies).toHaveLength(20);
     expect(snapshot.enemies.map((enemy) => enemy.id)).toEqual([...Array(20).keys()]);
-    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 26)).toBe(true);
+    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 22)).toBe(true);
   });
 
   it('removes breaches and reports their kind once', () => {
