@@ -29,11 +29,13 @@ import { BuildState } from '../progression/BuildState';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
 import type { AbilityId, AbilityRanks } from '../progression/progressionRules';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
+import { progressionHudState } from '../ui/progressionHud';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
 const RUN_SEED = 0x5249434f;
+const XP_BAR_WIDTH = 220;
 const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'defeated'];
 
 export interface CombatDebugSnapshot {
@@ -75,6 +77,7 @@ export class CombatScene extends Phaser.Scene {
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private progressionText!: Phaser.GameObjects.Text;
+  private progressionBarFill!: Phaser.GameObjects.Rectangle;
   private build?: BuildState;
   private progression?: ProgressionManager;
   private levelUpOverlay?: LevelUpOverlay;
@@ -169,6 +172,12 @@ export class CombatScene extends Phaser.Scene {
     this.aimGuide = this.add.graphics().setDepth(5);
     this.healthText = this.add.text(16, 16, '', { color: '#dff7ff', fontSize: '20px' }).setDepth(10);
     this.progressionText = this.add.text(16, 44, '', { color: '#65f6ff', fontSize: '16px' }).setDepth(10);
+    this.add.rectangle(16, 70, XP_BAR_WIDTH, 8, 0x17314a, 0.95)
+      .setOrigin(0, 0.5)
+      .setDepth(10);
+    this.progressionBarFill = this.add.rectangle(16, 70, XP_BAR_WIDTH, 8, 0x65f6ff, 1)
+      .setOrigin(0, 0.5)
+      .setDepth(11);
     this.add.text(GAME_WIDTH - 16, 16, 'WASD / MOUSE · TWO TOUCH STICKS', {
       color: '#6f8aa8',
       fontSize: '12px',
@@ -345,9 +354,11 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private updateProgressionText(): void {
-    if (!this.progressionText || !this.progression) return;
+    if (!this.progressionText || !this.progressionBarFill || !this.progression) return;
     const { level, xp, xpRequired } = this.progression.getSnapshot();
-    this.progressionText.setText(`LV ${level}  XP ${xp}/${xpRequired ?? 'MAX'}`);
+    const hud = progressionHudState(level, xp, xpRequired);
+    this.progressionText.setText(hud.label);
+    this.progressionBarFill.setScale(hud.fillRatio, 1);
   }
 
   private showDefeat(): void {
@@ -406,6 +417,7 @@ export class CombatScene extends Phaser.Scene {
   };
 
   private syncPauseState(): void {
+    this.playerInput?.setGameplayPointerEnabled(!this.pause.has('levelUp'));
     if (this.pause.isPaused()) {
       this.physics.pause();
       this.time.paused = true;

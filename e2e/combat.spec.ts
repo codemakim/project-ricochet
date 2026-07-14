@@ -670,6 +670,38 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   await page.keyboard.up('KeyD');
 });
 
+test('@desktop clicks a level-up card without changing aim and resumes gameplay', async ({ page }) => {
+  await page.clock.install();
+  const { box } = await loadCanvas(page);
+  const aimPoint = clientPoint(box, { x: 340, y: 120 });
+  await page.mouse.move(aimPoint.x, aimPoint.y);
+  await page.clock.runFor(32);
+  const aimed = await snapshot(page);
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
+  const paused = await snapshot(page);
+  const selectedAbility = paused.progression.choices[0]!;
+
+  const card = clientPoint(box, { x: 225, y: 270 });
+  await page.mouse.click(card.x, card.y);
+
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return {
+      rank: current.buildRanks[selectedAbility],
+      visible: current.levelUpVisible,
+      paused: current.pauseReasons.includes('levelUp'),
+    };
+  }).toEqual({ rank: 1, visible: false, paused: false });
+  const selected = await snapshot(page);
+  expect(selected.aim).toEqual(aimed.aim);
+  await expect.poll(async () => {
+    await page.clock.runFor(16);
+    return (await snapshot(page)).gameplayElapsedMs > selected.gameplayElapsedMs;
+  }, { intervals: [0], timeout: 1_000 }).toBe(true);
+  expect((await snapshot(page)).aim).toEqual(aimed.aim);
+});
+
 test('@desktop keeps visibility pause after choosing a level-up while hidden', async ({ page }) => {
   await page.clock.install();
   await loadCanvas(page);

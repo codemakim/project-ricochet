@@ -120,6 +120,18 @@ describe('TemporaryOrbManager', () => {
     expect(manager.getSnapshot()[0]!.id).toBe(12);
   });
 
+  it('advances the rank-one angle trigger when a full cap blocks spawning', () => {
+    const { manager, group } = createManager();
+    for (let index = 0; index < 4; index += 1) {
+      manager.spawn({ x: index, y: 0 }, { x: 1, y: 0 }, 3);
+    }
+
+    expect(manager.spawn({ x: 99, y: 99 }, { x: 1, y: 0 }, 1)).toBe(0);
+    manager.update(1500);
+    expect(manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1)).toBe(1);
+    expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
+  });
+
   it('expires and destroys temporary orbs exactly at 1500ms', () => {
     const { manager, group } = createManager();
     manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 2);

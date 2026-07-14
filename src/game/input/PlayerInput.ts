@@ -18,6 +18,7 @@ export class PlayerInput {
   private touchMovement: Vector = { x: 0, y: 0 };
   private currentAimCandidate: Vector = { x: 0, y: 0 };
   private currentAimActivated = false;
+  private gameplayPointerEnabled = true;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -62,6 +63,11 @@ export class PlayerInput {
     return this.currentAimActivated;
   }
 
+  setGameplayPointerEnabled(enabled: boolean): void {
+    this.gameplayPointerEnabled = enabled;
+    if (!enabled) this.resetActiveSticks();
+  }
+
   destroy(): void {
     this.scene.input.off('pointerdown', this.handlePointerDown);
     this.scene.input.off('pointermove', this.handlePointerMove);
@@ -73,6 +79,7 @@ export class PlayerInput {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.gameplayPointerEnabled) return;
     if (this.isMouse(pointer)) return;
 
     const role = pointerRole(pointer.x);
@@ -89,6 +96,7 @@ export class PlayerInput {
   };
 
   private readonly handlePointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.gameplayPointerEnabled) return;
     if (this.isMouse(pointer)) {
       const player = this.getPlayerPosition();
       this.currentAimCandidate = {
@@ -133,6 +141,16 @@ export class PlayerInput {
     if (this.activeSticks.move?.pointerId === pointerId) return 'move';
     if (this.activeSticks.aim?.pointerId === pointerId) return 'aim';
     return undefined;
+  }
+
+  private resetActiveSticks(): void {
+    const hadActiveAimStick = this.activeSticks.aim !== undefined;
+    delete this.activeSticks.move;
+    delete this.activeSticks.aim;
+    this.touchMovement = { x: 0, y: 0 };
+    if (hadActiveAimStick) this.currentAimActivated = false;
+    this.graphics.move.clear();
+    this.graphics.aim.clear();
   }
 
   private isMouse(pointer: Phaser.Input.Pointer): boolean {

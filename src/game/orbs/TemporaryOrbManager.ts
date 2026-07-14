@@ -57,13 +57,13 @@ export class TemporaryOrbManager {
 
   spawn(position: Vector, direction: Vector, count: number): number {
     if (this.destroyed || count <= 0) return 0;
+    const angles = this.spawnAngles(count);
     const available = TEMPORARY_ORB_CAP - this.records.size;
     const spawnCount = Math.min(count, available);
     if (spawnCount <= 0) return 0;
 
-    const angles = this.spawnAngles(count).slice(0, spawnCount);
     const incoming = normalize(direction);
-    for (const angle of angles) {
+    for (const angle of angles.slice(0, spawnCount)) {
       const launch = rotate(incoming, angle);
       const expiresAt = this.options.getGameplayElapsedMs() + TEMPORARY_ORB_LIFETIME_MS;
       const sprite = this.group.create(
