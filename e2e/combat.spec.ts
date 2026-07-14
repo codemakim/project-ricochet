@@ -76,6 +76,19 @@ async function snapshot(page: Page): Promise<CombatSnapshot> {
   return sceneCall(page, (scene) => scene.getDebugSnapshot());
 }
 
+async function revealAndRunFirstFrame(page: Page, delta: number): Promise<CombatSnapshot> {
+  return page.evaluate((resumeDelta) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    const game = (window as unknown as {
+      __RICHOCHET_GAME__: { scene: { getScene(key: string): DevelopmentScene } };
+    }).__RICHOCHET_GAME__;
+    const scene = game.scene.getScene('combat');
+    scene.update(0, resumeDelta);
+    return scene.getDebugSnapshot();
+  }, delta);
+}
+
 async function bulletState(page: Page): Promise<Array<{ x: number; y: number; vx: number; vy: number }>> {
   return page.evaluate(() => {
     const game = (window as unknown as {
@@ -265,6 +278,7 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
 });
 
 test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
+  await page.clock.install();
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
@@ -283,6 +297,15 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
       paused: current.pauseReasons.includes('levelUp'),
     };
   }).toEqual({ rank: 1, visible: false, paused: false });
+
+  await expect.poll(async () => {
+    await page.clock.runFor(16);
+    const current = await snapshot(page);
+    return current.gameplayElapsedMs > paused.gameplayElapsedMs
+      && current.enemies[0]!.position.y > paused.enemies[0]!.position.y;
+  }, { intervals: [0], timeout: 1_000 }).toBe(true);
+  const resumed = await snapshot(page);
+  expect(resumed.gameplayElapsedMs - paused.gameplayElapsedMs).toBeLessThanOrEqual(50);
 });
 
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
@@ -582,12 +605,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   expect(hidden.player).toEqual(before.player);
   expect(hidden.enemies[0]!.position.y - before.enemies[0]!.position.y).toBeLessThan(1);
 
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-  await sceneCall(page, (scene) => scene.update(0, 8_100));
-  const firstResumedFrame = await snapshot(page);
+  const firstResumedFrame = await revealAndRunFirstFrame(page, 8_100);
   expect(firstResumedFrame.encounter.elapsedMs - hidden.encounter.elapsedMs).toBeLessThanOrEqual(50);
   expect(firstResumedFrame.encounter.elapsedSinceSpawnMs - hidden.encounter.elapsedSinceSpawnMs)
     .toBeLessThanOrEqual(50);
@@ -681,20 +699,22 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   expect(stillHidden.orbs).toEqual(selected.orbs);
   expect(stillHidden.encounter).toEqual(selected.encounter);
 
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-  await sceneCall(page, (scene) => scene.update(0, 8_100));
-  const firstResumedFrame = await snapshot(page);
+  const firstResumedFrame = await revealAndRunFirstFrame(page, 8_100);
   expect(firstResumedFrame.player).toEqual(stillHidden.player);
   expect(firstResumedFrame.encounter).toEqual(stillHidden.encounter);
 
-  await page.clock.runFor(32);
+  await expect.poll(async () => {
+    await page.clock.runFor(16);
+    const current = await snapshot(page);
+    return current.player.x > firstResumedFrame.player.x
+      && current.enemies[0]!.position.y > firstResumedFrame.enemies[0]!.position.y
+      && current.encounter.elapsedMs > firstResumedFrame.encounter.elapsedMs;
+  }, { intervals: [0], timeout: 1_000 }).toBe(true);
   const resumed = await snapshot(page);
   expect(resumed.player.x).toBeGreaterThan(firstResumedFrame.player.x);
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(firstResumedFrame.enemies[0]!.position.y);
   expect(resumed.encounter.elapsedMs).toBeGreaterThan(firstResumedFrame.encounter.elapsedMs);
+  expect(resumed.encounter.elapsedMs - firstResumedFrame.encounter.elapsedMs).toBeLessThanOrEqual(50);
   await page.keyboard.up('KeyD');
 });
 
@@ -756,9 +776,29 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   expect((await snapshot(page)).health.current).toBe(1);
   await page.waitForTimeout(370);
   await sceneCall(page, (scene) => {
-    scene.debugGrantXp(8);
-    scene.debugDamage(1);
+    scene.debugFreezeEnemies();
+    scene.debugUpgradeAbility('split');
+    scene.debugSetEnemy(0, { x: 225, y: 300 }, 99);
   });
+  const beforeLaunch = await snapshot(page);
+  const aim = clientPoint(box, { x: beforeLaunch.player.x, y: beforeLaunch.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 90,
+  }).toEqual({ active: 1, queued: 2 });
+  await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
+    if (!scene.debugPlaceOrb(active.id, { x: 225, y: 324 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbs).toBe(1);
+  await sceneCall(page, (scene) => scene.debugGrantXp(9));
+  const dirty = await snapshot(page);
+  expect(dirty.progression).toMatchObject({ level: 1, xp: 1, pendingChoices: 1 });
+  expect(dirty.buildRanks.split).toBe(1);
+  expect(dirty.temporaryOrbs).toBe(1);
+  expect(dirty.levelUpVisible).toBe(true);
+  await sceneCall(page, (scene) => scene.debugDamage(1));
 
   const defeated = await snapshot(page);
   expect(defeated.health.current).toBe(0);
@@ -775,8 +815,10 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   expect(panelCount).toBe(1);
 
   const restart = clientPoint(box, { x: 225, y: 436 });
-  await page.mouse.click(restart.x, restart.y);
-  await expect.poll(async () => (await snapshot(page)).defeated).toBe(false);
+  await expect.poll(async () => {
+    await page.mouse.click(restart.x, restart.y);
+    return (await snapshot(page)).defeated;
+  }, { intervals: [16], timeout: 1_000 }).toBe(false);
   expect(await snapshot(page)).toMatchObject({
     health: { current: 10 },
     progression: { level: 0, xp: 0, pendingChoices: 0 },

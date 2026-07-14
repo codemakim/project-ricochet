@@ -185,12 +185,14 @@ Commit 전 Task 9 acceptance 상태에서 실행한 fresh evidence:
 | 검증 | 결과 | 확인 범위 |
 | --- | --- | --- |
 | `npm test` | **PASS** — 20 files, 126/126 tests | XP와 레벨, 선택지, 네 능력의 1~5등급 수치, 합성 pause, 폭발, 분열, 기존 전투 규칙 |
-| `npm run test:e2e -- --grep "level-up\|temporary split\|explosion damage"` | **PASS** — 7/7 | desktop 레벨업/pause/폭발/분열 6개와 Pixel 7 emulation 카드 탭 1개 |
+| `npm run test:e2e -- --grep "level-up\|temporary split\|explosion damage\|restarts"` | **PASS** — 8/8 | desktop 레벨업/pause/폭발/분열/restart 7개와 Pixel 7 emulation 카드 탭 1개 |
 | `npm run test:e2e` | **PASS** — 16/16 | `desktop-chromium` 14개, `mobile-chromium` 2개. 기존 ingress, 회수, 충돌, 체력, 입력과 성장 acceptance |
 | `npm run build` | **PASS** — TypeScript 성공, Vite 29 modules transformed | production bundle 생성. 기존 `1,235.50 kB` chunk-size warning은 유지되며 exit code 0 |
-| production DEV audit | **PASS** — mutation helper 6개와 `__RICHOCHET_GAME__` match 없음 | `debugGrantXp`, `debugChooseAbility`, `debugUpgradeAbility`, `debugSetEnemy`, `debugPlaceOrb`, `debugRemoveEnemies`, game global 미노출 |
+| production DEV audit | **PASS** — mutation helper 9개와 `__RICHOCHET_GAME__` match 없음 | `debugGrantXp`, `debugChooseAbility`, `debugUpgradeAbility`, `debugSetEnemy`, `debugPlaceOrb`, `debugRemoveEnemies`, `debugFreezeEnemies`, `debugSetHealth`, `debugDamage`, game global 미노출 |
 
-첫 레벨 목표는 평균 **15~20초**다. 초기 능력 풀은 `화력 증폭`, `운동 에너지`, `폭발`, `분열` 네 개이며 첫 선택 화면은 중복 없는 최대 3개와 `폭발` 또는 `분열` 최소 하나를 보장한다. 자동 테스트는 8 XP 레벨업 정지, 숫자 선택, Pixel 7 emulation 카드 탭, 복수 pending 선택, visibility와 level-up 중첩, max-rank XP 중단, defeat/restart 초기화를 확인했다. 숨김 해제 직후 첫 resume delta 폐기 뒤 정상 진행도 condition polling으로 확인했다.
+첫 레벨 목표는 평균 **15~20초**다. 초기 능력 풀은 `화력 증폭`, `운동 에너지`, `폭발`, `분열` 네 개이며 첫 선택 화면은 중복 없는 최대 3개와 `폭발` 또는 `분열` 최소 하나를 보장한다. 자동 테스트는 8 XP 레벨업 정지, 숫자 선택, Pixel 7 emulation 카드 탭, 복수 pending 선택, visibility와 level-up 중첩, max-rank XP 중단을 확인했다. Mobile 카드 탭 뒤 `levelUp` 해제뿐 아니라 gameplay 시계와 적 위치가 50ms 이내에 다시 진행함을 condition polling했다. 중첩 pause는 숨김 해제 직후 첫 resume frame의 player와 encounter가 그대로인 것을 먼저 확인한 뒤 player, enemy, encounter가 다시 진행할 때까지 polling했다.
+
+Restart 검증은 초기값을 바로 재확인하지 않았다. Split rank 1, level 1, XP 1, pending choice 1, temporary orb 1, 열린 level-up overlay를 먼저 assertion한 뒤 defeat가 overlay와 temporary orb를 닫는지 확인했다. UI restart 뒤 level 0, XP 0, pending 0, 네 rank 0, pause reason 없음, overlay 닫힘, temporary orb 0의 exact snapshot을 확인했다.
 
 폭발 자동 결과: 직접 적중 주 대상은 범위 피해에서 제외되고, 반경 안 다른 적만 한 번 피해를 받으며, 범위 밖 적은 유지되고, 폭발 처치 XP가 1회 지급됐다. 분열 자동 결과: 충전 영구 구슬이 임시 구슬을 만들고, 재귀 분열 없이 폭발을 적용하며, 활성 수 12개 상한을 지켰다. 레벨업 pause 중 1,600ms wall time에는 수명이 줄지 않았고, 재개 뒤 남은 gameplay lifetime 경계에서 제거됐으며 defeat 시 즉시 0개가 됐다.
 
