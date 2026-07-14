@@ -13,6 +13,7 @@ import {
   PLAYER_RADIUS,
   type ExperimentSettings,
 } from '../constants';
+import { EncounterDirector } from '../encounters/EncounterDirector';
 import { EnemyManager, type EnemyManagerSnapshot } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
@@ -33,6 +34,7 @@ export interface CombatDebugSnapshot {
   activeShooters: number;
   bullets: number;
   experiment: ExperimentSettings;
+  encounter: ReturnType<EncounterDirector['getSnapshot']>;
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -40,11 +42,13 @@ export class CombatScene extends Phaser.Scene {
   declare debugFreezeEnemies?: () => void;
   declare debugSetHealth?: (value: number) => void;
   declare debugDamage?: (amount: number) => void;
+  declare debugRemoveEnemies?: (ids: readonly number[]) => void;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
   private orbManager?: OrbManager;
   private enemyManager?: EnemyManager;
+  private encounterDirector?: EncounterDirector;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private health: HealthState = createHealth();
@@ -76,6 +80,7 @@ export class CombatScene extends Phaser.Scene {
       textureKey: 'orb-charged',
       hasFixedTerrainLineOfSight: () => true,
     });
+    this.encounterDirector = new EncounterDirector();
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
@@ -100,6 +105,7 @@ export class CombatScene extends Phaser.Scene {
         this.updateHealthText();
       };
       this.debugDamage = (amount) => this.damagePlayer(amount);
+      this.debugRemoveEnemies = (ids) => this.enemyManager?.debugRemoveEnemies?.(ids);
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
@@ -117,7 +123,13 @@ export class CombatScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.defeated || !this.playerInput || !this.orbManager || !this.enemyManager) return;
+    if (
+      this.defeated
+      || !this.playerInput
+      || !this.orbManager
+      || !this.enemyManager
+      || !this.encounterDirector
+    ) return;
 
     const next = movePlayer(this.player, this.playerInput.movement, delta);
     this.player.setPosition(next.x, next.y);
@@ -129,11 +141,18 @@ export class CombatScene extends Phaser.Scene {
     this.drawAimGuide();
     this.orbManager.update(this.time.now, delta, next, this.aim);
     this.enemyManager.update();
+    const enemies = this.enemyManager.getSnapshot();
+    const formation = this.encounterDirector.update(delta, {
+      activeEnemies: enemies.enemies.length,
+      topmostEnemyY: enemies.topmostEnemyY,
+    });
+    if (formation) this.enemyManager.spawnFormation(formation);
   }
 
   getDebugSnapshot(): CombatDebugSnapshot {
     const enemySnapshot = this.enemyManager?.getSnapshot() ?? {
       enemies: [],
+      topmostEnemyY: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,
     };
@@ -162,6 +181,12 @@ export class CombatScene extends Phaser.Scene {
       activeShooters: enemySnapshot.activeShooters,
       bullets: enemySnapshot.bullets,
       experiment: { ...this.experiment },
+      encounter: this.encounterDirector?.getSnapshot() ?? {
+        elapsedMs: 0,
+        elapsedSinceSpawnMs: 0,
+        phase: 0,
+        spawnSequence: 0,
+      },
     };
   }
 
@@ -237,6 +262,7 @@ export class CombatScene extends Phaser.Scene {
     this.orbManager?.destroy();
     this.playerInput?.destroy();
     this.enemyManager = undefined;
+    this.encounterDirector = undefined;
     this.orbManager = undefined;
     this.playerInput = undefined;
   };

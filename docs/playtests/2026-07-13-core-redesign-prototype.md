@@ -167,3 +167,13 @@ Phone과 Mac은 같은 Wi-Fi/LAN에 있어야 한다. 접속 실패 시 macOS fi
 ## Next decision
 
 다음 결정은 사용자 play session 데이터 뒤에만 한다. 우선순위는 정확한 20-basic/non-attacking acceptance fixture 확보, physical phone 확인, 위 표의 정량값과 1–5 점수 수집이다. 그 전에는 tuning 제안, 로그라이트 콘텐츠, boss 구현으로 넘어가지 않는다.
+
+## 2026-07-14 Continuous ingress automation
+
+- Initial formation: 20
+- Reinforcement: 6 enemies after 8 seconds when four capacity slots are available
+- Original and reinforcement IDs coexist: verified by Playwright
+- Unit tests: 14 files, 93/93 tests passed
+- Desktop/mobile E2E: 9/9 passed (`desktop-chromium` 8, `mobile-chromium` 1)
+- Production build: `tsc --noEmit && vite build` exit 0, 23 modules transformed
+- Physical-device density and aim-fatigue check: pending user playtest

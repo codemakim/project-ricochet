@@ -26,6 +26,12 @@ interface CombatSnapshot {
   activeShooters: number;
   bullets: number;
   experiment: { passThroughOnKill: boolean; homeOnBottomHit: boolean; autoReturnAfterMs: number | null };
+  encounter: {
+    elapsedMs: number;
+    elapsedSinceSpawnMs: number;
+    phase: 0 | 1 | 2;
+    spawnSequence: number;
+  };
 }
 
 interface DevelopmentScene {
@@ -34,6 +40,7 @@ interface DevelopmentScene {
   debugFreezeEnemies(): void;
   debugSetHealth(value: number): void;
   debugDamage(amount: number): void;
+  debugRemoveEnemies(ids: readonly number[]): void;
 }
 
 async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {
@@ -307,6 +314,22 @@ test('@desktop caps simultaneous shooters and bullets under accelerated clock', 
   expect(Math.max(peakShooters, peakBullets)).toBeGreaterThan(0);
   expect(peakShooters).toBeLessThanOrEqual(2);
   expect(peakBullets).toBeLessThanOrEqual(12);
+});
+
+test('@desktop admits reinforcement while original enemies remain', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
+  const before = await snapshot(page);
+  expect(before.enemies).toHaveLength(16);
+
+  await page.clock.runFor(8_100);
+
+  const after = await snapshot(page);
+  expect(after.enemies.some((enemy) => enemy.id < 20)).toBe(true);
+  expect(after.enemies.some((enemy) => enemy.id >= 20)).toBe(true);
+  expect(after.encounter.spawnSequence).toBe(1);
+  expect(after.encounter.phase).toBe(0);
 });
 
 test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
