@@ -55,13 +55,23 @@ class FakeGroup {
   }
 }
 
-function createManager(getDirectDamageBonus = () => 0) {
+function createManager(
+  getDirectDamageBonus = () => 0,
+  getGameplayElapsedMs?: () => number,
+) {
   const group = new FakeGroup();
   const scene = {
     time: { now: 0 },
     physics: { add: { group: () => group } },
   } as unknown as Phaser.Scene;
-  return { manager: new TemporaryOrbManager(scene, { getDirectDamageBonus }), group, scene };
+  return {
+    manager: new TemporaryOrbManager(scene, {
+      getDirectDamageBonus,
+      getGameplayElapsedMs: getGameplayElapsedMs ?? (() => 0),
+    }),
+    group,
+    scene,
+  };
 }
 
 function angleDegrees(sprite: FakeSprite): number {
@@ -73,9 +83,9 @@ describe('TemporaryOrbManager', () => {
     const { manager, group, scene } = createManager();
 
     expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 1)).toBe(1);
-    expect(angleDegrees(group.children[0]!)).toBe(-25);
+    expect(angleDegrees(group.children[0]!)).toBe(25);
     expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 1)).toBe(1);
-    expect(angleDegrees(group.children[1]!)).toBe(25);
+    expect(angleDegrees(group.children[1]!)).toBe(-25);
     expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 2)).toBe(2);
     expect(group.children.slice(2, 4).map(angleDegrees)).toEqual([-25, 25]);
     expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 3)).toBe(3);
@@ -120,6 +130,21 @@ describe('TemporaryOrbManager', () => {
     manager.update(1500);
     expect(manager.getSnapshot()).toEqual([]);
     expect(group.children.every((sprite) => sprite.destroyed)).toBe(true);
+  });
+
+  it('bases spawn lifetime on gameplay elapsed time instead of Phaser clock time', () => {
+    let gameplayElapsedMs = 100;
+    const { manager, scene } = createManager(() => 0, () => gameplayElapsedMs);
+    scene.time.now = 10_000;
+
+    manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);
+    expect(manager.getSnapshot()[0]!.expiresAt).toBe(1600);
+    gameplayElapsedMs = 1599;
+    manager.update(gameplayElapsedMs);
+    expect(manager.getSnapshot()).toHaveLength(1);
+    gameplayElapsedMs = 1600;
+    manager.update(gameplayElapsedMs);
+    expect(manager.getSnapshot()).toEqual([]);
   });
 
   it('applies temporary damage and rejects a repeated enemy hit newer than 80ms', () => {

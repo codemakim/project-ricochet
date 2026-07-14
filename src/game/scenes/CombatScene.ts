@@ -52,6 +52,7 @@ export interface CombatDebugSnapshot {
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
   temporaryOrbs: number;
+  gameplayElapsedMs: number;
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -84,6 +85,7 @@ export class CombatScene extends Phaser.Scene {
   private aimQueueActivated = false;
   private defeated = false;
   private pause = new CombatPauseController();
+  private gameplayElapsedMs = 0;
 
   constructor() {
     super('combat');
@@ -97,6 +99,7 @@ export class CombatScene extends Phaser.Scene {
     this.aimQueueActivated = false;
     this.defeated = false;
     this.pause = new CombatPauseController();
+    this.gameplayElapsedMs = 0;
     const build = new BuildState();
     this.build = build;
     this.progression = new ProgressionManager(RUN_SEED, build);
@@ -116,12 +119,14 @@ export class CombatScene extends Phaser.Scene {
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
+      getGameplayElapsedMs: () => this.gameplayElapsedMs,
     });
     this.encounterDirector = new EncounterDirector();
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
+      getGameplayElapsedMs: () => this.gameplayElapsedMs,
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
@@ -189,6 +194,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.pause.isPaused()) return;
 
     const gameplayDelta = this.pause.consumeGameplayDelta(delta);
+    this.gameplayElapsedMs += gameplayDelta;
     const next = movePlayer(this.player, this.playerInput.movement, gameplayDelta);
     this.player.setPosition(next.x, next.y);
     this.aim = resolveAim(this.aim, this.playerInput.aimCandidate);
@@ -198,7 +204,7 @@ export class CombatScene extends Phaser.Scene {
     }
     this.drawAimGuide();
     this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
-    this.temporaryOrbManager?.update(this.time.now);
+    this.temporaryOrbManager?.update(this.gameplayElapsedMs);
     this.enemyManager.update();
     const enemies = this.enemyManager.getSnapshot();
     const formation = this.encounterDirector.update(gameplayDelta, {
@@ -262,6 +268,7 @@ export class CombatScene extends Phaser.Scene {
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
+      gameplayElapsedMs: this.gameplayElapsedMs,
     };
   }
 
@@ -350,6 +357,7 @@ export class CombatScene extends Phaser.Scene {
     this.pause.remove('levelUp');
     this.pause.add('defeated');
     this.syncPauseState();
+    this.temporaryOrbManager?.destroy();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
       .setInteractive();

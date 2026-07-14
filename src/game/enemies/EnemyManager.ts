@@ -51,6 +51,7 @@ export interface EnemyManagerOptions {
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
   temporaryOrbManager?: TemporaryOrbManager;
+  getGameplayElapsedMs(): number;
   formation?: readonly EnemySpec[];
   onContact: (damage: number) => void;
   onBreach: (kind: EnemyKind) => void;
@@ -301,7 +302,12 @@ export class EnemyManager {
   private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
     const manager = this.options.temporaryOrbManager;
     if (!manager || !enemy.active || !orb.active) return false;
-    const result = manager.handleEnemyHit(orb, enemy.enemyId, enemy.hp, this.scene.time.now);
+    const result = manager.handleEnemyHit(
+      orb,
+      enemy.enemyId,
+      enemy.hp,
+      this.options.getGameplayElapsedMs(),
+    );
     if (!result) return false;
     const direction = this.orbDirection(orb);
     const key = this.temporaryHitKey(orb, enemy);

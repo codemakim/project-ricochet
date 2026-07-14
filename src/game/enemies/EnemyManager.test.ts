@@ -164,6 +164,7 @@ function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = fa
   const colliders: FakeCollider[] = [];
   const overlaps: FakeCollider[] = [];
   const time = new FakeTime();
+  const gameplayClock = { now: 0 };
   const physics = {
     add: {
       group: () => {
@@ -212,6 +213,7 @@ function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = fa
     player: player as unknown as Phaser.Physics.Arcade.Sprite,
     orbManager,
     temporaryOrbManager,
+    getGameplayElapsedMs: () => gameplayClock.now,
     onContact,
     onBreach,
     onBulletHit,
@@ -236,6 +238,7 @@ function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = fa
     colliders,
     overlaps,
     time,
+    gameplayClock,
   };
 }
 
@@ -423,9 +426,13 @@ describe('EnemyManager', () => {
       handleTemporaryEnemyHit,
       temporaryOrbManager,
       onDirectHit,
+      time,
+      gameplayClock,
     } = createBoundary(undefined, true);
     const enemy = groups[0]!.children[0]!;
     temporaryOrb.setVelocity(30, -40);
+    time.now = 10_000;
+    gameplayClock.now = 123;
     handleTemporaryEnemyHit.mockReturnValueOnce({
       charged: false,
       charges: 0,
@@ -436,7 +443,7 @@ describe('EnemyManager', () => {
 
     expect(colliders[1]!.trigger(temporaryOrb, enemy)).toBe(true);
 
-    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, 0, 1, 0);
+    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, 0, 1, 123);
     expect(temporaryOrbManager!.synchronizeOrb).toHaveBeenCalledWith(temporaryOrb);
     expect(enemy.hp).toBe(0.5);
     expect(onDirectHit).toHaveBeenCalledWith({

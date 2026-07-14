@@ -27,6 +27,7 @@ interface TemporaryOrbRecord extends TemporaryOrbSnapshot {
 
 export interface TemporaryOrbManagerOptions {
   getDirectDamageBonus(): number;
+  getGameplayElapsedMs(): number;
   textureKey?: string;
 }
 
@@ -44,7 +45,7 @@ export class TemporaryOrbManager {
   private readonly group: Phaser.Physics.Arcade.Group;
   private readonly records = new Map<TemporaryOrbSprite, TemporaryOrbRecord>();
   private nextId = 0;
-  private singleAngle = -25;
+  private singleAngle = 25;
   private destroyed = false;
 
   constructor(
@@ -64,7 +65,7 @@ export class TemporaryOrbManager {
     const incoming = normalize(direction);
     for (const angle of angles) {
       const launch = rotate(incoming, angle);
-      const expiresAt = this.scene.time.now + TEMPORARY_ORB_LIFETIME_MS;
+      const expiresAt = this.options.getGameplayElapsedMs() + TEMPORARY_ORB_LIFETIME_MS;
       const sprite = this.group.create(
         position.x,
         position.y,

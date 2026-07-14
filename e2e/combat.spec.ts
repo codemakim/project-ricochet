@@ -43,6 +43,7 @@ interface CombatSnapshot {
   pauseReasons: string[];
   levelUpVisible: boolean;
   temporaryOrbs: number;
+  gameplayElapsedMs: number;
 }
 
 type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
@@ -388,7 +389,7 @@ test('@desktop applies explosion damage once around the direct-hit enemy', async
   expect(after.progression.xp).toBe(before.progression.xp + 1);
 });
 
-test('@desktop temporary split orbs stay capped, do not recursively split, and pause lifetime', async ({ page }) => {
+test('@desktop temporary split orbs stay capped, do not recursively split, pause lifetime, and clear on defeat', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
@@ -422,17 +423,48 @@ test('@desktop temporary split orbs stay capped, do not recursively split, and p
     intervals: [5],
     timeout: 100,
   }).toBe(3);
+  const spawned = await snapshot(page);
   await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === 2)?.hp, {
     intervals: [10],
     timeout: 400,
   }).toBe(1.5);
   expect((await snapshot(page)).temporaryOrbs).toBe(3);
 
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  const paused = await snapshot(page);
+  const expectedRemainingMs = 1500 - (paused.gameplayElapsedMs - spawned.gameplayElapsedMs);
+  expect(paused.pauseReasons).toContain('levelUp');
+  await page.waitForTimeout(1600);
+  const afterLongPause = await snapshot(page);
+  expect(afterLongPause.temporaryOrbs).toBe(3);
+  expect(afterLongPause.gameplayElapsedMs).toBe(paused.gameplayElapsedMs);
+
+  await sceneCall(page, (scene) => {
+    const choice = scene.getDebugSnapshot().progression.choices[0]!;
+    scene.debugChooseAbility(choice);
+  });
+  await page.waitForTimeout(50);
+  expect((await snapshot(page)).temporaryOrbs).toBe(3);
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return current.gameplayElapsedMs - paused.gameplayElapsedMs >= expectedRemainingMs - 50
+      ? current.temporaryOrbs
+      : -1;
+  }, { intervals: [5], timeout: expectedRemainingMs + 200 }).toBe(3);
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
+    intervals: [5],
+    timeout: 100,
+  }).toBe(0);
+  const expired = await snapshot(page);
+  const resumedLifetimeMs = expired.gameplayElapsedMs - paused.gameplayElapsedMs;
+  expect(resumedLifetimeMs).toBeGreaterThanOrEqual(expectedRemainingMs - 20);
+  expect(resumedLifetimeMs).toBeLessThan(expectedRemainingMs + 50);
+
   await sceneCall(page, (scene) => {
     scene.debugSetEnemy(1, { x: 30, y: 80 }, 99);
     scene.debugSetEnemy(2, { x: 420, y: 80 }, 2);
   });
-  for (const expectedCount of [6, 9, 12]) {
+  for (const expectedCount of [3, 6, 9, 12]) {
     await page.waitForTimeout(85);
     await sceneCall(page, (scene) => {
       const active = scene.getDebugSnapshot().orbs.find(
@@ -466,20 +498,12 @@ test('@desktop temporary split orbs stay capped, do not recursively split, and p
   expect((await snapshot(page)).temporaryOrbs).toBe(12);
 
   await sceneCall(page, (scene) => {
-    scene.debugSetEnemy(0, { x: 30, y: 100 }, 99);
-    scene.debugGrantXp(8);
+    scene.debugSetHealth(1);
+    scene.debugDamage(1);
   });
-  const paused = await snapshot(page);
-  expect(paused.pauseReasons).toContain('levelUp');
-  await page.waitForTimeout(1600);
-  expect((await snapshot(page)).temporaryOrbs).toBe(paused.temporaryOrbs);
-
-  await sceneCall(page, (scene) => {
-    const choice = scene.getDebugSnapshot().progression.choices[0]!;
-    scene.debugChooseAbility(choice);
-  });
-  await page.waitForTimeout(1600);
-  expect((await snapshot(page)).temporaryOrbs).toBe(0);
+  const defeated = await snapshot(page);
+  expect(defeated.defeated).toBe(true);
+  expect(defeated.temporaryOrbs).toBe(0);
 });
 
 test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
