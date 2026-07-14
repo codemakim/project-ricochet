@@ -35,6 +35,7 @@ interface CombatSnapshot {
 }
 
 interface DevelopmentScene {
+  update(time: number, delta: number): void;
   getDebugSnapshot(): CombatSnapshot;
   debugPlaceOrb(id: number, position: Vector): boolean;
   debugFreezeEnemies(): void;
@@ -333,22 +334,40 @@ test('@desktop admits reinforcement while original enemies remain', async ({ pag
 });
 
 test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
+  await page.clock.install();
   await loadCanvas(page);
-  const before = await snapshot(page);
+  await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
+  await page.clock.runFor(1_000);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await page.waitForTimeout(250);
+  const before = await snapshot(page);
+  await page.clock.runFor(8_100);
   const hidden = await snapshot(page);
+  expect(hidden.encounter.elapsedMs).toBe(before.encounter.elapsedMs);
+  expect(hidden.encounter.elapsedSinceSpawnMs).toBe(before.encounter.elapsedSinceSpawnMs);
+  expect(hidden.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
+  expect(hidden.enemies).toHaveLength(before.enemies.length);
   expect(hidden.enemies[0]!.position.y - before.enemies[0]!.position.y).toBeLessThan(1);
 
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await page.waitForTimeout(120);
+  await sceneCall(page, (scene) => scene.update(0, 8_100));
+  const firstResumedFrame = await snapshot(page);
+  expect(firstResumedFrame.encounter.elapsedMs - hidden.encounter.elapsedMs).toBeLessThanOrEqual(50);
+  expect(firstResumedFrame.encounter.elapsedSinceSpawnMs - hidden.encounter.elapsedSinceSpawnMs)
+    .toBeLessThanOrEqual(50);
+  expect(firstResumedFrame.encounter.spawnSequence).toBe(hidden.encounter.spawnSequence);
+  expect(firstResumedFrame.enemies).toHaveLength(hidden.enemies.length);
+
+  await page.clock.runFor(16);
   const resumed = await snapshot(page);
+  expect(resumed.encounter.elapsedMs - firstResumedFrame.encounter.elapsedMs).toBeLessThanOrEqual(50);
+  expect(resumed.encounter.elapsedSinceSpawnMs - firstResumedFrame.encounter.elapsedSinceSpawnMs)
+    .toBeLessThanOrEqual(50);
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(hidden.enemies[0]!.position.y);
 });
 

@@ -57,6 +57,8 @@ export class CombatScene extends Phaser.Scene {
   private invulnerableUntil = 0;
   private aimQueueActivated = false;
   private defeated = false;
+  private visibilityPaused = false;
+  private discardNextEncounterDelta = false;
 
   constructor() {
     super('combat');
@@ -69,6 +71,8 @@ export class CombatScene extends Phaser.Scene {
     this.invulnerableUntil = 0;
     this.aimQueueActivated = false;
     this.defeated = false;
+    this.visibilityPaused = false;
+    this.discardNextEncounterDelta = false;
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -131,6 +135,8 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return;
 
+    if (this.visibilityPaused) return;
+
     const next = movePlayer(this.player, this.playerInput.movement, delta);
     this.player.setPosition(next.x, next.y);
     this.aim = resolveAim(this.aim, this.playerInput.aimCandidate);
@@ -142,7 +148,9 @@ export class CombatScene extends Phaser.Scene {
     this.orbManager.update(this.time.now, delta, next, this.aim);
     this.enemyManager.update();
     const enemies = this.enemyManager.getSnapshot();
-    const formation = this.encounterDirector.update(delta, {
+    const encounterDelta = this.discardNextEncounterDelta ? 0 : delta;
+    this.discardNextEncounterDelta = false;
+    const formation = this.encounterDirector.update(encounterDelta, {
       activeEnemies: enemies.enemies.length,
       topmostEnemyY: enemies.topmostEnemyY,
     });
@@ -248,9 +256,12 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleVisibilityChange = (): void => {
     if (document.hidden) {
+      this.visibilityPaused = true;
       this.physics.pause();
       this.time.paused = true;
     } else if (!this.defeated) {
+      if (this.visibilityPaused) this.discardNextEncounterDelta = true;
+      this.visibilityPaused = false;
       this.physics.resume();
       this.time.paused = false;
     }

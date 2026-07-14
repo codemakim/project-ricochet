@@ -171,7 +171,7 @@ Phone과 Mac은 같은 Wi-Fi/LAN에 있어야 한다. 접속 실패 시 macOS fi
 ## 2026-07-14 Continuous ingress automation
 
 - Initial formation: 20
-- Reinforcement: 6 enemies after 8 seconds when four capacity slots are available
+- Reinforcement: 6 enemies after 8 seconds after four enemies are removed, leaving six capacity slots
 - Original and reinforcement IDs coexist: verified by Playwright
 - Unit tests: 14 files, 93/93 tests passed
 - Desktop/mobile E2E: 9/9 passed (`desktop-chromium` 8, `mobile-chromium` 1)
