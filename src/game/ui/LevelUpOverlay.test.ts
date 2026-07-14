@@ -31,6 +31,10 @@ class FakeEmitter {
   listenerCount(event: string): number {
     return this.listeners.get(event)?.length ?? 0;
   }
+
+  removeAllListeners(): void {
+    this.listeners.clear();
+  }
 }
 
 class FakeObject extends FakeEmitter {
@@ -51,7 +55,10 @@ class FakeObject extends FakeEmitter {
   setDepth(): this { return this; }
   setOrigin(): this { return this; }
   setInteractive(): this { this.interactive = true; return this; }
-  destroy(): void { this.destroyed = true; }
+  destroy(): void {
+    this.destroyed = true;
+    this.removeAllListeners();
+  }
 }
 
 function makeScene() {
@@ -130,5 +137,20 @@ describe('LevelUpOverlay', () => {
     overlay.hide();
     expect(overlay.isVisible()).toBe(false);
     expect([...keys.values()].every((key) => key.listenerCount('down') === 0)).toBe(true);
+  });
+
+  it('makes destroyed cards unable to invoke stale pointer callbacks', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+    const onSelect = vi.fn();
+    overlay.show(['firepower'], new BuildState(), onSelect);
+    const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
+
+    overlay.hide();
+    card.emit('pointerup');
+
+    expect(card.destroyed).toBe(true);
+    expect(card.listenerCount('pointerup')).toBe(0);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

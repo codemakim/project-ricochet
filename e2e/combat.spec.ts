@@ -74,6 +74,36 @@ async function snapshot(page: Page): Promise<CombatSnapshot> {
   return sceneCall(page, (scene) => scene.getDebugSnapshot());
 }
 
+async function bulletState(page: Page): Promise<Array<{ x: number; y: number; vx: number; vy: number }>> {
+  return page.evaluate(() => {
+    const game = (window as unknown as {
+      __RICHOCHET_GAME__: {
+        scene: {
+          getScene(key: string): {
+            children: {
+              list: Array<{
+                active?: boolean;
+                x?: number;
+                y?: number;
+                texture?: { key?: string };
+                body?: { velocity?: { x: number; y: number } };
+              }>;
+            };
+          };
+        };
+      };
+    }).__RICHOCHET_GAME__;
+    return game.scene.getScene('combat').children.list
+      .filter((child) => child.active && child.texture?.key === 'enemy-bullet')
+      .map((child) => ({
+        x: child.x!,
+        y: child.y!,
+        vx: child.body!.velocity!.x,
+        vy: child.body!.velocity!.y,
+      }));
+  });
+}
+
 async function loadCanvas(page: Page, search = '') {
   await page.goto(`/${search}`);
   const canvas = page.locator('#game-root canvas');
@@ -394,13 +424,37 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
 });
 
 test('@desktop pauses for level-up until an ability is chosen', async ({ page }) => {
-  await loadCanvas(page);
+  await page.clock.install();
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 4, 8, 12]));
+  const movingStart = await snapshot(page);
+  await page.clock.runFor(1_700);
+  const current = await snapshot(page);
+  expect(current.enemies[0]!.position.y).toBeGreaterThan(movingStart.enemies[0]!.position.y);
+  expect(current.encounter.elapsedMs).toBeGreaterThan(movingStart.encounter.elapsedMs);
+  const aim = clientPoint(box, { x: current.player.x + 100, y: current.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await page.clock.runFor(120);
+  await page.keyboard.down('KeyD');
   await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
+  const pausedBullets = await bulletState(page);
   expect(paused.pauseReasons).toContain('levelUp');
-  await page.waitForTimeout(200);
-  expect((await snapshot(page)).encounter.elapsedMs).toBe(paused.encounter.elapsedMs);
+  expect(paused.orbs.some((orb) => orb.state === 'active' && Math.hypot(orb.velocity.x, orb.velocity.y) > 0)).toBe(true);
+  expect(pausedBullets.length).toBeGreaterThan(0);
+  expect(pausedBullets.some((bullet) => Math.hypot(bullet.vx, bullet.vy) > 0)).toBe(true);
+
+  await page.clock.runFor(2_000);
+
+  const frozen = await snapshot(page);
+  expect(frozen.player).toEqual(paused.player);
+  expect(frozen.aim).toEqual(paused.aim);
+  expect(frozen.enemies).toEqual(paused.enemies);
+  expect(frozen.orbs).toEqual(paused.orbs);
+  expect(frozen.bullets).toBe(paused.bullets);
+  expect(await bulletState(page)).toEqual(pausedBullets);
+  expect(frozen.encounter).toEqual(paused.encounter);
 
   await page.keyboard.press('Digit1');
 
@@ -408,6 +462,53 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   const selected = await snapshot(page);
   expect(selected.pauseReasons).not.toContain('levelUp');
   expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(1);
+  await page.keyboard.up('KeyD');
+});
+
+test('@desktop keeps visibility pause after choosing a level-up while hidden', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
+  await page.clock.runFor(1_000);
+  await page.keyboard.down('KeyD');
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const hidden = await snapshot(page);
+  expect(hidden.pauseReasons).toEqual(['visibility', 'levelUp']);
+
+  await sceneCall(page, (scene) => {
+    const choice = scene.getDebugSnapshot().progression.choices[0]!;
+    scene.debugChooseAbility(choice);
+  });
+
+  const selected = await snapshot(page);
+  expect(selected.levelUpVisible).toBe(false);
+  expect(selected.pauseReasons).toEqual(['visibility']);
+  await page.clock.runFor(1_000);
+  const stillHidden = await snapshot(page);
+  expect(stillHidden.player).toEqual(selected.player);
+  expect(stillHidden.enemies).toEqual(selected.enemies);
+  expect(stillHidden.orbs).toEqual(selected.orbs);
+  expect(stillHidden.encounter).toEqual(selected.encounter);
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await sceneCall(page, (scene) => scene.update(0, 8_100));
+  const firstResumedFrame = await snapshot(page);
+  expect(firstResumedFrame.player).toEqual(stillHidden.player);
+  expect(firstResumedFrame.encounter).toEqual(stillHidden.encounter);
+
+  await page.clock.runFor(32);
+  const resumed = await snapshot(page);
+  expect(resumed.player.x).toBeGreaterThan(firstResumedFrame.player.x);
+  expect(resumed.enemies[0]!.position.y).toBeGreaterThan(firstResumedFrame.enemies[0]!.position.y);
+  expect(resumed.encounter.elapsedMs).toBeGreaterThan(firstResumedFrame.encounter.elapsedMs);
+  await page.keyboard.up('KeyD');
 });
 
 test('@desktop keeps level-up paused across queued choices', async ({ page }) => {
