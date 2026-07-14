@@ -32,7 +32,19 @@ interface CombatSnapshot {
     phase: 0 | 1 | 2;
     spawnSequence: number;
   };
+  progression: {
+    level: number;
+    xp: number;
+    xpRequired: number | null;
+    pendingChoices: number;
+    choices: AbilityId[];
+  };
+  buildRanks: Record<AbilityId, number>;
+  pauseReasons: string[];
+  levelUpVisible: boolean;
 }
+
+type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
 
 interface DevelopmentScene {
   update(time: number, delta: number): void;
@@ -42,6 +54,10 @@ interface DevelopmentScene {
   debugSetHealth(value: number): void;
   debugDamage(amount: number): void;
   debugRemoveEnemies(ids: readonly number[]): void;
+  debugGrantXp(amount: number): void;
+  debugChooseAbility(id: AbilityId): void;
+  debugUpgradeAbility(id: AbilityId): void;
+  debugSetEnemy(id: number, position: Vector, hp: number): boolean;
 }
 
 async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {
@@ -290,6 +306,7 @@ for (const passThroughOnKill of [false, true]) {
     expect(after.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
     expect(orb.charges).toBe(chargeBefore - 1);
     expect(orb.velocity.y < 0).toBe(passThroughOnKill);
+    expect(after.progression.xp).toBe(before.progression.xp + 1);
 
     await page.waitForTimeout(120);
     const stable = await snapshot(page);
@@ -376,6 +393,50 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   await page.keyboard.up('KeyD');
 });
 
+test('@desktop pauses for level-up until an ability is chosen', async ({ page }) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
+  const paused = await snapshot(page);
+  expect(paused.pauseReasons).toContain('levelUp');
+  await page.waitForTimeout(200);
+  expect((await snapshot(page)).encounter.elapsedMs).toBe(paused.encounter.elapsedMs);
+
+  await page.keyboard.press('Digit1');
+
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
+  const selected = await snapshot(page);
+  expect(selected.pauseReasons).not.toContain('levelUp');
+  expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(1);
+});
+
+test('@desktop keeps level-up paused across queued choices', async ({ page }) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugGrantXp(21));
+  await expect.poll(async () => (await snapshot(page)).progression.pendingChoices).toBe(2);
+
+  await sceneCall(page, (scene) => {
+    const choice = scene.getDebugSnapshot().progression.choices[0]!;
+    scene.debugChooseAbility(choice);
+  });
+
+  const between = await snapshot(page);
+  expect(between.progression.pendingChoices).toBe(1);
+  expect(between.levelUpVisible).toBe(true);
+  expect(between.pauseReasons).toContain('levelUp');
+
+  await sceneCall(page, (scene) => {
+    const choice = scene.getDebugSnapshot().progression.choices[0]!;
+    scene.debugChooseAbility(choice);
+  });
+
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
+  const selected = await snapshot(page);
+  expect(selected.progression).toMatchObject({ level: 2, xp: 1, pendingChoices: 0 });
+  expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(2);
+  expect(selected.pauseReasons).not.toContain('levelUp');
+});
+
 test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => {
@@ -390,11 +451,16 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   await sceneCall(page, (scene) => scene.debugDamage(1));
   expect((await snapshot(page)).health.current).toBe(1);
   await page.waitForTimeout(370);
-  await sceneCall(page, (scene) => scene.debugDamage(1));
+  await sceneCall(page, (scene) => {
+    scene.debugGrantXp(8);
+    scene.debugDamage(1);
+  });
 
   const defeated = await snapshot(page);
   expect(defeated.health.current).toBe(0);
   expect(defeated.defeated).toBe(true);
+  expect(defeated.levelUpVisible).toBe(false);
+  expect(defeated.pauseReasons).toEqual(['defeated']);
   await sceneCall(page, (scene) => scene.debugDamage(1));
   const panelCount = await page.evaluate(() => {
     const game = (window as unknown as {
@@ -407,5 +473,11 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   const restart = clientPoint(box, { x: 225, y: 436 });
   await page.mouse.click(restart.x, restart.y);
   await expect.poll(async () => (await snapshot(page)).defeated).toBe(false);
-  expect((await snapshot(page)).health.current).toBe(10);
+  expect(await snapshot(page)).toMatchObject({
+    health: { current: 10 },
+    progression: { level: 0, xp: 0, pendingChoices: 0 },
+    buildRanks: { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
+    pauseReasons: [],
+    levelUpVisible: false,
+  });
 });

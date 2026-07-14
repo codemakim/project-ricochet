@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
-import { CombatPauseController } from '../combat/CombatPauseController';
+import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import {
   applyDamage,
   breachDamage,
@@ -20,10 +20,16 @@ import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
+import { BuildState } from '../progression/BuildState';
+import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
+import type { AbilityId, AbilityRanks } from '../progression/progressionRules';
+import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
+const RUN_SEED = 0x5249434f;
+const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'defeated'];
 
 export interface CombatDebugSnapshot {
   player: Vector;
@@ -36,6 +42,10 @@ export interface CombatDebugSnapshot {
   bullets: number;
   experiment: ExperimentSettings;
   encounter: ReturnType<EncounterDirector['getSnapshot']>;
+  progression: ProgressionSnapshot;
+  buildRanks: AbilityRanks;
+  pauseReasons: PauseReason[];
+  levelUpVisible: boolean;
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -44,6 +54,10 @@ export class CombatScene extends Phaser.Scene {
   declare debugSetHealth?: (value: number) => void;
   declare debugDamage?: (amount: number) => void;
   declare debugRemoveEnemies?: (ids: readonly number[]) => void;
+  declare debugGrantXp?: (amount: number) => void;
+  declare debugChooseAbility?: (id: AbilityId) => boolean;
+  declare debugUpgradeAbility?: (id: AbilityId) => void;
+  declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -52,6 +66,10 @@ export class CombatScene extends Phaser.Scene {
   private encounterDirector?: EncounterDirector;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
+  private progressionText!: Phaser.GameObjects.Text;
+  private build?: BuildState;
+  private progression?: ProgressionManager;
+  private levelUpOverlay?: LevelUpOverlay;
   private health: HealthState = createHealth();
   private experiment: ExperimentSettings = parseExperimentSettings('');
   private aim: Vector = { x: 0, y: -1 };
@@ -72,6 +90,9 @@ export class CombatScene extends Phaser.Scene {
     this.aimQueueActivated = false;
     this.defeated = false;
     this.pause = new CombatPauseController();
+    this.build = new BuildState();
+    this.progression = new ProgressionManager(RUN_SEED, this.build);
+    this.levelUpOverlay = new LevelUpOverlay(this);
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -90,6 +111,7 @@ export class CombatScene extends Phaser.Scene {
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
+      onEnemyKilled: ({ kind }) => this.handleEnemyKilled(kind),
     });
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -109,15 +131,30 @@ export class CombatScene extends Phaser.Scene {
       };
       this.debugDamage = (amount) => this.damagePlayer(amount);
       this.debugRemoveEnemies = (ids) => this.enemyManager?.debugRemoveEnemies?.(ids);
+      this.debugGrantXp = (amount) => {
+        this.progression?.gainExperience(amount);
+        this.updateProgressionText();
+        this.openNextLevelUp();
+      };
+      this.debugChooseAbility = (id) => this.chooseAbility(id);
+      this.debugUpgradeAbility = (id) => {
+        this.build?.upgrade(id);
+        this.refreshCombatModifiers();
+      };
+      this.debugSetEnemy = (id, position, hp) => {
+        return this.enemyManager?.debugSetEnemy?.(id, position, hp) ?? false;
+      };
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
     this.healthText = this.add.text(16, 16, '', { color: '#dff7ff', fontSize: '20px' }).setDepth(10);
+    this.progressionText = this.add.text(16, 44, '', { color: '#65f6ff', fontSize: '16px' }).setDepth(10);
     this.add.text(GAME_WIDTH - 16, 16, 'WASD / MOUSE · TWO TOUCH STICKS', {
       color: '#6f8aa8',
       fontSize: '12px',
     }).setOrigin(1, 0);
     this.updateHealthText();
+    this.updateProgressionText();
     this.drawAimGuide();
 
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -193,7 +230,59 @@ export class CombatScene extends Phaser.Scene {
         phase: 0,
         spawnSequence: 0,
       },
+      progression: this.progression?.getSnapshot() ?? {
+        level: 0,
+        xp: 0,
+        xpRequired: 8,
+        pendingChoices: 0,
+        choices: [],
+      },
+      buildRanks: this.build?.getRanks() ?? {
+        firepower: 0,
+        kinetic: 0,
+        explosion: 0,
+        split: 0,
+      },
+      pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
+      levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
     };
+  }
+
+  private handleEnemyKilled(kind: Parameters<ProgressionManager['gainEnemyKill']>[0]): void {
+    if (this.defeated) return;
+    this.progression?.gainEnemyKill(kind);
+    this.updateProgressionText();
+    this.openNextLevelUp();
+  }
+
+  private openNextLevelUp(): void {
+    if (this.defeated || !this.build || !this.progression || !this.levelUpOverlay) return;
+    const snapshot = this.progression.getSnapshot();
+    if (snapshot.pendingChoices === 0 || snapshot.choices.length === 0) return;
+
+    this.pause.add('levelUp');
+    this.syncPauseState();
+    this.levelUpOverlay.show(snapshot.choices, this.build, (id) => this.chooseAbility(id));
+  }
+
+  private chooseAbility(id: AbilityId): boolean {
+    if (this.defeated || !this.progression || !this.levelUpOverlay?.isVisible()) return false;
+    if (!this.progression.choose(id)) return false;
+
+    this.refreshCombatModifiers();
+    this.updateProgressionText();
+    if (this.progression.getSnapshot().pendingChoices > 0) {
+      this.openNextLevelUp();
+    } else {
+      this.levelUpOverlay.hide();
+      this.pause.remove('levelUp');
+      this.syncPauseState();
+    }
+    return true;
+  }
+
+  private refreshCombatModifiers(): void {
+    // Task 6 applies BuildState values to active permanent orbs.
   }
 
   private damagePlayer(amount: number): void {
@@ -209,9 +298,17 @@ export class CombatScene extends Phaser.Scene {
     this.healthText.setText(`HP ${this.health.current}/${this.health.maximum}`);
   }
 
+  private updateProgressionText(): void {
+    if (!this.progressionText || !this.progression) return;
+    const { level, xp, xpRequired } = this.progression.getSnapshot();
+    this.progressionText.setText(`LV ${level}  XP ${xp}/${xpRequired ?? 'MAX'}`);
+  }
+
   private showDefeat(): void {
     if (this.defeated) return;
     this.defeated = true;
+    this.levelUpOverlay?.hide();
+    this.pause.remove('levelUp');
     this.pause.add('defeated');
     this.syncPauseState();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
@@ -276,10 +373,14 @@ export class CombatScene extends Phaser.Scene {
     this.enemyManager?.destroy();
     this.orbManager?.destroy();
     this.playerInput?.destroy();
+    this.levelUpOverlay?.destroy();
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
     this.orbManager = undefined;
     this.playerInput = undefined;
+    this.levelUpOverlay = undefined;
+    this.progression = undefined;
+    this.build = undefined;
   };
 
   private createTextures(): void {
