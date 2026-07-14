@@ -5,8 +5,8 @@ import {
   xpForEnemy,
   xpRequiredForLevel,
   type AbilityId,
-  type AbilityRanks,
 } from './progressionRules';
+import { BuildState } from './BuildState';
 
 export interface ProgressionSnapshot {
   level: number;
@@ -14,10 +14,6 @@ export interface ProgressionSnapshot {
   xpRequired: number | null;
   pendingChoices: number;
   choices: AbilityId[];
-}
-
-function createEmptyRanks(): AbilityRanks {
-  return { firepower: 0, kinetic: 0, explosion: 0, split: 0 };
 }
 
 export class ProgressionManager {
@@ -28,9 +24,9 @@ export class ProgressionManager {
 
   constructor(
     private readonly seed: number,
-    private readonly ranks: AbilityRanks = createEmptyRanks(),
+    private readonly build: BuildState = new BuildState(),
   ) {
-    this.level = ABILITY_IDS.reduce((total, id) => total + ranks[id], 0);
+    this.level = ABILITY_IDS.reduce((total, id) => total + build.rank(id), 0);
     this.normalizeCompletedBuild();
   }
 
@@ -57,7 +53,7 @@ export class ProgressionManager {
   choose(ability: AbilityId): boolean {
     if (this.pendingChoices === 0 || !this.choices.includes(ability)) return false;
 
-    this.ranks[ability] += 1;
+    this.build.upgrade(ability);
     this.pendingChoices -= 1;
 
     if (this.normalizeCompletedBuild()) return true;
@@ -85,11 +81,11 @@ export class ProgressionManager {
     if (this.pendingChoices === 0 || this.choices.length > 0) return;
 
     const choiceLevel = this.level - this.pendingChoices;
-    this.choices = selectAbilityOptions(this.ranks, choiceLevel, this.seed);
+    this.choices = selectAbilityOptions(this.build.getRanks(), choiceLevel, this.seed);
   }
 
   private isBuildComplete(): boolean {
-    return ABILITY_IDS.every((id) => this.ranks[id] >= 5);
+    return ABILITY_IDS.every((id) => this.build.rank(id) >= 5);
   }
 
   private normalizeCompletedBuild(): boolean {
