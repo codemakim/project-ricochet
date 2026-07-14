@@ -3,13 +3,13 @@ import { createReinforcementFormation } from './formationRules';
 
 describe('reinforcement formations', () => {
   it.each([
-    [0, 6],
-    [1, 8],
-    [2, 10],
+    [0, 8],
+    [1, 10],
+    [2, 12],
   ] as const)('creates phase %i with %i enemies', (phase, size) => {
     const formation = createReinforcementFormation(phase, 0);
     expect(formation).toHaveLength(size);
-    expect(formation.every((enemy) => enemy.speed === 22)).toBe(true);
+    expect(formation.every((enemy) => enemy.speed === 18)).toBe(true);
     expect(formation.every((enemy) => enemy.y <= 14)).toBe(true);
     expect(formation.every((enemy) => enemy.x >= 36 && enemy.x <= 414)).toBe(true);
   });

@@ -280,7 +280,7 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
 test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
   await page.clock.install();
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(12));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
@@ -459,6 +459,7 @@ test('@desktop temporary split orbs stay capped, do not recursively split, pause
     timeout: 240,
   }).toEqual({ active: 3, queued: 0 });
 
+  const beforeSpawn = await snapshot(page);
   await sceneCall(page, (scene) => {
     const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
     if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('active orb required');
@@ -474,9 +475,10 @@ test('@desktop temporary split orbs stay capped, do not recursively split, pause
   }).toBe(1.5);
   expect((await snapshot(page)).temporaryOrbs).toBe(3);
 
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(12));
   const paused = await snapshot(page);
-  const expectedRemainingMs = 1500 - (paused.gameplayElapsedMs - spawned.gameplayElapsedMs);
+  const minimumRemainingMs = 1500 - (paused.gameplayElapsedMs - beforeSpawn.gameplayElapsedMs);
+  const maximumRemainingMs = 1500 - (paused.gameplayElapsedMs - spawned.gameplayElapsedMs);
   expect(paused.pauseReasons).toContain('levelUp');
   await page.waitForTimeout(1600);
   const afterLongPause = await snapshot(page);
@@ -491,18 +493,18 @@ test('@desktop temporary split orbs stay capped, do not recursively split, pause
   expect((await snapshot(page)).temporaryOrbs).toBe(3);
   await expect.poll(async () => {
     const current = await snapshot(page);
-    return current.gameplayElapsedMs - paused.gameplayElapsedMs >= expectedRemainingMs - 50
+    return current.gameplayElapsedMs - paused.gameplayElapsedMs >= minimumRemainingMs - 50
       ? current.temporaryOrbs
       : -1;
-  }, { intervals: [5], timeout: expectedRemainingMs + 200 }).toBe(3);
+  }, { intervals: [5], timeout: maximumRemainingMs + 200 }).toBe(3);
   await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
     intervals: [5],
     timeout: 100,
   }).toBe(0);
   const expired = await snapshot(page);
   const resumedLifetimeMs = expired.gameplayElapsedMs - paused.gameplayElapsedMs;
-  expect(resumedLifetimeMs).toBeGreaterThanOrEqual(expectedRemainingMs - 20);
-  expect(resumedLifetimeMs).toBeLessThan(expectedRemainingMs + 50);
+  expect(resumedLifetimeMs).toBeGreaterThanOrEqual(minimumRemainingMs - 20);
+  expect(resumedLifetimeMs).toBeLessThan(maximumRemainingMs + 50);
 
   await sceneCall(page, (scene) => {
     scene.debugSetEnemy(1, { x: 30, y: 80 }, 99);
@@ -641,7 +643,7 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   await page.mouse.move(aim.x, aim.y);
   await page.clock.runFor(120);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(12));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const pausedBullets = await bulletState(page);
@@ -677,7 +679,7 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   await page.mouse.move(aimPoint.x, aimPoint.y);
   await page.clock.runFor(32);
   const aimed = await snapshot(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(12));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
@@ -708,7 +710,7 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
   await page.clock.runFor(1_000);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(12));
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -752,7 +754,7 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
 
 test('@desktop keeps level-up paused across queued choices', async ({ page }) => {
   await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(21));
+  await sceneCall(page, (scene) => scene.debugGrantXp(30));
   await expect.poll(async () => (await snapshot(page)).progression.pendingChoices).toBe(2);
 
   await sceneCall(page, (scene) => {
@@ -824,7 +826,7 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
     if (!scene.debugPlaceOrb(active.id, { x: 225, y: 324 })) throw new Error('active orb required');
   });
   await expect.poll(async () => (await snapshot(page)).temporaryOrbs).toBe(1);
-  await sceneCall(page, (scene) => scene.debugGrantXp(9));
+  await sceneCall(page, (scene) => scene.debugGrantXp(13));
   const dirty = await snapshot(page);
   expect(dirty.progression).toMatchObject({ level: 1, xp: 1, pendingChoices: 1 });
   expect(dirty.buildRanks.split).toBe(1);

@@ -13,7 +13,7 @@ describe('prototype enemies', () => {
       80, 122, 164, 206, 248,
     ]);
     expect(formation.every((enemy) => enemy.x >= 36 && enemy.x <= 414)).toBe(true);
-    expect(formation.every((enemy) => enemy.speed === 22)).toBe(true);
+    expect(formation.every((enemy) => enemy.speed === 18)).toBe(true);
     expect(
       formation.every(
         (enemy) => enemy.hp === (enemy.kind === 'armored' ? 3 : 1),

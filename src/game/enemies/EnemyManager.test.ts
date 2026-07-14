@@ -259,7 +259,7 @@ describe('EnemyManager', () => {
 
     expect(snapshot.enemies).toHaveLength(20);
     expect(snapshot.enemies.map((enemy) => enemy.id)).toEqual([...Array(20).keys()]);
-    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 22)).toBe(true);
+    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 18)).toBe(true);
   });
 
   it('appends formations with monotonic IDs and reports topmost position', () => {

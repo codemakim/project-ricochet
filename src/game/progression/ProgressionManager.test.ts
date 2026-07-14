@@ -5,14 +5,14 @@ import { ProgressionManager } from './ProgressionManager';
 describe('ProgressionManager', () => {
   it('preserves overflow and queues multiple choices', () => {
     const manager = new ProgressionManager(7);
-    manager.gainExperience(21);
+    manager.gainExperience(30);
     expect(manager.getSnapshot()).toMatchObject({ level: 2, xp: 1, pendingChoices: 2 });
   });
 
   it('applies one valid choice and rejects stale or invalid choices', () => {
     const build = new BuildState();
     const manager = new ProgressionManager(7, build);
-    manager.gainExperience(8);
+    manager.gainExperience(12);
     const choice = manager.getChoices()[0]!;
     expect(manager.choose(choice)).toBe(true);
     expect(build.rank(choice)).toBe(1);

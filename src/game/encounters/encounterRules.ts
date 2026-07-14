@@ -17,9 +17,9 @@ export interface SpawnGateInput {
 }
 
 export function threatConfigAt(elapsedMs: number): ThreatConfig {
-  if (elapsedMs >= 120_000) return { phase: 2, activeCap: 30, spawnIntervalMs: 6_000 };
-  if (elapsedMs >= 60_000) return { phase: 1, activeCap: 26, spawnIntervalMs: 7_000 };
-  return { phase: 0, activeCap: 22, spawnIntervalMs: 8_000 };
+  if (elapsedMs >= 120_000) return { phase: 2, activeCap: 40, spawnIntervalMs: 6_000 };
+  if (elapsedMs >= 60_000) return { phase: 1, activeCap: 34, spawnIntervalMs: 7_000 };
+  return { phase: 0, activeCap: 28, spawnIntervalMs: 8_000 };
 }
 
 export function canSpawnReinforcement(input: SpawnGateInput): boolean {

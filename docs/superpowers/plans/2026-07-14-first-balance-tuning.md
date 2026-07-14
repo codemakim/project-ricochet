@@ -32,6 +32,8 @@
 - Modify: `src/game/encounters/encounterRules.test.ts`
 - Modify: `src/game/encounters/encounterRules.ts`
 - Modify: `src/game/encounters/EncounterDirector.test.ts`
+- Modify: `src/game/scenes/CombatScene.ts`
+- Modify: `e2e/combat.spec.ts`
 - Modify: `docs/playtests/2026-07-13-core-redesign-prototype.md`
 
 **Interfaces:**
@@ -71,6 +73,8 @@ it.each([
 ```
 
 Update `EncounterDirector.test.ts` phase-0 formation results from length `6` to `8`. Update its capacity fixture to use `activeEnemies: 20`, incoming `8`, and cap `28`; one additional active enemy must block the spawn.
+
+Update fixed progression fixtures in `ProgressionManager.test.ts` and `e2e/combat.spec.ts`: first level `8` becomes `12`, level 1 with 1 overflow XP `9` becomes `13`, and two pending choices with 1 overflow XP `21` becomes `30`. Update the development snapshot fallback in `CombatScene.ts` from `xpRequired: 8` to `xpRequired: 12`.
 
 - [ ] **Step 2: Run focused tests and prove RED**
 
@@ -137,6 +141,6 @@ Append a dated section to `docs/playtests/2026-07-13-core-redesign-prototype.md`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/game/progression/progressionRules.ts src/game/progression/progressionRules.test.ts src/game/enemies/enemyRules.ts src/game/enemies/enemyRules.test.ts src/game/encounters/formationRules.ts src/game/encounters/formationRules.test.ts src/game/encounters/encounterRules.ts src/game/encounters/encounterRules.test.ts src/game/encounters/EncounterDirector.test.ts docs/playtests/2026-07-13-core-redesign-prototype.md
+git add src/game/progression src/game/enemies src/game/encounters src/game/scenes/CombatScene.ts e2e/combat.spec.ts docs/playtests/2026-07-13-core-redesign-prototype.md docs/superpowers/plans/2026-07-14-first-balance-tuning.md
 git commit -m "balance: slow growth and increase enemy density"
 ```

@@ -205,3 +205,33 @@ Restart 검증은 초기값을 바로 재확인하지 않았다. Split rank 1, l
 - 1~3분 동안 성장 속도와 적 압박이 균형을 유지하는지
 
 `mobile-chromium` 결과는 Pixel 7 emulation이다. physical phone 결과가 아니다.
+
+## 2026-07-14 First balance tuning
+
+사용자 플레이에서 첫 레벨업이 너무 빠르고 적 밀도가 낮게 느껴졌다. 강해지는 체감은 확인됐지만 보스가 없는 현재 구간에서는 성장 속도가 필요 이상으로 빠르게 느껴졌다.
+
+적용한 1차 조정:
+
+- 레벨 비용: `8 + level * 4`에서 `12 + level * 5`
+- 초기·보충 적 하강 속도: `22px/s`에서 `18px/s`
+- 단계별 보충 대형: `6/8/10`에서 `8/10/12`마리
+- 단계별 활성 적 상한: `22/26/30`에서 `28/34/40`
+- 단계별 생성 간격 `8/7/6초`, 적 체력, 적 종류별 XP, 사수·탄환 상한은 유지
+
+Fresh automation evidence:
+
+| 검증 | 결과 |
+| --- | --- |
+| focused rule tests | **PASS** — 5 files, 22/22 tests |
+| `npm test` | **PASS** — 22 files, 131/131 tests |
+| `npm run test:e2e` | **PASS** — 17/17, desktop 15 + Pixel 7 emulation 2 |
+| `npm run build` | **PASS** — TypeScript 성공, Vite 30 modules transformed |
+| `git diff --check` | **PASS** — whitespace 오류 없음 |
+
+다음 사용자 플레이까지 수동 pending:
+
+- 변경 후 첫 레벨업 도달 시간
+- 적이 느리지만 충분히 많이 보이는지
+- 1~3분 성장 속도와 적 압박
+- 폭발·분열이 늘어난 적을 정리하는 순간 화력의 만족도
+- physical phone 입력과 성능

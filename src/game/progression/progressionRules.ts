@@ -13,7 +13,7 @@ export function xpRequiredForLevel(level: number): number {
     throw new RangeError('level must be a non-negative integer');
   }
 
-  return 8 + level * 4;
+  return 12 + level * 5;
 }
 
 function nextSeed(seed: number): number {
