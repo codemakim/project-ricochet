@@ -217,6 +217,32 @@ describe('EnemyManager', () => {
     expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 22)).toBe(true);
   });
 
+  it('appends formations with monotonic IDs and reports topmost position', () => {
+    const { manager, colliders } = createBoundary();
+    const colliderCount = colliders.length;
+    manager.spawnFormation([
+      { kind: 'basic', hp: 1, x: 90, y: -28, column: 1, speed: 22 },
+      { kind: 'shooter', hp: 1, x: 144, y: 14, column: 2, speed: 22 },
+    ]);
+
+    const snapshot = manager.getSnapshot();
+    expect(snapshot.enemies).toHaveLength(22);
+    expect(snapshot.enemies.slice(-2).map((enemy) => enemy.id)).toEqual([20, 21]);
+    expect(snapshot.topmostEnemyY).toBe(-28);
+    expect(colliders).toHaveLength(colliderCount);
+  });
+
+  it('debug-removes selected enemies without reusing IDs', () => {
+    const { manager } = createBoundary();
+    manager.debugRemoveEnemies!([0, 3, 7, 11]);
+    expect(manager.getSnapshot().enemies).toHaveLength(16);
+
+    manager.spawnFormation([
+      { kind: 'basic', hp: 1, x: 90, y: -28, column: 1, speed: 22 },
+    ]);
+    expect(manager.getSnapshot().enemies.at(-1)?.id).toBe(20);
+  });
+
   it('removes breaches and reports their kind once', () => {
     const { manager, groups, onBreach } = createBoundary();
     const armored = groups[0]!.children[1]!;
@@ -334,6 +360,11 @@ describe('EnemyManager', () => {
     expect(groups.every((group) => group.destroyed)).toBe(true);
     expect([...colliders, ...overlaps].every((collider) => collider.destroyed)).toBe(true);
     expect(time.activeCount()).toBe(0);
-    expect(manager.getSnapshot()).toEqual({ enemies: [], activeShooters: 0, bullets: 0 });
+    expect(manager.getSnapshot()).toEqual({
+      enemies: [],
+      topmostEnemyY: Number.POSITIVE_INFINITY,
+      activeShooters: 0,
+      bullets: 0,
+    });
   });
 });

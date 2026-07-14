@@ -27,6 +27,7 @@ export interface EnemySnapshot {
 
 export interface EnemyManagerSnapshot {
   enemies: EnemySnapshot[];
+  topmostEnemyY: number;
   activeShooters: number;
   bullets: number;
 }
@@ -43,6 +44,7 @@ export interface EnemyManagerOptions {
 
 export class EnemyManager {
   declare debugFreezeEnemies?: () => void;
+  declare debugRemoveEnemies?: (ids: readonly number[]) => void;
 
   private readonly enemyGroup: Phaser.Physics.Arcade.Group;
   private readonly bulletGroup: Phaser.Physics.Arcade.Group;
@@ -52,7 +54,9 @@ export class EnemyManager {
   private readonly warningTimers = new Map<number, Phaser.Time.TimerEvent>();
   private readonly pendingReflections = new Map<string, HitResult>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
+  private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
   private readonly bulletTextureKey: string;
+  private nextEnemyId = 0;
   private destroyed = false;
 
   constructor(
@@ -61,23 +65,16 @@ export class EnemyManager {
   ) {
     this.enemyGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.bulletGroup = scene.physics.add.group({ allowGravity: false });
-    const textures = {
+    this.textureKeys = {
       basic: 'enemy-basic',
       armored: 'enemy-armored',
       shooter: 'enemy-shooter',
       bullet: 'enemy-bullet',
       ...options.textureKeys,
     };
-    this.bulletTextureKey = textures.bullet;
+    this.bulletTextureKey = this.textureKeys.bullet;
 
-    (options.formation ?? createPrototypeFormation()).forEach((spec, id) => {
-      const enemy = this.enemyGroup.create(spec.x, spec.y, textures[spec.kind]) as EnemySprite;
-      enemy.enemyId = id;
-      enemy.kind = spec.kind;
-      enemy.hp = spec.hp;
-      enemy.setImmovable(true).setVelocityY(spec.speed);
-      this.enemies.set(id, enemy);
-    });
+    this.spawnFormation(options.formation ?? createPrototypeFormation());
 
     for (const orb of options.orbManager.getSprites()) {
       this.colliders.push(scene.physics.add.collider(
@@ -111,6 +108,28 @@ export class EnemyManager {
         if (this.destroyed) return;
         for (const enemy of this.enemies.values()) enemy.setVelocityY(0);
       };
+      this.debugRemoveEnemies = (ids) => {
+        if (ids.some((id) => !Number.isInteger(id) || id < 0)) {
+          throw new RangeError('enemy IDs must be non-negative integers');
+        }
+        for (const id of new Set(ids)) {
+          const enemy = this.enemies.get(id);
+          if (enemy?.active) this.destroyEnemy(enemy);
+        }
+      };
+    }
+  }
+
+  spawnFormation(formation: readonly EnemySpec[]): void {
+    if (this.destroyed) return;
+    for (const spec of formation) {
+      const enemy = this.enemyGroup.create(spec.x, spec.y, this.textureKeys[spec.kind]) as EnemySprite;
+      enemy.enemyId = this.nextEnemyId;
+      this.nextEnemyId += 1;
+      enemy.kind = spec.kind;
+      enemy.hp = spec.hp;
+      enemy.setImmovable(true).setVelocityY(spec.speed);
+      this.enemies.set(enemy.enemyId, enemy);
     }
   }
 
@@ -135,17 +154,26 @@ export class EnemyManager {
   }
 
   getSnapshot(): EnemyManagerSnapshot {
-    if (this.destroyed) return { enemies: [], activeShooters: 0, bullets: 0 };
+    if (this.destroyed) {
+      return {
+        enemies: [],
+        topmostEnemyY: Number.POSITIVE_INFINITY,
+        activeShooters: 0,
+        bullets: 0,
+      };
+    }
+    const enemies = [...this.enemies.values()].filter((enemy) => enemy.active);
     return {
-      enemies: [...this.enemies.values()]
-        .filter((enemy) => enemy.active)
-        .map((enemy) => ({
-          id: enemy.enemyId,
-          kind: enemy.kind,
-          hp: enemy.hp,
-          position: { x: enemy.x, y: enemy.y },
-          warning: this.activeShooters.has(enemy.enemyId),
-        })),
+      enemies: enemies.map((enemy) => ({
+        id: enemy.enemyId,
+        kind: enemy.kind,
+        hp: enemy.hp,
+        position: { x: enemy.x, y: enemy.y },
+        warning: this.activeShooters.has(enemy.enemyId),
+      })),
+      topmostEnemyY: enemies.length === 0
+        ? Number.POSITIVE_INFINITY
+        : Math.min(...enemies.map((enemy) => enemy.y)),
       activeShooters: this.activeShooters.size,
       bullets: (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
         .filter((bullet) => bullet.active).length,
