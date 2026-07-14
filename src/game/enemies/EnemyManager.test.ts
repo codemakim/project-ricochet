@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import type { OrbManager } from '../orbs/OrbManager';
 import { EnemyManager } from './EnemyManager';
+import type { EnemySpec } from './enemyRules';
 
 type Callback = (...args: FakeSprite[]) => void;
 type ProcessCallback = (...args: FakeSprite[]) => boolean;
@@ -150,7 +151,7 @@ class FakeCollider {
   }
 }
 
-function createBoundary() {
+function createBoundary(formation?: readonly EnemySpec[]) {
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
   const overlaps: FakeCollider[] = [];
@@ -187,14 +188,33 @@ function createBoundary() {
   const onContact = vi.fn();
   const onBreach = vi.fn();
   const onBulletHit = vi.fn();
+  const onEnemyKilled = vi.fn();
+  const onDirectHit = vi.fn();
   const manager = new EnemyManager(scene, {
     player: player as unknown as Phaser.Physics.Arcade.Sprite,
     orbManager,
     onContact,
     onBreach,
     onBulletHit,
+    onEnemyKilled,
+    onDirectHit,
+    formation,
   });
-  return { manager, player, orb, handleEnemyHit, onContact, onBreach, onBulletHit, groups, colliders, overlaps, time };
+  return {
+    manager,
+    player,
+    orb,
+    handleEnemyHit,
+    onContact,
+    onBreach,
+    onBulletHit,
+    onEnemyKilled,
+    onDirectHit,
+    groups,
+    colliders,
+    overlaps,
+    time,
+  };
 }
 
 describe('EnemyManager', () => {
@@ -243,6 +263,26 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().enemies.at(-1)?.id).toBe(20);
   });
 
+  it('debug-sets exactly one active enemy with valid position and HP', () => {
+    const { manager } = createBoundary();
+    const before = manager.getSnapshot().enemies[1];
+
+    expect(manager.debugSetEnemy!(0, { x: 100, y: 110 }, 2.5)).toBe(true);
+    expect(manager.getSnapshot().enemies[0]).toMatchObject({
+      id: 0,
+      hp: 2.5,
+      position: { x: 100, y: 110 },
+    });
+    expect(manager.getSnapshot().enemies[1]).toEqual(before);
+    expect(manager.debugSetEnemy!(999, { x: 0, y: 0 }, 1)).toBe(false);
+    expect(() => manager.debugSetEnemy!(0, { x: Number.NaN, y: 0 }, 1)).toThrow(RangeError);
+    expect(() => manager.debugSetEnemy!(0, { x: 0, y: Number.POSITIVE_INFINITY }, 1)).toThrow(RangeError);
+    expect(() => manager.debugSetEnemy!(0, { x: 0, y: 0 }, 0)).toThrow(RangeError);
+    expect(() => manager.debugSetEnemy!(0, { x: 0, y: 0 }, -1)).toThrow(RangeError);
+    expect(() => manager.debugSetEnemy!(0, { x: 0, y: 0 }, Number.NaN)).toThrow(RangeError);
+    expect(() => manager.debugSetEnemy!(0, { x: 0, y: 0 }, Number.POSITIVE_INFINITY)).toThrow(RangeError);
+  });
+
   it('reports an infinite topmost position after debug-removing every enemy', () => {
     const { manager } = createBoundary();
     manager.debugRemoveEnemies!(manager.getSnapshot().enemies.map((enemy) => enemy.id));
@@ -254,8 +294,8 @@ describe('EnemyManager', () => {
     expect((manager as unknown as { enemies: Map<number, unknown> }).enemies.size).toBe(0);
   });
 
-  it('removes breaches and reports their kind once', () => {
-    const { manager, groups, onBreach } = createBoundary();
+  it('removes breaches and reports their kind once without reporting a kill', () => {
+    const { manager, groups, onBreach, onEnemyKilled } = createBoundary();
     const armored = groups[0]!.children[1]!;
     armored.y = GAME_HEIGHT - PLAYER_RADIUS;
 
@@ -265,6 +305,7 @@ describe('EnemyManager', () => {
     expect(armored.destroyed).toBe(true);
     expect(onBreach).toHaveBeenCalledOnce();
     expect(onBreach).toHaveBeenCalledWith('armored');
+    expect(onEnemyKilled).not.toHaveBeenCalled();
   });
 
   it('warns at most two shooters, aims after 350ms, and caps bullets at twelve', () => {
@@ -309,7 +350,7 @@ describe('EnemyManager', () => {
     const enemy = groups[0]!.children[0]!;
     const orbCollider = colliders[0]!;
     orb.setVelocity(50, -100);
-    handleEnemyHit.mockReturnValueOnce({ charges: 2, damage: 1.5, reflect: false });
+    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 2, damage: 1.5, reflect: false });
 
     expect(orbCollider.trigger(orb, enemy)).toBe(false);
     expect(handleEnemyHit).toHaveBeenCalledOnce();
@@ -317,18 +358,59 @@ describe('EnemyManager', () => {
     expect(enemy.destroyed).toBe(true);
 
     const reflectedEnemy = groups[0]!.children[2]!;
-    handleEnemyHit.mockReturnValueOnce({ charges: 1, damage: 1, reflect: true });
+    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 1, damage: 1, reflect: true });
     expect(orbCollider.trigger(orb, reflectedEnemy)).toBe(true);
     expect(handleEnemyHit).toHaveBeenCalledTimes(2);
     expect(orb.body.velocity).toEqual({ x: -50, y: -100 });
     expect(reflectedEnemy.destroyed).toBe(true);
   });
 
+  it('reports one direct hit and one kill with captured enemy data', () => {
+    const { orb, handleEnemyHit, groups, colliders, onDirectHit, onEnemyKilled } = createBoundary();
+    const enemy = groups[0]!.children[0]!;
+    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 0, damage: 1.5, reflect: false });
+
+    colliders[0]!.trigger(orb, enemy);
+
+    expect(onDirectHit).toHaveBeenCalledOnce();
+    expect(onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'permanent',
+      enemyId: 0,
+      charged: true,
+      position: { x: 36, y: 80 },
+    }));
+    expect(onEnemyKilled).toHaveBeenCalledOnce();
+    expect(onEnemyKilled).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'basic',
+      enemyId: 0,
+      position: { x: 36, y: 80 },
+    }));
+  });
+
+  it('applies area damage once to nearby non-primary enemies and reports kills', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 2, x: 100, y: 100, column: 0, speed: 0 },
+      { kind: 'basic', hp: 1, x: 130, y: 100, column: 1, speed: 0 },
+      { kind: 'armored', hp: 3, x: 151, y: 100, column: 2, speed: 0 },
+    ];
+    const { manager, onDirectHit, onEnemyKilled } = createBoundary(formation);
+
+    expect(manager.applyAreaDamage({ x: 100, y: 100 }, 50, 1, 0)).toEqual([1]);
+
+    expect(manager.getSnapshot().enemies).toEqual([
+      expect.objectContaining({ id: 0, hp: 2 }),
+      expect.objectContaining({ id: 2, hp: 3 }),
+    ]);
+    expect(onDirectHit).not.toHaveBeenCalled();
+    expect(onEnemyKilled).toHaveBeenCalledOnce();
+    expect(onEnemyKilled).toHaveBeenCalledWith(expect.objectContaining({ enemyId: 1, kind: 'basic' }));
+  });
+
   it('clears warning state if a shooter dies before firing', () => {
     const { manager, handleEnemyHit, groups, colliders, time } = createBoundary();
     time.advance(1300);
     const warningShooter = groups[0]!.children.find((enemy) => enemy.tint !== undefined)!;
-    handleEnemyHit.mockReturnValueOnce({ charges: 2, damage: 1.5, reflect: false });
+    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 2, damage: 1.5, reflect: false });
 
     colliders[0]!.trigger(new FakeSprite(0, 0, 'orb'), warningShooter);
     time.advance(350);

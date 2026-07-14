@@ -32,6 +32,19 @@ export interface EnemyManagerSnapshot {
   bullets: number;
 }
 
+export interface DirectHitEvent {
+  source: 'permanent' | 'temporary';
+  enemyId: number;
+  position: Vector;
+  charged: boolean;
+}
+
+export interface EnemyKilledEvent {
+  enemyId: number;
+  kind: EnemyKind;
+  position: Vector;
+}
+
 export interface EnemyManagerOptions {
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
@@ -39,12 +52,15 @@ export interface EnemyManagerOptions {
   onContact: (damage: number) => void;
   onBreach: (kind: EnemyKind) => void;
   onBulletHit: (damage: number) => void;
+  onEnemyKilled?: (event: EnemyKilledEvent) => void;
+  onDirectHit?: (event: DirectHitEvent) => void;
   textureKeys?: Partial<Record<EnemyKind | 'bullet', string>>;
 }
 
 export class EnemyManager {
   declare debugFreezeEnemies?: () => void;
   declare debugRemoveEnemies?: (ids: readonly number[]) => void;
+  declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
 
   private readonly enemyGroup: Phaser.Physics.Arcade.Group;
   private readonly bulletGroup: Phaser.Physics.Arcade.Group;
@@ -117,6 +133,19 @@ export class EnemyManager {
           if (enemy?.active) this.destroyEnemy(enemy);
         }
       };
+      this.debugSetEnemy = (id, position, hp) => {
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+          throw new RangeError('enemy position must be finite');
+        }
+        if (!Number.isFinite(hp) || hp <= 0) {
+          throw new RangeError('enemy HP must be finite and positive');
+        }
+        const enemy = this.enemies.get(id);
+        if (!enemy?.active) return false;
+        enemy.setPosition(position.x, position.y);
+        enemy.hp = hp;
+        return true;
+      };
     }
   }
 
@@ -182,6 +211,25 @@ export class EnemyManager {
     };
   }
 
+  applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
+    const killedIds: number[] = [];
+    const enemies = [...this.enemies.values()];
+    for (const enemy of enemies) {
+      if (
+        !enemy.active
+        || enemy.enemyId === excludedEnemyId
+        || Math.hypot(enemy.x - center.x, enemy.y - center.y) > radius
+      ) continue;
+      const killEvent = this.createKillEvent(enemy);
+      enemy.hp -= damage;
+      if (enemy.hp <= 0) {
+        killedIds.push(enemy.enemyId);
+        this.killEnemy(enemy, killEvent);
+      }
+    }
+    return killedIds;
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -208,7 +256,7 @@ export class EnemyManager {
     );
     if (!result) return false;
     if (!result.reflect) {
-      this.applyHit(enemy, result);
+      this.applyHit(enemy, result, 'permanent');
       return false;
     }
     this.pendingReflections.set(this.hitKey(orb, enemy), result);
@@ -221,13 +269,24 @@ export class EnemyManager {
     if (!result) return;
     this.pendingReflections.delete(key);
     this.options.orbManager.synchronizeOrb(orb);
-    this.applyHit(enemy, result);
+    this.applyHit(enemy, result, 'permanent');
   }
 
-  private applyHit(enemy: EnemySprite, result: HitResult): void {
+  private applyHit(
+    enemy: EnemySprite,
+    result: HitResult,
+    source: DirectHitEvent['source'],
+  ): void {
     if (!enemy.active) return;
+    const killEvent = this.createKillEvent(enemy);
     enemy.hp -= result.damage;
-    if (enemy.hp <= 0) this.destroyEnemy(enemy);
+    this.options.onDirectHit?.({
+      source,
+      enemyId: enemy.enemyId,
+      position: { ...killEvent.position },
+      charged: result.charged,
+    });
+    if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);
   }
 
   private hitKey(orb: OrbSprite, enemy: EnemySprite): string {
@@ -296,5 +355,18 @@ export class EnemyManager {
     enemy.clearTint();
     enemy.destroy();
     this.enemies.delete(enemy.enemyId);
+  }
+
+  private createKillEvent(enemy: EnemySprite): EnemyKilledEvent {
+    return {
+      enemyId: enemy.enemyId,
+      kind: enemy.kind,
+      position: { x: enemy.x, y: enemy.y },
+    };
+  }
+
+  private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
+    this.destroyEnemy(enemy);
+    this.options.onEnemyKilled?.(event);
   }
 }

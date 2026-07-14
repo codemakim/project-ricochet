@@ -11,6 +11,7 @@ export type OrbState =
 export type RecoverySource = 'proximity' | 'floorRecall' | 'timeoutRecall';
 
 export interface HitResult {
+  charged: boolean;
   charges: number;
   damage: number;
   killed: boolean;
@@ -42,12 +43,17 @@ export function directHit(
   enemyHp: number,
   settings: Pick<ExperimentSettings, 'passThroughOnKill'>,
   piercing: boolean,
+  directDamageBonus = 0,
 ): HitResult {
+  if (!Number.isFinite(directDamageBonus) || directDamageBonus < 0) {
+    throw new RangeError('direct damage bonus must be finite and non-negative');
+  }
   const charged = charges > 0;
-  const damage = charged ? 1.5 : 1;
+  const damage = (charged ? 1.5 : 1) + directDamageBonus;
   const killed = enemyHp <= damage;
 
   return {
+    charged,
     charges: charged ? charges - 1 : 0,
     damage,
     killed,
