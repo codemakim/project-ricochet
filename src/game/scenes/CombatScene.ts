@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
+import { CombatPauseController } from '../combat/CombatPauseController';
 import {
   applyDamage,
   breachDamage,
@@ -57,8 +58,7 @@ export class CombatScene extends Phaser.Scene {
   private invulnerableUntil = 0;
   private aimQueueActivated = false;
   private defeated = false;
-  private visibilityPaused = false;
-  private discardNextEncounterDelta = false;
+  private pause = new CombatPauseController();
 
   constructor() {
     super('combat');
@@ -71,8 +71,7 @@ export class CombatScene extends Phaser.Scene {
     this.invulnerableUntil = 0;
     this.aimQueueActivated = false;
     this.defeated = false;
-    this.visibilityPaused = false;
-    this.discardNextEncounterDelta = false;
+    this.pause = new CombatPauseController();
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -135,9 +134,10 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return;
 
-    if (this.visibilityPaused) return;
+    if (this.pause.isPaused()) return;
 
-    const next = movePlayer(this.player, this.playerInput.movement, delta);
+    const gameplayDelta = this.pause.consumeGameplayDelta(delta);
+    const next = movePlayer(this.player, this.playerInput.movement, gameplayDelta);
     this.player.setPosition(next.x, next.y);
     this.aim = resolveAim(this.aim, this.playerInput.aimCandidate);
     if (!this.aimQueueActivated && this.playerInput.aimActivated) {
@@ -145,12 +145,10 @@ export class CombatScene extends Phaser.Scene {
       this.orbManager.activateAim();
     }
     this.drawAimGuide();
-    this.orbManager.update(this.time.now, delta, next, this.aim);
+    this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
     this.enemyManager.update();
     const enemies = this.enemyManager.getSnapshot();
-    const encounterDelta = this.discardNextEncounterDelta ? 0 : delta;
-    this.discardNextEncounterDelta = false;
-    const formation = this.encounterDirector.update(encounterDelta, {
+    const formation = this.encounterDirector.update(gameplayDelta, {
       activeEnemies: enemies.enemies.length,
       topmostEnemyY: enemies.topmostEnemyY,
     });
@@ -214,8 +212,8 @@ export class CombatScene extends Phaser.Scene {
   private showDefeat(): void {
     if (this.defeated) return;
     this.defeated = true;
-    this.physics.pause();
-    this.time.paused = true;
+    this.pause.add('defeated');
+    this.syncPauseState();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
       .setInteractive();
@@ -256,16 +254,22 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleVisibilityChange = (): void => {
     if (document.hidden) {
-      this.visibilityPaused = true;
+      this.pause.add('visibility');
+    } else {
+      this.pause.remove('visibility');
+    }
+    this.syncPauseState();
+  };
+
+  private syncPauseState(): void {
+    if (this.pause.isPaused()) {
       this.physics.pause();
       this.time.paused = true;
-    } else if (!this.defeated) {
-      if (this.visibilityPaused) this.discardNextEncounterDelta = true;
-      this.visibilityPaused = false;
-      this.physics.resume();
-      this.time.paused = false;
+      return;
     }
-  };
+    this.physics.resume();
+    this.time.paused = false;
+  }
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);

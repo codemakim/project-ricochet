@@ -338,6 +338,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
   await page.clock.runFor(1_000);
+  await page.keyboard.down('KeyD');
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -349,6 +350,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   expect(hidden.encounter.elapsedSinceSpawnMs).toBe(before.encounter.elapsedSinceSpawnMs);
   expect(hidden.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
   expect(hidden.enemies).toHaveLength(before.enemies.length);
+  expect(hidden.player).toEqual(before.player);
   expect(hidden.enemies[0]!.position.y - before.enemies[0]!.position.y).toBeLessThan(1);
 
   await page.evaluate(() => {
@@ -362,6 +364,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
     .toBeLessThanOrEqual(50);
   expect(firstResumedFrame.encounter.spawnSequence).toBe(hidden.encounter.spawnSequence);
   expect(firstResumedFrame.enemies).toHaveLength(hidden.enemies.length);
+  expect(firstResumedFrame.player).toEqual(hidden.player);
 
   await page.clock.runFor(16);
   const resumed = await snapshot(page);
@@ -369,6 +372,8 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   expect(resumed.encounter.elapsedSinceSpawnMs - firstResumedFrame.encounter.elapsedSinceSpawnMs)
     .toBeLessThanOrEqual(50);
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(hidden.enemies[0]!.position.y);
+  expect(resumed.player.x).toBeGreaterThan(firstResumedFrame.player.x);
+  await page.keyboard.up('KeyD');
 });
 
 test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
