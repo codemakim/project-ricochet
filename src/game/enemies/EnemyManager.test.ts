@@ -397,23 +397,33 @@ describe('EnemyManager', () => {
     }));
   });
 
-  it('applies area damage once to nearby non-primary enemies and reports kills', () => {
+  it('applies area damage once to nearby non-primary enemies and reports each kill without direct hits', () => {
     const formation: EnemySpec[] = [
       { kind: 'basic', hp: 2, x: 100, y: 100, column: 0, speed: 0 },
       { kind: 'basic', hp: 1, x: 130, y: 100, column: 1, speed: 0 },
-      { kind: 'armored', hp: 3, x: 151, y: 100, column: 2, speed: 0 },
+      { kind: 'armored', hp: 0.5, x: 140, y: 100, column: 2, speed: 0 },
+      { kind: 'basic', hp: 3, x: 100, y: 150, column: 3, speed: 0 },
+      { kind: 'basic', hp: 3, x: 151, y: 100, column: 4, speed: 0 },
     ];
     const { manager, onDirectHit, onEnemyKilled } = createBoundary(formation);
 
-    expect(manager.applyAreaDamage({ x: 100, y: 100 }, 50, 1, 0)).toEqual([1]);
+    expect(manager.applyAreaDamage({ x: 100, y: 100 }, 50, 1, 0)).toEqual([1, 2]);
 
     expect(manager.getSnapshot().enemies).toEqual([
       expect.objectContaining({ id: 0, hp: 2 }),
-      expect.objectContaining({ id: 2, hp: 3 }),
+      expect.objectContaining({ id: 3, hp: 2 }),
+      expect.objectContaining({ id: 4, hp: 3 }),
     ]);
     expect(onDirectHit).not.toHaveBeenCalled();
-    expect(onEnemyKilled).toHaveBeenCalledOnce();
-    expect(onEnemyKilled).toHaveBeenCalledWith(expect.objectContaining({ enemyId: 1, kind: 'basic' }));
+    expect(onEnemyKilled).toHaveBeenCalledTimes(2);
+    expect(onEnemyKilled).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ enemyId: 1, kind: 'basic' }),
+    );
+    expect(onEnemyKilled).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ enemyId: 2, kind: 'armored' }),
+    );
   });
 
   it('clears warning state if a shooter dies before firing', () => {

@@ -345,6 +345,48 @@ for (const passThroughOnKill of [false, true]) {
   });
 }
 
+test('@desktop applies explosion damage once around the direct-hit enemy', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    scene.debugUpgradeAbility('explosion');
+    const keep = new Set([0, 1, 2, 3]);
+    scene.debugRemoveEnemies(
+      scene.getDebugSnapshot().enemies
+        .filter((enemy) => !keep.has(enemy.id))
+        .map((enemy) => enemy.id),
+    );
+    scene.debugSetEnemy(0, { x: 225, y: 300 }, 2);
+    scene.debugSetEnemy(1, { x: 273, y: 300 }, 1);
+    scene.debugSetEnemy(2, { x: 225, y: 252 }, 0.5);
+    scene.debugSetEnemy(3, { x: 225, y: 204 }, 1);
+  });
+  const before = await snapshot(page);
+  const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 90,
+  }).toEqual({ active: 1, queued: 2 });
+
+  await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
+    if (!scene.debugPlaceOrb(active.id, { x: 225, y: 324 })) {
+      throw new Error('active orb required');
+    }
+  });
+
+  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === 1)?.hp, {
+    intervals: [5],
+    timeout: 90,
+  }).toBe(0.5);
+  const after = await snapshot(page);
+  expect(after.enemies.find((enemy) => enemy.id === 0)?.hp).toBe(0.5);
+  expect(after.enemies.some((enemy) => enemy.id === 2)).toBe(false);
+  expect(after.enemies.find((enemy) => enemy.id === 3)?.hp).toBe(1);
+  expect(after.progression.xp).toBe(before.progression.xp + 1);
+});
+
 test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
   await page.clock.install();
   await loadCanvas(page);

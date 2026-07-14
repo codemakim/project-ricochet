@@ -15,7 +15,11 @@ import {
   type ExperimentSettings,
 } from '../constants';
 import { EncounterDirector } from '../encounters/EncounterDirector';
-import { EnemyManager, type EnemyManagerSnapshot } from '../enemies/EnemyManager';
+import {
+  EnemyManager,
+  type DirectHitEvent,
+  type EnemyManagerSnapshot,
+} from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
@@ -115,6 +119,7 @@ export class CombatScene extends Phaser.Scene {
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
       onEnemyKilled: ({ kind }) => this.handleEnemyKilled(kind),
+      onDirectHit: (event) => this.handleDirectHit(event),
     });
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -256,6 +261,23 @@ export class CombatScene extends Phaser.Scene {
     this.progression?.gainEnemyKill(kind);
     this.updateProgressionText();
     this.openNextLevelUp();
+  }
+
+  private handleDirectHit(event: DirectHitEvent): void {
+    const explosion = this.build?.explosion();
+    if (!explosion) return;
+
+    this.enemyManager?.applyAreaDamage(
+      event.position,
+      explosion.radius,
+      explosion.damage,
+      event.enemyId,
+    );
+    const ring = this.add.graphics()
+      .lineStyle(2, 0xffb45c, 0.85)
+      .strokeCircle(event.position.x, event.position.y, explosion.radius)
+      .setDepth(4);
+    this.time.delayedCall(120, () => ring.destroy());
   }
 
   private openNextLevelUp(): void {
