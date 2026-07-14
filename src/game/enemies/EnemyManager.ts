@@ -163,6 +163,10 @@ export class EnemyManager {
       };
     }
     const enemies = [...this.enemies.values()].filter((enemy) => enemy.active);
+    const topmostEnemyY = enemies.reduce(
+      (topmost, enemy) => Math.min(topmost, enemy.y),
+      Number.POSITIVE_INFINITY,
+    );
     return {
       enemies: enemies.map((enemy) => ({
         id: enemy.enemyId,
@@ -171,9 +175,7 @@ export class EnemyManager {
         position: { x: enemy.x, y: enemy.y },
         warning: this.activeShooters.has(enemy.enemyId),
       })),
-      topmostEnemyY: enemies.length === 0
-        ? Number.POSITIVE_INFINITY
-        : Math.min(...enemies.map((enemy) => enemy.y)),
+      topmostEnemyY,
       activeShooters: this.activeShooters.size,
       bullets: (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
         .filter((bullet) => bullet.active).length,
@@ -293,5 +295,6 @@ export class EnemyManager {
     }
     enemy.clearTint();
     enemy.destroy();
+    this.enemies.delete(enemy.enemyId);
   }
 }

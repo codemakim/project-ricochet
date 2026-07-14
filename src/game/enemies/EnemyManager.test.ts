@@ -243,6 +243,17 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().enemies.at(-1)?.id).toBe(20);
   });
 
+  it('reports an infinite topmost position after debug-removing every enemy', () => {
+    const { manager } = createBoundary();
+    manager.debugRemoveEnemies!(manager.getSnapshot().enemies.map((enemy) => enemy.id));
+
+    expect(manager.getSnapshot()).toMatchObject({
+      enemies: [],
+      topmostEnemyY: Number.POSITIVE_INFINITY,
+    });
+    expect((manager as unknown as { enemies: Map<number, unknown> }).enemies.size).toBe(0);
+  });
+
   it('removes breaches and reports their kind once', () => {
     const { manager, groups, onBreach } = createBoundary();
     const armored = groups[0]!.children[1]!;
