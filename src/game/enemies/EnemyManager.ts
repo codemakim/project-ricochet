@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constan
 import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
+import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import { canFire, createPrototypeFormation, type EnemyKind, type EnemySpec } from './enemyRules';
 
 const SHOOTER_INTERVAL_MS = 1300;
@@ -37,6 +38,7 @@ export interface DirectHitEvent {
   enemyId: number;
   position: Vector;
   charged: boolean;
+  direction: Vector;
 }
 
 export interface EnemyKilledEvent {
@@ -48,6 +50,7 @@ export interface EnemyKilledEvent {
 export interface EnemyManagerOptions {
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
+  temporaryOrbManager?: TemporaryOrbManager;
   formation?: readonly EnemySpec[];
   onContact: (damage: number) => void;
   onBreach: (kind: EnemyKind) => void;
@@ -68,7 +71,11 @@ export class EnemyManager {
   private readonly enemies = new Map<number, EnemySprite>();
   private readonly activeShooters = new Set<number>();
   private readonly warningTimers = new Map<number, Phaser.Time.TimerEvent>();
-  private readonly pendingReflections = new Map<string, HitResult>();
+  private readonly pendingReflections = new Map<string, {
+    result: HitResult;
+    direction: Vector;
+    source: DirectHitEvent['source'];
+  }>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
   private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
   private readonly bulletTextureKey: string;
@@ -98,6 +105,20 @@ export class EnemyManager {
         this.enemyGroup,
         (orbObject, enemyObject) => this.completeReflectedHit(orbObject as OrbSprite, enemyObject as EnemySprite),
         (orbObject, enemyObject) => this.processOrbHit(orbObject as OrbSprite, enemyObject as EnemySprite),
+      ));
+    }
+    if (options.temporaryOrbManager) {
+      this.colliders.push(scene.physics.add.collider(
+        options.temporaryOrbManager.getGroup(),
+        this.enemyGroup,
+        (orbObject, enemyObject) => this.completeTemporaryReflectedHit(
+          orbObject as TemporaryOrbSprite,
+          enemyObject as EnemySprite,
+        ),
+        (orbObject, enemyObject) => this.processTemporaryOrbHit(
+          orbObject as TemporaryOrbSprite,
+          enemyObject as EnemySprite,
+        ),
       ));
     }
     this.colliders.push(scene.physics.add.overlap(
@@ -259,27 +280,49 @@ export class EnemyManager {
       false,
     );
     if (!result) return false;
+    const direction = this.orbDirection(orb);
     if (!result.reflect) {
-      this.applyHit(enemy, result, 'permanent');
+      this.applyHit(enemy, result, 'permanent', direction);
       return false;
     }
-    this.pendingReflections.set(this.hitKey(orb, enemy), result);
+    this.pendingReflections.set(this.hitKey(orb, enemy), { result, direction, source: 'permanent' });
     return true;
   }
 
   private completeReflectedHit(orb: OrbSprite, enemy: EnemySprite): void {
     const key = this.hitKey(orb, enemy);
-    const result = this.pendingReflections.get(key);
-    if (!result) return;
+    const pending = this.pendingReflections.get(key);
+    if (!pending) return;
     this.pendingReflections.delete(key);
     this.options.orbManager.synchronizeOrb(orb);
-    this.applyHit(enemy, result, 'permanent');
+    this.applyHit(enemy, pending.result, pending.source, pending.direction);
+  }
+
+  private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
+    const manager = this.options.temporaryOrbManager;
+    if (!manager || !enemy.active || !orb.active) return false;
+    const result = manager.handleEnemyHit(orb, enemy.enemyId, enemy.hp, this.scene.time.now);
+    if (!result) return false;
+    const direction = this.orbDirection(orb);
+    const key = this.temporaryHitKey(orb, enemy);
+    this.pendingReflections.set(key, { result, direction, source: 'temporary' });
+    return true;
+  }
+
+  private completeTemporaryReflectedHit(orb: TemporaryOrbSprite, enemy: EnemySprite): void {
+    const key = this.temporaryHitKey(orb, enemy);
+    const pending = this.pendingReflections.get(key);
+    if (!pending) return;
+    this.pendingReflections.delete(key);
+    this.options.temporaryOrbManager?.synchronizeOrb(orb);
+    this.applyHit(enemy, pending.result, pending.source, pending.direction);
   }
 
   private applyHit(
     enemy: EnemySprite,
     result: HitResult,
     source: DirectHitEvent['source'],
+    direction: Vector,
   ): void {
     if (!enemy.active) return;
     const killEvent = this.createKillEvent(enemy);
@@ -289,12 +332,22 @@ export class EnemyManager {
       enemyId: enemy.enemyId,
       position: { ...killEvent.position },
       charged: result.charged,
+      direction,
     });
     if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);
   }
 
   private hitKey(orb: OrbSprite, enemy: EnemySprite): string {
     return `${orb.orbId}:${enemy.enemyId}`;
+  }
+
+  private temporaryHitKey(orb: TemporaryOrbSprite, enemy: EnemySprite): string {
+    return `temporary:${orb.temporaryOrbId}:${enemy.enemyId}`;
+  }
+
+  private orbDirection(orb: Phaser.Physics.Arcade.Sprite): Vector {
+    const body = orb.body as Phaser.Physics.Arcade.Body;
+    return normalize(body.velocity);
   }
 
   private handleContact(player: Phaser.Physics.Arcade.Sprite, enemy: EnemySprite): void {

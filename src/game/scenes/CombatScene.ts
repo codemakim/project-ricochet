@@ -23,6 +23,7 @@ import {
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
+import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
@@ -50,6 +51,7 @@ export interface CombatDebugSnapshot {
   buildRanks: AbilityRanks;
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
+  temporaryOrbs: number;
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -66,6 +68,7 @@ export class CombatScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
   private orbManager?: OrbManager;
+  private temporaryOrbManager?: TemporaryOrbManager;
   private enemyManager?: EnemyManager;
   private encounterDirector?: EncounterDirector;
   private aimGuide!: Phaser.GameObjects.Graphics;
@@ -111,10 +114,14 @@ export class CombatScene extends Phaser.Scene {
       getDirectDamageBonus: () => build.directDamageBonus(),
       getChargedSpeed: () => build.chargedSpeed(),
     });
+    this.temporaryOrbManager = new TemporaryOrbManager(this, {
+      getDirectDamageBonus: () => build.directDamageBonus(),
+    });
     this.encounterDirector = new EncounterDirector();
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
+      temporaryOrbManager: this.temporaryOrbManager,
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
@@ -191,6 +198,7 @@ export class CombatScene extends Phaser.Scene {
     }
     this.drawAimGuide();
     this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
+    this.temporaryOrbManager?.update(this.time.now);
     this.enemyManager.update();
     const enemies = this.enemyManager.getSnapshot();
     const formation = this.encounterDirector.update(gameplayDelta, {
@@ -253,6 +261,7 @@ export class CombatScene extends Phaser.Scene {
       },
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
+      temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
     };
   }
 
@@ -265,19 +274,24 @@ export class CombatScene extends Phaser.Scene {
 
   private handleDirectHit(event: DirectHitEvent): void {
     const explosion = this.build?.explosion();
-    if (!explosion) return;
+    if (explosion) {
+      this.enemyManager?.applyAreaDamage(
+        event.position,
+        explosion.radius,
+        explosion.damage,
+        event.enemyId,
+      );
+      const ring = this.add.graphics()
+        .lineStyle(2, 0xffb45c, 0.85)
+        .strokeCircle(event.position.x, event.position.y, explosion.radius)
+        .setDepth(4);
+      this.time.delayedCall(120, () => ring.destroy());
+    }
 
-    this.enemyManager?.applyAreaDamage(
-      event.position,
-      explosion.radius,
-      explosion.damage,
-      event.enemyId,
-    );
-    const ring = this.add.graphics()
-      .lineStyle(2, 0xffb45c, 0.85)
-      .strokeCircle(event.position.x, event.position.y, explosion.radius)
-      .setDepth(4);
-    this.time.delayedCall(120, () => ring.destroy());
+    if (event.source === 'permanent' && event.charged) {
+      const count = this.build?.splitCount() ?? 0;
+      if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
+    }
   }
 
   private openNextLevelUp(): void {
@@ -396,12 +410,14 @@ export class CombatScene extends Phaser.Scene {
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.enemyManager?.destroy();
+    this.temporaryOrbManager?.destroy();
     this.orbManager?.destroy();
     this.playerInput?.destroy();
     this.levelUpOverlay?.destroy();
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
     this.orbManager = undefined;
+    this.temporaryOrbManager = undefined;
     this.playerInput = undefined;
     this.levelUpOverlay = undefined;
     this.progression = undefined;
@@ -417,6 +433,8 @@ export class CombatScene extends Phaser.Scene {
     graphics.generateTexture('player', 36, 36);
     graphics.clear().fillStyle(0xffffff).fillCircle(8, 8, 7);
     graphics.lineStyle(2, 0x4ddcff).strokeCircle(8, 8, 7).generateTexture('orb-charged', 16, 16);
+    graphics.clear().fillStyle(0xfff4a3).fillCircle(6, 6, 5);
+    graphics.lineStyle(2, 0xff9f43).strokeCircle(6, 6, 5).generateTexture('orb-temporary', 12, 12);
     graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, 36, 28, 5)
       .generateTexture('enemy-basic', 36, 28);
     graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, 40, 32, 5);

@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import type { OrbManager } from '../orbs/OrbManager';
+import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { EnemyManager } from './EnemyManager';
 import type { EnemySpec } from './enemyRules';
 
@@ -83,6 +84,7 @@ class FakeSprite {
   active = true;
   destroyed = false;
   tint?: number;
+  hp = 0;
   readonly body = new FakeBody(this);
 
   constructor(x: number, y: number, readonly texture: string) {
@@ -157,7 +159,7 @@ class FakeCollider {
   }
 }
 
-function createBoundary(formation?: readonly EnemySpec[]) {
+function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = false) {
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
   const overlaps: FakeCollider[] = [];
@@ -191,6 +193,16 @@ function createBoundary(formation?: readonly EnemySpec[]) {
     handleEnemyHit,
     synchronizeOrb: vi.fn(),
   } as unknown as OrbManager;
+  const temporaryOrb = new FakeSprite(140, 140, 'orb-temporary');
+  (temporaryOrb as FakeSprite & { temporaryOrbId: number }).temporaryOrbId = 7;
+  const temporaryGroup = new FakeGroup();
+  temporaryGroup.children.push(temporaryOrb);
+  const handleTemporaryEnemyHit = vi.fn();
+  const temporaryOrbManager = withTemporaryOrbs ? {
+    getGroup: () => temporaryGroup,
+    handleEnemyHit: handleTemporaryEnemyHit,
+    synchronizeOrb: vi.fn(),
+  } as unknown as TemporaryOrbManager : undefined;
   const onContact = vi.fn();
   const onBreach = vi.fn();
   const onBulletHit = vi.fn();
@@ -199,6 +211,7 @@ function createBoundary(formation?: readonly EnemySpec[]) {
   const manager = new EnemyManager(scene, {
     player: player as unknown as Phaser.Physics.Arcade.Sprite,
     orbManager,
+    temporaryOrbManager,
     onContact,
     onBreach,
     onBulletHit,
@@ -211,6 +224,9 @@ function createBoundary(formation?: readonly EnemySpec[]) {
     player,
     orb,
     handleEnemyHit,
+    handleTemporaryEnemyHit,
+    temporaryOrbManager,
+    temporaryOrb,
     onContact,
     onBreach,
     onBulletHit,
@@ -388,6 +404,7 @@ describe('EnemyManager', () => {
       enemyId: 0,
       charged: true,
       position: { x: 36, y: 80 },
+      direction: { x: 0, y: -1 },
     }));
     expect(onEnemyKilled).toHaveBeenCalledOnce();
     expect(onEnemyKilled).toHaveBeenCalledWith(expect.objectContaining({
@@ -395,6 +412,41 @@ describe('EnemyManager', () => {
       enemyId: 0,
       position: { x: 36, y: 80 },
     }));
+  });
+
+  it('applies reflected temporary hits once with a prefixed pending key and uncharged event', () => {
+    const {
+      manager,
+      groups,
+      colliders,
+      temporaryOrb,
+      handleTemporaryEnemyHit,
+      temporaryOrbManager,
+      onDirectHit,
+    } = createBoundary(undefined, true);
+    const enemy = groups[0]!.children[0]!;
+    temporaryOrb.setVelocity(30, -40);
+    handleTemporaryEnemyHit.mockReturnValueOnce({
+      charged: false,
+      charges: 0,
+      damage: 0.5,
+      killed: false,
+      reflect: true,
+    });
+
+    expect(colliders[1]!.trigger(temporaryOrb, enemy)).toBe(true);
+
+    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, 0, 1, 0);
+    expect(temporaryOrbManager!.synchronizeOrb).toHaveBeenCalledWith(temporaryOrb);
+    expect(enemy.hp).toBe(0.5);
+    expect(onDirectHit).toHaveBeenCalledWith({
+      source: 'temporary',
+      enemyId: 0,
+      position: { x: 36, y: 80 },
+      charged: false,
+      direction: { x: 0.6, y: -0.8 },
+    });
+    expect((manager as unknown as { pendingReflections: Map<string, unknown> }).pendingReflections.size).toBe(0);
   });
 
   it('applies area damage once to nearby non-primary enemies and reports each kill without direct hits', () => {

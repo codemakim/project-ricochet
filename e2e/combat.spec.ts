@@ -42,6 +42,7 @@ interface CombatSnapshot {
   buildRanks: Record<AbilityId, number>;
   pauseReasons: string[];
   levelUpVisible: boolean;
+  temporaryOrbs: number;
 }
 
 type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
@@ -385,6 +386,100 @@ test('@desktop applies explosion damage once around the direct-hit enemy', async
   expect(after.enemies.some((enemy) => enemy.id === 2)).toBe(false);
   expect(after.enemies.find((enemy) => enemy.id === 3)?.hp).toBe(1);
   expect(after.progression.xp).toBe(before.progression.xp + 1);
+});
+
+test('@desktop temporary split orbs stay capped, do not recursively split, and pause lifetime', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility('split');
+    scene.debugUpgradeAbility('explosion');
+    const keep = new Set([0, 1, 2]);
+    scene.debugRemoveEnemies(
+      scene.getDebugSnapshot().enemies.filter((enemy) => !keep.has(enemy.id)).map((enemy) => enemy.id),
+    );
+    scene.debugSetEnemy(0, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(1, { x: 100, y: 200 }, 99);
+    scene.debugSetEnemy(2, { x: 140, y: 200 }, 2);
+  });
+  const before = await snapshot(page);
+  const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 90,
+  }).toEqual({ active: 1, queued: 2 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 240,
+  }).toEqual({ active: 3, queued: 0 });
+
+  await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
+    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
+    intervals: [5],
+    timeout: 100,
+  }).toBe(3);
+  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === 2)?.hp, {
+    intervals: [10],
+    timeout: 400,
+  }).toBe(1.5);
+  expect((await snapshot(page)).temporaryOrbs).toBe(3);
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetEnemy(1, { x: 30, y: 80 }, 99);
+    scene.debugSetEnemy(2, { x: 420, y: 80 }, 2);
+  });
+  for (const expectedCount of [6, 9, 12]) {
+    await page.waitForTimeout(85);
+    await sceneCall(page, (scene) => {
+      const active = scene.getDebugSnapshot().orbs.find(
+        (orb) => orb.state === 'active' && orb.charges > 0,
+      )!;
+      const speed = Math.hypot(active.velocity.x, active.velocity.y);
+      const position = {
+        x: 100 - active.velocity.x / speed * 24,
+        y: 300 - active.velocity.y / speed * 24,
+      };
+      if (!scene.debugPlaceOrb(active.id, position)) throw new Error('charged orb required');
+    });
+    await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
+      intervals: [5],
+      timeout: 100,
+    }).toBe(expectedCount);
+  }
+  await page.waitForTimeout(85);
+  await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find(
+      (orb) => orb.state === 'active' && orb.charges > 0,
+    )!;
+    const speed = Math.hypot(active.velocity.x, active.velocity.y);
+    const position = {
+      x: 100 - active.velocity.x / speed * 24,
+      y: 300 - active.velocity.y / speed * 24,
+    };
+    if (!scene.debugPlaceOrb(active.id, position)) throw new Error('charged orb required');
+  });
+  await page.waitForTimeout(50);
+  expect((await snapshot(page)).temporaryOrbs).toBe(12);
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetEnemy(0, { x: 30, y: 100 }, 99);
+    scene.debugGrantXp(8);
+  });
+  const paused = await snapshot(page);
+  expect(paused.pauseReasons).toContain('levelUp');
+  await page.waitForTimeout(1600);
+  expect((await snapshot(page)).temporaryOrbs).toBe(paused.temporaryOrbs);
+
+  await sceneCall(page, (scene) => {
+    const choice = scene.getDebugSnapshot().progression.choices[0]!;
+    scene.debugChooseAbility(choice);
+  });
+  await page.waitForTimeout(1600);
+  expect((await snapshot(page)).temporaryOrbs).toBe(0);
 });
 
 test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
