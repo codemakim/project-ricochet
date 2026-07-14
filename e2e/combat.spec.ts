@@ -264,6 +264,27 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
   expect(after.orbs.every((orb) => orb.state === 'active')).toBe(true);
 });
 
+test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
+  const paused = await snapshot(page);
+  const selectedAbility = paused.progression.choices[0]!;
+  expect(paused.pauseReasons).toContain('levelUp');
+
+  const card = clientPoint(box, { x: 225, y: 270 });
+  await page.touchscreen.tap(card.x, card.y);
+
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return {
+      rank: current.buildRanks[selectedAbility],
+      visible: current.levelUpVisible,
+      paused: current.pauseReasons.includes('levelUp'),
+    };
+  }).toEqual({ rank: 1, visible: false, paused: false });
+});
+
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const initial = await snapshot(page);
@@ -574,7 +595,12 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   expect(firstResumedFrame.enemies).toHaveLength(hidden.enemies.length);
   expect(firstResumedFrame.player).toEqual(hidden.player);
 
-  await page.clock.runFor(16);
+  await expect.poll(async () => {
+    await page.clock.runFor(16);
+    const current = await snapshot(page);
+    return current.enemies[0]!.position.y > hidden.enemies[0]!.position.y
+      && current.player.x > firstResumedFrame.player.x;
+  }, { intervals: [0], timeout: 1_000 }).toBe(true);
   const resumed = await snapshot(page);
   expect(resumed.encounter.elapsedMs - firstResumedFrame.encounter.elapsedMs).toBeLessThanOrEqual(50);
   expect(resumed.encounter.elapsedSinceSpawnMs - firstResumedFrame.encounter.elapsedSinceSpawnMs)
@@ -699,6 +725,22 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
   expect(selected.pauseReasons).not.toContain('levelUp');
 });
 
+test('@desktop stops XP and keeps level-up closed when all abilities are rank five', async ({ page }) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    for (const ability of ['firepower', 'kinetic', 'explosion', 'split'] as const) {
+      for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility(ability);
+    }
+    scene.debugGrantXp(100);
+  });
+
+  const completed = await snapshot(page);
+  expect(completed.buildRanks).toEqual({ firepower: 5, kinetic: 5, explosion: 5, split: 5 });
+  expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
+  expect(completed.levelUpVisible).toBe(false);
+  expect(completed.pauseReasons).not.toContain('levelUp');
+});
+
 test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => {
@@ -741,5 +783,6 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
     buildRanks: { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
     pauseReasons: [],
     levelUpVisible: false,
+    temporaryOrbs: 0,
   });
 });

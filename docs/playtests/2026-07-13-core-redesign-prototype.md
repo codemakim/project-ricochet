@@ -177,3 +177,29 @@ Phone과 Mac은 같은 Wi-Fi/LAN에 있어야 한다. 접속 실패 시 macOS fi
 - Desktop/mobile E2E: 9/9 passed (`desktop-chromium` 8, `mobile-chromium` 1)
 - Production build: `tsc --noEmit && vite build` exit 0, 23 modules transformed
 - Physical-device density and aim-fatigue check: pending user playtest
+
+## 2026-07-14 Level-up power growth acceptance
+
+Commit 전 Task 9 acceptance 상태에서 실행한 fresh evidence:
+
+| 검증 | 결과 | 확인 범위 |
+| --- | --- | --- |
+| `npm test` | **PASS** — 20 files, 126/126 tests | XP와 레벨, 선택지, 네 능력의 1~5등급 수치, 합성 pause, 폭발, 분열, 기존 전투 규칙 |
+| `npm run test:e2e -- --grep "level-up\|temporary split\|explosion damage"` | **PASS** — 7/7 | desktop 레벨업/pause/폭발/분열 6개와 Pixel 7 emulation 카드 탭 1개 |
+| `npm run test:e2e` | **PASS** — 16/16 | `desktop-chromium` 14개, `mobile-chromium` 2개. 기존 ingress, 회수, 충돌, 체력, 입력과 성장 acceptance |
+| `npm run build` | **PASS** — TypeScript 성공, Vite 29 modules transformed | production bundle 생성. 기존 `1,235.50 kB` chunk-size warning은 유지되며 exit code 0 |
+| production DEV audit | **PASS** — mutation helper 6개와 `__RICHOCHET_GAME__` match 없음 | `debugGrantXp`, `debugChooseAbility`, `debugUpgradeAbility`, `debugSetEnemy`, `debugPlaceOrb`, `debugRemoveEnemies`, game global 미노출 |
+
+첫 레벨 목표는 평균 **15~20초**다. 초기 능력 풀은 `화력 증폭`, `운동 에너지`, `폭발`, `분열` 네 개이며 첫 선택 화면은 중복 없는 최대 3개와 `폭발` 또는 `분열` 최소 하나를 보장한다. 자동 테스트는 8 XP 레벨업 정지, 숫자 선택, Pixel 7 emulation 카드 탭, 복수 pending 선택, visibility와 level-up 중첩, max-rank XP 중단, defeat/restart 초기화를 확인했다. 숨김 해제 직후 첫 resume delta 폐기 뒤 정상 진행도 condition polling으로 확인했다.
+
+폭발 자동 결과: 직접 적중 주 대상은 범위 피해에서 제외되고, 반경 안 다른 적만 한 번 피해를 받으며, 범위 밖 적은 유지되고, 폭발 처치 XP가 1회 지급됐다. 분열 자동 결과: 충전 영구 구슬이 임시 구슬을 만들고, 재귀 분열 없이 폭발을 적용하며, 활성 수 12개 상한을 지켰다. 레벨업 pause 중 1,600ms wall time에는 수명이 줄지 않았고, 재개 뒤 남은 gameplay lifetime 경계에서 제거됐으며 defeat 시 즉시 0개가 됐다.
+
+다음 항목은 자동 통과로 판정하지 않는다. 사용자 직접 플레이 전까지 **pending**이다.
+
+- 첫 레벨이 실제 자연 플레이 평균 15~20초에 도달하는지
+- 선택이 흐름 방해보다 짧은 보상으로 느껴지는지
+- 분열과 폭발 조합이 만족스러운 순간 화력을 만드는지
+- physical phone에서 임시 구슬 12개가 읽기 쉽고 성능을 유지하는지
+- 1~3분 동안 성장 속도와 적 압박이 균형을 유지하는지
+
+`mobile-chromium` 결과는 Pixel 7 emulation이다. physical phone 결과가 아니다.
