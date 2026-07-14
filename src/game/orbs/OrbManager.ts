@@ -59,6 +59,8 @@ export class OrbStore {
     private readonly settings: ExperimentSettings,
     private readonly callbacks: OrbCallbacks = {},
     private readonly hasFixedTerrainLineOfSight: FixedTerrainLineOfSight = () => false,
+    private readonly getDirectDamageBonus: () => number = () => 0,
+    private readonly getChargedSpeed: () => number = () => ORB_SPEED,
   ) {
     this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => ({
       id,
@@ -132,10 +134,28 @@ export class OrbStore {
     if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
 
     record.enemyHits.set(enemyId, nowMs);
-    const result = directHit(record.charges, enemyHp, this.settings, piercing);
+    const result = directHit(
+      record.charges,
+      enemyHp,
+      this.settings,
+      piercing,
+      this.getDirectDamageBonus(),
+    );
     record.charges = result.charges;
+    this.normalizeActiveSpeed(record);
     this.callbacks.onEnemyDamage?.(enemyId, result.damage, result.reflect);
     return result;
+  }
+
+  refreshCombatModifiers(id?: number): void {
+    if (id !== undefined) {
+      const record = this.requireRecord(id);
+      if (record.state === 'active') this.normalizeActiveSpeed(record);
+      return;
+    }
+    for (const record of this.records) {
+      if (record.state === 'active') this.normalizeActiveSpeed(record);
+    }
   }
 
   getSnapshot(): OrbSnapshot[] {
@@ -238,7 +258,8 @@ export class OrbStore {
       x: playerPosition.x + direction.x * SPAWN_CLEARANCE,
       y: playerPosition.y + direction.y * SPAWN_CLEARANCE,
     };
-    record.velocity = { x: direction.x * ORB_SPEED, y: direction.y * ORB_SPEED };
+    const speed = this.speedTarget(record);
+    record.velocity = { x: direction.x * speed, y: direction.y * speed };
     record.collisionEnabled = true;
     record.damageEnabled = true;
     record.activeSinceMs = nowMs;
@@ -250,6 +271,16 @@ export class OrbStore {
     if (!record) throw new RangeError(`unknown orb id: ${id}`);
     return record;
   }
+
+  private normalizeActiveSpeed(record: OrbRecord): void {
+    const direction = normalize(record.velocity);
+    const speed = this.speedTarget(record);
+    record.velocity = { x: direction.x * speed, y: direction.y * speed };
+  }
+
+  private speedTarget(record: OrbRecord): number {
+    return record.charges > 0 ? this.getChargedSpeed() : ORB_SPEED;
+  }
 }
 
 export type OrbSprite = Phaser.Physics.Arcade.Sprite & { orbId: number };
@@ -257,6 +288,8 @@ export type OrbSprite = Phaser.Physics.Arcade.Sprite & { orbId: number };
 export interface OrbManagerOptions extends OrbCallbacks {
   settings: ExperimentSettings;
   hasFixedTerrainLineOfSight: FixedTerrainLineOfSight;
+  getDirectDamageBonus(): number;
+  getChargedSpeed(): number;
   textureKey?: string;
 }
 
@@ -282,7 +315,13 @@ export class OrbManager {
   };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
-    this.store = new OrbStore(options.settings, options, options.hasFixedTerrainLineOfSight);
+    this.store = new OrbStore(
+      options.settings,
+      options,
+      options.hasFixedTerrainLineOfSight,
+      options.getDirectDamageBonus,
+      options.getChargedSpeed,
+    );
     this.world = scene.physics.world;
     const textureKey = options.textureKey ?? 'orb';
     this.sprites = this.store.getSnapshot().map(({ id }) => {
@@ -356,7 +395,10 @@ export class OrbManager {
   ): HitResult | null {
     const owned = this.resolveOwnedOrb(orb);
     if (!owned) return null;
-    return this.store.handleEnemyHit(owned.id, enemyId, enemyHp, nowMs, piercing);
+    this.synchronizeOwnedBody(owned.sprite, owned.id);
+    const result = this.store.handleEnemyHit(owned.id, enemyId, enemyHp, nowMs, piercing);
+    if (result && !result.reflect) this.synchronizeSprites();
+    return result;
   }
 
   getSprites(): readonly OrbSprite[] {
@@ -371,7 +413,20 @@ export class OrbManager {
     const owned = this.resolveOwnedOrb(orb);
     if (!owned) return false;
     this.synchronizeOwnedBody(owned.sprite, owned.id);
+    this.store.refreshCombatModifiers(owned.id);
+    this.synchronizeSprites();
     return true;
+  }
+
+  refreshCombatModifiers(): void {
+    const snapshot = this.store.getSnapshot();
+    for (const sprite of this.sprites) {
+      const id = this.spriteIds.get(sprite);
+      if (id === undefined || snapshot[id]?.state !== 'active') continue;
+      this.synchronizeOwnedBody(sprite, id);
+    }
+    this.store.refreshCombatModifiers();
+    this.synchronizeSprites();
   }
 
   destroy(): void {

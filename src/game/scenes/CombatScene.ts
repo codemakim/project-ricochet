@@ -90,8 +90,9 @@ export class CombatScene extends Phaser.Scene {
     this.aimQueueActivated = false;
     this.defeated = false;
     this.pause = new CombatPauseController();
-    this.build = new BuildState();
-    this.progression = new ProgressionManager(RUN_SEED, this.build);
+    const build = new BuildState();
+    this.build = build;
+    this.progression = new ProgressionManager(RUN_SEED, build);
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -103,6 +104,8 @@ export class CombatScene extends Phaser.Scene {
       settings: this.experiment,
       textureKey: 'orb-charged',
       hasFixedTerrainLineOfSight: () => true,
+      getDirectDamageBonus: () => build.directDamageBonus(),
+      getChargedSpeed: () => build.chargedSpeed(),
     });
     this.encounterDirector = new EncounterDirector();
     this.enemyManager = new EnemyManager(this, {
@@ -282,7 +285,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private refreshCombatModifiers(): void {
-    // Task 6 applies BuildState values to active permanent orbs.
+    this.orbManager?.refreshCombatModifiers();
   }
 
   private damagePlayer(amount: number): void {

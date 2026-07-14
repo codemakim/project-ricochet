@@ -12,12 +12,12 @@ describe('orb rules', () => {
     });
   });
 
-  it('deals 1 direct damage without a charge', () => {
-    expect(directHit(0, 1, { passThroughOnKill: false }, false)).toEqual({
+  it('adds the direct damage bonus without a charge', () => {
+    expect(directHit(0, 2, { passThroughOnKill: false }, false, 0.25)).toEqual({
       charged: false,
       charges: 0,
-      damage: 1,
-      killed: true,
+      damage: 1.25,
+      killed: false,
       reflect: true,
     });
   });

@@ -72,6 +72,9 @@ function createManager(
   homeOnBottomHit = true,
   hasFixedTerrainLineOfSight: () => boolean = () => false,
   autoReturnAfterMs: number | null = null,
+  getDirectDamageBonus: () => number = () => 0,
+  getChargedSpeed: () => number = () => ORB_SPEED,
+  passThroughOnKill = false,
 ) {
   const world = new FakeWorld();
   const sprites: FakeSprite[] = [];
@@ -88,8 +91,10 @@ function createManager(
     },
   } as unknown as Phaser.Scene;
   const manager = new OrbManager(scene, {
-    settings: { ...EXPERIMENT_DEFAULTS, homeOnBottomHit, autoReturnAfterMs },
+    settings: { ...EXPERIMENT_DEFAULTS, homeOnBottomHit, autoReturnAfterMs, passThroughOnKill },
     hasFixedTerrainLineOfSight,
+    getDirectDamageBonus,
+    getChargedSpeed,
   });
   return { manager, sprites, world };
 }
@@ -219,6 +224,35 @@ describe('OrbStore', () => {
     expect(onEnemyDamage).toHaveBeenCalledTimes(3);
   });
 
+  it('uses current damage and charged-speed providers, then drops to 400 after the last charge', () => {
+    const store = new OrbStore(
+      { ...EXPERIMENT_DEFAULTS, passThroughOnKill: true },
+      {},
+      () => false,
+      () => 0.25,
+      () => 480,
+    );
+    store.activateAim();
+    store.update(0, 0, player, { x: 3, y: 4 });
+
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(480);
+    store.handleEnemyHit(0, 1, 1, 1_000, false);
+    store.handleEnemyHit(0, 2, 1, 1_000, false);
+    const result = store.handleEnemyHit(0, 3, 2, 1_000, false);
+
+    expect(result).toMatchObject({ charged: true, damage: 1.75, charges: 0 });
+    const after = store.getSnapshot()[0]!;
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(store.handleEnemyHit(0, 4, 2, 1_000, false)).toMatchObject({
+      charged: false,
+      damage: 1.25,
+      charges: 0,
+    });
+  });
+
   it('accepts Phaser position and reflected velocity as active-orb state', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.activateAim();
@@ -234,6 +268,64 @@ describe('OrbStore', () => {
 });
 
 describe('OrbManager Phaser adapter', () => {
+  it('launches with injected charged speed', () => {
+    const { manager, sprites } = createManager(true, () => false, null, () => 0, () => 480);
+    manager.activateAim();
+    manager.update(0, 0, player, { x: 3, y: 4 });
+
+    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(480);
+  });
+
+  it('normalizes the body to 400 when a pass-through hit consumes the last charge', () => {
+    const { manager, sprites } = createManager(true, () => false, null, () => 0.25, () => 480, true);
+    manager.activateAim();
+    manager.update(0, 0, player, { x: 3, y: 4 });
+
+    manager.handleEnemyHit(0, 1, 1, 1_000, false);
+    manager.handleEnemyHit(0, 2, 1, 1_000, false);
+    const result = manager.handleEnemyHit(0, 3, 1.5, 1_000, false);
+
+    expect(result).toMatchObject({ charged: true, damage: 1.75, charges: 0, reflect: false });
+    const after = manager.getSnapshot()[0]!;
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(400);
+  });
+
+  it('normalizes a reflected body to 400 after the last charge', () => {
+    const { manager, sprites } = createManager(true, () => false, null, () => 0, () => 480, true);
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    manager.handleEnemyHit(0, 1, 1, 1_000, false);
+    manager.handleEnemyHit(0, 2, 1, 1_000, false);
+
+    const result = manager.handleEnemyHit(0, 3, 3, 1_000, false);
+    expect(result).toMatchObject({ charged: true, charges: 0, reflect: true });
+    sprites[0]!.body.setVelocity(-288, 384);
+    expect(manager.synchronizeOrb(sprites[0] as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
+
+    const after = manager.getSnapshot()[0]!;
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(after.velocity.x).toBeLessThan(0);
+    expect(after.velocity.y).toBeGreaterThan(0);
+    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(400);
+  });
+
+  it('refreshes active charged bodies to the current speed without changing direction', () => {
+    let chargedSpeed = 400;
+    const { manager, sprites } = createManager(true, () => false, null, () => 0, () => chargedSpeed);
+    manager.activateAim();
+    manager.update(0, 0, player, { x: 3, y: 4 });
+    const before = { ...sprites[0]!.body.velocity };
+
+    chargedSpeed = 480;
+    manager.refreshCombatModifiers();
+
+    const after = manager.getSnapshot()[0]!;
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(480);
+    expect(after.velocity.x / after.velocity.y).toBeCloseTo(before.x / before.y);
+    expect(sprites[0]!.body.velocity).toEqual(after.velocity);
+  });
+
   it('places only an active owned orb while retaining its velocity', () => {
     const { manager, sprites } = createManager();
     manager.activateAim();
@@ -356,10 +448,10 @@ describe('OrbManager Phaser adapter', () => {
     sprite.body.setVelocity(20, 300);
 
     expect(manager.synchronizeOrb(sprite as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
-    expect(manager.getSnapshot()[0]).toMatchObject({
-      position: { x: 88, y: 99 },
-      velocity: { x: 20, y: 300 },
-    });
+    const after = manager.getSnapshot()[0]!;
+    expect(after.position).toEqual({ x: 88, y: 99 });
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(after.velocity.x / after.velocity.y).toBeCloseTo(20 / 300);
   });
 
   it('uses private sprite identity instead of mutable orbId during update ingestion', () => {
