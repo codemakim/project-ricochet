@@ -61,6 +61,7 @@ class FakeTime {
 
 class FakeBody {
   velocity = { x: 0, y: 0 };
+  center = { x: 0, y: 0 };
   enable = true;
 
   constructor(readonly gameObject: FakeSprite) {}
@@ -68,6 +69,11 @@ class FakeBody {
   setVelocity(x: number, y: number): this {
     this.velocity = { x, y };
     return this;
+  }
+
+  reset(x: number, y: number): void {
+    this.center = { x, y };
+    this.velocity = { x: 0, y: 0 };
   }
 }
 
@@ -264,8 +270,10 @@ describe('EnemyManager', () => {
   });
 
   it('debug-sets exactly one active enemy with valid position and HP', () => {
-    const { manager } = createBoundary();
+    const { manager, groups } = createBoundary();
     const before = manager.getSnapshot().enemies[1];
+    const target = groups[0]!.children[0]!;
+    const velocity = { ...target.body.velocity };
 
     expect(manager.debugSetEnemy!(0, { x: 100, y: 110 }, 2.5)).toBe(true);
     expect(manager.getSnapshot().enemies[0]).toMatchObject({
@@ -274,6 +282,8 @@ describe('EnemyManager', () => {
       position: { x: 100, y: 110 },
     });
     expect(manager.getSnapshot().enemies[1]).toEqual(before);
+    expect(target.body.center).toEqual({ x: 100, y: 110 });
+    expect(target.body.velocity).toEqual(velocity);
     expect(manager.debugSetEnemy!(999, { x: 0, y: 0 }, 1)).toBe(false);
     expect(() => manager.debugSetEnemy!(0, { x: Number.NaN, y: 0 }, 1)).toThrow(RangeError);
     expect(() => manager.debugSetEnemy!(0, { x: 0, y: Number.POSITIVE_INFINITY }, 1)).toThrow(RangeError);

@@ -142,7 +142,11 @@ export class EnemyManager {
         }
         const enemy = this.enemies.get(id);
         if (!enemy?.active) return false;
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        const velocity = { x: body.velocity.x, y: body.velocity.y };
         enemy.setPosition(position.x, position.y);
+        body.reset(position.x, position.y);
+        body.setVelocity(velocity.x, velocity.y);
         enemy.hp = hp;
         return true;
       };
