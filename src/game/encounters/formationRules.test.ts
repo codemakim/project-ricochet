@@ -26,6 +26,33 @@ function hasWideGap(enemies: ReturnType<typeof generateFormation>): boolean {
   });
 }
 
+function diagonalComponentSizes(enemies: ReturnType<typeof generateFormation>): number[] {
+  const remaining = new Set(enemies.map((_, index) => index));
+  const sizes: number[] = [];
+  while (remaining.size > 0) {
+    const start = remaining.values().next().value as number;
+    const queue = [start];
+    remaining.delete(start);
+    let size = 0;
+    while (queue.length > 0) {
+      const index = queue.pop()!;
+      size += 1;
+      const enemy = enemies[index]!;
+      for (const otherIndex of [...remaining]) {
+        const other = enemies[otherIndex]!;
+        const rowDistance = Math.abs(enemy.y - other.y) / 42;
+        const columnDistance = Math.abs(enemy.column - other.column);
+        if (rowDistance <= 1 && columnDistance <= 1) {
+          remaining.delete(otherIndex);
+          queue.push(otherIndex);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  return sizes;
+}
+
 describe('procedural formation generation', () => {
   it.each(ORGANIC)('%s generates exact, unique, safe counts', (style) => {
     for (const count of [9, 15, 20]) {
@@ -51,6 +78,34 @@ describe('procedural formation generation', () => {
     const layouts = new Set(Array.from({ length: 8 }, (_, seed) =>
       JSON.stringify(generateFormation('cluster', 20, seed, 80).map(({ x, y }) => [x, y]))));
     expect(layouts.size).toBeGreaterThan(4);
+  });
+
+  it('grows cluster members coherently from no more than three groups', () => {
+    for (const seed of Array.from({ length: 32 }, (_, index) => index)) {
+      const components = diagonalComponentSizes(generateFormation('cluster', 15, seed, -28));
+      expect(components.length, `seed ${seed}: ${components}`).toBeLessThanOrEqual(3);
+      expect(components.every((size) => size > 1), `seed ${seed}: ${components}`).toBe(true);
+    }
+  });
+
+  it('reproduces public results for the same run seed and sequence', () => {
+    expect(createInitialFormation(321)).toEqual(createInitialFormation(321));
+    for (let sequence = 0; sequence < 9; sequence += 1) {
+      expect(createReinforcementFormation(1, sequence, 321))
+        .toEqual(createReinforcementFormation(1, sequence, 321));
+    }
+  });
+
+  it('changes initial or first-bag public layouts for different run seeds', () => {
+    const publicLayouts = (runSeed: number) => [
+      createInitialFormation(runSeed),
+      ...Array.from({ length: 9 }, (_, sequence) =>
+        createReinforcementFormation(1, sequence, runSeed)),
+    ].map(({ style, enemies }) => ({
+      style,
+      coordinates: enemies.map(({ x, y }) => [x, y]),
+    }));
+    expect(publicLayouts(100)).not.toEqual(publicLayouts(101));
   });
 
   it('creates non-grid 20-enemy initial formations', () => {

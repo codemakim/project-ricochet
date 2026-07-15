@@ -92,18 +92,30 @@ function clusterOrder(cells: readonly Cell[], random: () => number): Cell[] {
   }
   if (anchors.length === 0) anchors.push(candidates[0]!);
 
+  const groups = anchors.map((anchor) => [anchor]);
   const result = [...anchors];
   const unused = new Map(cells.map((cell) => [key(cell), cell]));
   result.forEach((cell) => unused.delete(key(cell)));
   let cursor = 0;
   while (unused.size > 0) {
-    const cluster = result.filter((_, index) => index % anchors.length === cursor % anchors.length);
-    const neighbors = shuffled([...unused.values()].filter((cell) =>
-      cluster.some((member) => touches(member, cell, true))), random);
-    const next = neighbors[0] ?? shuffled([...unused.values()], random)[0]!;
+    const ungrownIndex = groups.findIndex((group) => group.length === 1);
+    let activeIndex = ungrownIndex >= 0 ? ungrownIndex : cursor % groups.length;
+    let neighbors = shuffled([...unused.values()].filter((cell) =>
+      groups[activeIndex]!.some((member) => touches(member, cell, true))), random);
+    if (neighbors.length === 0) {
+      const expandable = shuffled(groups.map((_, index) => index), random)
+        .find((index) => [...unused.values()].some((cell) =>
+          groups[index]!.some((member) => touches(member, cell, true))));
+      if (expandable === undefined) throw new Error('unable to grow cluster formation');
+      activeIndex = expandable;
+      neighbors = shuffled([...unused.values()].filter((cell) =>
+        groups[activeIndex]!.some((member) => touches(member, cell, true))), random);
+    }
+    const next = neighbors[0]!;
+    groups[activeIndex]!.push(next);
     result.push(next);
     unused.delete(key(next));
-    if (random() < 0.7) cursor += 1;
+    cursor = random() < 0.7 ? activeIndex + 1 : activeIndex;
   }
   return result;
 }
@@ -176,13 +188,23 @@ function hasAdjacent(cells: readonly Cell[]): boolean {
   return cells.some((cell, index) => cells.slice(index + 1).some((other) => touches(cell, other)));
 }
 
+function hasNoIsolatedCell(cells: readonly Cell[]): boolean {
+  return cells.every((cell, index) =>
+    cells.some((other, otherIndex) => index !== otherIndex && touches(cell, other, true)));
+}
+
 function hasWideGap(cells: readonly Cell[]): boolean {
   return Array.from({ length: Math.max(...cells.map(({ row }) => row)) + 1 }, (_, row) =>
     cells.filter((cell) => cell.row === row).map(({ column }) => column).sort((a, b) => a - b))
     .some((columns) => columns.some((column, index) => index > 0 && column - columns[index - 1]! >= 3));
 }
 
-function preserveOrganicShape(selected: Cell[], all: readonly Cell[], random: () => number): Cell[] {
+function preserveOrganicShape(
+  selected: Cell[],
+  all: readonly Cell[],
+  random: () => number,
+  preserveClusterCoherence: boolean,
+): Cell[] {
   const result = [...selected];
   const replace = (candidate: Cell, predicate: (next: Cell[]) => boolean): boolean => {
     for (const index of shuffled(result.map((_, position) => position), random)) {
@@ -206,9 +228,13 @@ function preserveOrganicShape(selected: Cell[], all: readonly Cell[], random: ()
     const rows = shuffled([...new Set(result.map(({ row }) => row))], random);
     for (const row of rows) {
       const occupied = result.filter((cell) => cell.row === row);
-      const candidate = shuffled(all.filter((cell) =>
-        cell.row === row && occupied.some((other) => Math.abs(other.column - cell.column) >= 3)), random)[0];
-      if (candidate && replace(candidate, (next) => hasAdjacent(next) && hasWideGap(next))) break;
+      const candidates = shuffled(all.filter((cell) =>
+        cell.row === row && occupied.some((other) => Math.abs(other.column - cell.column) >= 3)), random);
+      const replaced = candidates.some((candidate) => replace(candidate, (next) =>
+        hasAdjacent(next)
+        && hasWideGap(next)
+        && (!preserveClusterCoherence || hasNoIsolatedCell(next))));
+      if (replaced) break;
     }
   }
   return result;
@@ -244,7 +270,9 @@ function generateWithPressure(
   const ordered = orderedCells(style, cells, rows, coordinateRandom);
   appendUnused(ordered, shuffled(cells, coordinateRandom));
   let selected = ordered.slice(0, count);
-  if (style !== 'grid') selected = preserveOrganicShape(selected, cells, coordinateRandom);
+  if (style !== 'grid') {
+    selected = preserveOrganicShape(selected, cells, coordinateRandom, style === 'cluster');
+  }
 
   const offsetRandom = createRandom(mix(seed, 0x4f464653));
   const mirror = offsetRandom() < 0.5;
