@@ -31,6 +31,8 @@ interface CombatSnapshot {
     elapsedSinceSpawnMs: number;
     phase: 0 | 1 | 2;
     spawnSequence: number;
+    runSeed: number;
+    lastFormationId: string | null;
   };
   progression: {
     level: number;
@@ -350,7 +352,15 @@ test('@desktop recovers active orbs through proximity and bottom worldbounds', a
 for (const passThroughOnKill of [false, true]) {
   test(`@desktop kills through Arcade collision with passThroughOnKill=${passThroughOnKill}`, async ({ page }) => {
     const { box } = await loadCanvas(page, `?passThroughOnKill=${passThroughOnKill}`);
-    await sceneCall(page, (scene) => scene.debugFreezeEnemies());
+    await sceneCall(page, (scene) => {
+      scene.debugFreezeEnemies();
+      const enemies = scene.getDebugSnapshot().enemies;
+      const target = enemies.find((enemy) => enemy.kind === 'basic')!;
+      enemies.filter((enemy) => enemy.id !== target.id).forEach((enemy, index) => {
+        scene.debugSetEnemy(enemy.id, { x: 36, y: 80 + index % 5 * 24 }, enemy.hp);
+      });
+      scene.debugSetEnemy(target.id, { x: 225, y: 300 }, target.hp);
+    });
     const before = await snapshot(page);
     const bottomY = Math.max(...before.enemies.filter((enemy) => enemy.kind === 'basic').map((enemy) => enemy.position.y));
     const target = before.enemies
@@ -393,19 +403,24 @@ for (const passThroughOnKill of [false, true]) {
 
 test('@desktop applies explosion damage once around the direct-hit enemy', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => {
+  const enemyIds = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.debugUpgradeAbility('explosion');
-    const keep = new Set([0, 1, 2, 3]);
+    const [targetId, nearId, killedId, outsideId] = scene.getDebugSnapshot().enemies
+      .filter((enemy) => enemy.kind === 'basic')
+      .slice(0, 4)
+      .map((enemy) => enemy.id);
+    const keep = new Set([targetId, nearId, killedId, outsideId]);
     scene.debugRemoveEnemies(
       scene.getDebugSnapshot().enemies
         .filter((enemy) => !keep.has(enemy.id))
         .map((enemy) => enemy.id),
     );
-    scene.debugSetEnemy(0, { x: 225, y: 300 }, 2);
-    scene.debugSetEnemy(1, { x: 273, y: 300 }, 1);
-    scene.debugSetEnemy(2, { x: 225, y: 252 }, 0.5);
-    scene.debugSetEnemy(3, { x: 225, y: 204 }, 1);
+    scene.debugSetEnemy(targetId!, { x: 225, y: 300 }, 2);
+    scene.debugSetEnemy(nearId!, { x: 273, y: 300 }, 1);
+    scene.debugSetEnemy(killedId!, { x: 225, y: 252 }, 0.5);
+    scene.debugSetEnemy(outsideId!, { x: 225, y: 204 }, 1);
+    return { targetId: targetId!, nearId: nearId!, killedId: killedId!, outsideId: outsideId! };
   });
   const before = await snapshot(page);
   const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
@@ -422,14 +437,14 @@ test('@desktop applies explosion damage once around the direct-hit enemy', async
     }
   });
 
-  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === 1)?.hp, {
+  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === enemyIds.nearId)?.hp, {
     intervals: [5],
     timeout: 90,
   }).toBe(0.5);
   const after = await snapshot(page);
-  expect(after.enemies.find((enemy) => enemy.id === 0)?.hp).toBe(0.5);
-  expect(after.enemies.some((enemy) => enemy.id === 2)).toBe(false);
-  expect(after.enemies.find((enemy) => enemy.id === 3)?.hp).toBe(1);
+  expect(after.enemies.find((enemy) => enemy.id === enemyIds.targetId)?.hp).toBe(0.5);
+  expect(after.enemies.some((enemy) => enemy.id === enemyIds.killedId)).toBe(false);
+  expect(after.enemies.find((enemy) => enemy.id === enemyIds.outsideId)?.hp).toBe(1);
   expect(after.progression.xp).toBe(before.progression.xp + 1);
 });
 
@@ -585,6 +600,64 @@ test('@desktop admits reinforcement while original enemies remain', async ({ pag
   expect(after.enemies.some((enemy) => enemy.id >= 20)).toBe(true);
   expect(after.encounter.spawnSequence).toBe(1);
   expect(after.encounter.phase).toBe(0);
+});
+
+test('@desktop varies procedural enemy formations across spawns and restarts', async ({ page }) => {
+  await page.clock.install();
+  const { box } = await loadCanvas(page);
+  const sortedPositions = (current: CombatSnapshot) => current.enemies
+    .map((enemy) => enemy.position)
+    .sort((left, right) => left.y - right.y || left.x - right.x);
+  const formationStyle = (id: string) => id.split(':')[2];
+
+  const initial = await snapshot(page);
+  expect(initial.enemies).toHaveLength(20);
+  const initialSeed = initial.encounter.runSeed;
+  const initialPositions = sortedPositions(initial);
+
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+  });
+  await page.clock.runFor(8_100);
+
+  const first = await snapshot(page);
+  expect(first.enemies.length).toBeGreaterThanOrEqual(9);
+  expect(first.enemies.length).toBeLessThanOrEqual(11);
+  expect(first.encounter.lastFormationId).not.toBeNull();
+  const firstId = first.encounter.lastFormationId!;
+  const firstPositions = sortedPositions(first);
+  expect(new Set(firstPositions.map(({ x, y }) => `${x}:${y}`)).size).toBe(first.enemies.length);
+
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+  });
+  await page.clock.runFor(8_100);
+
+  const second = await snapshot(page);
+  expect(second.enemies.length).toBeGreaterThanOrEqual(9);
+  expect(second.enemies.length).toBeLessThanOrEqual(11);
+  expect(second.encounter.lastFormationId).not.toBeNull();
+  const secondId = second.encounter.lastFormationId!;
+  const secondPositions = sortedPositions(second);
+  expect(secondId).not.toBe(firstId);
+  expect(formationStyle(secondId)).not.toBe(formationStyle(firstId));
+  expect(secondPositions).not.toEqual(firstPositions);
+  expect(new Set(secondPositions.map(({ x, y }) => `${x}:${y}`)).size).toBe(second.enemies.length);
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetHealth(1);
+    scene.debugDamage(1);
+  });
+  const restart = clientPoint(box, { x: 225, y: 436 });
+  await expect.poll(async () => {
+    await page.mouse.click(restart.x, restart.y);
+    return (await snapshot(page)).defeated;
+  }, { intervals: [16], timeout: 1_000 }).toBe(false);
+
+  const restarted = await snapshot(page);
+  expect(restarted.enemies).toHaveLength(20);
+  expect(restarted.encounter.runSeed).not.toBe(initialSeed);
+  expect(sortedPositions(restarted)).not.toEqual(initialPositions);
 });
 
 test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
