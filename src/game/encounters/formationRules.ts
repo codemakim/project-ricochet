@@ -193,6 +193,31 @@ function hasNoIsolatedCell(cells: readonly Cell[]): boolean {
     cells.some((other, otherIndex) => index !== otherIndex && touches(cell, other, true)));
 }
 
+function diagonalComponentCount(cells: readonly Cell[]): number {
+  const remaining = new Set(cells);
+  let components = 0;
+  while (remaining.size > 0) {
+    components += 1;
+    const start = remaining.values().next().value as Cell;
+    const queue = [start];
+    remaining.delete(start);
+    while (queue.length > 0) {
+      const cell = queue.pop()!;
+      for (const other of [...remaining]) {
+        if (touches(cell, other, true)) {
+          remaining.delete(other);
+          queue.push(other);
+        }
+      }
+    }
+  }
+  return components;
+}
+
+function hasCoherentCluster(cells: readonly Cell[]): boolean {
+  return hasNoIsolatedCell(cells) && diagonalComponentCount(cells) <= 3;
+}
+
 function hasWideGap(cells: readonly Cell[]): boolean {
   return Array.from({ length: Math.max(...cells.map(({ row }) => row)) + 1 }, (_, row) =>
     cells.filter((cell) => cell.row === row).map(({ column }) => column).sort((a, b) => a - b))
@@ -221,7 +246,8 @@ function preserveOrganicShape(
   if (!hasAdjacent(result)) {
     for (const anchor of shuffled(result, random)) {
       const candidate = shuffled(all.filter((cell) => touches(anchor, cell)), random)[0];
-      if (candidate && replace(candidate, hasAdjacent)) break;
+      if (candidate && replace(candidate, (next) =>
+        hasAdjacent(next) && (!preserveClusterCoherence || hasCoherentCluster(next)))) break;
     }
   }
   if (!hasWideGap(result)) {
@@ -233,7 +259,7 @@ function preserveOrganicShape(
       const replaced = candidates.some((candidate) => replace(candidate, (next) =>
         hasAdjacent(next)
         && hasWideGap(next)
-        && (!preserveClusterCoherence || hasNoIsolatedCell(next))));
+        && (!preserveClusterCoherence || hasCoherentCluster(next))));
       if (replaced) break;
     }
   }

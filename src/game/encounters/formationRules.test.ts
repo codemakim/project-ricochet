@@ -81,10 +81,14 @@ describe('procedural formation generation', () => {
   });
 
   it('grows cluster members coherently from no more than three groups', () => {
-    for (const seed of Array.from({ length: 32 }, (_, index) => index)) {
-      const components = diagonalComponentSizes(generateFormation('cluster', 15, seed, -28));
-      expect(components.length, `seed ${seed}: ${components}`).toBeLessThanOrEqual(3);
-      expect(components.every((size) => size > 1), `seed ${seed}: ${components}`).toBe(true);
+    for (const seed of Array.from({ length: 4_096 }, (_, index) => index)) {
+      for (const count of [9, 15, 20]) {
+        const components = diagonalComponentSizes(generateFormation('cluster', count, seed, -28));
+        expect(components.length, `seed ${seed}, count ${count}: ${components}`)
+          .toBeLessThanOrEqual(3);
+        expect(components.every((size) => size > 1), `seed ${seed}, count ${count}: ${components}`)
+          .toBe(true);
+      }
     }
   });
 
