@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
+import { createInitialFormation } from '../encounters/formationRules';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { EnemyManager } from './EnemyManager';
@@ -253,12 +254,16 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().activeShooters).toBe(2);
   });
 
-  it('creates the fixed formation with stable IDs and descent velocities', () => {
+  it('uses the seed-0 procedural fallback with stable IDs and descent velocities', () => {
     const { manager, groups } = createBoundary();
     const snapshot = manager.getSnapshot();
+    const expected = createInitialFormation(0).enemies;
 
     expect(snapshot.enemies).toHaveLength(20);
     expect(snapshot.enemies.map((enemy) => enemy.id)).toEqual([...Array(20).keys()]);
+    expect(snapshot.enemies.map(({ kind, hp, position }) => ({ kind, hp, position }))).toEqual(
+      expected.map(({ kind, hp, x, y }) => ({ kind, hp, position: { x, y } })),
+    );
     expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 18)).toBe(true);
   });
 
@@ -325,7 +330,8 @@ describe('EnemyManager', () => {
 
   it('removes breaches and reports their kind once without reporting a kill', () => {
     const { manager, groups, onBreach, onEnemyKilled } = createBoundary();
-    const armored = groups[0]!.children[1]!;
+    const armoredId = manager.getSnapshot().enemies.find(({ kind }) => kind === 'armored')!.id;
+    const armored = groups[0]!.children[armoredId]!;
     armored.y = GAME_HEIGHT - PLAYER_RADIUS;
 
     manager.update();
@@ -376,7 +382,10 @@ describe('EnemyManager', () => {
 
   it('applies each accepted orb hit once and honors pass-through versus reflection', () => {
     const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary();
-    const enemy = groups[0]!.children[0]!;
+    const basicIds = manager.getSnapshot().enemies
+      .filter(({ kind }) => kind === 'basic')
+      .map(({ id }) => id);
+    const enemy = groups[0]!.children[basicIds[0]!]!;
     const orbCollider = colliders[0]!;
     orb.setVelocity(50, -100);
     handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 2, damage: 1.5, reflect: false });
@@ -386,7 +395,7 @@ describe('EnemyManager', () => {
     expect(orb.body.velocity).toEqual({ x: 50, y: -100 });
     expect(enemy.destroyed).toBe(true);
 
-    const reflectedEnemy = groups[0]!.children[2]!;
+    const reflectedEnemy = groups[0]!.children[basicIds[1]!]!;
     handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 1, damage: 1, reflect: true });
     expect(orbCollider.trigger(orb, reflectedEnemy)).toBe(true);
     expect(handleEnemyHit).toHaveBeenCalledTimes(2);
@@ -395,8 +404,9 @@ describe('EnemyManager', () => {
   });
 
   it('reports one direct hit and one kill with captured enemy data', () => {
-    const { orb, handleEnemyHit, groups, colliders, onDirectHit, onEnemyKilled } = createBoundary();
-    const enemy = groups[0]!.children[0]!;
+    const { manager, orb, handleEnemyHit, groups, colliders, onDirectHit, onEnemyKilled } = createBoundary();
+    const target = manager.getSnapshot().enemies.find(({ kind }) => kind === 'basic')!;
+    const enemy = groups[0]!.children[target.id]!;
     handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 0, damage: 1.5, reflect: false });
 
     colliders[0]!.trigger(orb, enemy);
@@ -404,16 +414,16 @@ describe('EnemyManager', () => {
     expect(onDirectHit).toHaveBeenCalledOnce();
     expect(onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       source: 'permanent',
-      enemyId: 0,
+      enemyId: target.id,
       charged: true,
-      position: { x: 36, y: 80 },
+      position: target.position,
       direction: { x: 0, y: -1 },
     }));
     expect(onEnemyKilled).toHaveBeenCalledOnce();
     expect(onEnemyKilled).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'basic',
-      enemyId: 0,
-      position: { x: 36, y: 80 },
+      enemyId: target.id,
+      position: target.position,
     }));
   });
 
@@ -429,7 +439,8 @@ describe('EnemyManager', () => {
       time,
       gameplayClock,
     } = createBoundary(undefined, true);
-    const enemy = groups[0]!.children[0]!;
+    const target = manager.getSnapshot().enemies.find(({ kind }) => kind === 'basic')!;
+    const enemy = groups[0]!.children[target.id]!;
     temporaryOrb.setVelocity(30, -40);
     time.now = 10_000;
     gameplayClock.now = 123;
@@ -443,13 +454,13 @@ describe('EnemyManager', () => {
 
     expect(colliders[1]!.trigger(temporaryOrb, enemy)).toBe(true);
 
-    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, 0, 1, 123);
+    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, target.id, 1, 123);
     expect(temporaryOrbManager!.synchronizeOrb).toHaveBeenCalledWith(temporaryOrb);
     expect(enemy.hp).toBe(0.5);
     expect(onDirectHit).toHaveBeenCalledWith({
       source: 'temporary',
-      enemyId: 0,
-      position: { x: 36, y: 80 },
+      enemyId: target.id,
+      position: target.position,
       charged: false,
       direction: { x: 0.6, y: -0.8 },
     });

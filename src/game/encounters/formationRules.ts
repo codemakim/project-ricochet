@@ -368,34 +368,21 @@ export function createInitialFormation(runSeed: number): FormationResult {
 export function createReinforcementFormation(
   phase: ThreatPhase,
   sequence: number,
-): EnemySpec[];
-export function createReinforcementFormation(
-  phase: ThreatPhase,
-  sequence: number,
   runSeed: number,
-): FormationResult;
-export function createReinforcementFormation(
-  phase: ThreatPhase,
-  sequence: number,
-  runSeed?: number,
-): FormationResult | EnemySpec[] {
+): FormationResult {
   if (!Number.isInteger(sequence) || sequence < 0) {
     throw new RangeError('sequence must be a non-negative integer');
   }
-  const seed = runSeed ?? 0;
-  validateSeed(seed, 'runSeed');
-  const style = styleAt(seed, sequence);
+  validateSeed(runSeed, 'runSeed');
+  const style = styleAt(runSeed, sequence);
   const [minimum, maximum] = SIZE_RANGES[phase];
-  const countSeed = mix(seed, sequence ^ 0x53495a45);
-  const count = runSeed === undefined
-    ? [8, 10, 12][phase]!
-    : minimum + countSeed % (maximum - minimum + 1);
-  const layoutSeed = mix(seed, sequence ^ 0x4c41594f);
+  const countSeed = mix(runSeed, sequence ^ 0x53495a45);
+  const count = minimum + countSeed % (maximum - minimum + 1);
+  const layoutSeed = mix(runSeed, sequence ^ 0x4c41594f);
   const specialPressure = [[1, 0], [1, 1], [2, 2]] as const;
   const [armored, shooters] = specialPressure[phase];
   const enemies = generateWithPressure(
-    style, count, layoutSeed, -28, armored, shooters, mix(seed, sequence ^ 0x4b494e44),
+    style, count, layoutSeed, -28, armored, shooters, mix(runSeed, sequence ^ 0x4b494e44),
   );
-  if (runSeed === undefined) return enemies;
-  return { id: `${seed}:${sequence}:${style}:${layoutSeed}`, style, enemies };
+  return { id: `${runSeed}:${sequence}:${style}:${layoutSeed}`, style, enemies };
 }

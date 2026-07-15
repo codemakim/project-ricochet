@@ -4,7 +4,8 @@ import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
-import { canFire, createPrototypeFormation, type EnemyKind, type EnemySpec } from './enemyRules';
+import { createInitialFormation } from '../encounters/formationRules';
+import { canFire, type EnemyKind, type EnemySpec } from './enemyRules';
 
 const SHOOTER_INTERVAL_MS = 1300;
 const SHOOTER_WARNING_MS = 350;
@@ -98,7 +99,7 @@ export class EnemyManager {
     };
     this.bulletTextureKey = this.textureKeys.bullet;
 
-    this.spawnFormation(options.formation ?? createPrototypeFormation());
+    this.spawnFormation(options.formation ?? createInitialFormation(0).enemies);
 
     for (const orb of options.orbManager.getSprites()) {
       this.colliders.push(scene.physics.add.collider(

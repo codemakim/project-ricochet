@@ -15,6 +15,7 @@ import {
   type ExperimentSettings,
 } from '../constants';
 import { EncounterDirector } from '../encounters/EncounterDirector';
+import { createInitialFormation } from '../encounters/formationRules';
 import {
   EnemyManager,
   type DirectHitEvent,
@@ -34,7 +35,8 @@ import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
-const RUN_SEED = 0x5249434f;
+const PROGRESSION_SEED = 0x5249434f;
+let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
 const XP_BAR_WIDTH = 220;
 const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'defeated'];
 
@@ -95,6 +97,8 @@ export class CombatScene extends Phaser.Scene {
   }
 
   create(): void {
+    const runSeed = formationRunSeed;
+    formationRunSeed = (formationRunSeed + 1) >>> 0;
     this.health = createHealth();
     this.experiment = parseExperimentSettings(window.location.search);
     this.aim = { x: 0, y: -1 };
@@ -105,7 +109,7 @@ export class CombatScene extends Phaser.Scene {
     this.gameplayElapsedMs = 0;
     const build = new BuildState();
     this.build = build;
-    this.progression = new ProgressionManager(RUN_SEED, build);
+    this.progression = new ProgressionManager(PROGRESSION_SEED, build);
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -124,12 +128,14 @@ export class CombatScene extends Phaser.Scene {
       getDirectDamageBonus: () => build.directDamageBonus(),
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
     });
-    this.encounterDirector = new EncounterDirector();
+    this.encounterDirector = new EncounterDirector(runSeed);
+    const initialFormation = createInitialFormation(runSeed).enemies;
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
+      formation: initialFormation,
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
@@ -260,6 +266,8 @@ export class CombatScene extends Phaser.Scene {
         elapsedSinceSpawnMs: 0,
         phase: 0,
         spawnSequence: 0,
+        runSeed: 0,
+        lastFormationId: null,
       },
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
