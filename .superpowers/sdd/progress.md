@@ -7,7 +7,7 @@
 
 ## Tasks
 
-- Task 1 procedural formation rules: review fixes complete (`dbb6be8f55455b3dc55a91b177dd54f2037c99ab`)
+- Task 1 procedural formation rules: review fixes complete (`17a489a7799cc59c5b7e61d1b5fe33d262e52e15`)
 - Task 2 runtime wiring and density: pending
 - Task 3 browser acceptance and docs: pending
 - Final review and verification: pending
