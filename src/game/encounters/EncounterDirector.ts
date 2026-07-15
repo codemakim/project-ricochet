@@ -1,11 +1,17 @@
 import { PLAYER_MIN_Y } from '../constants';
 import type { EnemySpec } from '../enemies/enemyRules';
-import { canSpawnReinforcement, threatConfigAt } from './encounterRules';
-import { createReinforcementFormation } from './formationRules';
+import { canSpawnReinforcement, threatConfigAt, type ThreatPhase } from './encounterRules';
+import { createReinforcementFormation, type FormationResult } from './formationRules';
 
 export interface EncounterEnemyState {
   activeEnemies: number;
   topmostEnemyY: number;
+}
+
+interface PendingFormation {
+  phase: ThreatPhase;
+  sequence: number;
+  result: FormationResult;
 }
 
 export class EncounterDirector {
@@ -13,6 +19,7 @@ export class EncounterDirector {
   private elapsedSinceSpawnMs = 0;
   private spawnSequence = 0;
   private lastFormationId: string | null = null;
+  private pendingFormation: PendingFormation | null = null;
 
   constructor(private readonly runSeed = 0) {}
 
@@ -23,7 +30,18 @@ export class EncounterDirector {
     this.elapsedMs += deltaMs;
     this.elapsedSinceSpawnMs += deltaMs;
     const threat = threatConfigAt(this.elapsedMs);
-    const formation = createReinforcementFormation(threat.phase, this.spawnSequence, this.runSeed);
+    if (this.elapsedSinceSpawnMs < threat.spawnIntervalMs
+      || enemyState.topmostEnemyY < PLAYER_MIN_Y) return null;
+
+    if (this.pendingFormation?.phase !== threat.phase
+      || this.pendingFormation.sequence !== this.spawnSequence) {
+      this.pendingFormation = {
+        phase: threat.phase,
+        sequence: this.spawnSequence,
+        result: createReinforcementFormation(threat.phase, this.spawnSequence, this.runSeed),
+      };
+    }
+    const formation = this.pendingFormation.result;
     if (!canSpawnReinforcement({
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
       spawnIntervalMs: threat.spawnIntervalMs,
@@ -37,6 +55,7 @@ export class EncounterDirector {
     this.elapsedSinceSpawnMs = 0;
     this.spawnSequence += 1;
     this.lastFormationId = formation.id;
+    this.pendingFormation = null;
     return formation.enemies;
   }
 

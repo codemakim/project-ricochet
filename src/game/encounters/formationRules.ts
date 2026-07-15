@@ -379,7 +379,7 @@ export function createReinforcementFormation(
   const countSeed = mix(runSeed, sequence ^ 0x53495a45);
   const count = minimum + countSeed % (maximum - minimum + 1);
   const layoutSeed = mix(runSeed, sequence ^ 0x4c41594f);
-  const specialPressure = [[1, 0], [1, 1], [2, 2]] as const;
+  const specialPressure = [[1, 0], [2, 1], [2, 2]] as const;
   const [armored, shooters] = specialPressure[phase];
   const enemies = generateWithPressure(
     style, count, layoutSeed, -28, armored, shooters, mix(runSeed, sequence ^ 0x4b494e44),

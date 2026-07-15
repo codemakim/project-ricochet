@@ -145,15 +145,22 @@ describe('procedural formation generation', () => {
     expect(styles.every((style, index) => index === 0 || style !== styles[index - 1])).toBe(true);
   });
 
-  it('does not lower special-enemy pressure by phase', () => {
-    for (let sequence = 0; sequence < 27; sequence += 1) {
-      const specialCount = (phase: 0 | 1 | 2) =>
-        createReinforcementFormation(phase, sequence, 55).enemies
-          .filter(({ kind }) => kind !== 'basic').length;
-      expect(specialCount(1)).toBeGreaterThanOrEqual(specialCount(0));
-      expect(specialCount(2)).toBeGreaterThanOrEqual(specialCount(1));
-    }
-  });
+  it.each([
+    [0, 1, 0],
+    [1, 2, 1],
+    [2, 2, 2],
+  ] as const)(
+    'uses exact phase-%i reinforcement pressure: %i armored and %i shooters',
+    (phase, armored, shooters) => {
+      for (const runSeed of [0, 55, 808]) {
+        for (const sequence of [0, 1, 8, 9, 17, 26]) {
+          const enemies = createReinforcementFormation(phase, sequence, runSeed).enemies;
+          expect(enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(armored);
+          expect(enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(shooters);
+        }
+      }
+    },
+  );
 
   it('rejects invalid counts, seeds, and sequences with clear RangeErrors', () => {
     for (const count of [0, -1, 1.5]) {

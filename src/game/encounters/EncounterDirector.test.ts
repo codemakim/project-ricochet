@@ -1,9 +1,59 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const createFormationSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('./formationRules', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./formationRules')>();
+  createFormationSpy.mockImplementation(actual.createReinforcementFormation);
+  return { ...actual, createReinforcementFormation: createFormationSpy };
+});
+
 import { EncounterDirector } from './EncounterDirector';
 import { createReinforcementFormation } from './formationRules';
 
 describe('EncounterDirector', () => {
   const clearTop = { activeEnemies: 20, topmostEnemyY: 120 };
+
+  beforeEach(() => {
+    createFormationSpy.mockClear();
+  });
+
+  it('does not generate while interval or top clearance is blocked', () => {
+    const director = new EncounterDirector(1234);
+
+    expect(director.update(7_999, clearTop)).toBeNull();
+    expect(director.update(1, { activeEnemies: 0, topmostEnemyY: 97 })).toBeNull();
+    expect(director.update(1_000, { activeEnemies: 0, topmostEnemyY: 97 })).toBeNull();
+
+    expect(createFormationSpy).not.toHaveBeenCalled();
+  });
+
+  it('generates once while capacity is blocked and admits the cached formation', () => {
+    const director = new EncounterDirector(1234);
+    const capacityBlocked = { activeEnemies: 24, topmostEnemyY: 120 };
+
+    expect(director.update(8_000, capacityBlocked)).toBeNull();
+    expect(director.update(16, capacityBlocked)).toBeNull();
+    expect(director.update(16, capacityBlocked)).toBeNull();
+    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+
+    expect(director.update(16, clearTop)).not.toBeNull();
+    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+    expect(director.getSnapshot().spawnSequence).toBe(1);
+  });
+
+  it('regenerates a capacity-blocked pending formation when phase changes', () => {
+    const director = new EncounterDirector(1234);
+
+    expect(director.update(8_000, { activeEnemies: 32, topmostEnemyY: 120 })).toBeNull();
+    expect(director.update(52_000, { activeEnemies: 40, topmostEnemyY: 120 })).toBeNull();
+    expect(createFormationSpy).toHaveBeenNthCalledWith(1, 0, 0, 1234);
+    expect(createFormationSpy).toHaveBeenNthCalledWith(2, 1, 0, 1234);
+
+    expect(director.update(0, clearTop)).not.toBeNull();
+    expect(createFormationSpy).toHaveBeenCalledTimes(2);
+    expect(director.getSnapshot()).toMatchObject({ phase: 1, spawnSequence: 1 });
+  });
 
   it('releases one seeded phase-0 formation and records its metadata', () => {
     const director = new EncounterDirector(1234);
