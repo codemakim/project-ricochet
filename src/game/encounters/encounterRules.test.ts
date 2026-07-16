@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canSpawnReinforcement, threatConfigAt } from './encounterRules';
+import { canSpawnReinforcement, threatConfigAt, threatPhaseForSection } from './encounterRules';
 
 describe('encounter rules', () => {
   it.each([
@@ -10,6 +10,19 @@ describe('encounter rules', () => {
     [180_000, { phase: 2, activeCap: 48, spawnIntervalMs: 6_000 }],
   ] as const)('maps %ims to its threat config', (elapsedMs, expected) => {
     expect(threatConfigAt(elapsedMs)).toEqual(expected);
+  });
+
+  it.each([
+    [0, 0, 0],
+    [0, 59_999, 0],
+    [0, 60_000, 1],
+    [0, 119_999, 1],
+    [0, 120_000, 2],
+    [1, 0, 1],
+    [1, 59_999, 1],
+    [1, 60_000, 2],
+  ] as const)('maps section %i at %ims to phase %i', (section, elapsedMs, phase) => {
+    expect(threatPhaseForSection(section, elapsedMs)).toBe(phase);
   });
 
   it('requires interval, top clearance, and capacity together', () => {
