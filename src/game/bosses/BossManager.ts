@@ -38,7 +38,7 @@ const PART_HIT_IDS: Record<BossPartId, number> = {
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
 type Warning =
-  | { kind: 'aimedShot'; dueAt: number; marker: BossSprite }
+  | { kind: 'aimedShot'; dueAt: number; marker: BossSprite; target: Vector }
   | { kind: 'supportDrop'; dueAt: number; marker: BossSprite; x: number };
 
 interface PendingHit {
@@ -314,10 +314,40 @@ export class BossManager {
 
   private processBodyReflection(orb: Phaser.Physics.Arcade.Sprite): boolean {
     if (!(this.body.body as Phaser.Physics.Arcade.Body).enable) return false;
-    return orb.active && !exposedBossParts(this.state).some((partId) => {
-      const part = this.partSprites[partId];
-      return Math.abs(orb.x - part.x) <= 8 && Math.abs(orb.y - part.y) <= 20;
-    });
+    return orb.active && !exposedBossParts(this.state).some((partId) => (
+      this.arcadeBodiesIntersect(orb, this.partSprites[partId])
+    ));
+  }
+
+  private arcadeBodiesIntersect(
+    firstSprite: Phaser.Physics.Arcade.Sprite,
+    secondSprite: Phaser.Physics.Arcade.Sprite,
+  ): boolean {
+    const first = firstSprite.body as Phaser.Physics.Arcade.Body;
+    const second = secondSprite.body as Phaser.Physics.Arcade.Body;
+    if (!first.enable || !second.enable) return false;
+    if (first.isCircle && second.isCircle) {
+      return Math.hypot(
+        first.center.x - second.center.x,
+        first.center.y - second.center.y,
+      ) <= first.halfWidth + second.halfWidth;
+    }
+    if (first.isCircle) return this.circleIntersectsBody(first, second);
+    if (second.isCircle) return this.circleIntersectsBody(second, first);
+    return first.left <= second.right && first.right >= second.left
+      && first.top <= second.bottom && first.bottom >= second.top;
+  }
+
+  private circleIntersectsBody(
+    circle: Phaser.Physics.Arcade.Body,
+    body: Phaser.Physics.Arcade.Body,
+  ): boolean {
+    const closestX = clamp(circle.center.x, body.left, body.right);
+    const closestY = clamp(circle.center.y, body.top, body.bottom);
+    return Math.hypot(
+      circle.center.x - closestX,
+      circle.center.y - closestY,
+    ) <= circle.halfWidth;
   }
 
   private finishPermanentHit(orb: OrbSprite, _target: BossSprite, partId: BossPartId | null): void {
@@ -432,12 +462,18 @@ export class BossManager {
   }
 
   private beginAimedWarning(startsAt: number): void {
+    const target = { x: this.options.player.x, y: this.options.player.y };
     const marker = this.warningGroup.create(
-      this.options.player.x,
-      this.options.player.y,
+      target.x,
+      target.y,
       'boss-aim-marker',
     ) as BossSprite;
-    this.warnings.push({ kind: 'aimedShot', dueAt: startsAt + AIMED_WARNING_MS, marker });
+    this.warnings.push({
+      kind: 'aimedShot',
+      dueAt: startsAt + AIMED_WARNING_MS,
+      marker,
+      target,
+    });
   }
 
   private beginSupportWarnings(startsAt: number, attackIndex: number): void {
@@ -457,17 +493,17 @@ export class BossManager {
         continue;
       }
       warning.marker.destroy();
-      if (warning.kind === 'aimedShot') this.fireAimedFan();
+      if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
       else this.spawnFallingHazard(warning.x);
     }
     this.warnings = pending;
   }
 
-  private fireAimedFan(): void {
+  private fireAimedFan(target: Vector): void {
     const origin = { x: this.motion.x, y: BOSS_Y };
     const aimed = normalize({
-      x: this.options.player.x - origin.x,
-      y: this.options.player.y - origin.y,
+      x: target.x - origin.x,
+      y: target.y - origin.y,
     });
     for (const angle of [-12, 0, 12]) {
       if (this.options.getEnemyBulletCount() + this.getBulletCount() >= HOSTILE_BULLET_CAP) break;

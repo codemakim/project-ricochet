@@ -13,6 +13,9 @@ class FakeBody {
   velocity = { x: 0, y: 0 };
   center: { x: number; y: number };
   enable = true;
+  isCircle = false;
+  halfWidth = 0;
+  halfHeight = 0;
 
   constructor(readonly gameObject: FakeSprite) {
     this.center = { x: gameObject.x, y: gameObject.y };
@@ -22,6 +25,11 @@ class FakeBody {
     this.velocity = { x, y };
     return this;
   }
+
+  get left(): number { return this.center.x - this.halfWidth; }
+  get right(): number { return this.center.x + this.halfWidth; }
+  get top(): number { return this.center.y - this.halfHeight; }
+  get bottom(): number { return this.center.y + this.halfHeight; }
 }
 
 class FakeSprite {
@@ -29,14 +37,26 @@ class FakeSprite {
   destroyed = false;
   visible = true;
   tint?: number;
-  readonly body = new FakeBody(this);
+  readonly body: FakeBody;
 
-  constructor(public x: number, public y: number, readonly texture: string) {}
+  constructor(public x: number, public y: number, readonly texture: string) {
+    this.body = new FakeBody(this);
+  }
 
-  setCircle(): this { return this; }
+  setCircle(radius: number): this {
+    this.body.isCircle = true;
+    this.body.halfWidth = radius;
+    this.body.halfHeight = radius;
+    return this;
+  }
   setImmovable(): this { return this; }
   setDepth(): this { return this; }
-  setSize(): this { return this; }
+  setSize(width: number, height: number): this {
+    this.body.isCircle = false;
+    this.body.halfWidth = width / 2;
+    this.body.halfHeight = height / 2;
+    return this;
+  }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
@@ -133,6 +153,7 @@ function createBoundary() {
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 120, 'orb') as FakeSprite & { orbId: number };
   orb.orbId = 0;
+  orb.setCircle(8);
   orb.setVelocity(100, -200);
   const handleEnemyHit = vi.fn(() => hitResult());
   const synchronizeOrb = vi.fn();
@@ -143,6 +164,7 @@ function createBoundary() {
   } as unknown as OrbManager;
   const temporaryOrb = new FakeSprite(225, 120, 'temporary') as FakeSprite & { temporaryOrbId: number };
   temporaryOrb.temporaryOrbId = 4;
+  temporaryOrb.setCircle(6);
   temporaryOrb.setVelocity(-120, -80);
   const temporaryGroup = new FakeGroup();
   temporaryGroup.children.push(temporaryOrb);
@@ -223,6 +245,30 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(11);
   });
 
+  it('rejects body reflection when a permanent radius-8 orb clips a weakpoint seam corner', () => {
+    const boundary = createBoundary();
+    const body = boundary.colliderFor('boss-body');
+    const weakpoint = boundary.colliderFor('boss-left-weakpoint');
+    boundary.orb.setPosition(165, 143);
+
+    expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
+    expect(boundary.handleEnemyHit).not.toHaveBeenCalled();
+    expect(weakpoint.trigger(boundary.orb, weakpoint.second as FakeSprite)).toBe(true);
+    expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(11);
+  });
+
+  it('rejects body reflection when a temporary radius-6 orb clips a weakpoint seam corner', () => {
+    const boundary = createBoundary();
+    const body = boundary.colliderFor('boss-body', boundary.temporaryGroup);
+    const weakpoint = boundary.colliderFor('boss-left-weakpoint', boundary.temporaryGroup);
+    boundary.temporaryOrb.setPosition(165, 141);
+
+    expect(body.trigger(boundary.temporaryOrb, body.second as FakeSprite)).toBe(false);
+    expect(boundary.handleTemporaryHit).not.toHaveBeenCalled();
+    expect(weakpoint.trigger(boundary.temporaryOrb, weakpoint.second as FakeSprite)).toBe(true);
+    expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(13.5);
+  });
+
   it('hits only one exposed weakpoint per orb in one gameplay frame and reports permanent hits', () => {
     const boundary = createBoundary();
     const left = boundary.colliderFor('boss-left-weakpoint');
@@ -299,6 +345,29 @@ describe('BossManager', () => {
     boundary.gameplay.now = 3400;
     boundary.manager.update();
     expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, aimedBullets: 3 });
+  });
+
+  it('fires the aimed fan at the warned target after the player moves', () => {
+    const boundary = createBoundary();
+    const warnedTarget = { x: boundary.player.x, y: boundary.player.y };
+    boundary.gameplay.now = 2800;
+    boundary.manager.update();
+
+    boundary.player.setPosition(400, 80);
+    boundary.gameplay.now = 3400;
+    boundary.manager.update();
+
+    const centerBullet = boundary.groups[0]!.children.filter((child) => child.active)[1]!;
+    const distance = Math.hypot(
+      warnedTarget.x - centerBullet.x,
+      warnedTarget.y - centerBullet.y,
+    );
+    expect(centerBullet.body.velocity.x).toBeCloseTo(
+      (warnedTarget.x - centerBullet.x) / distance * 220,
+    );
+    expect(centerBullet.body.velocity.y).toBeCloseTo(
+      (warnedTarget.y - centerBullet.y) / distance * 220,
+    );
   });
 
   it('shares cap twelve with normal bullets and spawns only available aimed bullets', () => {
