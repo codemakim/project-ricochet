@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+import { updateBossMotion, type HorizontalInterval } from './bossMovementRules';
+
+const CENTER_BOUNDS: HorizontalInterval = { minimum: 60, maximum: 390 };
+
+describe('boss movement rules', () => {
+  it('moves freely across the full-width center bounds at 55px/s', () => {
+    expect(updateBossMotion({ x: 225, direction: 1 }, 1000, [])).toEqual({
+      x: 280,
+      direction: 1,
+    });
+
+    expect(updateBossMotion({ x: 380, direction: 1 }, 1000, [])).toEqual({
+      x: 345,
+      direction: -1,
+    });
+  });
+
+  it('clips movement to a padded obstacle interval', () => {
+    const bossHalfWidth = 60;
+    const obstaclePadding = 12;
+    const enemy = { minimum: 220, maximum: 264 };
+    const paddedObstacle = {
+      minimum: enemy.minimum - bossHalfWidth - obstaclePadding,
+      maximum: enemy.maximum + bossHalfWidth + obstaclePadding,
+    };
+
+    expect(updateBossMotion({ x: 120, direction: 1 }, 1000, [paddedObstacle])).toEqual({
+      x: 121,
+      direction: -1,
+    });
+  });
+
+  it('reverses at an obstacle before overlap', () => {
+    expect(
+      updateBossMotion({ x: 120, direction: 1 }, 1000, [{ minimum: 150, maximum: 200 }]),
+    ).toEqual({ x: 125, direction: -1 });
+  });
+
+  it('stops when merged obstacles block both sides', () => {
+    expect(
+      updateBossMotion(
+        { x: 225, direction: 1 },
+        1000,
+        [
+          { minimum: 0, maximum: 225 },
+          { minimum: 200, maximum: 450 },
+        ],
+      ),
+    ).toEqual({ x: 225, direction: 0 });
+  });
+
+  it('resumes into newly expanded range after obstacle removal', () => {
+    const stopped = updateBossMotion(
+      { x: 200, direction: 0 },
+      1000,
+      [
+        { minimum: 60, maximum: 200 },
+        { minimum: 200, maximum: 390 },
+      ],
+    );
+
+    expect(stopped).toEqual({ x: 200, direction: 0 });
+    expect(updateBossMotion(stopped, 1000, [])).toEqual({ x: 255, direction: 1 });
+  });
+
+  it('merges overlapping forbidden intervals and never crosses them on a large delta', () => {
+    expect(
+      updateBossMotion(
+        { x: 100, direction: 1 },
+        3000,
+        [
+          { minimum: 150, maximum: 220 },
+          { minimum: 200, maximum: 260 },
+        ],
+        CENTER_BOUNDS,
+      ),
+    ).toEqual({ x: 85, direction: 1 });
+  });
+});
