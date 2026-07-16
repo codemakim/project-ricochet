@@ -251,6 +251,15 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().active).toBe(false);
   });
 
+  it('sets a deterministic boss position through its DEV-only debug hook', () => {
+    const { manager } = createBoundary();
+
+    manager.debugSetPosition!(120);
+
+    expect(manager.getSnapshot().position).toEqual({ x: 120, y: 120 });
+    expect(() => manager.debugSetPosition!(Number.NaN)).toThrow(RangeError);
+  });
+
   it('reflects from the body without consuming charge, opening bonus, or hit cooldown', () => {
     const { colliderFor, orb, handleEnemyHit, synchronizeOrb, manager } = createBoundary();
 

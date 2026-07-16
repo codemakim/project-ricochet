@@ -79,6 +79,8 @@ export interface BossManagerSnapshot {
 }
 
 export class BossManager {
+  declare debugSetPosition?: (x: number) => void;
+
   private readonly body: BossSprite;
   private readonly partSprites: Record<BossPartId, BossSprite>;
   private readonly aimedBulletGroup: Phaser.Physics.Arcade.Group;
@@ -146,6 +148,15 @@ export class BossManager {
       this.fallingHazardGroup,
       (_player, hazard) => this.consumeHostile(hazard as BossSprite, 2),
     ));
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugSetPosition = (x) => {
+        if (!Number.isFinite(x) || x < 60 || x > GAME_WIDTH - 60) {
+          throw new RangeError('boss x must be finite and within movement bounds');
+        }
+        this.motion = { x, direction: 1 };
+        this.positionBossSprites();
+      };
+    }
   }
 
   update(): void {
@@ -239,6 +250,7 @@ export class BossManager {
     this.aimedBulletGroup.destroy(true);
     this.fallingHazardGroup.destroy(true);
     this.warningGroup.destroy(true);
+    this.debugSetPosition = undefined;
   }
 
   private addPermanentCollider(orb: OrbSprite, target: BossSprite, partId: BossPartId | null): void {

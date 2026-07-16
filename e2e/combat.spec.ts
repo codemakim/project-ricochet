@@ -83,6 +83,7 @@ interface DevelopmentScene {
   debugAdvanceEncounter(deltaMs: number): void;
   debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter'): void;
   debugDamageBossPart(partId: 'leftWeakpoint' | 'rightWeakpoint' | 'core', damage: number): void;
+  debugSetBossPosition(x: number): void;
 }
 
 async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {
@@ -1045,6 +1046,7 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
     scene.debugFreezeEnemies();
     scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
     scene.debugSetEnemy(obstacle.id, { x: 330, y: 120 }, 99);
+    scene.debugSetBossPosition(225);
     const constrained: number[] = [];
     for (let sample = 0; sample < 6; sample += 1) {
       scene.update(0, 2_000);
@@ -1183,8 +1185,8 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
   expect(reset.encounter).toMatchObject({
     state: 'running', section: 0, spawnSequence: 0, bossScore: 0, bossesDefeated: 0,
   });
-  expect(reset.encounter.elapsedMs).toBeLessThan(reward.encounter.elapsedMs);
-  expect(reset.encounter.sectionElapsedMs).toBeLessThan(reward.encounter.elapsedMs);
+  expect(reset.encounter.elapsedMs).toBeLessThan(1_000);
+  expect(reset.encounter.sectionElapsedMs).toBeLessThan(1_000);
   expect(reset.bossRewards).toEqual([]);
   expect(reset.bossRewardChoices).toEqual([]);
   expect(reset.bossRewardVisible).toBe(false);

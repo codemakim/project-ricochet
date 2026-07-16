@@ -83,6 +83,7 @@ export class CombatScene extends Phaser.Scene {
   declare debugAdvanceEncounter?: (deltaMs: number) => void;
   declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
   declare debugDamageBossPart?: (partId: BossPartId, damage: number) => void;
+  declare debugSetBossPosition?: (x: number) => void;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -223,6 +224,7 @@ export class CombatScene extends Phaser.Scene {
           damage,
         );
       };
+      this.debugSetBossPosition = (x) => this.bossManager?.debugSetPosition?.(x);
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
@@ -652,6 +654,7 @@ export class CombatScene extends Phaser.Scene {
     this.debugAdvanceEncounter = undefined;
     this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;
+    this.debugSetBossPosition = undefined;
   };
 
   private createTextures(): void {
