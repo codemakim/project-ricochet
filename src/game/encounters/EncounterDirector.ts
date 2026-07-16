@@ -31,6 +31,7 @@ const NO_UPDATE: EncounterUpdate = { formation: null, transition: null };
 export class EncounterDirector {
   private state: EncounterState = 'running';
   private section = 0;
+  private elapsedMs = 0;
   private sectionElapsedMs = 0;
   private elapsedSinceSpawnMs = 0;
   private bossScore = 0;
@@ -46,6 +47,7 @@ export class EncounterDirector {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
       throw new RangeError('deltaMs must be finite and non-negative');
     }
+    this.elapsedMs += deltaMs;
 
     if (this.state === 'bossWarning') {
       this.warningElapsedMs += deltaMs;
@@ -125,7 +127,7 @@ export class EncounterDirector {
   getSnapshot() {
     const phase = threatConfigAt(this.sectionElapsedMs, this.section).phase;
     return {
-      elapsedMs: this.sectionElapsedMs,
+      elapsedMs: this.elapsedMs,
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
       phase,
       spawnSequence: this.spawnSequence,

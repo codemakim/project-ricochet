@@ -176,6 +176,18 @@ describe('EncounterDirector', () => {
     });
   });
 
+  it('keeps elapsed time monotonic while resetting section elapsed time', () => {
+    const director = new EncounterDirector(1234);
+    director.update(210_000, clearTop);
+    director.update(2_000, clearTop);
+    director.markBossDefeated();
+    director.resumeAfterBossReward();
+
+    expect(director.getSnapshot()).toMatchObject({ elapsedMs: 212_000, sectionElapsedMs: 0 });
+    director.update(1_000, clearTop);
+    expect(director.getSnapshot()).toMatchObject({ elapsedMs: 213_000, sectionElapsedMs: 1_000 });
+  });
+
   it('never starts another boss warning in section 1', () => {
     const director = new EncounterDirector(1234);
     director.update(210_000, clearTop);
