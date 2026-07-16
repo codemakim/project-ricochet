@@ -279,11 +279,13 @@ export class EnemyManager {
 
   destroy(): void {
     if (this.destroyed) return;
-    this.clearHostileActions();
     this.destroyed = true;
     this.unsubscribeOrbAdded();
     this.shooterTimer.remove(false);
+    for (const timer of this.warningTimers.values()) timer.remove(false);
     for (const collider of this.colliders) collider.destroy();
+    this.warningTimers.clear();
+    this.activeShooters.clear();
     this.pendingReflections.clear();
     this.enemies.clear();
     this.enemyGroup.destroy(true);

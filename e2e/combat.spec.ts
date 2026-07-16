@@ -152,6 +152,29 @@ async function loadCanvas(page: Page, search = '') {
   return { canvas, box: box! };
 }
 
+async function enterMidbossByScore(page: Page): Promise<CombatSnapshot> {
+  await sceneCall(page, (scene) => {
+    scene.debugAdvanceEncounter(120_000);
+    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(0);
+  });
+  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
+  await expect.poll(async () => (await snapshot(page)).boss.active).toBe(true);
+  return snapshot(page);
+}
+
+async function defeatMidboss(page: Page): Promise<CombatSnapshot> {
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftWeakpoint', 14);
+    scene.debugDamageBossPart('rightWeakpoint', 14);
+    scene.debugDamageBossPart('core', 36);
+    scene.update(0, 0);
+  });
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  return snapshot(page);
+}
+
 function clientPoint(
   box: { x: number; y: number; width: number; height: number },
   world: Vector,
@@ -955,4 +978,201 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
     levelUpVisible: false,
     temporaryOrbs: 0,
   });
+});
+
+test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {
+  await loadCanvas(page);
+  const before = await snapshot(page);
+
+  await sceneCall(page, (scene) => {
+    scene.debugAdvanceEncounter(120_000);
+    for (let score = 0; score < 69; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(0);
+  });
+  expect((await snapshot(page)).encounter.state).toBe('running');
+
+  await sceneCall(page, (scene) => {
+    scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(0);
+  });
+  const warning = await snapshot(page);
+  expect(warning.encounter).toMatchObject({ state: 'bossWarning', bossScore: 70 });
+  expect(warning.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
+  expect(warning.enemies).toHaveLength(before.enemies.length);
+
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
+  const boss = await snapshot(page);
+  expect(boss.encounter.state).toBe('boss');
+  expect(boss.boss).toMatchObject({ active: true, phase: 'twoWeakpoints' });
+  expect(boss.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
+  expect(boss.enemies).toHaveLength(before.enemies.length);
+
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(60_000));
+  const stable = await snapshot(page);
+  expect(stable.encounter.state).toBe('boss');
+  expect(stable.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
+  expect(stable.enemies).toHaveLength(before.enemies.length);
+});
+
+test('@desktop midboss hard-time entry does not require kill score', async ({ page }) => {
+  await loadCanvas(page);
+  const initialElapsed = (await snapshot(page)).encounter.sectionElapsedMs;
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(
+    209_999 - scene.getDebugSnapshot().encounter.sectionElapsedMs,
+  ));
+  expect(initialElapsed).toBeLessThan(209_999);
+  expect((await snapshot(page)).encounter).toMatchObject({ state: 'running', bossScore: 0 });
+
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(1));
+  expect((await snapshot(page)).encounter).toMatchObject({ state: 'bossWarning', bossScore: 0 });
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
+  expect((await snapshot(page)).boss.active).toBe(true);
+});
+
+test('@desktop midboss movement is constrained by enemies and expands after obstacle removal', async ({ page }) => {
+  await loadCanvas(page);
+  await enterMidbossByScore(page);
+  await sceneCall(page, (scene) => {
+    const enemies = scene.getDebugSnapshot().enemies;
+    const obstacle = enemies[0]!;
+    scene.debugFreezeEnemies();
+    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
+    scene.debugSetEnemy(obstacle.id, { x: 330, y: 120 }, 99);
+    scene.update(0, 4_000);
+  });
+  const constrained = await snapshot(page);
+  expect(constrained.boss.position!.x).toBeLessThanOrEqual(236);
+
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    scene.update(0, 4_000);
+  });
+  const expanded = await snapshot(page);
+  expect(expanded.boss.position!.x).toBeGreaterThan(236);
+});
+
+test('@desktop midboss enforces weakpoint order, pauses reward, and resumes stronger section one', async ({ page }) => {
+  await loadCanvas(page);
+  await enterMidbossByScore(page);
+
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('core', 36));
+  expect((await snapshot(page)).boss).toMatchObject({
+    phase: 'twoWeakpoints',
+    parts: { leftWeakpoint: 14, rightWeakpoint: 14, core: 36 },
+  });
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('leftWeakpoint', 14));
+  expect((await snapshot(page)).boss).toMatchObject({
+    phase: 'oneWeakpoint',
+    parts: { leftWeakpoint: 0, rightWeakpoint: 14, core: 36 },
+  });
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('core', 36));
+  expect((await snapshot(page)).boss.parts!.core).toBe(36);
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('rightWeakpoint', 14));
+  expect((await snapshot(page)).boss.phase).toBe('core');
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('core', 36);
+    scene.update(0, 0);
+  });
+
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  const reward = await snapshot(page);
+  expect(reward.encounter).toMatchObject({ state: 'bossRewardPaused', bossesDefeated: 1 });
+  expect(reward.pauseReasons).toContain('bossReward');
+  expect(reward.bossRewardChoices).toHaveLength(3);
+  const elapsedAtReward = reward.gameplayElapsedMs;
+  await page.waitForTimeout(100);
+  expect((await snapshot(page)).gameplayElapsedMs).toBe(elapsedAtReward);
+
+  const selected = reward.bossRewardChoices[0]!;
+  await page.keyboard.press('Digit1');
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(false);
+  const resumed = await snapshot(page);
+  expect(resumed.bossRewards).toEqual([selected]);
+  expect(resumed.encounter).toMatchObject({ state: 'running', section: 1, phase: 1 });
+  expect(resumed.pauseReasons).not.toContain('bossReward');
+  expect(resumed.boss.active).toBe(false);
+});
+
+test('@desktop chain warhead enables temporary-orb explosions only after reward acquisition', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    scene.debugUpgradeAbility('split');
+    scene.debugUpgradeAbility('explosion');
+    const enemies = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(enemies.slice(3).map((enemy) => enemy.id));
+    scene.debugSetEnemy(enemies[0]!.id, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(enemies[1]!.id, { x: 137, y: 220 }, 2);
+    scene.debugSetEnemy(enemies[2]!.id, { x: 175, y: 220 }, 2);
+  });
+  const initial = await snapshot(page);
+  const [, directBeforeId, splashBeforeId] = initial.enemies.map((enemy) => enemy.id);
+  const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 100,
+  }).toEqual({ active: 1, queued: 2 });
+  await sceneCall(page, (scene) => {
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
+    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find((enemy) => enemy.id === directBeforeId)?.hp, { timeout: 600 }).toBe(1.5);
+  expect((await snapshot(page)).enemies.find((enemy) => enemy.id === splashBeforeId)?.hp).toBe(2);
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, { timeout: 2_000 }).toBe(0);
+
+  await enterMidbossByScore(page);
+  const reward = await defeatMidboss(page);
+  const chainIndex = reward.bossRewardChoices.indexOf('chain-warhead');
+  expect(chainIndex).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press(`Digit${chainIndex + 1}`);
+  await expect.poll(async () => (await snapshot(page)).bossRewards).toContain('chain-warhead');
+
+  await sceneCall(page, (scene) => {
+    const enemies = scene.getDebugSnapshot().enemies;
+    const [anchor, direct, splash] = enemies;
+    scene.debugSetEnemy(anchor!.id, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(direct!.id, { x: 63, y: 220 }, 2);
+    scene.debugSetEnemy(splash!.id, { x: 25, y: 220 }, 2);
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active' && orb.charges > 0)!;
+    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('charged orb required');
+  });
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find((enemy) => enemy.id === directBeforeId)?.hp, { timeout: 600 }).toBe(1.5);
+  expect((await snapshot(page)).enemies.find((enemy) => enemy.id === splashBeforeId)?.hp).toBe(1.5);
+});
+
+test('@desktop midboss rewards and encounter state reset on restart', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await enterMidbossByScore(page);
+  const reward = await defeatMidboss(page);
+  await page.keyboard.press('Digit1');
+  await expect.poll(async () => (await snapshot(page)).bossRewards).toEqual([reward.bossRewardChoices[0]]);
+  await sceneCall(page, (scene) => {
+    scene.debugSetHealth(1);
+    scene.debugDamage(1);
+  });
+  expect((await snapshot(page)).defeated).toBe(true);
+  const restart = clientPoint(box, { x: 225, y: 436 });
+  await expect.poll(async () => {
+    try {
+      await page.mouse.click(restart.x, restart.y);
+      return (await snapshot(page)).defeated;
+    } catch {
+      return true;
+    }
+  }, { intervals: [16], timeout: 1_000 }).toBe(false);
+
+  const reset = await snapshot(page);
+  expect(reset.encounter).toMatchObject({
+    state: 'running', section: 0, bossScore: 0, bossesDefeated: 0,
+  });
+  expect(reset.encounter.sectionElapsedMs).toBeLessThan(50);
+  expect(reset.bossRewards).toEqual([]);
+  expect(reset.bossRewardChoices).toEqual([]);
+  expect(reset.bossRewardVisible).toBe(false);
+  expect(reset.boss.active).toBe(false);
 });
