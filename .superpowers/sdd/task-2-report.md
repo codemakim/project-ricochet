@@ -39,3 +39,14 @@
 
 - Vite retains the existing advisory that the main minified chunk exceeds 500 kB; build succeeds.
 - `BossManager` must convert enemy occupancy to padded boss-center forbidden intervals using boss half-width `60` and padding `12`.
+
+## Review Fix
+
+- Review-fix commit: `83e125ecd52d50708c64e2d0079f91f873873dcc`
+- RED: `npm test -- src/game/bosses/bossRules.test.ts src/game/bosses/bossMovementRules.test.ts` — exit 1; 2 files failed, 14 tests failed and 17 passed. Failures reproduced global weakpoint/core cadence coupling, incorrect core attacks 4-5, and missing movement-input rejection.
+- Focused GREEN: same command — exit 0; 2 files passed, 31 tests passed.
+- Full unit suite: `npm test` — exit 0; 25 files passed, 201 tests passed.
+- Typecheck and production build: `npm run build` — exit 0; `tsc --noEmit` and Vite build passed. Existing chunk-size advisory remains.
+- Diff hygiene: `git diff --check` — exit 0.
+- Core cadence now resets on entry and repeats explicit `aimedShot`, `supportDrop`, both phases across attacks 1-6.
+- `updateBossMotion` now rejects non-finite or negative `deltaMs`, non-finite `current.x`, and non-finite or reversed bounds and obstacle endpoints.
