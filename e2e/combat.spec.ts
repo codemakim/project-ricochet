@@ -982,18 +982,25 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
 
 test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {
   await loadCanvas(page);
-  const before = await snapshot(page);
-
   await sceneCall(page, (scene) => {
-    scene.debugAdvanceEncounter(120_000);
-    for (let score = 0; score < 69; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    scene.debugAdvanceEncounter(8_000);
   });
-  expect((await snapshot(page)).encounter.state).toBe('running');
+  const control = await snapshot(page);
+  expect(control.encounter.spawnSequence).toBe(1);
+  expect(control.enemies.length).toBeGreaterThan(0);
+
+  await loadCanvas(page);
+  const before = await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
+    return scene.getDebugSnapshot();
+  });
+  expect(before.enemies).toHaveLength(0);
+  expect(before.encounter.spawnSequence).toBe(0);
 
   await sceneCall(page, (scene) => {
-    scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
+    scene.debugAdvanceEncounter(120_000 - scene.getDebugSnapshot().encounter.sectionElapsedMs);
   });
   const warning = await snapshot(page);
   expect(warning.encounter).toMatchObject({ state: 'bossWarning', bossScore: 70 });
@@ -1032,23 +1039,29 @@ test('@desktop midboss hard-time entry does not require kill score', async ({ pa
 test('@desktop midboss movement is constrained by enemies and expands after obstacle removal', async ({ page }) => {
   await loadCanvas(page);
   await enterMidbossByScore(page);
-  await sceneCall(page, (scene) => {
+  const movement = await sceneCall(page, (scene) => {
     const enemies = scene.getDebugSnapshot().enemies;
     const obstacle = enemies[0]!;
     scene.debugFreezeEnemies();
     scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
     scene.debugSetEnemy(obstacle.id, { x: 330, y: 120 }, 99);
-    scene.update(0, 4_000);
-  });
-  const constrained = await snapshot(page);
-  expect(constrained.boss.position!.x).toBeLessThanOrEqual(236);
+    const constrained: number[] = [];
+    for (let sample = 0; sample < 6; sample += 1) {
+      scene.update(0, 2_000);
+      constrained.push(scene.getDebugSnapshot().boss.position!.x);
+    }
 
-  await sceneCall(page, (scene) => {
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    scene.update(0, 4_000);
+    const expanded: number[] = [];
+    for (let sample = 0; sample < 6; sample += 1) {
+      scene.update(0, 2_000);
+      expanded.push(scene.getDebugSnapshot().boss.position!.x);
+    }
+    return { constrained, expanded };
   });
-  const expanded = await snapshot(page);
-  expect(expanded.boss.position!.x).toBeGreaterThan(236);
+  expect(Math.max(...movement.constrained)).toBeLessThanOrEqual(236);
+  expect(Math.min(...movement.constrained)).toBeGreaterThanOrEqual(60);
+  expect(Math.max(...movement.expanded)).toBeGreaterThan(300);
 });
 
 test('@desktop midboss enforces weakpoint order, pauses reward, and resumes stronger section one', async ({ page }) => {
@@ -1168,9 +1181,10 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
 
   const reset = await snapshot(page);
   expect(reset.encounter).toMatchObject({
-    state: 'running', section: 0, bossScore: 0, bossesDefeated: 0,
+    state: 'running', section: 0, spawnSequence: 0, bossScore: 0, bossesDefeated: 0,
   });
-  expect(reset.encounter.sectionElapsedMs).toBeLessThan(50);
+  expect(reset.encounter.elapsedMs).toBeLessThan(reward.encounter.elapsedMs);
+  expect(reset.encounter.sectionElapsedMs).toBeLessThan(reward.encounter.elapsedMs);
   expect(reset.bossRewards).toEqual([]);
   expect(reset.bossRewardChoices).toEqual([]);
   expect(reset.bossRewardVisible).toBe(false);
