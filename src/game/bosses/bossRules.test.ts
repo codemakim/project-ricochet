@@ -79,22 +79,44 @@ describe('boss attack schedule', () => {
     expect(nextBossAttack(state)).toMatchObject({ patterns: ['aimedShot'], intervalMs: 2300 });
   });
 
-  it('uses 1900ms in core phase and combines every third attack', () => {
+  it.each([1, 2])(
+    'starts the core cadence at aimedShot after %i prior weakpoint attacks',
+    (priorAttackCount) => {
+      let state = createBossState();
+      for (let attack = 0; attack < priorAttackCount; attack += 1) {
+        state = nextBossAttack(state).state;
+      }
+      state = damageBossPart(damageBossPart(state, 'leftWeakpoint', 14), 'rightWeakpoint', 14);
+
+      expect(nextBossAttack(state)).toMatchObject({
+        patterns: ['aimedShot'],
+        intervalMs: 1900,
+      });
+    },
+  );
+
+  it('repeats aimedShot, supportDrop, and both across core attacks 1-6', () => {
     let state = damageBossPart(
       damageBossPart(createBossState(), 'leftWeakpoint', 14),
       'rightWeakpoint',
       14,
     );
+    const attacks = [];
+    for (let attack = 0; attack < 6; attack += 1) {
+      const result = nextBossAttack(state);
+      attacks.push(result.patterns);
+      state = result.state;
+    }
 
-    const first = nextBossAttack(state);
-    const second = nextBossAttack(first.state);
-    const third = nextBossAttack(second.state);
-    state = third.state;
-
-    expect(first).toMatchObject({ patterns: ['aimedShot'], intervalMs: 1900 });
-    expect(second).toMatchObject({ patterns: ['supportDrop'], intervalMs: 1900 });
-    expect(third).toMatchObject({ patterns: ['aimedShot', 'supportDrop'], intervalMs: 1900 });
-    expect(state.attackIndex).toBe(3);
+    expect(attacks).toEqual([
+      ['aimedShot'],
+      ['supportDrop'],
+      ['aimedShot', 'supportDrop'],
+      ['aimedShot'],
+      ['supportDrop'],
+      ['aimedShot', 'supportDrop'],
+    ]);
+    expect(state.attackIndex).toBe(6);
   });
 
   it('rejects attack scheduling after defeat', () => {

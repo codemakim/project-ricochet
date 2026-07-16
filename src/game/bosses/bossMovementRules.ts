@@ -17,6 +17,19 @@ export function updateBossMotion(
   obstacles: readonly HorizontalInterval[],
   bounds: HorizontalInterval = DEFAULT_BOUNDS,
 ): BossMotion {
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+    throw new Error('deltaMs must be finite and non-negative');
+  }
+  if (!Number.isFinite(current.x)) {
+    throw new Error('current x must be finite');
+  }
+  if (!isValidInterval(bounds)) {
+    throw new Error('bounds must have finite, ordered endpoints');
+  }
+  if (obstacles.some((obstacle) => !isValidInterval(obstacle))) {
+    throw new Error('obstacles must have finite, ordered endpoints');
+  }
+
   const freeIntervals = subtractIntervals(bounds, mergeIntervals(obstacles, bounds));
   const range = freeIntervals.find(
     ({ minimum, maximum }) => current.x >= minimum && current.x <= maximum,
@@ -45,6 +58,10 @@ export function updateBossMotion(
     return { x: range.minimum + wrapped, direction: 1 };
   }
   return { x: range.maximum - (wrapped - width), direction: -1 };
+}
+
+function isValidInterval({ minimum, maximum }: HorizontalInterval): boolean {
+  return Number.isFinite(minimum) && Number.isFinite(maximum) && minimum <= maximum;
 }
 
 function mergeIntervals(

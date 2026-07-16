@@ -48,10 +48,16 @@ export function damageBossPart(state: BossState, part: BossPartId, damage: numbe
   }
 
   if (part === 'leftWeakpoint') {
-    return { ...state, leftWeakpointHp: Math.max(0, state.leftWeakpointHp - damage) };
+    const next = { ...state, leftWeakpointHp: Math.max(0, state.leftWeakpointHp - damage) };
+    return bossPhase(state) !== 'core' && bossPhase(next) === 'core'
+      ? { ...next, attackIndex: 0 }
+      : next;
   }
   if (part === 'rightWeakpoint') {
-    return { ...state, rightWeakpointHp: Math.max(0, state.rightWeakpointHp - damage) };
+    const next = { ...state, rightWeakpointHp: Math.max(0, state.rightWeakpointHp - damage) };
+    return bossPhase(state) !== 'core' && bossPhase(next) === 'core'
+      ? { ...next, attackIndex: 0 }
+      : next;
   }
   return { ...state, coreHp: Math.max(0, state.coreHp - damage) };
 }
@@ -66,8 +72,12 @@ export function nextBossAttack(
 
   const attackNumber = state.attackIndex + 1;
   const patterns: BossPattern[] =
-    phase === 'core' && attackNumber % 3 === 0
-      ? ['aimedShot', 'supportDrop']
+    phase === 'core'
+      ? state.attackIndex % 3 === 0
+        ? ['aimedShot']
+        : state.attackIndex % 3 === 1
+          ? ['supportDrop']
+          : ['aimedShot', 'supportDrop']
       : [state.attackIndex % 2 === 0 ? 'aimedShot' : 'supportDrop'];
   const intervalMs =
     phase === 'twoWeakpoints' ? 2800 : phase === 'oneWeakpoint' ? 2300 : 1900;

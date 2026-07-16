@@ -4,6 +4,41 @@ import { updateBossMotion, type HorizontalInterval } from './bossMovementRules';
 const CENTER_BOUNDS: HorizontalInterval = { minimum: 60, maximum: 390 };
 
 describe('boss movement rules', () => {
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
+    'rejects invalid deltaMs %s',
+    (deltaMs) => {
+      expect(() => updateBossMotion({ x: 225, direction: 1 }, deltaMs, [])).toThrow(
+        'deltaMs must be finite and non-negative',
+      );
+    },
+  );
+
+  it.each([Number.NaN, Number.NEGATIVE_INFINITY])('rejects invalid current x %s', (x) => {
+    expect(() => updateBossMotion({ x, direction: 1 }, 1000, [])).toThrow(
+      'current x must be finite',
+    );
+  });
+
+  it.each([
+    { minimum: Number.NaN, maximum: 390 },
+    { minimum: 60, maximum: Number.POSITIVE_INFINITY },
+    { minimum: 390, maximum: 60 },
+  ])('rejects invalid bounds $minimum..$maximum', (bounds) => {
+    expect(() => updateBossMotion({ x: 225, direction: 1 }, 1000, [], bounds)).toThrow(
+      'bounds must have finite, ordered endpoints',
+    );
+  });
+
+  it.each([
+    { minimum: Number.NaN, maximum: 200 },
+    { minimum: 150, maximum: Number.NEGATIVE_INFINITY },
+    { minimum: 200, maximum: 150 },
+  ])('rejects invalid obstacle $minimum..$maximum', (obstacle) => {
+    expect(() => updateBossMotion({ x: 120, direction: 1 }, 1000, [obstacle])).toThrow(
+      'obstacles must have finite, ordered endpoints',
+    );
+  });
+
   it('moves freely across the full-width center bounds at 55px/s', () => {
     expect(updateBossMotion({ x: 225, direction: 1 }, 1000, [])).toEqual({
       x: 280,
