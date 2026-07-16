@@ -8,7 +8,7 @@
 
 ## Tasks
 
-- Task 1 encounter progression: done (`8948f375f0726a5872c0a616bff97c6942f23ef8`, adapter `b06c6062b8a6f90e60cf3f68aa14e2c0d10538bf`)
+- Task 1 encounter progression: done (`8948f375f0726a5872c0a616bff97c6942f23ef8`, adapter `b06c6062b8a6f90e60cf3f68aa14e2c0d10538bf`, review fix `ced675edea085df8a101d4bc7885ddd91c044c53`)
 - Task 2 pure boss rules: pending
 - Task 3 BossManager: pending
 - Task 4 boss relic modifiers: pending

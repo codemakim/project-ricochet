@@ -4,6 +4,7 @@ Status: `DONE`
 
 Implementation commit: `8948f375f0726a5872c0a616bff97c6942f23ef8`
 Scene interface adapter commit: `b06c6062b8a6f90e60cf3f68aa14e2c0d10538bf`
+Elapsed-time compatibility fix commit: `ced675edea085df8a101d4bc7885ddd91c044c53`
 
 ## Result
 
@@ -15,6 +16,7 @@ Scene interface adapter commit: `b06c6062b8a6f90e60cf3f68aa14e2c0d10538bf`
 - Added post-boss section threat mapping: phase 1 immediately, phase 2 at `60000ms`; no second warning.
 - Added clear errors for illegal boss defeat/reward resume calls.
 - Adapted `CombatScene` to destructure `EncounterUpdate.formation` and provide exact default snapshot fields. No warning/boss scene behavior added.
+- Restored monotonic total `elapsedMs` independently from resettable `sectionElapsedMs`.
 
 ## TDD Evidence
 
@@ -50,6 +52,20 @@ Adapter GREEN evidence:
 
 - Focused encounter command: exit `0`; `3 passed`, `35 passed`.
 - Full `npm test`: exit `0`; `23 passed`, `169 passed`.
+- `npm run build`: exit `0`; TypeScript passed and Vite built 31 modules. Existing large-chunk advisory remains.
+
+Elapsed-time review RED command:
+
+```sh
+npm test -- src/game/encounters/EncounterDirector.test.ts
+```
+
+Elapsed-time review RED result: exit `1`; cross-section regression expected `elapsedMs: 212000` after reward resume but received `0`. `1 failed | 16 passed`.
+
+Elapsed-time review GREEN evidence:
+
+- `npm test -- src/game/encounters/encounterProgressionRules.test.ts src/game/encounters/EncounterDirector.test.ts src/game/encounters/encounterRules.test.ts`: exit `0`; `3 passed`, `36 passed`.
+- `npm test`: exit `0`; `23 passed`, `170 passed`.
 - `npm run build`: exit `0`; TypeScript passed and Vite built 31 modules. Existing large-chunk advisory remains.
 
 ## Files
