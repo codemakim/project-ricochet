@@ -12,7 +12,7 @@
 - Task 2 pure boss rules: done (`d3c57cd7915f7f6558bfd62e090f3961f391453b`, review fix `83e125ecd52d50708c64e2d0079f91f873873dcc`)
 - Task 3 BossManager: done (`71fbed0f5b5b2aefe8aedd27d134c8a3e8c22b15`, review fix `b491d9d0225ceb5705ee7f658a40ea8201bbacfe`)
 - Task 4 boss relic modifiers: done (`8e04b2817fbc3c51fb0d2d015335c1abddd85289`, review fix `5bc3638436ff6768f43227363f6426384927adc7`)
-- Task 5 scene and reward UI: done (`08c10910d2e3ce57f8b39cf82f28ec677ae48a7e`)
+- Task 5 scene and reward UI: done (`08c10910d2e3ce57f8b39cf82f28ec677ae48a7e`, review fix `8eb1bfc5c4bf50157bda9c20bddbd13eb1fe2a2e`)
 - Task 6 browser acceptance: pending
 - Final review and verification: pending
 

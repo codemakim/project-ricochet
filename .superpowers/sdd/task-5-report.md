@@ -52,3 +52,17 @@ One-off DEV browser path, without adding Task 6 assertions:
 
 - Vite retains existing main-chunk size advisory; build succeeds.
 - Task 6 still owns dedicated midboss browser acceptance and playtest handoff.
+
+## Review Fix
+
+- Review-fix commit: `8eb1bfc5c4bf50157bda9c20bddbd13eb1fe2a2e`
+- RED: `npm test -- src/game/scenes/combatSceneRules.test.ts src/game/enemies/EnemyManager.test.ts src/game/ui/BossRewardOverlay.test.ts` — exit 1; missing finalization guard module, missing `clearHostileActions()`, and rejected reward callback remained consumed.
+- Per-fix GREEN: scene rule 2 tests, EnemyManager 21 tests, and overlay 3 tests passed in isolated cycles.
+- Focused final: scene flow, EnemyManager, overlay, pause, and reward rules — exit 0; 5 files and 35 tests passed.
+- Full unit: `npm test` — exit 0; 30 files and 257 tests passed.
+- Build: `npm run build` — exit 0; TypeScript and Vite passed, 38 modules transformed.
+- Diff hygiene: `git diff --check` and `git diff --cached --check` — exit 0.
+- Boss reward finalization now waits until the last level-up choice is accepted. Reward options are computed afterward from the winning updated ranks, preventing overlay/key-listener overlap.
+- `EnemyManager.clearHostileActions()` destroys bullets, cancels current shooter warning timers, clears warning tint/state, and preserves the recurring shooter clock for post-reward combat. Boss defeat, player defeat, and manager destruction use it.
+- `BossRewardOverlay` consumes and hides only after its callback returns `true`; rejected selection remains available.
+- One-off DEV Scene smoke held encounter state at `boss` with only the level-up overlay visible, then accepted explosion rank 1 and opened boss reward with split/explosion rank 1 and `chain-warhead` among choices.
