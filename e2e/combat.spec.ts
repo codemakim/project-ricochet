@@ -1066,6 +1066,81 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
   expect(Math.max(...movement.expanded)).toBeGreaterThan(300);
 });
 
+test('@desktop midboss real orb collisions reflect body, respect locked core, and split on forgiving weakpoints', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugUpgradeAbility('split'));
+  await enterMidbossByScore(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    scene.debugSetBossPosition(225);
+  });
+
+  const initial = await snapshot(page);
+  const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+    intervals: [5],
+    timeout: 100,
+  }).toEqual({ active: 1, queued: 2 });
+  const launched = await snapshot(page);
+  const orb = launched.orbs.find((candidate) => candidate.state === 'active')!;
+  const initialCharges = orb.charges;
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetBossPosition(225);
+    if (!scene.debugPlaceOrb(0, { x: 225, y: 166 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find((candidate) => candidate.id === orb.id)?.velocity.y, { timeout: 500 }).toBeGreaterThan(0);
+  const bodyHit = await snapshot(page);
+  expect(bodyHit.boss.parts).toEqual({ leftWeakpoint: 14, rightWeakpoint: 14, core: 36 });
+  expect(bodyHit.orbs.find((candidate) => candidate.id === orb.id)?.charges).toBe(initialCharges);
+  expect(bodyHit.temporaryOrbs).toBe(0);
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetBossPosition(225);
+    if (!scene.debugPlaceOrb(0, { x: 225, y: 75 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find((candidate) => candidate.id === orb.id)?.velocity.y, { timeout: 500 }).toBeLessThan(0);
+  const lockedCore = await snapshot(page);
+  expect(lockedCore.boss.parts?.core).toBe(36);
+  expect(lockedCore.orbs.find((candidate) => candidate.id === orb.id)?.charges).toBe(initialCharges);
+
+  await sceneCall(page, (scene) => {
+    scene.debugSetBossPosition(225);
+    if (!scene.debugPlaceOrb(0, { x: 177, y: 120 })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return {
+      weakpointDamaged: current.boss.parts!.leftWeakpoint < 14,
+      temporaryOrbs: current.temporaryOrbs,
+    };
+  }, { timeout: 600 }).toEqual({ weakpointDamaged: true, temporaryOrbs: 1 });
+  const weakpointHit = await snapshot(page);
+  expect(weakpointHit.boss.parts!.leftWeakpoint).toBeLessThan(14);
+  expect(weakpointHit.orbs.find((candidate) => candidate.id === orb.id)?.charges).toBe(initialCharges - 1);
+
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftWeakpoint', 14);
+    scene.debugDamageBossPart('rightWeakpoint', 14);
+  });
+  expect((await snapshot(page)).boss.phase).toBe('core');
+  const coreBefore = (await snapshot(page)).boss.parts!.core;
+  await sceneCall(page, (scene) => {
+    scene.debugSetBossPosition(225);
+    const orb = scene.getDebugSnapshot().orbs.find((candidate) => candidate.id === 0)!;
+    const approachY = orb.velocity.y > 0 ? 90 : 150;
+    if (!scene.debugPlaceOrb(0, { x: 225, y: approachY })) throw new Error('active orb required');
+  });
+  await expect.poll(async () => (await snapshot(page)).boss.parts?.core, { timeout: 600 })
+    .toBeLessThan(coreBefore);
+});
+
 test('@desktop midboss enforces weakpoint order, pauses reward, and resumes stronger section one', async ({ page }) => {
   await loadCanvas(page);
   await enterMidbossByScore(page);

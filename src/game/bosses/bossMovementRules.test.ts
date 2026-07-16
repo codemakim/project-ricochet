@@ -46,9 +46,20 @@ describe('boss movement rules', () => {
     });
 
     expect(updateBossMotion({ x: 380, direction: 1 }, 1000, [])).toEqual({
-      x: 345,
-      direction: -1,
+      x: 390,
+      direction: 1,
     });
+  });
+
+  it('decelerates near a boundary, settles there, then reverses on a later update', () => {
+    const decelerating = updateBossMotion({ x: 360, direction: 1 }, 500, []);
+    expect(decelerating).toEqual({ x: 375, direction: 1 });
+
+    const settling = updateBossMotion(decelerating, 1000, []);
+    expect(settling).toEqual({ x: 390, direction: 1 });
+
+    const reversing = updateBossMotion(settling, 16, []);
+    expect(reversing).toEqual({ x: 390, direction: -1 });
   });
 
   it('clips movement to a padded obstacle interval', () => {
@@ -61,15 +72,15 @@ describe('boss movement rules', () => {
     };
 
     expect(updateBossMotion({ x: 120, direction: 1 }, 1000, [paddedObstacle])).toEqual({
-      x: 121,
-      direction: -1,
+      x: 148,
+      direction: 1,
     });
   });
 
   it('reverses at an obstacle before overlap', () => {
     expect(
       updateBossMotion({ x: 120, direction: 1 }, 1000, [{ minimum: 150, maximum: 200 }]),
-    ).toEqual({ x: 125, direction: -1 });
+    ).toEqual({ x: 150, direction: 1 });
   });
 
   it('stops when merged obstacles block both sides', () => {
@@ -110,6 +121,6 @@ describe('boss movement rules', () => {
         ],
         CENTER_BOUNDS,
       ),
-    ).toEqual({ x: 85, direction: 1 });
+    ).toEqual({ x: 150, direction: 1 });
   });
 });

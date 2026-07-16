@@ -10,6 +10,7 @@ export interface BossMotion {
 
 const DEFAULT_BOUNDS: HorizontalInterval = { minimum: 60, maximum: 390 };
 const BOSS_SPEED_PX_PER_SECOND = 55;
+const MIN_TURN_SPEED_PX_PER_SECOND = 15;
 
 export function updateBossMotion(
   current: BossMotion,
@@ -40,24 +41,22 @@ export function updateBossMotion(
   }
 
   let direction = current.direction;
-  if (direction === 0) {
-    direction = current.x < range.maximum ? 1 : -1;
-  } else if (direction === 1 && current.x >= range.maximum) {
-    direction = -1;
-  } else if (direction === -1 && current.x <= range.minimum) {
-    direction = 1;
+  if (direction === 0) direction = current.x < range.maximum ? 1 : -1;
+  if (direction === 1 && current.x >= range.maximum) {
+    return { x: range.maximum, direction: -1 };
+  }
+  if (direction === -1 && current.x <= range.minimum) {
+    return { x: range.minimum, direction: 1 };
   }
 
-  const width = range.maximum - range.minimum;
-  const offset = current.x - range.minimum;
-  const phase = direction === 1 ? offset : 2 * width - offset;
-  const distance = (deltaMs / 1000) * BOSS_SPEED_PX_PER_SECOND;
-  const wrapped = (phase + distance) % (2 * width);
-
-  if (wrapped < width) {
-    return { x: range.minimum + wrapped, direction: 1 };
-  }
-  return { x: range.maximum - (wrapped - width), direction: -1 };
+  const boundary = direction === 1 ? range.maximum : range.minimum;
+  const remaining = Math.abs(boundary - current.x);
+  const speed = Math.min(
+    BOSS_SPEED_PX_PER_SECOND,
+    Math.max(MIN_TURN_SPEED_PX_PER_SECOND, remaining),
+  );
+  const distance = Math.min(remaining, (deltaMs / 1000) * speed);
+  return { x: current.x + direction * distance, direction };
 }
 
 function isValidInterval({ minimum, maximum }: HorizontalInterval): boolean {

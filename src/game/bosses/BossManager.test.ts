@@ -37,6 +37,7 @@ class FakeSprite {
   destroyed = false;
   visible = true;
   tint?: number;
+  depth = 0;
   readonly body: FakeBody;
 
   constructor(public x: number, public y: number, readonly texture: string) {
@@ -50,7 +51,7 @@ class FakeSprite {
     return this;
   }
   setImmovable(): this { return this; }
-  setDepth(): this { return this; }
+  setDepth(depth: number): this { this.depth = depth; return this; }
   setSize(width: number, height: number): this {
     this.body.isCircle = false;
     this.body.halfWidth = width / 2;
@@ -251,6 +252,35 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().active).toBe(false);
   });
 
+  it('uses forgiving weakpoint hitboxes and keeps enemies/actions visually ahead of boss parts', () => {
+    const boundary = createBoundary();
+    const { sprites, groups } = boundary;
+    const body = sprites.find((sprite) => sprite.texture === 'boss-body')!;
+    const left = sprites.find((sprite) => sprite.texture === 'boss-left-weakpoint')!;
+    const right = sprites.find((sprite) => sprite.texture === 'boss-right-weakpoint')!;
+    const core = sprites.find((sprite) => sprite.texture === 'boss-core')!;
+
+    expect({ width: left.body.halfWidth * 2, height: left.body.halfHeight * 2 }).toEqual({
+      width: 18,
+      height: 42,
+    });
+    expect(right.body.halfWidth).toBe(left.body.halfWidth);
+    expect(body.depth).toBeLessThan(0);
+    expect(left.depth).toBeLessThan(0);
+    expect(left.depth).toBeGreaterThan(body.depth);
+    expect(right.depth).toBe(left.depth);
+    expect(core.depth).toBe(left.depth);
+
+    boundary.gameplay.now = 3_400;
+    boundary.manager.update();
+    const aimed = groups[0]!.children.find((sprite) => sprite.active)!;
+    boundary.gameplay.now = 6_400;
+    boundary.manager.update();
+    const hazard = groups[1]!.children.find((sprite) => sprite.active)!;
+    expect(aimed.depth).toBeGreaterThan(left.depth);
+    expect(hazard.depth).toBeGreaterThan(left.depth);
+  });
+
   it('sets a deterministic boss position through its DEV-only debug hook', () => {
     const { manager } = createBoundary();
 
@@ -371,7 +401,7 @@ describe('BossManager', () => {
     boundary.gameplay.now = 1000;
     boundary.manager.update();
 
-    expect(boundary.manager.getSnapshot().position?.x).toBe(192);
+    expect(boundary.manager.getSnapshot().position?.x).toBe(236);
   });
 
   it('uses gameplay delta for the 600ms aimed telegraph and three-shot fan', () => {

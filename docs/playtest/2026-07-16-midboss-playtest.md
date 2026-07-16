@@ -6,13 +6,15 @@
 - 강제 진입: 처치 점수 0이어도 210초에 경고 시작.
 - 증원 잠금: 경고와 보스 전투 중 `spawnSequence`와 기존 적 수 유지.
 - 이동 공간: 보스 높이의 일반 적이 좌우 이동을 제한하고, 제거 후 이동 범위 확장.
+- 보스 이동: 경계 가까이에서 감속하고 경계에 정착한 다음 반전.
 - 파괴 순서: 좌우 약점이 남아 있으면 코어 피해 무효. 양쪽 약점 파괴 후 코어 노출.
+- 실제 충돌: 몸체 반사는 충전/피해/분열을 소모하지 않고, 넉넉한 약점 판정의 충전타는 피해와 분열을 모두 발생.
 - 보상 루프: 보스 처치 시 전투 일시정지, 보상 3개 표시, 선택 후 section 1 / phase 1 재개.
 - 연쇄 탄두: 획득 전 임시 구슬의 폭발 전파 없음, 획득 후 폭발 전파 확인.
 - 재시작: 보상 획득 후 패배·재시작 시 보스 진행도, 유물, 보상 UI 전부 초기화.
 - focused 명령: `npx playwright test e2e/combat.spec.ts --project=desktop-chromium --grep "midboss|boss reward|chain warhead"`
 - focused 결과: 6 passed.
-- 전체 자동 결과: unit 257 passed, browser 24 passed, production build 성공.
+- 전체 자동 결과: unit 260 passed, browser 25 passed, production build 성공.
 
 ## 수동 확인 항목
 

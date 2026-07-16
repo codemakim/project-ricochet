@@ -372,37 +372,37 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleDirectHit(event: DirectHitEvent): void {
-    if (event.source === 'temporary' && !this.bossBuild?.temporaryExplosionEnabled()) return;
-    const explosion = this.build?.explosion();
-    if (explosion) {
+    this.handlePostDirectHit(event, (radius, damage) => {
       this.enemyManager?.applyAreaDamage(
         event.position,
-        explosion.radius,
-        explosion.damage,
+        radius,
+        damage,
         event.enemyId,
       );
-      this.bossManager?.applyAreaDamage(event.position, explosion.radius, explosion.damage);
-      this.drawExplosion(event.position, explosion.radius);
-    }
-
-    if (event.source === 'permanent' && event.charged) {
-      const count = this.build?.splitCount() ?? 0;
-      if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
-    }
+      this.bossManager?.applyAreaDamage(event.position, radius, damage);
+    });
   }
 
   private handleBossDirectHit(event: BossDirectHitEvent): void {
+    this.handlePostDirectHit(event, (radius, damage) => {
+      this.enemyManager?.applyAreaDamage(event.position, radius, damage, -1);
+      this.bossManager?.applyAreaDamage(event.position, radius, damage, event.partId);
+    });
+  }
+
+  private handlePostDirectHit(
+    event: Pick<DirectHitEvent, 'source' | 'position' | 'charged' | 'direction'>,
+    applyExplosion: (radius: number, damage: number) => void,
+  ): void {
     if (event.source === 'temporary' && !this.bossBuild?.temporaryExplosionEnabled()) return;
     const explosion = this.build?.explosion();
-    if (!explosion) return;
-    this.enemyManager?.applyAreaDamage(event.position, explosion.radius, explosion.damage, -1);
-    this.bossManager?.applyAreaDamage(
-      event.position,
-      explosion.radius,
-      explosion.damage,
-      event.partId,
-    );
-    this.drawExplosion(event.position, explosion.radius);
+    if (explosion) {
+      applyExplosion(explosion.radius, explosion.damage);
+      this.drawExplosion(event.position, explosion.radius);
+    }
+    if (event.source !== 'permanent' || !event.charged) return;
+    const count = this.build?.splitCount() ?? 0;
+    if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
   }
 
   private drawExplosion(position: Vector, radius: number): void {

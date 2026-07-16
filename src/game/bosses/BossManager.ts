@@ -23,6 +23,11 @@ const BODY_HALF_HEIGHT = 36;
 const ENEMY_HALF_SIZE = 22;
 const OBSTACLE_PADDING = 12;
 const WEAKPOINT_OFFSET_X = 64;
+const WEAKPOINT_HITBOX_WIDTH = 18;
+const WEAKPOINT_HITBOX_HEIGHT = 42;
+const BOSS_BODY_DEPTH = -3;
+const BOSS_PART_DEPTH = -2;
+const BOSS_ACTION_DEPTH = 1;
 const AIMED_WARNING_MS = 600;
 const SUPPORT_WARNING_MS = 800;
 const AIMED_BULLET_SPEED = 220;
@@ -107,7 +112,10 @@ export class BossManager {
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
 
     this.body = scene.physics.add.sprite(this.motion.x, BOSS_Y, 'boss-body');
-    this.body.setImmovable(true).setSize(BODY_HALF_WIDTH * 2, BODY_HALF_HEIGHT * 2).setDepth(5);
+    this.body
+      .setImmovable(true)
+      .setSize(BODY_HALF_WIDTH * 2, BODY_HALF_HEIGHT * 2)
+      .setDepth(BOSS_BODY_DEPTH);
     this.partSprites = {
       leftWeakpoint: scene.physics.add.sprite(
         this.motion.x - WEAKPOINT_OFFSET_X,
@@ -121,9 +129,19 @@ export class BossManager {
       ),
       core: scene.physics.add.sprite(this.motion.x, BOSS_Y, 'boss-core'),
     };
-    this.partSprites.leftWeakpoint.setImmovable(true).setSize(8, 32).setDepth(6);
-    this.partSprites.rightWeakpoint.setImmovable(true).setSize(8, 32).setDepth(6);
-    this.partSprites.core.setImmovable(true).setSize(28, 28).setDepth(6).setVisible(false);
+    this.partSprites.leftWeakpoint
+      .setImmovable(true)
+      .setSize(WEAKPOINT_HITBOX_WIDTH, WEAKPOINT_HITBOX_HEIGHT)
+      .setDepth(BOSS_PART_DEPTH);
+    this.partSprites.rightWeakpoint
+      .setImmovable(true)
+      .setSize(WEAKPOINT_HITBOX_WIDTH, WEAKPOINT_HITBOX_HEIGHT)
+      .setDepth(BOSS_PART_DEPTH);
+    this.partSprites.core
+      .setImmovable(true)
+      .setSize(28, 28)
+      .setDepth(BOSS_PART_DEPTH)
+      .setVisible(false);
     (this.partSprites.core.body as Phaser.Physics.Arcade.Body).enable = false;
 
     this.aimedBulletGroup = scene.physics.add.group({ allowGravity: false });
@@ -488,6 +506,7 @@ export class BossManager {
       target.y,
       'boss-aim-marker',
     ) as BossSprite;
+    marker.setDepth(BOSS_ACTION_DEPTH);
     this.warnings.push({
       kind: 'aimedShot',
       dueAt: startsAt + AIMED_WARNING_MS,
@@ -501,6 +520,7 @@ export class BossManager {
     const secondX = clamp(playerX + (attackIndex % 2 === 0 ? 90 : -90), 24, GAME_WIDTH - 24);
     for (const x of [playerX, secondX]) {
       const marker = this.warningGroup.create(x, GAME_HEIGHT - 16, 'boss-drop-marker') as BossSprite;
+      marker.setDepth(BOSS_ACTION_DEPTH);
       this.warnings.push({ kind: 'supportDrop', dueAt: startsAt + SUPPORT_WARNING_MS, marker, x });
     }
   }
@@ -529,7 +549,7 @@ export class BossManager {
       if (this.options.getEnemyBulletCount() + this.getBulletCount() >= HOSTILE_BULLET_CAP) break;
       const direction = this.rotate(aimed, angle);
       const bullet = this.aimedBulletGroup.create(origin.x, origin.y, 'boss-aimed-bullet') as BossSprite;
-      bullet.setCircle(5).setVelocity(
+      bullet.setCircle(5).setDepth(BOSS_ACTION_DEPTH).setVelocity(
         direction.x * AIMED_BULLET_SPEED,
         direction.y * AIMED_BULLET_SPEED,
       );
@@ -538,7 +558,7 @@ export class BossManager {
 
   private spawnFallingHazard(x: number): void {
     const hazard = this.fallingHazardGroup.create(x, -8, 'boss-falling-hazard') as BossSprite;
-    hazard.setVelocity(0, FALLING_HAZARD_SPEED);
+    hazard.setDepth(BOSS_ACTION_DEPTH).setVelocity(0, FALLING_HAZARD_SPEED);
   }
 
   private consumeHostile(hostile: BossSprite, damage: number): void {
