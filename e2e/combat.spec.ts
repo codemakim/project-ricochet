@@ -33,6 +33,12 @@ interface CombatSnapshot {
     spawnSequence: number;
     runSeed: number;
     lastFormationId: string | null;
+    state: 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused';
+    section: number;
+    sectionElapsedMs: number;
+    bossScore: number;
+    warningElapsedMs: number;
+    bossesDefeated: number;
   };
   progression: {
     level: number;
@@ -44,6 +50,18 @@ interface CombatSnapshot {
   buildRanks: Record<AbilityId, number>;
   pauseReasons: string[];
   levelUpVisible: boolean;
+  boss: {
+    active: boolean;
+    phase: 'twoWeakpoints' | 'oneWeakpoint' | 'core' | 'defeated' | null;
+    position: Vector | null;
+    parts: { leftWeakpoint: number; rightWeakpoint: number; core: number } | null;
+    aimedBullets: number;
+    fallingHazards: number;
+    warnings: number;
+  };
+  bossRewards: string[];
+  bossRewardChoices: string[];
+  bossRewardVisible: boolean;
   temporaryOrbs: number;
   gameplayElapsedMs: number;
 }
@@ -62,6 +80,9 @@ interface DevelopmentScene {
   debugChooseAbility(id: AbilityId): void;
   debugUpgradeAbility(id: AbilityId): void;
   debugSetEnemy(id: number, position: Vector, hp: number): boolean;
+  debugAdvanceEncounter(deltaMs: number): void;
+  debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter'): void;
+  debugDamageBossPart(partId: 'leftWeakpoint' | 'rightWeakpoint' | 'core', damage: number): void;
 }
 
 async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {

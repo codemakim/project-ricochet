@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
+import { BossManager, type BossDirectHitEvent } from '../bosses/BossManager';
+import type { BossPartId } from '../bosses/bossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import {
   applyDamage,
@@ -27,8 +29,11 @@ import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
 import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
+import { BossBuild } from '../progression/BossBuild';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
 import type { AbilityId, AbilityRanks } from '../progression/progressionRules';
+import { selectBossRewardOptions, type BossRewardId } from '../progression/bossRewardRules';
+import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { parseExperimentSettings } from './experimentSettings';
@@ -36,9 +41,10 @@ import { parseExperimentSettings } from './experimentSettings';
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
 const PROGRESSION_SEED = 0x5249434f;
+const BOSS_REWARD_SEED = 0x424f5353;
 let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
 const XP_BAR_WIDTH = 220;
-const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'defeated'];
+const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'bossReward', 'defeated'];
 
 export interface CombatDebugSnapshot {
   player: Vector;
@@ -55,6 +61,10 @@ export interface CombatDebugSnapshot {
   buildRanks: AbilityRanks;
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
+  boss: ReturnType<BossManager['getSnapshot']>;
+  bossRewards: BossRewardId[];
+  bossRewardChoices: BossRewardId[];
+  bossRewardVisible: boolean;
   temporaryOrbs: number;
   gameplayElapsedMs: number;
 }
@@ -69,6 +79,9 @@ export class CombatScene extends Phaser.Scene {
   declare debugChooseAbility?: (id: AbilityId) => boolean;
   declare debugUpgradeAbility?: (id: AbilityId) => void;
   declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
+  declare debugAdvanceEncounter?: (deltaMs: number) => void;
+  declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
+  declare debugDamageBossPart?: (partId: BossPartId, damage: number) => void;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -76,6 +89,7 @@ export class CombatScene extends Phaser.Scene {
   private temporaryOrbManager?: TemporaryOrbManager;
   private enemyManager?: EnemyManager;
   private encounterDirector?: EncounterDirector;
+  private bossManager?: BossManager;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private progressionText!: Phaser.GameObjects.Text;
@@ -83,6 +97,11 @@ export class CombatScene extends Phaser.Scene {
   private build?: BuildState;
   private progression?: ProgressionManager;
   private levelUpOverlay?: LevelUpOverlay;
+  private bossBuild?: BossBuild;
+  private bossRewardOverlay?: BossRewardOverlay;
+  private bossWarning?: Phaser.GameObjects.Text;
+  private bossRewardChoices: BossRewardId[] = [];
+  private bossDefeatPending = false;
   private health: HealthState = createHealth();
   private experiment: ExperimentSettings = parseExperimentSettings('');
   private aim: Vector = { x: 0, y: -1 };
@@ -105,12 +124,16 @@ export class CombatScene extends Phaser.Scene {
     this.invulnerableUntil = 0;
     this.aimQueueActivated = false;
     this.defeated = false;
+    this.bossDefeatPending = false;
+    this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
     const build = new BuildState();
     this.build = build;
+    this.bossBuild = new BossBuild();
     this.progression = new ProgressionManager(PROGRESSION_SEED, build);
     this.levelUpOverlay = new LevelUpOverlay(this);
+    this.bossRewardOverlay = new BossRewardOverlay(this);
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -123,6 +146,10 @@ export class CombatScene extends Phaser.Scene {
       hasFixedTerrainLineOfSight: () => true,
       getDirectDamageBonus: () => build.directDamageBonus(),
       getChargedSpeed: () => build.chargedSpeed(),
+      getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
+      getOpeningHitBonus: (source, firstHitPending) => (
+        this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
+      ),
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
@@ -141,6 +168,7 @@ export class CombatScene extends Phaser.Scene {
       onBulletHit: (damage) => this.damagePlayer(damage),
       onEnemyKilled: ({ kind }) => this.handleEnemyKilled(kind),
       onDirectHit: (event) => this.handleDirectHit(event),
+      getExternalBulletCount: () => this.bossManager?.getBulletCount() ?? 0,
     });
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -172,6 +200,27 @@ export class CombatScene extends Phaser.Scene {
       };
       this.debugSetEnemy = (id, position, hp) => {
         return this.enemyManager?.debugSetEnemy?.(id, position, hp) ?? false;
+      };
+      this.debugAdvanceEncounter = (deltaMs) => {
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+          throw new RangeError('encounter delta must be finite and non-negative');
+        }
+        if (this.defeated || this.pause.isPaused()) return;
+        this.advanceEncounter(deltaMs);
+      };
+      this.debugRecordEnemyKill = (kind) => this.encounterDirector?.recordEnemyKill(kind);
+      this.debugDamageBossPart = (partId, damage) => {
+        if (!Number.isFinite(damage) || damage <= 0) {
+          throw new RangeError('boss damage must be finite and positive');
+        }
+        const snapshot = this.bossManager?.getSnapshot();
+        if (!snapshot?.position) return;
+        const offset = partId === 'leftWeakpoint' ? -64 : partId === 'rightWeakpoint' ? 64 : 0;
+        this.bossManager?.applyAreaDamage(
+          { x: snapshot.position.x + offset, y: snapshot.position.y },
+          0,
+          damage,
+        );
       };
     }
 
@@ -206,6 +255,10 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return;
 
+    if (this.bossDefeatPending) {
+      this.finalizeBossDefeat();
+      return;
+    }
     if (this.pause.isPaused()) return;
 
     const gameplayDelta = this.pause.consumeGameplayDelta(delta);
@@ -221,12 +274,8 @@ export class CombatScene extends Phaser.Scene {
     this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
     this.temporaryOrbManager?.update(this.gameplayElapsedMs);
     this.enemyManager.update();
-    const enemies = this.enemyManager.getSnapshot();
-    const { formation } = this.encounterDirector.update(gameplayDelta, {
-      activeEnemies: enemies.enemies.length,
-      topmostEnemyY: enemies.topmostEnemyY,
-    });
-    if (formation) this.enemyManager.spawnFormation(formation);
+    this.bossManager?.update();
+    this.advanceEncounter(gameplayDelta);
   }
 
   getDebugSnapshot(): CombatDebugSnapshot {
@@ -290,6 +339,18 @@ export class CombatScene extends Phaser.Scene {
       },
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
+      boss: this.bossManager?.getSnapshot() ?? {
+        active: false,
+        phase: null,
+        position: null,
+        parts: null,
+        aimedBullets: 0,
+        fallingHazards: 0,
+        warnings: 0,
+      },
+      bossRewards: this.bossBuild?.snapshot() ?? [],
+      bossRewardChoices: [...this.bossRewardChoices],
+      bossRewardVisible: this.bossRewardOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
       gameplayElapsedMs: this.gameplayElapsedMs,
     };
@@ -297,12 +358,14 @@ export class CombatScene extends Phaser.Scene {
 
   private handleEnemyKilled(kind: Parameters<ProgressionManager['gainEnemyKill']>[0]): void {
     if (this.defeated) return;
+    this.encounterDirector?.recordEnemyKill(kind);
     this.progression?.gainEnemyKill(kind);
     this.updateProgressionText();
     this.openNextLevelUp();
   }
 
   private handleDirectHit(event: DirectHitEvent): void {
+    if (event.source === 'temporary' && !this.bossBuild?.temporaryExplosionEnabled()) return;
     const explosion = this.build?.explosion();
     if (explosion) {
       this.enemyManager?.applyAreaDamage(
@@ -311,17 +374,118 @@ export class CombatScene extends Phaser.Scene {
         explosion.damage,
         event.enemyId,
       );
-      const ring = this.add.graphics()
-        .lineStyle(2, 0xffb45c, 0.85)
-        .strokeCircle(event.position.x, event.position.y, explosion.radius)
-        .setDepth(4);
-      this.time.delayedCall(120, () => ring.destroy());
+      this.bossManager?.applyAreaDamage(event.position, explosion.radius, explosion.damage);
+      this.drawExplosion(event.position, explosion.radius);
     }
 
     if (event.source === 'permanent' && event.charged) {
       const count = this.build?.splitCount() ?? 0;
       if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
     }
+  }
+
+  private handleBossDirectHit(event: BossDirectHitEvent): void {
+    if (event.source === 'temporary' && !this.bossBuild?.temporaryExplosionEnabled()) return;
+    const explosion = this.build?.explosion();
+    if (!explosion) return;
+    this.enemyManager?.applyAreaDamage(event.position, explosion.radius, explosion.damage, -1);
+    this.bossManager?.applyAreaDamage(
+      event.position,
+      explosion.radius,
+      explosion.damage,
+      event.partId,
+    );
+    this.drawExplosion(event.position, explosion.radius);
+  }
+
+  private drawExplosion(position: Vector, radius: number): void {
+    const ring = this.add.graphics()
+      .lineStyle(2, 0xffb45c, 0.85)
+      .strokeCircle(position.x, position.y, radius)
+      .setDepth(4);
+    this.time.delayedCall(120, () => ring.destroy());
+  }
+
+  private advanceEncounter(deltaMs: number): void {
+    if (!this.encounterDirector || !this.enemyManager) return;
+    const enemies = this.enemyManager.getSnapshot();
+    const { formation, transition } = this.encounterDirector.update(deltaMs, {
+      activeEnemies: enemies.enemies.length,
+      topmostEnemyY: enemies.topmostEnemyY,
+    });
+    if (formation) this.enemyManager.spawnFormation(formation);
+    if (transition === 'bossWarningStarted') this.showBossWarning();
+    if (transition === 'bossStarted') this.startBoss();
+  }
+
+  private showBossWarning(): void {
+    this.clearBossWarning();
+    this.bossWarning = this.add.text(GAME_WIDTH / 2, 116, 'WARNING · MIDBOSS APPROACHING', {
+      color: '#ffcf5c',
+      fontSize: '22px',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(18);
+  }
+
+  private clearBossWarning(): void {
+    this.bossWarning?.destroy();
+    this.bossWarning = undefined;
+  }
+
+  private startBoss(): void {
+    if (!this.player || !this.orbManager || !this.temporaryOrbManager || !this.enemyManager) return;
+    this.clearBossWarning();
+    this.bossManager?.destroy();
+    this.bossManager = new BossManager(this, {
+      player: this.player,
+      orbManager: this.orbManager,
+      temporaryOrbManager: this.temporaryOrbManager,
+      getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
+      getEnemyBulletCount: () => this.enemyManager?.getBulletCount() ?? 0,
+      getGameplayElapsedMs: () => this.gameplayElapsedMs,
+      onPlayerHit: (damage) => this.damagePlayer(damage),
+      onDirectHit: (event) => this.handleBossDirectHit(event),
+      onDefeated: () => this.handleBossDefeatSignal(),
+    });
+  }
+
+  private handleBossDefeatSignal(): void {
+    if (this.defeated || this.bossDefeatPending) return;
+    this.enemyManager?.clearBullets();
+    this.bossManager?.clearHostileActions();
+    this.bossDefeatPending = true;
+  }
+
+  private finalizeBossDefeat(): void {
+    if (!this.bossDefeatPending || this.defeated) return;
+    this.bossDefeatPending = false;
+    this.clearBossWarning();
+    this.enemyManager?.clearBullets();
+    this.bossManager?.clearHostileActions();
+    this.encounterDirector?.markBossDefeated();
+    const owned = new Set(this.bossBuild?.snapshot() ?? []);
+    this.bossRewardChoices = selectBossRewardOptions(
+      owned,
+      this.build?.getRanks() ?? { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
+      BOSS_REWARD_SEED,
+    );
+    this.pause.add('bossReward');
+    this.syncPauseState();
+    this.bossRewardOverlay?.show(this.bossRewardChoices, (id) => this.chooseBossReward(id));
+  }
+
+  private chooseBossReward(id: BossRewardId): void {
+    if (this.defeated || !this.bossRewardOverlay?.isVisible() || !this.bossBuild) return;
+    if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return;
+    this.bossBuild.acquire(id);
+    if (id === 'expanded-magazine') this.orbManager?.addOrb();
+    this.encounterDirector?.resumeAfterBossReward();
+    this.bossManager?.destroy();
+    this.bossManager = undefined;
+    this.bossRewardOverlay.hide();
+    this.bossRewardChoices = [];
+    this.pause.remove('bossReward');
+    this.syncPauseState();
   }
 
   private openNextLevelUp(): void {
@@ -378,10 +542,19 @@ export class CombatScene extends Phaser.Scene {
   private showDefeat(): void {
     if (this.defeated) return;
     this.defeated = true;
+    this.bossDefeatPending = false;
+    this.clearBossWarning();
     this.levelUpOverlay?.hide();
+    this.bossRewardOverlay?.hide();
+    this.bossRewardChoices = [];
     this.pause.remove('levelUp');
+    this.pause.remove('bossReward');
     this.pause.add('defeated');
     this.syncPauseState();
+    this.enemyManager?.clearBullets();
+    this.bossManager?.destroy();
+    this.bossManager = undefined;
+    this.bossBuild = new BossBuild();
     this.temporaryOrbManager?.destroy();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
@@ -431,7 +604,9 @@ export class CombatScene extends Phaser.Scene {
   };
 
   private syncPauseState(): void {
-    this.playerInput?.setGameplayPointerEnabled(!this.pause.has('levelUp'));
+    this.playerInput?.setGameplayPointerEnabled(
+      !this.pause.has('levelUp') && !this.pause.has('bossReward'),
+    );
     if (this.pause.isPaused()) {
       this.physics.pause();
       this.time.paused = true;
@@ -443,40 +618,77 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    this.clearBossWarning();
+    this.bossManager?.destroy();
     this.enemyManager?.destroy();
     this.temporaryOrbManager?.destroy();
     this.orbManager?.destroy();
     this.playerInput?.destroy();
     this.levelUpOverlay?.destroy();
+    this.bossRewardOverlay?.destroy();
+    this.bossDefeatPending = false;
+    this.bossRewardChoices = [];
+    this.bossManager = undefined;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
     this.orbManager = undefined;
     this.temporaryOrbManager = undefined;
     this.playerInput = undefined;
     this.levelUpOverlay = undefined;
+    this.bossRewardOverlay = undefined;
     this.progression = undefined;
     this.build = undefined;
+    this.bossBuild = undefined;
+    this.debugAdvanceEncounter = undefined;
+    this.debugRecordEnemyKill = undefined;
+    this.debugDamageBossPart = undefined;
   };
 
   private createTextures(): void {
-    if (this.textures.exists('player')) return;
+    const createBaseTextures = !this.textures.exists('player');
+    const createBossTextures = !this.textures.exists('boss-body');
+    if (!createBaseTextures && !createBossTextures) return;
     const graphics = this.add.graphics();
-    graphics.fillStyle(0x4ddcff).fillCircle(18, 18, 18);
-    graphics.fillStyle(0x061225).fillCircle(12, 15, 2).fillCircle(24, 15, 2);
-    graphics.lineStyle(2, 0x061225).beginPath().moveTo(12, 24).lineTo(18, 27).lineTo(24, 24).strokePath();
-    graphics.generateTexture('player', 36, 36);
-    graphics.clear().fillStyle(0xffffff).fillCircle(8, 8, 7);
-    graphics.lineStyle(2, 0x4ddcff).strokeCircle(8, 8, 7).generateTexture('orb-charged', 16, 16);
-    graphics.clear().fillStyle(0xfff4a3).fillCircle(6, 6, 5);
-    graphics.lineStyle(2, 0xff9f43).strokeCircle(6, 6, 5).generateTexture('orb-temporary', 12, 12);
-    graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, 36, 28, 5)
-      .generateTexture('enemy-basic', 36, 28);
-    graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, 40, 32, 5);
-    graphics.lineStyle(3, 0xd8c8ff).strokeRoundedRect(2, 2, 36, 28, 4)
-      .generateTexture('enemy-armored', 40, 32);
-    graphics.clear().fillStyle(0xffa23a).fillRoundedRect(0, 0, 38, 30, 5);
-    graphics.fillStyle(0x4c2400).fillCircle(19, 15, 5).generateTexture('enemy-shooter', 38, 30);
-    graphics.clear().fillStyle(0xffe45c).fillCircle(5, 5, 5).generateTexture('enemy-bullet', 10, 10);
+    if (createBaseTextures) {
+      graphics.fillStyle(0x4ddcff).fillCircle(18, 18, 18);
+      graphics.fillStyle(0x061225).fillCircle(12, 15, 2).fillCircle(24, 15, 2);
+      graphics.lineStyle(2, 0x061225).beginPath().moveTo(12, 24).lineTo(18, 27).lineTo(24, 24).strokePath();
+      graphics.generateTexture('player', 36, 36);
+      graphics.clear().fillStyle(0xffffff).fillCircle(8, 8, 7);
+      graphics.lineStyle(2, 0x4ddcff).strokeCircle(8, 8, 7).generateTexture('orb-charged', 16, 16);
+      graphics.clear().fillStyle(0xfff4a3).fillCircle(6, 6, 5);
+      graphics.lineStyle(2, 0xff9f43).strokeCircle(6, 6, 5).generateTexture('orb-temporary', 12, 12);
+      graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, 36, 28, 5)
+        .generateTexture('enemy-basic', 36, 28);
+      graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, 40, 32, 5);
+      graphics.lineStyle(3, 0xd8c8ff).strokeRoundedRect(2, 2, 36, 28, 4)
+        .generateTexture('enemy-armored', 40, 32);
+      graphics.clear().fillStyle(0xffa23a).fillRoundedRect(0, 0, 38, 30, 5);
+      graphics.fillStyle(0x4c2400).fillCircle(19, 15, 5).generateTexture('enemy-shooter', 38, 30);
+      graphics.clear().fillStyle(0xffe45c).fillCircle(5, 5, 5).generateTexture('enemy-bullet', 10, 10);
+    }
+    if (createBossTextures) {
+      graphics.clear().fillStyle(0x3b315d).fillRoundedRect(0, 0, 120, 72, 12);
+      graphics.lineStyle(4, 0x7d6ab3).strokeRoundedRect(2, 2, 116, 68, 10)
+        .generateTexture('boss-body', 120, 72);
+      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(0, 0, 14, 38, 6);
+      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(1, 1, 12, 36, 5)
+        .generateTexture('boss-left-weakpoint', 14, 38);
+      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(0, 0, 14, 38, 6);
+      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(1, 1, 12, 36, 5)
+        .generateTexture('boss-right-weakpoint', 14, 38);
+      graphics.clear().fillStyle(0xffd15c).fillCircle(16, 16, 14);
+      graphics.lineStyle(3, 0xffffff).strokeCircle(16, 16, 13)
+        .generateTexture('boss-core', 32, 32);
+      graphics.clear().fillStyle(0xfff08a).fillCircle(5, 5, 5)
+        .generateTexture('boss-aimed-bullet', 10, 10);
+      graphics.clear().fillStyle(0xff7b55).fillRoundedRect(0, 0, 16, 24, 5)
+        .generateTexture('boss-falling-hazard', 16, 24);
+      graphics.clear().lineStyle(2, 0xffe45c, 0.9).strokeCircle(16, 16, 14)
+        .generateTexture('boss-aim-marker', 32, 32);
+      graphics.clear().lineStyle(3, 0xff704d, 0.9).strokeRoundedRect(1, 1, 30, 10, 4)
+        .generateTexture('boss-drop-marker', 32, 12);
+    }
     graphics.destroy();
   }
 }

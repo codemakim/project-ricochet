@@ -12,6 +12,24 @@ describe('CombatPauseController', () => {
     expect(pause.isPaused()).toBe(false);
   });
 
+  it('keeps boss rewards frozen while visibility and level-up reasons compose', () => {
+    const pause = new CombatPauseController();
+    pause.add('bossReward');
+    pause.add('visibility');
+    pause.add('levelUp');
+
+    pause.remove('bossReward');
+    expect(pause.isPaused()).toBe(true);
+    expect(pause.consumeGameplayDelta(5_000)).toBe(0);
+    pause.remove('visibility');
+    expect(pause.isPaused()).toBe(true);
+    pause.remove('levelUp');
+
+    expect(pause.isPaused()).toBe(false);
+    expect(pause.consumeGameplayDelta(5_000)).toBe(0);
+    expect(pause.consumeGameplayDelta(16)).toBe(16);
+  });
+
   it('discards the first delta after every paused interval', () => {
     const pause = new CombatPauseController();
     pause.add('visibility');
