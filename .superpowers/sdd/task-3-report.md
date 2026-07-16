@@ -3,6 +3,7 @@
 - Status: DONE
 - Starting commit: `50dfd0f4e11ddb0696e128e3f03f54fd47a744cf`
 - Implementation commit: `71fbed0f5b5b2aefe8aedd27d134c8a3e8c22b15`
+- Review-fix commit: `b491d9d0225ceb5705ee7f658a40ea8201bbacfe`
 
 ## RED-GREEN Evidence
 
@@ -13,6 +14,19 @@
 - Full unit suite: `npm test` — exit 0; 26 files and 218 tests passed.
 - Typecheck and production build: `npm run build` — exit 0; `tsc --noEmit` and Vite build passed, 31 modules transformed.
 - Diff hygiene: `git diff --check` and `git diff --cached --check` — exit 0.
+
+## Review Fix Evidence
+
+- Combined regression RED: `npm test -- src/game/bosses/BossManager.test.ts -t "fires the aimed fan at the warned target|radius-8 orb clips|radius-6 orb clips"` — exit 1; all 3 selected tests failed because aim followed the moved player and both body processes accepted seam/corner overlaps.
+- Stored-target GREEN: `npm test -- src/game/bosses/BossManager.test.ts -t "fires the aimed fan at the warned target"` — exit 0; 1 test passed and 17 skipped.
+- Exact-body-intersection GREEN: `npm test -- src/game/bosses/BossManager.test.ts -t "radius-8 orb clips|radius-6 orb clips"` — exit 0; 2 tests passed and 16 skipped.
+- Final focused suite: `npm test -- src/game/bosses/BossManager.test.ts src/game/enemies/EnemyManager.test.ts` — exit 0; 2 files and 37 tests passed.
+- Final full unit suite: `npm test` — exit 0; 26 files and 221 tests passed.
+- Final typecheck and production build: `npm run build` — exit 0; `tsc --noEmit` and Vite build passed, 31 modules transformed.
+- Final diff hygiene: `git diff --check` and code commit's `git diff --cached --check` — exit 0.
+- Aimed warnings now store player target coordinates when created and resolve their three-shot fan against that immutable target after `600ms`.
+- Body reflection exclusion now compares actual enabled Arcade body shapes and bounds against every exposed damage part. Radius-8 permanent and radius-6 temporary seam/corner overlaps reject body processing, preserve charge/bonus/cooldown state, and allow weakpoint processing.
+- No Task 4 or Task 5 code added.
 
 ## Files
 
