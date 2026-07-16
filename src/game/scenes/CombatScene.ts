@@ -222,7 +222,7 @@ export class CombatScene extends Phaser.Scene {
     this.temporaryOrbManager?.update(this.gameplayElapsedMs);
     this.enemyManager.update();
     const enemies = this.enemyManager.getSnapshot();
-    const formation = this.encounterDirector.update(gameplayDelta, {
+    const { formation } = this.encounterDirector.update(gameplayDelta, {
       activeEnemies: enemies.enemies.length,
       topmostEnemyY: enemies.topmostEnemyY,
     });
@@ -268,6 +268,12 @@ export class CombatScene extends Phaser.Scene {
         spawnSequence: 0,
         runSeed: 0,
         lastFormationId: null,
+        state: 'running',
+        section: 0,
+        sectionElapsedMs: 0,
+        bossScore: 0,
+        warningElapsedMs: 0,
+        bossesDefeated: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
