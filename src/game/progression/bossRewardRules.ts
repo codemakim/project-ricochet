@@ -22,6 +22,9 @@ export function selectBossRewardOptions(
     !owned.has(id)
     && (id !== 'chain-warhead' || (ranks.split >= 1 && ranks.explosion >= 1)),
   );
+  if (eligible.length < 3) {
+    throw new RangeError(`at least 3 eligible boss rewards are required; received ${eligible.length}`);
+  }
   const shuffled = [...eligible];
   let state = seed >>> 0;
 

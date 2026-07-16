@@ -157,8 +157,13 @@ function createBoundary() {
   orb.setVelocity(100, -200);
   const handleEnemyHit = vi.fn(() => hitResult());
   const synchronizeOrb = vi.fn();
+  const orbAddedListeners = new Set<(orb: unknown) => void>();
   const orbManager = {
     getSprites: () => [orb],
+    onOrbAdded: (listener: (added: unknown) => void) => {
+      orbAddedListeners.add(listener);
+      return () => orbAddedListeners.delete(listener);
+    },
     handleEnemyHit,
     synchronizeOrb,
   } as unknown as OrbManager;
@@ -197,10 +202,37 @@ function createBoundary() {
     colliders, overlaps, handleEnemyHit, handleTemporaryHit, synchronizeOrb,
     synchronizeTemporary, onPlayerHit, onDirectHit, onDefeated,
     setExternalBullets: (count: number) => { externalBullets = count; }, colliderFor,
+    addRuntimeOrb: () => {
+      const runtimeOrb = new FakeSprite(225, 120, 'orb-runtime') as FakeSprite & { orbId: number };
+      runtimeOrb.orbId = 1;
+      runtimeOrb.setCircle(8).setVelocity(100, -200);
+      for (const listener of orbAddedListeners) listener(runtimeOrb);
+      return runtimeOrb;
+    },
+    orbAddedListeners,
   };
 }
 
 describe('BossManager', () => {
+  it('registers all boss colliders for a runtime permanent orb and unsubscribes on destroy', () => {
+    const boundary = createBoundary();
+    expect(boundary.colliders.filter((collider) => collider.first === boundary.orb)).toHaveLength(4);
+
+    const runtimeOrb = boundary.addRuntimeOrb();
+    const runtimeColliders = boundary.colliders.filter((collider) => collider.first === runtimeOrb);
+    expect(runtimeColliders).toHaveLength(4);
+    const weakpoint = runtimeColliders.find(
+      (collider) => (collider.second as FakeSprite).texture === 'boss-left-weakpoint',
+    )!;
+    expect(weakpoint.trigger(runtimeOrb, weakpoint.second as FakeSprite)).toBe(true);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(runtimeOrb, -1, 14, 0, false);
+
+    boundary.manager.destroy();
+    expect(boundary.orbAddedListeners.size).toBe(0);
+    boundary.addRuntimeOrb();
+    expect(boundary.colliders.filter((collider) => collider.first !== boundary.orb && collider.first !== boundary.temporaryGroup)).toHaveLength(4);
+  });
+
   it('spawns body, weakpoints, hidden core, then tears down every owned object', () => {
     const boundary = createBoundary();
 

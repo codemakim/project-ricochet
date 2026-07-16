@@ -94,6 +94,7 @@ export class BossManager {
   private nextAttackAt: number;
   private destroyed = false;
   private defeatReported = false;
+  private readonly unsubscribeOrbAdded: () => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -128,11 +129,9 @@ export class BossManager {
     this.warningGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
 
     for (const orb of options.orbManager.getSprites()) {
-      this.addPermanentCollider(orb, this.body, null);
-      for (const partId of this.partIds()) {
-        this.addPermanentCollider(orb, this.partSprites[partId], partId);
-      }
+      this.addPermanentOrbColliders(orb);
     }
+    this.unsubscribeOrbAdded = options.orbManager.onOrbAdded((orb) => this.addPermanentOrbColliders(orb));
     this.addTemporaryCollider(options.temporaryOrbManager.getGroup(), this.body, null);
     for (const partId of this.partIds()) {
       this.addTemporaryCollider(options.temporaryOrbManager.getGroup(), this.partSprites[partId], partId);
@@ -230,6 +229,7 @@ export class BossManager {
     if (this.destroyed) return;
     this.clearHostileActions();
     this.destroyed = true;
+    this.unsubscribeOrbAdded();
     for (const collider of this.colliders) collider.destroy();
     this.colliders.length = 0;
     this.pendingHits.clear();
@@ -252,6 +252,14 @@ export class BossManager {
       ),
       (orbObject) => this.processPermanentHit(orbObject as OrbSprite, partId),
     ));
+  }
+
+  private addPermanentOrbColliders(orb: OrbSprite): void {
+    if (this.destroyed) return;
+    this.addPermanentCollider(orb, this.body, null);
+    for (const partId of this.partIds()) {
+      this.addPermanentCollider(orb, this.partSprites[partId], partId);
+    }
   }
 
   private addTemporaryCollider(

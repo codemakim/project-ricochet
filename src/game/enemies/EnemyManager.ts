@@ -82,6 +82,7 @@ export class EnemyManager {
   private readonly shooterTimer: Phaser.Time.TimerEvent;
   private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
   private readonly bulletTextureKey: string;
+  private readonly unsubscribeOrbAdded: () => void;
   private nextEnemyId = 0;
   private destroyed = false;
 
@@ -103,13 +104,9 @@ export class EnemyManager {
     this.spawnFormation(options.formation ?? createInitialFormation(0).enemies);
 
     for (const orb of options.orbManager.getSprites()) {
-      this.colliders.push(scene.physics.add.collider(
-        orb,
-        this.enemyGroup,
-        (orbObject, enemyObject) => this.completeReflectedHit(orbObject as OrbSprite, enemyObject as EnemySprite),
-        (orbObject, enemyObject) => this.processOrbHit(orbObject as OrbSprite, enemyObject as EnemySprite),
-      ));
+      this.addPermanentOrbCollider(orb);
     }
+    this.unsubscribeOrbAdded = options.orbManager.onOrbAdded((orb) => this.addPermanentOrbCollider(orb));
     if (options.temporaryOrbManager) {
       this.colliders.push(scene.physics.add.collider(
         options.temporaryOrbManager.getGroup(),
@@ -274,6 +271,7 @@ export class EnemyManager {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.unsubscribeOrbAdded();
     this.shooterTimer.remove(false);
     for (const timer of this.warningTimers.values()) timer.remove(false);
     for (const collider of this.colliders) collider.destroy();
@@ -284,6 +282,16 @@ export class EnemyManager {
     this.enemyGroup.destroy(true);
     this.bulletGroup.destroy(true);
     this.colliders.length = 0;
+  }
+
+  private addPermanentOrbCollider(orb: OrbSprite): void {
+    if (this.destroyed) return;
+    this.colliders.push(this.scene.physics.add.collider(
+      orb,
+      this.enemyGroup,
+      (orbObject, enemyObject) => this.completeReflectedHit(orbObject as OrbSprite, enemyObject as EnemySprite),
+      (orbObject, enemyObject) => this.processOrbHit(orbObject as OrbSprite, enemyObject as EnemySprite),
+    ));
   }
 
   private processOrbHit(orb: OrbSprite, enemy: EnemySprite): boolean {

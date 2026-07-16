@@ -194,8 +194,13 @@ function createBoundary(
   const orb = new FakeSprite(120, 120, 'orb');
   (orb as FakeSprite & { orbId: number }).orbId = 0;
   const handleEnemyHit = vi.fn();
+  const orbAddedListeners = new Set<(orb: unknown) => void>();
   const orbManager = {
     getSprites: () => [orb],
+    onOrbAdded: (listener: (added: unknown) => void) => {
+      orbAddedListeners.add(listener);
+      return () => orbAddedListeners.delete(listener);
+    },
     handleEnemyHit,
     synchronizeOrb: vi.fn(),
   } as unknown as OrbManager;
@@ -245,10 +250,37 @@ function createBoundary(
     overlaps,
     time,
     gameplayClock,
+    addRuntimeOrb: () => {
+      const runtimeOrb = new FakeSprite(160, 160, 'orb-runtime');
+      (runtimeOrb as FakeSprite & { orbId: number }).orbId = 1;
+      for (const listener of orbAddedListeners) listener(runtimeOrb);
+      return runtimeOrb;
+    },
+    orbAddedListeners,
   };
 }
 
 describe('EnemyManager', () => {
+  it('registers one collider for each runtime permanent orb and unsubscribes on destroy', () => {
+    const boundary = createBoundary([{ kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 }]);
+    const initialPermanent = boundary.colliders.filter((collider) => collider.first === boundary.orb);
+    expect(initialPermanent).toHaveLength(1);
+
+    const runtimeOrb = boundary.addRuntimeOrb();
+    const runtimeColliders = boundary.colliders.filter((collider) => collider.first === runtimeOrb);
+    expect(runtimeColliders).toHaveLength(1);
+
+    boundary.handleEnemyHit.mockReturnValue({ damage: 1.5, charged: true, charges: 2, killed: false, reflect: true });
+    const enemy = boundary.groups[0]!.children[0]!;
+    expect(runtimeColliders[0]!.trigger(runtimeOrb, enemy)).toBe(true);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(runtimeOrb, 0, 3, 0, false);
+
+    boundary.manager.destroy();
+    expect(boundary.orbAddedListeners.size).toBe(0);
+    boundary.addRuntimeOrb();
+    expect(boundary.colliders.filter((collider) => collider.first !== boundary.orb)).toHaveLength(1);
+  });
+
   it('freezes enemy descent without pausing shooter timers', () => {
     const { manager, groups, time } = createBoundary();
 

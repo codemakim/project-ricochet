@@ -150,9 +150,15 @@ export class OrbStore {
     const lastHitMs = record.enemyHits.get(enemyId);
     if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
 
-    record.enemyHits.set(enemyId, nowMs);
     const source = record.lastRecoverySource;
-    const openingBonus = source === null ? 0 : this.getOpeningHitBonus(source, record.firstHitPending);
+    let openingBonus = 0;
+    if (source === 'proximity' && record.firstHitPending) {
+      openingBonus = this.getOpeningHitBonus(source, true);
+      if (openingBonus !== 0 && openingBonus !== 1) {
+        throw new RangeError('opening hit bonus must be exactly 0 or 1');
+      }
+    }
+    record.enemyHits.set(enemyId, nowMs);
     const result = directHit(
       record.charges,
       enemyHp,
@@ -258,8 +264,14 @@ export class OrbStore {
 
   private arrive(record: OrbRecord): void {
     const source = record.lastRecoverySource;
+    const restoredCharges = source === 'proximity'
+      ? this.getRestoredCharges(source)
+      : DEFAULT_RESTORED_CHARGES;
+    if (source === 'proximity' && restoredCharges !== 3 && restoredCharges !== 5) {
+      throw new RangeError('proximity restored charges must be exactly 3 or 5');
+    }
     record.state = transitionOrb(record.state, 'stored');
-    record.charges = this.getRestoredCharges(source!);
+    record.charges = restoredCharges;
     record.firstHitPending = source === 'proximity';
     record.velocity = { x: 0, y: 0 };
     this.callbacks.onRecovery?.(source!);
@@ -325,6 +337,8 @@ export class OrbManager {
   private readonly world: Phaser.Physics.Arcade.World;
   private readonly scene: Phaser.Scene;
   private readonly textureKey: string;
+  private readonly orbAddedListeners = new Set<(orb: OrbSprite) => void>();
+  private destroyed = false;
   private readonly onWorldBounds = (
     body: Phaser.Physics.Arcade.Body,
     _up: boolean,
@@ -376,11 +390,20 @@ export class OrbManager {
   }
 
   addOrb(): boolean {
+    if (this.destroyed) return false;
     if (!this.store.addOrb()) return false;
     const id = this.sprites.length;
-    this.sprites.push(this.createSprite(id));
+    const sprite = this.createSprite(id);
+    this.sprites.push(sprite);
     this.synchronizeSprites();
+    for (const listener of this.orbAddedListeners) listener(sprite);
     return true;
+  }
+
+  onOrbAdded(listener: (orb: OrbSprite) => void): () => void {
+    if (this.destroyed) return () => {};
+    this.orbAddedListeners.add(listener);
+    return () => this.orbAddedListeners.delete(listener);
   }
 
   update(nowMs: number, deltaMs: number, playerPosition: Vector, aim: Vector): void {
@@ -459,10 +482,13 @@ export class OrbManager {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.world.off('worldbounds', this.onWorldBounds);
     this.store.destroy();
     for (const sprite of this.sprites) sprite.destroy();
     this.spriteIds.clear();
+    this.orbAddedListeners.clear();
   }
 
   private synchronizeSprites(): void {

@@ -48,4 +48,15 @@ describe('bossRewardRules', () => {
     expect(first).not.toContain('expanded-magazine');
     expect(selectBossRewardOptions(owned, ranks, 9876)).toEqual(first);
   });
+
+  it('rejects an eligible pool smaller than three after ownership and chain filtering', () => {
+    const owned = new Set<typeof BOSS_REWARD_IDS[number]>([
+      'expanded-magazine',
+      'recovery-capacitor',
+    ]);
+
+    expect(() => selectBossRewardOptions(owned, noRanks, 9)).toThrow(
+      new RangeError('at least 3 eligible boss rewards are required; received 1'),
+    );
+  });
 });

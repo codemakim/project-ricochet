@@ -231,8 +231,39 @@ describe('OrbStore', () => {
     expect(recover(create(), 'floor')).toBe(3);
     expect(recover(create(1), 'timeout')).toBe(3);
     expect(restored).toHaveBeenCalledWith('proximity');
-    expect(restored).toHaveBeenCalledWith('floorRecall');
-    expect(restored).toHaveBeenCalledWith('timeoutRecall');
+    expect(restored).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([-1, 2.5, Number.NaN, 4, 6])(
+    'rejects invalid proximity restored charges %s before storing or relaunching',
+    (invalidCharges) => {
+      const store = new OrbStore(
+        EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED,
+        () => invalidCharges,
+      );
+      store.activateAim();
+      store.update(0, 0, player, up);
+      store.beginProximityRecovery(0);
+
+      expect(() => store.update(100, 100, player, up)).toThrow(
+        new RangeError('proximity restored charges must be exactly 3 or 5'),
+      );
+      expect(store.getSnapshot()[0]).toMatchObject({ state: 'attracting', charges: 3 });
+    },
+  );
+
+  it('forces non-proximity restoration to three without consulting the provider', () => {
+    const restored = vi.fn(() => 5);
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, restored,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.beginFloorRecall(0);
+    store.update(1_000, 1_000, player, up);
+
+    expect(restored).not.toHaveBeenCalled();
+    expect(store.getSnapshot()[0]?.charges).toBe(3);
   });
 
   it('consumes opening damage once on the first damage-enabled hit after proximity recovery', () => {
@@ -256,7 +287,42 @@ describe('OrbStore', () => {
     expect(store.handleEnemyHit(0, -1, 99, 1_000, false)?.damage).toBe(2.5);
     expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.damage).toBe(1.5);
     expect(openingBonus).toHaveBeenNthCalledWith(1, 'proximity', true);
-    expect(openingBonus).toHaveBeenNthCalledWith(2, 'proximity', false);
+    expect(openingBonus).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([-1, 0.5, Number.NaN, 2])(
+    'rejects invalid opening bonus %s without consuming the pending hit',
+    (invalidBonus) => {
+      let bonus = invalidBonus;
+      const openingBonus = vi.fn(() => bonus);
+      const store = new OrbStore(
+        EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, () => 3, openingBonus,
+      );
+      store.activateAim();
+      store.update(0, 0, player, up);
+      store.update(100, 100, player, up);
+      store.update(200, 100, player, up);
+      store.beginProximityRecovery(0);
+      store.update(300, 100, player, up);
+
+      expect(() => store.handleEnemyHit(0, 7, 99, 1_000, false)).toThrow(
+        new RangeError('opening hit bonus must be exactly 0 or 1'),
+      );
+      bonus = 1;
+      expect(store.handleEnemyHit(0, 7, 99, 1_000, false)?.damage).toBe(2.5);
+    },
+  );
+
+  it('does not consult the opening provider outside a pending proximity hit', () => {
+    const openingBonus = vi.fn(() => 1);
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, () => 3, openingBonus,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.damage).toBe(1.5);
+    expect(openingBonus).not.toHaveBeenCalled();
   });
 
   it('homes from any distance after floor recall', () => {
@@ -343,6 +409,29 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites).toHaveLength(4);
     expect(manager.getSprites()).toHaveLength(4);
     expect(manager.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
+  });
+
+  it('notifies subscribers once per runtime sprite and supports unsubscribe', () => {
+    const { manager, sprites } = createManager();
+    const listener = vi.fn();
+    const unsubscribe = manager.onOrbAdded(listener);
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(manager.addOrb()).toBe(true);
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith(sprites[3]);
+
+    unsubscribe();
+    expect(manager.addOrb()).toBe(true);
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('rejects addOrb after destroy without creating a sprite', () => {
+    const { manager, sprites } = createManager();
+    manager.destroy();
+
+    expect(manager.addOrb()).toBe(false);
+    expect(sprites).toHaveLength(3);
   });
 
   it('launches with injected charged speed', () => {
