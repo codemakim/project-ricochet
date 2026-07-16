@@ -3,6 +3,7 @@
 - Status: DONE
 - Starting commit: `ebb5c3950cea8362a65223720163b82039b1834c`
 - Implementation commit: `8e04b2817fbc3c51fb0d2d015335c1abddd85289`
+- Review-fix commit: `5bc3638436ff6768f43227363f6426384927adc7`
 
 ## RED-GREEN Evidence
 
@@ -42,3 +43,20 @@
 
 - Vite retains the existing advisory that the main minified chunk exceeds 500 kB; build succeeds.
 - Task 5 must call `addOrb()` when `expanded-magazine` is acquired and wire `BossBuild` providers/temporary-explosion flag into Scene flow.
+
+## Review Fix Evidence
+
+- Focused RED: `npm test -- src/game/progression/bossRewardRules.test.ts src/game/orbs/OrbManager.test.ts src/game/enemies/EnemyManager.test.ts src/game/bosses/BossManager.test.ts` — exit 1; 15 tests failed for runtime collider registration, subscription cleanup, undersized reward selection, invalid modifier callback values, non-proximity provider use, and post-destroy `addOrb()`.
+- Focused GREEN: same command — exit 0; 4 files and 86 tests passed.
+- Full unit suite: `npm test` — exit 0; 28 files and 250 tests passed.
+- Typecheck and production build: `npm run build` — exit 0; `tsc --noEmit` and Vite build passed, 31 modules transformed.
+- Diff hygiene: `git diff --check` and `git diff --cached --check` — exit 0 before the review-fix commit.
+
+## Review Fix Result
+
+- `OrbManager.onOrbAdded()` provides a narrow subscription returning an unsubscribe function. Existing `EnemyManager` and active `BossManager` instances add only the required permanent colliders for each runtime sprite and unsubscribe during destruction; constructor sprites are not emitted again.
+- `OrbManager.addOrb()` returns `false` after destruction and creates no sprite.
+- Reward selection throws a clear `RangeError` when ownership and chain eligibility leave fewer than three candidates.
+- Opening bonus lookup runs only for a pending first proximity hit, accepts exactly `0` or `1`, and validates before hit bookkeeping or pending consumption.
+- Non-proximity recovery always restores 3 without calling the provider. Proximity restoration accepts exactly 3 or 5 and validates before changing stored/relaunch state.
+- No Scene/UI work or chain gating was added.
