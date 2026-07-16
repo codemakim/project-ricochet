@@ -160,7 +160,11 @@ class FakeCollider {
   }
 }
 
-function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = false) {
+function createBoundary(
+  formation?: readonly EnemySpec[],
+  withTemporaryOrbs = false,
+  getExternalBulletCount: () => number = () => 0,
+) {
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
   const overlaps: FakeCollider[] = [];
@@ -221,6 +225,7 @@ function createBoundary(formation?: readonly EnemySpec[], withTemporaryOrbs = fa
     onEnemyKilled,
     onDirectHit,
     formation,
+    getExternalBulletCount,
   });
   return {
     manager,
@@ -366,6 +371,25 @@ describe('EnemyManager', () => {
 
     for (let cycle = 0; cycle < 6; cycle += 1) time.advance(1650);
     expect(manager.getSnapshot().bullets).toBe(12);
+  });
+
+  it('shares the twelve-bullet cap with external hostile bullets', () => {
+    const { manager, time } = createBoundary(undefined, false, () => 11);
+
+    time.advance(1650);
+
+    expect(manager.getBulletCount()).toBe(1);
+  });
+
+  it('clears every active bullet without destroying enemies', () => {
+    const { manager, time } = createBoundary();
+    time.advance(1650);
+    expect(manager.getBulletCount()).toBe(2);
+
+    manager.clearBullets();
+
+    expect(manager.getBulletCount()).toBe(0);
+    expect(manager.getSnapshot().enemies.length).toBeGreaterThan(0);
   });
 
   it('cleans bullets outside bounds', () => {

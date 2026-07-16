@@ -59,6 +59,7 @@ export interface EnemyManagerOptions {
   onBulletHit: (damage: number) => void;
   onEnemyKilled?: (event: EnemyKilledEvent) => void;
   onDirectHit?: (event: DirectHitEvent) => void;
+  getExternalBulletCount?: () => number;
   textureKeys?: Partial<Record<EnemyKind | 'bullet', string>>;
 }
 
@@ -238,6 +239,19 @@ export class EnemyManager {
     };
   }
 
+  getBulletCount(): number {
+    if (this.destroyed) return 0;
+    return (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
+      .filter((bullet) => bullet.active).length;
+  }
+
+  clearBullets(): void {
+    if (this.destroyed) return;
+    for (const bullet of this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (bullet.active) bullet.destroy();
+    }
+  }
+
   applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
     const killedIds: number[] = [];
     const enemies = [...this.enemies.values()];
@@ -378,7 +392,7 @@ export class EnemyManager {
 
   private beginShooterWarnings(): void {
     if (this.destroyed) return;
-    const bulletCount = this.getSnapshot().bullets;
+    const bulletCount = this.getBulletCount() + (this.options.getExternalBulletCount?.() ?? 0);
     const candidates = [...this.enemies.values()].filter(
       (enemy) => enemy.active && enemy.kind === 'shooter' && !this.activeShooters.has(enemy.enemyId),
     );
@@ -397,7 +411,7 @@ export class EnemyManager {
     shooter.clearTint();
     if (!wasActive || this.destroyed || !shooter.active) return;
     const activeOthers = this.activeShooters.size;
-    const activeBullets = this.getSnapshot().bullets;
+    const activeBullets = this.getBulletCount() + (this.options.getExternalBulletCount?.() ?? 0);
     if (!canFire(activeOthers, activeBullets)) return;
 
     const bullet = this.bulletGroup.create(shooter.x, shooter.y, this.bulletTextureKey) as Phaser.Physics.Arcade.Sprite;
