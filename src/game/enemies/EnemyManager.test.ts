@@ -424,6 +424,22 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().enemies.length).toBeGreaterThan(0);
   });
 
+  it('clears bullets and cancels every active shooter telegraph', () => {
+    const { manager, groups, time } = createBoundary();
+    time.advance(1650);
+    expect(manager.getSnapshot().bullets).toBe(2);
+    time.advance(950);
+    expect(manager.getSnapshot().activeShooters).toBe(2);
+    expect(groups[0]!.children.filter((enemy) => enemy.tint !== undefined)).toHaveLength(2);
+
+    manager.clearHostileActions();
+    time.advance(350);
+
+    expect(manager.getSnapshot()).toMatchObject({ activeShooters: 0, bullets: 0 });
+    expect(groups[0]!.children.every((enemy) => enemy.tint === undefined)).toBe(true);
+    expect(time.activeCount()).toBe(1);
+  });
+
   it('cleans bullets outside bounds', () => {
     const { manager, groups, time } = createBoundary();
     time.advance(1650);

@@ -24,7 +24,7 @@ export class BossRewardOverlay {
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  show(choices: readonly BossRewardId[], onSelect: (id: BossRewardId) => void): void {
+  show(choices: readonly BossRewardId[], onSelect: (id: BossRewardId) => boolean): void {
     this.hide();
     this.visible = true;
     this.consumed = false;
@@ -89,9 +89,10 @@ export class BossRewardOverlay {
     this.hide();
   }
 
-  private select(id: BossRewardId, onSelect: (id: BossRewardId) => void): void {
+  private select(id: BossRewardId, onSelect: (id: BossRewardId) => boolean): void {
     if (this.consumed || !this.visible) return;
+    if (!onSelect(id)) return;
     this.consumed = true;
-    onSelect(id);
+    this.hide();
   }
 }

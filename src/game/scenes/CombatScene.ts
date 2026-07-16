@@ -36,6 +36,7 @@ import { selectBossRewardOptions, type BossRewardId } from '../progression/bossR
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
+import { shouldFinalizeBossReward } from './combatSceneRules';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
@@ -255,7 +256,11 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return;
 
-    if (this.bossDefeatPending) {
+    if (shouldFinalizeBossReward(
+      this.bossDefeatPending,
+      this.defeated,
+      this.pause.has('levelUp'),
+    )) {
       this.finalizeBossDefeat();
       return;
     }
@@ -451,7 +456,7 @@ export class CombatScene extends Phaser.Scene {
 
   private handleBossDefeatSignal(): void {
     if (this.defeated || this.bossDefeatPending) return;
-    this.enemyManager?.clearBullets();
+    this.enemyManager?.clearHostileActions();
     this.bossManager?.clearHostileActions();
     this.bossDefeatPending = true;
   }
@@ -460,7 +465,7 @@ export class CombatScene extends Phaser.Scene {
     if (!this.bossDefeatPending || this.defeated) return;
     this.bossDefeatPending = false;
     this.clearBossWarning();
-    this.enemyManager?.clearBullets();
+    this.enemyManager?.clearHostileActions();
     this.bossManager?.clearHostileActions();
     this.encounterDirector?.markBossDefeated();
     const owned = new Set(this.bossBuild?.snapshot() ?? []);
@@ -474,9 +479,9 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardOverlay?.show(this.bossRewardChoices, (id) => this.chooseBossReward(id));
   }
 
-  private chooseBossReward(id: BossRewardId): void {
-    if (this.defeated || !this.bossRewardOverlay?.isVisible() || !this.bossBuild) return;
-    if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return;
+  private chooseBossReward(id: BossRewardId): boolean {
+    if (this.defeated || !this.bossRewardOverlay?.isVisible() || !this.bossBuild) return false;
+    if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
     this.bossBuild.acquire(id);
     if (id === 'expanded-magazine') this.orbManager?.addOrb();
     this.encounterDirector?.resumeAfterBossReward();
@@ -486,6 +491,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = [];
     this.pause.remove('bossReward');
     this.syncPauseState();
+    return true;
   }
 
   private openNextLevelUp(): void {
@@ -509,7 +515,11 @@ export class CombatScene extends Phaser.Scene {
     } else {
       this.levelUpOverlay.hide();
       this.pause.remove('levelUp');
-      this.syncPauseState();
+      if (shouldFinalizeBossReward(this.bossDefeatPending, this.defeated, false)) {
+        this.finalizeBossDefeat();
+      } else {
+        this.syncPauseState();
+      }
     }
     return true;
   }
@@ -551,7 +561,7 @@ export class CombatScene extends Phaser.Scene {
     this.pause.remove('bossReward');
     this.pause.add('defeated');
     this.syncPauseState();
-    this.enemyManager?.clearBullets();
+    this.enemyManager?.clearHostileActions();
     this.bossManager?.destroy();
     this.bossManager = undefined;
     this.bossBuild = new BossBuild();

@@ -98,7 +98,7 @@ describe('BossRewardOverlay', () => {
   it('shows three Korean reward cards and consumes touch or keyboard selection once', () => {
     const { scene, objects, keys } = makeScene();
     const overlay = new BossRewardOverlay(scene as never);
-    const onSelect = vi.fn();
+    const onSelect = vi.fn(() => true);
 
     overlay.show(
       ['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'],
@@ -129,7 +129,7 @@ describe('BossRewardOverlay', () => {
   it('labels chain warhead and removes stale card and key callbacks on cleanup', () => {
     const { scene, objects, keys } = makeScene();
     const overlay = new BossRewardOverlay(scene as never);
-    const onSelect = vi.fn();
+    const onSelect = vi.fn(() => true);
 
     overlay.show(['chain-warhead', 'expanded-magazine', 'opening-amplifier'], onSelect);
     expect(objects.filter((object) => object.kind === 'text').map(({ text }) => text)).toEqual(
@@ -148,5 +148,27 @@ describe('BossRewardOverlay', () => {
     expect(objects.every((object) => object.destroyed)).toBe(true);
     expect([...keys.values()].every((key) => key.listenerCount('down') === 0)).toBe(true);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps selection active when the callback rejects it', () => {
+    const { scene, objects, keys } = makeScene();
+    const overlay = new BossRewardOverlay(scene as never);
+    const onSelect = vi.fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+
+    overlay.show(['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'], onSelect);
+    const firstCard = objects.find((object) => object.kind === 'rectangle' && object.width === 380)!;
+
+    firstCard.emit('pointerup');
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(overlay.isVisible()).toBe(true);
+    expect(firstCard.destroyed).toBe(false);
+
+    keys.get(50)!.emit('down');
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith('recovery-capacitor');
+    expect(overlay.isVisible()).toBe(false);
+    expect(objects.every((object) => object.destroyed)).toBe(true);
   });
 });
