@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import {
   LAUNCH_INTERVAL_MS,
+  MAX_ORB_COUNT,
   ORB_PICKUP_RADIUS,
   ORB_SPEED,
   PLAYER_RADIUS,
@@ -23,7 +24,7 @@ const SPAWN_CLEARANCE = Math.max(PLAYER_RADIUS + ORB_RADIUS + 4, ORB_PICKUP_RADI
 const ATTRACTION_DURATION_MS = 100;
 const RECALL_SPEED = ORB_SPEED;
 const HIT_COOLDOWN_MS = 80;
-const RESTORED_CHARGES = 3;
+const DEFAULT_RESTORED_CHARGES = 3;
 
 export interface OrbSnapshot {
   id: number;
@@ -48,6 +49,7 @@ interface OrbRecord extends OrbSnapshot {
   attractionElapsedMs: number;
   attractionStart: Vector;
   enemyHits: Map<number, number>;
+  firstHitPending: boolean;
 }
 
 export class OrbStore {
@@ -61,11 +63,25 @@ export class OrbStore {
     private readonly hasFixedTerrainLineOfSight: FixedTerrainLineOfSight = () => false,
     private readonly getDirectDamageBonus: () => number = () => 0,
     private readonly getChargedSpeed: () => number = () => ORB_SPEED,
+    private readonly getRestoredCharges: (source: RecoverySource) => number = () => DEFAULT_RESTORED_CHARGES,
+    private readonly getOpeningHitBonus: (source: RecoverySource, firstHitPending: boolean) => number = () => 0,
   ) {
-    this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => ({
+    this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => this.createRecord(id));
+  }
+
+  addOrb(): boolean {
+    if (this.records.length >= MAX_ORB_COUNT) return false;
+    const record = this.createRecord(this.records.length);
+    this.records.push(record);
+    if (this.aimActivated) this.enqueue(record);
+    return true;
+  }
+
+  private createRecord(id: number): OrbRecord {
+    return {
       id,
       state: 'stored',
-      charges: RESTORED_CHARGES,
+      charges: DEFAULT_RESTORED_CHARGES,
       damageEnabled: false,
       collisionEnabled: false,
       position: { x: 0, y: 0 },
@@ -75,7 +91,8 @@ export class OrbStore {
       attractionElapsedMs: 0,
       attractionStart: { x: 0, y: 0 },
       enemyHits: new Map(),
-    }));
+      firstHitPending: false,
+    };
   }
 
   activateAim(): void {
@@ -134,13 +151,16 @@ export class OrbStore {
     if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
 
     record.enemyHits.set(enemyId, nowMs);
+    const source = record.lastRecoverySource;
+    const openingBonus = source === null ? 0 : this.getOpeningHitBonus(source, record.firstHitPending);
     const result = directHit(
       record.charges,
       enemyHp,
       this.settings,
       piercing,
-      this.getDirectDamageBonus(),
+      this.getDirectDamageBonus() + openingBonus,
     );
+    record.firstHitPending = false;
     record.charges = result.charges;
     this.normalizeActiveSpeed(record);
     this.callbacks.onEnemyDamage?.(enemyId, result.damage, result.reflect);
@@ -239,7 +259,8 @@ export class OrbStore {
   private arrive(record: OrbRecord): void {
     const source = record.lastRecoverySource;
     record.state = transitionOrb(record.state, 'stored');
-    record.charges = RESTORED_CHARGES;
+    record.charges = this.getRestoredCharges(source!);
+    record.firstHitPending = source === 'proximity';
     record.velocity = { x: 0, y: 0 };
     this.callbacks.onRecovery?.(source!);
     this.enqueue(record);
@@ -290,6 +311,8 @@ export interface OrbManagerOptions extends OrbCallbacks {
   hasFixedTerrainLineOfSight: FixedTerrainLineOfSight;
   getDirectDamageBonus(): number;
   getChargedSpeed(): number;
+  getRestoredCharges?(source: RecoverySource): number;
+  getOpeningHitBonus?(source: RecoverySource, firstHitPending: boolean): number;
   textureKey?: string;
 }
 
@@ -300,6 +323,8 @@ export class OrbManager {
   private readonly sprites: OrbSprite[];
   private readonly spriteIds = new Map<OrbSprite, number>();
   private readonly world: Phaser.Physics.Arcade.World;
+  private readonly scene: Phaser.Scene;
+  private readonly textureKey: string;
   private readonly onWorldBounds = (
     body: Phaser.Physics.Arcade.Body,
     _up: boolean,
@@ -315,23 +340,19 @@ export class OrbManager {
   };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
+    this.scene = scene;
+    this.textureKey = options.textureKey ?? 'orb';
     this.store = new OrbStore(
       options.settings,
       options,
       options.hasFixedTerrainLineOfSight,
       options.getDirectDamageBonus,
       options.getChargedSpeed,
+      options.getRestoredCharges,
+      options.getOpeningHitBonus,
     );
     this.world = scene.physics.world;
-    const textureKey = options.textureKey ?? 'orb';
-    this.sprites = this.store.getSnapshot().map(({ id }) => {
-      const sprite = scene.physics.add.sprite(0, 0, textureKey) as OrbSprite;
-      sprite.orbId = id;
-      sprite.setCircle(ORB_RADIUS).setBounce(1, 1).setCollideWorldBounds(true).setVisible(false);
-      (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
-      this.spriteIds.set(sprite, id);
-      return sprite;
-    });
+    this.sprites = this.store.getSnapshot().map(({ id }) => this.createSprite(id));
     this.world.on('worldbounds', this.onWorldBounds);
     this.synchronizeSprites();
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -352,6 +373,14 @@ export class OrbManager {
 
   activateAim(): void {
     this.store.activateAim();
+  }
+
+  addOrb(): boolean {
+    if (!this.store.addOrb()) return false;
+    const id = this.sprites.length;
+    this.sprites.push(this.createSprite(id));
+    this.synchronizeSprites();
+    return true;
   }
 
   update(nowMs: number, deltaMs: number, playerPosition: Vector, aim: Vector): void {
@@ -449,6 +478,15 @@ export class OrbManager {
       if (state.collisionEnabled) body.setVelocity(state.velocity.x, state.velocity.y);
       else body.setVelocity(0, 0);
     }
+  }
+
+  private createSprite(id: number): OrbSprite {
+    const sprite = this.scene.physics.add.sprite(0, 0, this.textureKey) as OrbSprite;
+    sprite.orbId = id;
+    sprite.setCircle(ORB_RADIUS).setBounce(1, 1).setCollideWorldBounds(true).setVisible(false);
+    (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
+    this.spriteIds.set(sprite, id);
+    return sprite;
   }
 
   private synchronizeOwnedSprite(sprite: OrbSprite, id: number): void {

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import { EXPERIMENT_DEFAULTS, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
+import { EXPERIMENT_DEFAULTS, MAX_ORB_COUNT, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
 import { OrbManager, OrbStore } from './OrbManager';
 
 const player = { x: 100, y: 200 };
@@ -100,6 +100,24 @@ function createManager(
 }
 
 describe('OrbStore', () => {
+  it('adds and queues one permanent orb at runtime, capped globally at six', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    expect(store.addOrb()).toBe(true);
+    expect(store.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
+    store.update(100, 100, player, up);
+    store.update(200, 100, player, up);
+    store.update(300, 100, player, up);
+    expect(store.getSnapshot()[3]).toMatchObject({ state: 'active', charges: 3 });
+
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(false);
+    expect(store.getSnapshot()).toHaveLength(MAX_ORB_COUNT);
+  });
+
   it('queues the three permanent orbs once and releases them 100ms apart', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 
@@ -193,6 +211,54 @@ describe('OrbStore', () => {
     });
   });
 
+  it('uses source-dependent restored charges while floor and timeout keep their defaults', () => {
+    const restored = vi.fn((source) => source === 'proximity' ? 5 : 3);
+    const create = (autoReturnAfterMs: number | null = null) => new OrbStore(
+      { ...EXPERIMENT_DEFAULTS, autoReturnAfterMs }, {}, () => false,
+      () => 0, () => ORB_SPEED, restored,
+    );
+    const recover = (store: OrbStore, source: 'proximity' | 'floor' | 'timeout') => {
+      store.activateAim();
+      store.update(0, 0, player, up);
+      if (source === 'proximity') store.beginProximityRecovery(0);
+      else if (source === 'floor') store.beginFloorRecall(0);
+      else store.update(1, 1, player, up);
+      store.update(source === 'timeout' ? 201 : 200, 200, player, up);
+      return store.getSnapshot()[0]?.charges;
+    };
+
+    expect(recover(create(), 'proximity')).toBe(5);
+    expect(recover(create(), 'floor')).toBe(3);
+    expect(recover(create(1), 'timeout')).toBe(3);
+    expect(restored).toHaveBeenCalledWith('proximity');
+    expect(restored).toHaveBeenCalledWith('floorRecall');
+    expect(restored).toHaveBeenCalledWith('timeoutRecall');
+  });
+
+  it('consumes opening damage once on the first damage-enabled hit after proximity recovery', () => {
+    const openingBonus = vi.fn((source, pending) => source === 'proximity' && pending ? 1 : 0);
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      openingBonus,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.update(100, 100, player, up);
+    store.update(200, 100, player, up);
+    store.beginProximityRecovery(0);
+    store.update(300, 100, player, up);
+
+    expect(store.handleEnemyHit(0, -1, 99, 1_000, false)?.damage).toBe(2.5);
+    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.damage).toBe(1.5);
+    expect(openingBonus).toHaveBeenNthCalledWith(1, 'proximity', true);
+    expect(openingBonus).toHaveBeenNthCalledWith(2, 'proximity', false);
+  });
+
   it('homes from any distance after floor recall', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.activateAim();
@@ -268,6 +334,17 @@ describe('OrbStore', () => {
 });
 
 describe('OrbManager Phaser adapter', () => {
+  it('creates a runtime sprite for a newly added queued orb', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+
+    expect(manager.addOrb()).toBe(true);
+    expect(sprites).toHaveLength(4);
+    expect(manager.getSprites()).toHaveLength(4);
+    expect(manager.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
+  });
+
   it('launches with injected charged speed', () => {
     const { manager, sprites } = createManager(true, () => false, null, () => 0, () => 480);
     manager.activateAim();
