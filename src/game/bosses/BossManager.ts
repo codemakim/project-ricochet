@@ -591,6 +591,7 @@ export class BossManager {
 
   private resolveWarnings(now: number): void {
     const pending: Warning[] = [];
+    let majorResolved = false;
     for (const warning of this.warnings) {
       if (now < warning.dueAt) {
         pending.push(warning);
@@ -598,10 +599,16 @@ export class BossManager {
       }
       warning.marker.destroy();
       if (warning.kind === 'basicShot') this.fireBasicShot(now);
-      else if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
-      else this.spawnFallingHazard(warning.x);
+      else {
+        majorResolved = true;
+        if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
+        else this.spawnFallingHazard(warning.x);
+      }
     }
     this.warnings = pending;
+    if (majorResolved) {
+      this.nextBasicShotAt = now + GAME_TUNING.projectiles.bossBasic.intervalMs;
+    }
   }
 
   private fireBasicShot(now: number): void {

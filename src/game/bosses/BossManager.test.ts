@@ -501,6 +501,18 @@ describe('BossManager', () => {
     expect(updateAt(boundary, 4300).basicBullets).toBe(1);
   });
 
+  it('waits a full basic interval after a delayed-frame major resolution', () => {
+    const boundary = createBoundary();
+
+    expect(updateAt(boundary, 5000)).toMatchObject({ aimedBullets: 3, basicBullets: 0 });
+    boundary.manager.applyAreaDamage(boundary.manager.getSnapshot().position!, 200, 14);
+    expect(updateAt(boundary, 5016).basicBullets).toBe(0);
+    expect(updateAt(boundary, 5749)).toMatchObject({ warnings: 0, basicBullets: 0 });
+    expect(updateAt(boundary, 5750)).toMatchObject({ warnings: 1, basicBullets: 0 });
+    expect(updateAt(boundary, 5899).basicBullets).toBe(0);
+    expect(updateAt(boundary, 5900).basicBullets).toBe(1);
+  });
+
   it('skips a capped shot and never releases it as a burst', () => {
     const boundary = createBoundary();
     boundary.setExternalBullets(12);

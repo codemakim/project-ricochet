@@ -1,3 +1,5 @@
+import { GAME_TUNING } from '../config/gameTuning';
+
 export type EnemyKind = 'basic' | 'armored' | 'shooter';
 
 export interface EnemySpec {
@@ -9,6 +11,10 @@ export interface EnemySpec {
   speed: number;
 }
 
-export function canFire(activeShooters: number, activeBullets: number): boolean {
-  return activeShooters < 2 && activeBullets < 12;
+export function canFire(
+  activeShooters: number,
+  activeBullets: number,
+  hostileCap: number = GAME_TUNING.projectiles.hostileCap,
+): boolean {
+  return activeShooters < 2 && activeBullets < hostileCap;
 }

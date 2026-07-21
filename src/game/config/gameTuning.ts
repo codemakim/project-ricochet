@@ -117,8 +117,29 @@ function positive(value: number, name: string): void {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be finite and positive`);
 }
 
+function finite(value: number, name: string): void {
+  if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
+}
+
+function nonNegative(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be finite and non-negative`);
+  }
+}
+
+function positiveInteger(value: number, name: string): void {
+  positive(value, name);
+  if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
+}
+
+function nonNegativeInteger(value: number, name: string): void {
+  nonNegative(value, name);
+  if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
+}
+
 export function validateGameTuning(tuning: GameTuning): void {
   const { boss, enemies, encounter, projectiles, visual } = tuning;
+  finite(boss.y, 'boss.y');
   positive(boss.body.width, 'boss.body.width');
   positive(boss.body.height, 'boss.body.height');
   positive(boss.weakpoint.visual.width, 'boss.weakpoint.visual.width');
@@ -132,6 +153,8 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(boss.core.hp, 'boss.core.hp');
   positive(boss.movement.maxSpeed, 'boss.movement.maxSpeed');
   positive(boss.movement.minimumTurnSpeed, 'boss.movement.minimumTurnSpeed');
+  nonNegative(boss.movement.obstaclePadding, 'boss.movement.obstaclePadding');
+  positive(boss.movement.enemyHalfSize, 'boss.movement.enemyHalfSize');
   if (boss.movement.minimumTurnSpeed > boss.movement.maxSpeed) {
     throw new RangeError('boss minimum turn speed must not exceed max speed');
   }
@@ -144,31 +167,43 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(enemies.shooter.warningMs, 'enemies.shooter.warningMs');
   positive(enemies.shooter.bulletSpeed, 'enemies.shooter.bulletSpeed');
   positive(enemies.shooter.damage, 'enemies.shooter.damage');
-  positive(encounter.initialFormation.count, 'encounter.initialFormation.count');
-  if (![encounter.initialFormation.armored, encounter.initialFormation.shooters].every(Number.isInteger)
-    || encounter.initialFormation.armored < 0 || encounter.initialFormation.shooters < 0
-    || encounter.initialFormation.armored + encounter.initialFormation.shooters
+  positiveInteger(encounter.initialFormation.count, 'encounter.initialFormation.count');
+  finite(encounter.initialFormation.originY, 'encounter.initialFormation.originY');
+  nonNegativeInteger(encounter.initialFormation.armored, 'encounter.initialFormation.armored');
+  nonNegativeInteger(encounter.initialFormation.shooters, 'encounter.initialFormation.shooters');
+  if (encounter.initialFormation.armored + encounter.initialFormation.shooters
       > encounter.initialFormation.count) {
     throw new RangeError('encounter initial special counts must fit the formation');
   }
   for (const [index, phase] of encounter.phases.entries()) {
-    positive(phase.formation.minimum, `encounter.phases.${index}.formation.minimum`);
+    positiveInteger(phase.formation.minimum, `encounter.phases.${index}.formation.minimum`);
+    positiveInteger(phase.formation.maximum, `encounter.phases.${index}.formation.maximum`);
     if (phase.formation.maximum < phase.formation.minimum) {
       throw new RangeError(`encounter.phases.${index}.formation must be ordered`);
     }
+    positiveInteger(phase.activeCap, `encounter.phases.${index}.activeCap`);
     if (phase.activeCap < phase.formation.maximum) {
       throw new RangeError(`encounter.phases.${index}.activeCap must fit one formation`);
     }
     positive(phase.spawnIntervalMs, `encounter.phases.${index}.spawnIntervalMs`);
-    if (![phase.armored, phase.shooters].every(Number.isInteger)
-      || phase.armored < 0 || phase.shooters < 0
-      || phase.armored + phase.shooters > phase.formation.minimum) {
+    nonNegativeInteger(phase.armored, `encounter.phases.${index}.armored`);
+    nonNegativeInteger(phase.shooters, `encounter.phases.${index}.shooters`);
+    if (phase.armored + phase.shooters > phase.formation.minimum) {
       throw new RangeError(`encounter.phases.${index} special counts must fit the minimum formation`);
     }
   }
+  finite(encounter.reinforcementOriginY, 'encounter.reinforcementOriginY');
+  finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
   if (!(encounter.reinforcementOriginY < encounter.reinforcementReleaseY
     && encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
     throw new RangeError('encounter reinforcement heights must be ordered below PLAYER_MIN_Y');
+  }
+  positive(encounter.bossEntry.scoreTarget, 'encounter.bossEntry.scoreTarget');
+  positive(encounter.bossEntry.minimumMs, 'encounter.bossEntry.minimumMs');
+  positive(encounter.bossEntry.hardMaximumMs, 'encounter.bossEntry.hardMaximumMs');
+  positive(encounter.bossEntry.warningMs, 'encounter.bossEntry.warningMs');
+  if (encounter.bossEntry.minimumMs > encounter.bossEntry.hardMaximumMs) {
+    throw new RangeError('encounter boss entry timings must be ordered');
   }
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;
@@ -177,7 +212,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (boss.y - boss.body.height / 2 < 0 || boss.y + boss.body.height / 2 > GAME_HEIGHT) {
     throw new RangeError('boss body must fit GAME_HEIGHT');
   }
-  positive(projectiles.hostileCap, 'projectiles.hostileCap');
+  positiveInteger(projectiles.hostileCap, 'projectiles.hostileCap');
   positive(projectiles.offscreenMargin, 'projectiles.offscreenMargin');
   for (const [name, projectile] of Object.entries({
     bossBasic: projectiles.bossBasic,
@@ -197,11 +232,15 @@ export function validateGameTuning(tuning: GameTuning): void {
     throw new RangeError('projectiles.bossAimed.fanDegrees must be finite');
   }
   for (const [name, friendly] of Object.entries(visual.friendly)) {
+    finite(friendly.fill, `visual.friendly.${name}.fill`);
+    finite(friendly.accent, `visual.friendly.${name}.accent`);
     positive(friendly.width, `visual.friendly.${name}.width`);
     positive(friendly.height, `visual.friendly.${name}.height`);
   }
   const friendlyPairs = Object.values(visual.friendly).map(({ fill, accent }) => `${fill}:${accent}`);
   for (const [name, hostile] of Object.entries(visual.hostile)) {
+    finite(hostile.fill, `visual.hostile.${name}.fill`);
+    finite(hostile.accent, `visual.hostile.${name}.accent`);
     positive(hostile.width, `visual.hostile.${name}.width`);
     positive(hostile.height, `visual.hostile.${name}.height`);
     if (friendlyPairs.includes(`${hostile.fill}:${hostile.accent}`)) {

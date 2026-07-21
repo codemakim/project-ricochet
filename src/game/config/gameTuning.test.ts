@@ -52,7 +52,44 @@ describe('GAME_TUNING', () => {
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
     ['reversed formation range', (value: Mutable<GameTuning>) => { value.encounter.phases[0]!.formation.minimum = 16; }],
+    ['non-finite formation maximum', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[0]!.formation.maximum = Number.NaN;
+    }],
+    ['fractional formation count', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[0]!.formation.maximum = 14.5;
+    }],
     ['cap below formation maximum', (value: Mutable<GameTuning>) => { value.encounter.phases[2]!.activeCap = 20; }],
+    ['non-finite active cap', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[0]!.activeCap = Number.NaN;
+    }],
+    ['fractional active cap', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[0]!.activeCap = 48.5;
+    }],
+    ['fractional initial formation count', (value: Mutable<GameTuning>) => {
+      value.encounter.initialFormation.count = 26.5;
+    }],
+    ['non-positive boss entry timing', (value: Mutable<GameTuning>) => {
+      value.encounter.bossEntry.warningMs = 0;
+    }],
+    ['reversed boss entry timings', (value: Mutable<GameTuning>) => {
+      value.encounter.bossEntry.minimumMs = value.encounter.bossEntry.hardMaximumMs + 1;
+    }],
+    ['non-finite obstacle padding', (value: Mutable<GameTuning>) => {
+      value.boss.movement.obstaclePadding = Number.POSITIVE_INFINITY;
+    }],
+    ['non-finite boss y', (value: Mutable<GameTuning>) => { value.boss.y = Number.NaN; }],
+    ['non-finite initial formation y', (value: Mutable<GameTuning>) => {
+      value.encounter.initialFormation.originY = Number.NEGATIVE_INFINITY;
+    }],
+    ['non-finite reinforcement y', (value: Mutable<GameTuning>) => {
+      value.encounter.reinforcementOriginY = Number.NaN;
+    }],
+    ['non-finite friendly color', (value: Mutable<GameTuning>) => {
+      value.visual.friendly.permanentOrb.fill = Number.NaN;
+    }],
+    ['non-finite hostile color', (value: Mutable<GameTuning>) => {
+      value.visual.hostile.enemyBullet.accent = Number.POSITIVE_INFINITY;
+    }],
     ['release height outside ingress band', (value: Mutable<GameTuning>) => { value.encounter.reinforcementReleaseY = 98; }],
     ['boss wider than the game', (value: Mutable<GameTuning>) => { value.boss.body.width = 450; }],
     ['identical friendly and hostile palette', (value: Mutable<GameTuning>) => {
