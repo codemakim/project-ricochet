@@ -35,4 +35,4 @@
 - Task 4 projectile visual separation: complete (`54a3ea2..6b9fe94`, review clean; browser contrast verified)
 - Task 5 boss basic shot: complete (`23b14b4..72d0d27`, review clean after configured support-damage fix)
 - Task 6 browser acceptance and playtest handoff: complete (focused 4/4, browser 27/27, unit 277/277, build passed)
-- Final review and verification: pending (final review fixes implemented and locally verified; pending final re-review/verification)
+- Final review and verification: complete (`24cf72a`; re-review clean; unit 292/292, browser 27/27, build and diff check passed)
