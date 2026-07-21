@@ -32,6 +32,19 @@ describe('GAME_TUNING', () => {
     ]);
   });
 
+  it('uses shape and palette separation for friendly and hostile projectiles', () => {
+    const { friendly, hostile } = GAME_TUNING.visual;
+    expect(friendly.temporaryOrb).toEqual({
+      fill: 0x8cf7ff, accent: 0x167d9a, width: 12, height: 12,
+    });
+    expect(hostile.enemyBullet).toEqual({
+      fill: 0xff4d5a, accent: 0x4a0710, width: 10, height: 10,
+    });
+    expect(hostile.enemyBullet.fill).not.toBe(friendly.temporaryOrb.fill);
+    expect(hostile.enemyBullet.accent).not.toBe(friendly.temporaryOrb.accent);
+    expect(hostile.bossHazard.height).toBeGreaterThan(hostile.bossHazard.width);
+  });
+
   it('accepts the shipped configuration', () => {
     expect(() => validateGameTuning(mutableTuning())).not.toThrow();
   });

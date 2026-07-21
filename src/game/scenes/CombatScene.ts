@@ -39,6 +39,7 @@ import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { shouldFinalizeBossReward } from './combatSceneRules';
+import { combatProjectileTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
@@ -667,17 +668,16 @@ export class CombatScene extends Phaser.Scene {
   private createTextures(): void {
     const createBaseTextures = !this.textures.exists('player');
     const createBossTextures = !this.textures.exists('boss-body');
-    if (!createBaseTextures && !createBossTextures) return;
+    const projectileTextures = combatProjectileTextureDescriptors();
+    const createProjectileTextures = Object.keys(projectileTextures)
+      .some((key) => !this.textures.exists(key));
+    if (!createBaseTextures && !createBossTextures && !createProjectileTextures) return;
     const graphics = this.add.graphics();
     if (createBaseTextures) {
       graphics.fillStyle(0x4ddcff).fillCircle(18, 18, 18);
       graphics.fillStyle(0x061225).fillCircle(12, 15, 2).fillCircle(24, 15, 2);
       graphics.lineStyle(2, 0x061225).beginPath().moveTo(12, 24).lineTo(18, 27).lineTo(24, 24).strokePath();
       graphics.generateTexture('player', 36, 36);
-      graphics.clear().fillStyle(0xffffff).fillCircle(8, 8, 7);
-      graphics.lineStyle(2, 0x4ddcff).strokeCircle(8, 8, 7).generateTexture('orb-charged', 16, 16);
-      graphics.clear().fillStyle(0xfff4a3).fillCircle(6, 6, 5);
-      graphics.lineStyle(2, 0xff9f43).strokeCircle(6, 6, 5).generateTexture('orb-temporary', 12, 12);
       graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, 36, 28, 5)
         .generateTexture('enemy-basic', 36, 28);
       graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, 40, 32, 5);
@@ -685,7 +685,9 @@ export class CombatScene extends Phaser.Scene {
         .generateTexture('enemy-armored', 40, 32);
       graphics.clear().fillStyle(0xffa23a).fillRoundedRect(0, 0, 38, 30, 5);
       graphics.fillStyle(0x4c2400).fillCircle(19, 15, 5).generateTexture('enemy-shooter', 38, 30);
-      graphics.clear().fillStyle(0xffe45c).fillCircle(5, 5, 5).generateTexture('enemy-bullet', 10, 10);
+    }
+    for (const [key, descriptor] of Object.entries(projectileTextures)) {
+      if (!this.textures.exists(key)) this.createProjectileTexture(graphics, key, descriptor);
     }
     if (createBossTextures) {
       const { body, weakpoint, core } = GAME_TUNING.boss;
@@ -739,15 +741,69 @@ export class CombatScene extends Phaser.Scene {
       graphics.clear().fillStyle(0xffd15c).fillCircle(coreCenter, coreCenter, coreCenter - 2);
       graphics.lineStyle(3, 0xffffff).strokeCircle(coreCenter, coreCenter, coreCenter - 3)
         .generateTexture('boss-core', core.visualSize, core.visualSize);
-      graphics.clear().fillStyle(0xfff08a).fillCircle(5, 5, 5)
-        .generateTexture('boss-aimed-bullet', 10, 10);
-      graphics.clear().fillStyle(0xff7b55).fillRoundedRect(0, 0, 16, 24, 5)
-        .generateTexture('boss-falling-hazard', 16, 24);
       graphics.clear().lineStyle(2, 0xffe45c, 0.9).strokeCircle(16, 16, 14)
         .generateTexture('boss-aim-marker', 32, 32);
       graphics.clear().lineStyle(3, 0xff704d, 0.9).strokeRoundedRect(1, 1, 30, 10, 4)
         .generateTexture('boss-drop-marker', 32, 12);
     }
     graphics.destroy();
+  }
+
+  private createProjectileTexture(
+    graphics: Phaser.GameObjects.Graphics,
+    key: string,
+    descriptor: CombatTextureDescriptor,
+  ): void {
+    const centerX = descriptor.width / 2;
+    const centerY = descriptor.height / 2;
+    const radius = Math.max(1, Math.min(centerX, centerY) - 1);
+    const strokeWidth = Math.max(1, Math.floor(radius / 3));
+
+    graphics.clear();
+    switch (descriptor.shape) {
+      case 'outlinedCircle':
+        graphics.fillStyle(descriptor.fill).fillCircle(centerX, centerY, radius);
+        graphics.lineStyle(strokeWidth, descriptor.accent).strokeCircle(centerX, centerY, radius);
+        break;
+      case 'centeredCircle':
+        graphics.fillStyle(descriptor.fill).fillCircle(centerX, centerY, radius);
+        graphics.fillStyle(descriptor.accent).fillCircle(centerX, centerY, radius / 2);
+        break;
+      case 'outlinedRoundedRect': {
+        const inset = strokeWidth / 2;
+        const cornerRadius = Math.max(1, Math.min(descriptor.width, descriptor.height) / 3);
+        graphics.fillStyle(descriptor.fill).fillRoundedRect(
+          0,
+          0,
+          descriptor.width,
+          descriptor.height,
+          cornerRadius,
+        );
+        graphics.lineStyle(strokeWidth, descriptor.accent).strokeRoundedRect(
+          inset,
+          inset,
+          descriptor.width - strokeWidth,
+          descriptor.height - strokeWidth,
+          cornerRadius - inset,
+        );
+        break;
+      }
+      case 'flash': {
+        const armLength = radius;
+        const armWidth = Math.max(1, radius / 3);
+        graphics.fillStyle(descriptor.fill)
+          .fillRect(centerX - armWidth / 2, centerY - armLength, armWidth, armLength * 2)
+          .fillRect(centerX - armLength, centerY - armWidth / 2, armLength * 2, armWidth);
+        graphics.lineStyle(strokeWidth, descriptor.accent)
+          .beginPath()
+          .moveTo(centerX - armLength, centerY - armLength)
+          .lineTo(centerX + armLength, centerY + armLength)
+          .moveTo(centerX + armLength, centerY - armLength)
+          .lineTo(centerX - armLength, centerY + armLength)
+          .strokePath();
+        break;
+      }
+    }
+    graphics.generateTexture(key, descriptor.width, descriptor.height);
   }
 }
