@@ -16,13 +16,26 @@ interface OrbSnapshot {
   lastRecoverySource: string | null;
 }
 
+interface BossProjectileSnapshot {
+  kind: 'basic' | 'aimed';
+  position: Vector;
+  velocity: Vector;
+}
+
 interface CombatSnapshot {
   player: Vector;
   aim: Vector;
   health: { current: number; maximum: number; shield: number; defeated: boolean };
   defeated: boolean;
   orbs: OrbSnapshot[];
-  enemies: Array<{ id: number; kind: string; hp: number; position: Vector; warning: boolean }>;
+  enemies: Array<{
+    id: number;
+    kind: string;
+    hp: number;
+    position: Vector;
+    warning: boolean;
+    speed: number;
+  }>;
   activeShooters: number;
   bullets: number;
   experiment: { passThroughOnKill: boolean; homeOnBottomHit: boolean; autoReturnAfterMs: number | null };
@@ -55,9 +68,11 @@ interface CombatSnapshot {
     phase: 'twoWeakpoints' | 'oneWeakpoint' | 'core' | 'defeated' | null;
     position: Vector | null;
     parts: { leftWeakpoint: number; rightWeakpoint: number; core: number } | null;
+    basicBullets: number;
     aimedBullets: number;
     fallingHazards: number;
     warnings: number;
+    projectiles: BossProjectileSnapshot[];
   };
   bossRewards: string[];
   bossRewardChoices: string[];
@@ -69,6 +84,15 @@ interface CombatSnapshot {
 type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
 
 interface DevelopmentScene {
+  children: {
+    list: Array<{
+      active?: boolean;
+      displayWidth?: number;
+      displayHeight?: number;
+      texture?: { key?: string };
+    }>;
+  };
+  player: { setPosition(x: number, y: number): void };
   update(time: number, delta: number): void;
   getDebugSnapshot(): CombatSnapshot;
   debugPlaceOrb(id: number, position: Vector): boolean;
@@ -86,14 +110,18 @@ interface DevelopmentScene {
   debugSetBossPosition(x: number): void;
 }
 
-async function sceneCall<T>(page: Page, callback: (scene: DevelopmentScene) => T): Promise<T> {
-  return page.evaluate((source) => {
+async function sceneCall<T, A = undefined>(
+  page: Page,
+  callback: (scene: DevelopmentScene, argument: A) => T,
+  argument?: A,
+): Promise<T> {
+  return page.evaluate(({ source, argument }) => {
     const game = (window as unknown as {
       __RICHOCHET_GAME__: { scene: { getScene(key: string): DevelopmentScene } };
     }).__RICHOCHET_GAME__;
     const scene = game.scene.getScene('combat');
-    return (0, eval)(`(${source})`)(scene) as T;
-  }, callback.toString());
+    return (0, eval)(`(${source})`)(scene, argument) as T;
+  }, { source: callback.toString(), argument });
 }
 
 async function snapshot(page: Page): Promise<CombatSnapshot> {
@@ -147,7 +175,7 @@ async function loadCanvas(page: Page, search = '') {
   await page.goto(`/${search}`);
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
-  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(20);
+  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
   return { canvas, box: box! };
@@ -404,7 +432,7 @@ for (const passThroughOnKill of [false, true]) {
       enemies.filter((enemy) => enemy.id !== target.id).forEach((enemy, index) => {
         scene.debugSetEnemy(enemy.id, { x: 36, y: 80 + index % 5 * 24 }, enemy.hp);
       });
-      scene.debugSetEnemy(target.id, { x: 225, y: 300 }, target.hp);
+      scene.debugSetEnemy(target.id, { x: 225, y: 300 }, 1);
     });
     const before = await snapshot(page);
     const bottomY = Math.max(...before.enemies.filter((enemy) => enemy.kind === 'basic').map((enemy) => enemy.position.y));
@@ -636,13 +664,13 @@ test('@desktop admits reinforcement while original enemies remain', async ({ pag
   await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
   const before = await snapshot(page);
-  expect(before.enemies).toHaveLength(16);
+  expect(before.enemies).toHaveLength(22);
 
   await page.clock.runFor(8_100);
 
   const after = await snapshot(page);
-  expect(after.enemies.some((enemy) => enemy.id < 20)).toBe(true);
-  expect(after.enemies.some((enemy) => enemy.id >= 20)).toBe(true);
+  expect(after.enemies.some((enemy) => enemy.id < 26)).toBe(true);
+  expect(after.enemies.some((enemy) => enemy.id >= 26)).toBe(true);
   expect(after.encounter.spawnSequence).toBe(1);
   expect(after.encounter.phase).toBe(0);
 });
@@ -656,7 +684,7 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   const formationStyle = (id: string) => id.split(':')[2];
 
   const initial = await snapshot(page);
-  expect(initial.enemies).toHaveLength(20);
+  expect(initial.enemies).toHaveLength(26);
   const initialSeed = initial.encounter.runSeed;
   const initialPositions = sortedPositions(initial);
 
@@ -666,8 +694,8 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   await page.clock.runFor(8_100);
 
   const first = await snapshot(page);
-  expect(first.enemies.length).toBeGreaterThanOrEqual(9);
-  expect(first.enemies.length).toBeLessThanOrEqual(11);
+  expect(first.enemies.length).toBeGreaterThanOrEqual(13);
+  expect(first.enemies.length).toBeLessThanOrEqual(15);
   expect(first.encounter.lastFormationId).not.toBeNull();
   const firstId = first.encounter.lastFormationId!;
   const firstPositions = sortedPositions(first);
@@ -679,8 +707,8 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   await page.clock.runFor(8_100);
 
   const second = await snapshot(page);
-  expect(second.enemies.length).toBeGreaterThanOrEqual(9);
-  expect(second.enemies.length).toBeLessThanOrEqual(11);
+  expect(second.enemies.length).toBeGreaterThanOrEqual(13);
+  expect(second.enemies.length).toBeLessThanOrEqual(15);
   expect(second.encounter.lastFormationId).not.toBeNull();
   const secondId = second.encounter.lastFormationId!;
   const secondPositions = sortedPositions(second);
@@ -700,7 +728,7 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   }, { intervals: [16], timeout: 1_000 }).toBe(false);
 
   const restarted = await snapshot(page);
-  expect(restarted.enemies).toHaveLength(20);
+  expect(restarted.enemies).toHaveLength(26);
   expect(restarted.encounter.runSeed).not.toBe(initialSeed);
   expect(sortedPositions(restarted)).not.toEqual(initialPositions);
 });
@@ -930,7 +958,9 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.debugUpgradeAbility('split');
-    scene.debugSetEnemy(0, { x: 225, y: 300 }, 99);
+    const enemies = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
+    scene.debugSetEnemy(enemies[0]!.id, { x: 225, y: 300 }, 99);
   });
   const beforeLaunch = await snapshot(page);
   const aim = clientPoint(box, { x: beforeLaunch.player.x, y: beforeLaunch.player.y - 100 });
@@ -979,6 +1009,45 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
     levelUpVisible: false,
     temporaryOrbs: 0,
   });
+});
+
+test('@desktop density uses shipped enemy stats and exact reinforcement release gate', async ({ page }) => {
+  await loadCanvas(page);
+  const initial = await snapshot(page);
+  expect(initial.enemies).toHaveLength(26);
+  expect(initial.enemies.every(({ speed }) => speed === 8)).toBe(true);
+  expect(initial.enemies.every(({ kind, hp }) => (
+    kind === 'armored' ? hp === 5 : hp === 2
+  ))).toBe(true);
+
+  const blocked = await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    for (const enemy of scene.getDebugSnapshot().enemies) {
+      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 49 }, enemy.hp);
+    }
+    scene.debugAdvanceEncounter(8_000);
+    return scene.getDebugSnapshot();
+  });
+  expect(Math.min(...blocked.enemies.map(({ position }) => position.y))).toBe(49);
+  expect(blocked.encounter).toMatchObject({ phase: 0, spawnSequence: 0 });
+  expect(blocked.enemies).toHaveLength(initial.enemies.length);
+
+  const released = await sceneCall(page, (scene) => {
+    for (const enemy of scene.getDebugSnapshot().enemies) {
+      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 50 }, enemy.hp);
+    }
+    scene.debugAdvanceEncounter(0);
+    return scene.getDebugSnapshot();
+  });
+  const reinforcementCount = released.enemies.length - blocked.enemies.length;
+  expect(Math.min(...released.enemies
+    .filter(({ id }) => id < initial.enemies.length)
+    .map(({ position }) => position.y))).toBe(50);
+  expect(released.encounter).toMatchObject({ phase: 0, spawnSequence: 1 });
+  expect(reinforcementCount).toBeGreaterThanOrEqual(13);
+  expect(reinforcementCount).toBeLessThanOrEqual(15);
+  expect(released.enemies.length).toBeGreaterThan(20);
+  expect(released.enemies.length).toBeLessThanOrEqual(48);
 });
 
 test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {
@@ -1040,6 +1109,14 @@ test('@desktop midboss hard-time entry does not require kill score', async ({ pa
 test('@desktop midboss movement is constrained by enemies and expands after obstacle removal', async ({ page }) => {
   await loadCanvas(page);
   await enterMidbossByScore(page);
+  const bodySize = await sceneCall(page, (scene) => {
+    const body = scene.children.list.find(
+      (child) => child.active && child.texture?.key === 'boss-body',
+    );
+    return { width: body?.displayWidth, height: body?.displayHeight };
+  });
+  expect(bodySize).toEqual({ width: 168, height: 96 });
+
   const movement = await sceneCall(page, (scene) => {
     const enemies = scene.getDebugSnapshot().enemies;
     const obstacle = enemies[0]!;
@@ -1054,16 +1131,121 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
     }
 
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    const expanded: number[] = [];
-    for (let sample = 0; sample < 6; sample += 1) {
+    const speedSamples = [scene.getDebugSnapshot().boss.position!.x];
+    for (let sample = 0; sample < 4; sample += 1) {
+      scene.update(0, 500);
+      speedSamples.push(scene.getDebugSnapshot().boss.position!.x);
+    }
+    const expanded = [...speedSamples];
+    for (let sample = 0; sample < 5; sample += 1) {
       scene.update(0, 2_000);
       expanded.push(scene.getDebugSnapshot().boss.position!.x);
     }
-    return { constrained, expanded };
+    return { constrained, speedSamples, expanded };
   });
   expect(Math.max(...movement.constrained)).toBeLessThanOrEqual(236);
   expect(Math.min(...movement.constrained)).toBeGreaterThanOrEqual(60);
+  const distances = movement.speedSamples.slice(1).map(
+    (position, index) => Math.abs(position - movement.speedSamples[index]!),
+  );
+  expect(distances).toHaveLength(4);
+  for (const distance of distances) expect(distance).toBeCloseTo(17.5, 5);
   expect(Math.max(...movement.expanded)).toBeGreaterThan(300);
+});
+
+test('@desktop midboss basic shots aim, damage once, pause for major warning, and resume at 900ms', async ({ page }) => {
+  await loadCanvas(page);
+  await enterMidbossByScore(page);
+  await sceneCall(page, (scene) => {
+    const enemies = scene.getDebugSnapshot().enemies;
+    const obstacle = enemies[0]!;
+    scene.debugFreezeEnemies();
+    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
+    scene.debugSetEnemy(obstacle.id, { x: 225, y: 120 }, 99);
+    scene.debugSetBossPosition(225);
+    scene.debugSetHealth(10);
+  });
+
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    if (current.boss.warnings === 0) {
+      await sceneCall(page, (scene) => scene.update(0, 25));
+    }
+    return (await snapshot(page)).boss.warnings;
+  }, { intervals: [1], timeout: 1_000 }).toBe(1);
+  const immediatelyBeforeFire = await snapshot(page);
+  expect(immediatelyBeforeFire.boss.basicBullets).toBe(0);
+
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    if (current.boss.basicBullets === 0) {
+      await sceneCall(page, (scene) => scene.update(0, 1));
+    }
+    return (await snapshot(page)).boss.basicBullets;
+  }, { intervals: [1], timeout: 1_000 }).toBe(1);
+  const firstFire = await snapshot(page);
+  const firstBasic = firstFire.boss.projectiles.find(({ kind }) => kind === 'basic')!;
+  const bossOrigin = firstFire.boss.position!;
+  const expectedLength = Math.hypot(
+    immediatelyBeforeFire.player.x - bossOrigin.x,
+    immediatelyBeforeFire.player.y - bossOrigin.y,
+  );
+  const expectedDirection = {
+    x: (immediatelyBeforeFire.player.x - bossOrigin.x) / expectedLength,
+    y: (immediatelyBeforeFire.player.y - bossOrigin.y) / expectedLength,
+  };
+  const actualSpeed = Math.hypot(firstBasic.velocity.x, firstBasic.velocity.y);
+  expect(actualSpeed).toBeCloseTo(150, 5);
+  expect(firstBasic.velocity.x / actualSpeed).toBeCloseTo(expectedDirection.x, 2);
+  expect(firstBasic.velocity.y / actualSpeed).toBeCloseTo(expectedDirection.y, 2);
+
+  const healthBeforeHit = firstFire.health.current;
+  await sceneCall(page, (scene, pathPoint: Vector) => {
+    scene.player.setPosition(pathPoint.x, pathPoint.y);
+  }, {
+    x: firstBasic.position.x + expectedDirection.x * 100,
+    y: firstBasic.position.y + expectedDirection.y * 100,
+  });
+  await expect.poll(async () => (await snapshot(page)).health.current, {
+    intervals: [16],
+    timeout: 1_500,
+  }).toBe(healthBeforeHit - 1);
+  await sceneCall(page, (scene) => scene.debugDamage(1));
+  expect((await snapshot(page)).health.current).toBe(healthBeforeHit - 1);
+
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    if (current.boss.basicBullets === 0) {
+      await sceneCall(page, (scene) => scene.update(0, 25));
+    }
+    return (await snapshot(page)).boss.projectiles.filter(({ kind }) => kind === 'basic').length;
+  }, { intervals: [1], timeout: 1_000 }).toBeGreaterThanOrEqual(1);
+  const secondFire = await snapshot(page);
+  expect(secondFire.boss.projectiles.find(({ kind }) => kind === 'basic')).toBeDefined();
+
+  const majorCycle = await sceneCall(page, (scene) => {
+    scene.update(0, 1_000);
+    const atWarning = scene.getDebugSnapshot();
+    const basicDuringWarning: number[] = [];
+    for (let step = 0; step < 1_000 && scene.getDebugSnapshot().boss.warnings > 0; step += 1) {
+      basicDuringWarning.push(scene.getDebugSnapshot().boss.basicBullets);
+      scene.update(0, 1);
+    }
+    const resolved = scene.getDebugSnapshot();
+    scene.update(0, 899);
+    const beforeReset = scene.getDebugSnapshot();
+    scene.update(0, 1);
+    const atReset = scene.getDebugSnapshot();
+    return { atWarning, basicDuringWarning, resolved, beforeReset, atReset };
+  });
+  expect(majorCycle.atWarning.boss.warnings).toBeGreaterThan(0);
+  expect(majorCycle.basicDuringWarning.length).toBeGreaterThan(0);
+  expect(new Set(majorCycle.basicDuringWarning)).toEqual(
+    new Set([majorCycle.atWarning.boss.basicBullets]),
+  );
+  expect(majorCycle.resolved.boss.warnings).toBe(0);
+  expect(majorCycle.beforeReset.boss.basicBullets).toBe(majorCycle.resolved.boss.basicBullets);
+  expect(majorCycle.atReset.boss.basicBullets).toBe(majorCycle.resolved.boss.basicBullets + 1);
 });
 
 test('@desktop midboss real orb collisions reflect body, respect locked core, and split on forgiving weakpoints', async ({ page }) => {
@@ -1089,7 +1271,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
 
   await sceneCall(page, (scene) => {
     scene.debugSetBossPosition(225);
-    if (!scene.debugPlaceOrb(0, { x: 225, y: 166 })) throw new Error('active orb required');
+    if (!scene.debugPlaceOrb(0, { x: 225, y: 178 })) throw new Error('active orb required');
   });
   await expect.poll(async () => (
     await snapshot(page)
@@ -1101,7 +1283,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
 
   await sceneCall(page, (scene) => {
     scene.debugSetBossPosition(225);
-    if (!scene.debugPlaceOrb(0, { x: 225, y: 75 })) throw new Error('active orb required');
+    if (!scene.debugPlaceOrb(0, { x: 225, y: 62 })) throw new Error('active orb required');
   });
   await expect.poll(async () => (
     await snapshot(page)
@@ -1112,7 +1294,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
 
   await sceneCall(page, (scene) => {
     scene.debugSetBossPosition(225);
-    if (!scene.debugPlaceOrb(0, { x: 177, y: 120 })) throw new Error('active orb required');
+    if (!scene.debugPlaceOrb(0, { x: 130, y: 156 })) throw new Error('active orb required');
   });
   await expect.poll(async () => {
     const current = await snapshot(page);

@@ -13,8 +13,8 @@
 - Task 3 BossManager: done (`71fbed0f5b5b2aefe8aedd27d134c8a3e8c22b15`, review fix `b491d9d0225ceb5705ee7f658a40ea8201bbacfe`)
 - Task 4 boss relic modifiers: done (`8e04b2817fbc3c51fb0d2d015335c1abddd85289`, review fix `5bc3638436ff6768f43227363f6426384927adc7`)
 - Task 5 scene and reward UI: done (`08c10910d2e3ce57f8b39cf82f28ec677ae48a7e`, review fix `8eb1bfc5c4bf50157bda9c20bddbd13eb1fe2a2e`)
-- Task 6 browser acceptance: pending
-- Final review and verification: pending
+- Task 6 browser acceptance: done (`98cc1ca`, hardening `6fb0330`, stabilization `31573fd`)
+- Final review and verification: done (`96e39da`)
 
 ## Minor findings
 
@@ -34,5 +34,5 @@
 - Task 3 boss geometry and movement: complete (`2999a8c..009f4ff`, review clean)
 - Task 4 projectile visual separation: complete (`54a3ea2..6b9fe94`, review clean; browser contrast verified)
 - Task 5 boss basic shot: complete (`23b14b4..72d0d27`, review clean after configured support-damage fix)
-- Task 6 browser acceptance and playtest handoff: pending
-- Final review and verification: pending
+- Task 6 browser acceptance and playtest handoff: complete (focused 4/4, browser 27/27, unit 277/277, build passed)
+- Final review and verification: pending (Task 6 verification complete; whole-diff review not yet run)

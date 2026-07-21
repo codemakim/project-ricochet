@@ -12,9 +12,9 @@
 - 보상 루프: 보스 처치 시 전투 일시정지, 보상 3개 표시, 선택 후 section 1 / phase 1 재개.
 - 연쇄 탄두: 획득 전 임시 구슬의 폭발 전파 없음, 획득 후 폭발 전파 확인.
 - 재시작: 보상 획득 후 패배·재시작 시 보스 진행도, 유물, 보상 UI 전부 초기화.
-- focused 명령: `npx playwright test e2e/combat.spec.ts --project=desktop-chromium --grep "midboss|boss reward|chain warhead"`
-- focused 결과: 6 passed.
-- 전체 자동 결과: unit 260 passed, browser 25 passed, production build 성공.
+- focused 명령: `npx playwright test e2e/combat.spec.ts --project=desktop-chromium --grep "density|midboss basic|midboss movement|midboss reward"`
+- focused 결과: 4 passed.
+- 전체 자동 결과: unit 277 passed, browser 27 passed, production build 성공.
 
 ## 수동 확인 항목
 
@@ -26,6 +26,13 @@
 - [ ] 세 패턴 단계의 회피 난도가 체력 10 기준으로 억울하지 않은가.
 - [ ] 보스 유물 선택 직후 section 1에서 화력·회수·구슬 수 변화가 즉시 체감되는가.
 - [ ] 연쇄 탄두 획득 시 임시 구슬 다발 폭발이 강력하지만 화면을 완전히 지우지는 않는가.
+- [ ] `900ms` 기본탄이 자주 느껴지지만 큰 패턴과 겹쳐 억울하지 않은가.
+- [ ] `150ms` 총구 점멸만으로 기본탄 발사를 읽을 수 있는가.
+- [ ] 붉고 어두운 적대 탄환과 청록색 임시 구슬을 즉시 구분할 수 있는가.
+- [ ] `168x96`, `35px/s` 보스가 묵직하지만 지나치게 쉬워지지 않는가.
+- [ ] `8px/s`, HP `2/2/5` 적 무리가 정체되지 않고 연쇄 처치 감각을 유지하는가.
+- [ ] 최대 적 `48/60/72`에서 모바일 성능과 판독성이 유지되는가.
+- [ ] 보스가 주로 `120~210초` 사이에 진입하는가.
 
 ## 기록할 값
 
