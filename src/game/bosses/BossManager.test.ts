@@ -214,6 +214,12 @@ function createBoundary() {
   };
 }
 
+function updateAt(boundary: ReturnType<typeof createBoundary>, now: number) {
+  boundary.gameplay.now = now;
+  boundary.manager.update();
+  return boundary.manager.getSnapshot();
+}
+
 describe('BossManager', () => {
   it('registers all boss colliders for a runtime permanent orb and unsubscribes on destroy', () => {
     const boundary = createBoundary();
@@ -249,7 +255,17 @@ describe('BossManager', () => {
     expect(boundary.sprites.every((sprite) => sprite.destroyed)).toBe(true);
     expect(boundary.groups.every((group) => group.destroyed)).toBe(true);
     expect(boundary.colliders.every((collider) => collider.destroyed)).toBe(true);
-    expect(boundary.manager.getSnapshot().active).toBe(false);
+    expect(boundary.manager.getSnapshot()).toEqual({
+      active: false,
+      phase: null,
+      position: null,
+      parts: null,
+      basicBullets: 0,
+      aimedBullets: 0,
+      fallingHazards: 0,
+      warnings: 0,
+      projectiles: [],
+    });
   });
 
   it('uses forgiving weakpoint hitboxes and keeps enemies/actions visually ahead of boss parts', () => {
@@ -431,6 +447,79 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, aimedBullets: 3 });
   });
 
+  it('flashes at 750ms and fires one aimed basic bullet at 900ms', () => {
+    const boundary = createBoundary();
+    expect(updateAt(boundary, 749)).toMatchObject({ warnings: 0, basicBullets: 0 });
+
+    expect(updateAt(boundary, 750).warnings).toBe(1);
+
+    boundary.player.setPosition(300, 600);
+    const shot = updateAt(boundary, 900).projectiles[0]!;
+    expect(shot.kind).toBe('basic');
+    expect(Math.hypot(shot.velocity.x, shot.velocity.y)).toBeCloseTo(150);
+  });
+
+  it('samples the player aim when a basic shot fires', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 750);
+    boundary.player.setPosition(325, 120);
+
+    const shot = updateAt(boundary, 900).projectiles[0]!;
+
+    expect(shot.velocity).toEqual({ x: 150, y: 0 });
+  });
+
+  it('fires the second basic shot at 1800ms without early catch-up', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 900);
+    expect(updateAt(boundary, 1799).basicBullets).toBe(1);
+    expect(updateAt(boundary, 1800).basicBullets).toBe(2);
+  });
+
+  it('cancels a late pending basic flash when a major warning starts', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 900);
+    updateAt(boundary, 1800);
+    updateAt(boundary, 2600);
+    expect(boundary.manager.getSnapshot().warnings).toBe(1);
+    const muzzle = boundary.groups[2]!.children.find((child) => child.active)!;
+
+    const major = updateAt(boundary, 2800);
+    expect(major.basicBullets).toBe(2);
+    expect(major.warnings).toBe(1);
+    expect(muzzle.destroyed).toBe(true);
+  });
+
+  it('waits a full basic interval after the major action resolves', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 2800);
+    updateAt(boundary, 3400);
+    expect(updateAt(boundary, 4149).warnings).toBe(0);
+    expect(updateAt(boundary, 4150).warnings).toBe(1);
+    expect(updateAt(boundary, 4299).basicBullets).toBe(0);
+    expect(updateAt(boundary, 4300).basicBullets).toBe(1);
+  });
+
+  it('skips a capped shot and never releases it as a burst', () => {
+    const boundary = createBoundary();
+    boundary.setExternalBullets(12);
+    expect(updateAt(boundary, 900).basicBullets).toBe(0);
+    boundary.setExternalBullets(0);
+    expect(updateAt(boundary, 901).basicBullets).toBe(0);
+    expect(updateAt(boundary, 1800).basicBullets).toBe(1);
+  });
+
+  it('does not advance the basic-shot clock while gameplay time is paused', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 750);
+    const paused = boundary.manager.getSnapshot();
+
+    boundary.manager.update();
+    boundary.manager.update();
+
+    expect(boundary.manager.getSnapshot()).toEqual(paused);
+  });
+
   it('fires the aimed fan at the warned target after the player moves', () => {
     const boundary = createBoundary();
     const warnedTarget = { x: boundary.player.x, y: boundary.player.y };
@@ -483,8 +572,14 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, fallingHazards: 2 });
   });
 
-  it('deals one from aimed bullets, two from hazards, and consumes each hostile action', () => {
+  it('uses per-kind damage and consumes each hostile action', () => {
     const boundary = createBoundary();
+    updateAt(boundary, 900);
+    const basic = boundary.groups[0]!.children.find((child) => child.active)!;
+    boundary.overlaps[0]!.trigger(boundary.player, basic);
+    expect(boundary.onPlayerHit).toHaveBeenLastCalledWith(1);
+    expect(basic.destroyed).toBe(true);
+
     boundary.gameplay.now = 3400;
     boundary.manager.update();
     const aimed = boundary.groups[0]!.children.find((child) => child.active)!;
@@ -509,7 +604,23 @@ describe('BossManager', () => {
     boundary.manager.update();
 
     expect(boundary.manager.getSnapshot()).toMatchObject({
-      aimedBullets: 0, fallingHazards: 0, warnings: 0,
+      basicBullets: 0, aimedBullets: 0, fallingHazards: 0, warnings: 0,
+      projectiles: [],
+    });
+  });
+
+  it('clears basic bullets, muzzle flashes, and reservations', () => {
+    const boundary = createBoundary();
+    updateAt(boundary, 900);
+    updateAt(boundary, 1650);
+
+    boundary.manager.clearHostileActions();
+
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      basicBullets: 0,
+      aimedBullets: 0,
+      warnings: 0,
+      projectiles: [],
     });
   });
 
@@ -520,7 +631,14 @@ describe('BossManager', () => {
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 36);
 
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
-    expect(boundary.manager.getSnapshot().phase).toBe('defeated');
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      phase: 'defeated',
+      basicBullets: 0,
+      aimedBullets: 0,
+      fallingHazards: 0,
+      warnings: 0,
+      projectiles: [],
+    });
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 999, 1);
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
   });

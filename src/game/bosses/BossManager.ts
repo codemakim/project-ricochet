@@ -22,12 +22,6 @@ import {
 const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
 const BOSS_ACTION_DEPTH = 1;
-const AIMED_WARNING_MS = 600;
-const SUPPORT_WARNING_MS = 800;
-const AIMED_BULLET_SPEED = 220;
-const FALLING_HAZARD_SPEED = 240;
-const HOSTILE_BULLET_CAP = 12;
-const HOSTILE_MARGIN = 20;
 
 const PART_HIT_IDS: Record<BossPartId, number> = {
   leftWeakpoint: -1,
@@ -36,7 +30,10 @@ const PART_HIT_IDS: Record<BossPartId, number> = {
 };
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
+type BossProjectileKind = 'basic' | 'aimed';
+type BossProjectileSprite = BossSprite & { bossProjectileKind: BossProjectileKind };
 type Warning =
+  | { kind: 'basicShot'; dueAt: number; marker: BossSprite }
   | { kind: 'aimedShot'; dueAt: number; marker: BossSprite; target: Vector }
   | { kind: 'supportDrop'; dueAt: number; marker: BossSprite; x: number };
 
@@ -72,9 +69,17 @@ export interface BossManagerSnapshot {
   phase: BossPhase | null;
   position: Vector | null;
   parts: Record<BossPartId, number> | null;
+  basicBullets: number;
   aimedBullets: number;
   fallingHazards: number;
   warnings: number;
+  projectiles: BossProjectileSnapshot[];
+}
+
+export interface BossProjectileSnapshot {
+  kind: BossProjectileKind;
+  position: Vector;
+  velocity: Vector;
 }
 
 export class BossManager {
@@ -93,6 +98,7 @@ export class BossManager {
   private motion: BossMotion = { x: GAME_WIDTH / 2, direction: 1 };
   private lastGameplayElapsedMs: number;
   private nextAttackAt: number;
+  private nextBasicShotAt: number;
   private destroyed = false;
   private defeatReported = false;
   private readonly unsubscribeOrbAdded: () => void;
@@ -104,6 +110,7 @@ export class BossManager {
     const now = options.getGameplayElapsedMs();
     this.lastGameplayElapsedMs = now;
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
+    this.nextBasicShotAt = now + GAME_TUNING.projectiles.bossBasic.intervalMs;
 
     this.body = scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, 'boss-body');
     this.body
@@ -159,7 +166,7 @@ export class BossManager {
     this.colliders.push(scene.physics.add.overlap(
       options.player,
       this.aimedBulletGroup,
-      (_player, bullet) => this.consumeHostile(bullet as BossSprite, 1),
+      (_player, bullet) => this.consumeBossProjectile(bullet as BossProjectileSprite),
     ));
     this.colliders.push(scene.physics.add.overlap(
       options.player,
@@ -203,11 +210,14 @@ export class BossManager {
         phase: null,
         position: null,
         parts: null,
+        basicBullets: 0,
         aimedBullets: 0,
         fallingHazards: 0,
         warnings: 0,
+        projectiles: [],
       };
     }
+    const projectiles = this.activeProjectiles();
     return {
       active: true,
       phase: bossPhase(this.state),
@@ -217,9 +227,11 @@ export class BossManager {
         rightWeakpoint: this.state.rightWeakpointHp,
         core: this.state.coreHp,
       },
-      aimedBullets: this.activeCount(this.aimedBulletGroup),
+      basicBullets: projectiles.filter(({ kind }) => kind === 'basic').length,
+      aimedBullets: projectiles.filter(({ kind }) => kind === 'aimed').length,
       fallingHazards: this.activeCount(this.fallingHazardGroup),
       warnings: this.warnings.length,
+      projectiles,
     };
   }
 
@@ -495,15 +507,57 @@ export class BossManager {
       const startsAt = this.nextAttackAt;
       const attack = nextBossAttack(this.state);
       this.state = attack.state;
+      let lastMajorDueAt = startsAt;
       for (const pattern of attack.patterns) {
-        if (pattern === 'aimedShot') this.beginAimedWarning(startsAt);
-        else this.beginSupportWarnings(startsAt, this.state.attackIndex);
+        const dueAt = pattern === 'aimedShot'
+          ? this.beginAimedWarning(startsAt)
+          : this.beginSupportWarnings(startsAt, this.state.attackIndex);
+        lastMajorDueAt = Math.max(lastMajorDueAt, dueAt);
       }
+      this.deferBasicUntil(lastMajorDueAt);
       this.nextAttackAt = startsAt + nextBossAttack(this.state).intervalMs;
+    }
+    this.scheduleBasicAttack(now);
+  }
+
+  private scheduleBasicAttack(now: number): void {
+    const tuning = GAME_TUNING.projectiles.bossBasic;
+    const basicPending = this.warnings.some(({ kind }) => kind === 'basicShot');
+    if (basicPending || this.hasMajorWarnings() || this.nextBasicShotAt >= this.nextAttackAt) return;
+    if (now >= this.nextBasicShotAt - tuning.warningMs) {
+      this.beginBasicWarning(this.nextBasicShotAt);
     }
   }
 
-  private beginAimedWarning(startsAt: number): void {
+  private beginBasicWarning(dueAt: number): void {
+    const marker = this.warningGroup.create(
+      this.motion.x,
+      GAME_TUNING.boss.y,
+      'boss-muzzle-flash',
+    ) as BossSprite;
+    marker.setDepth(BOSS_ACTION_DEPTH);
+    this.warnings.push({ kind: 'basicShot', dueAt, marker });
+  }
+
+  private cancelPendingBasicAttack(): void {
+    this.warnings = this.warnings.filter((warning) => {
+      if (warning.kind !== 'basicShot') return true;
+      warning.marker.destroy();
+      return false;
+    });
+  }
+
+  private deferBasicUntil(lastMajorDueAt: number): void {
+    this.cancelPendingBasicAttack();
+    this.nextBasicShotAt = lastMajorDueAt + GAME_TUNING.projectiles.bossBasic.intervalMs;
+  }
+
+  private hasMajorWarnings(): boolean {
+    return this.warnings.some(({ kind }) => kind !== 'basicShot');
+  }
+
+  private beginAimedWarning(startsAt: number): number {
+    const dueAt = startsAt + GAME_TUNING.projectiles.bossAimed.warningMs;
     const target = { x: this.options.player.x, y: this.options.player.y };
     const marker = this.warningGroup.create(
       target.x,
@@ -513,20 +567,23 @@ export class BossManager {
     marker.setDepth(BOSS_ACTION_DEPTH);
     this.warnings.push({
       kind: 'aimedShot',
-      dueAt: startsAt + AIMED_WARNING_MS,
+      dueAt,
       marker,
       target,
     });
+    return dueAt;
   }
 
-  private beginSupportWarnings(startsAt: number, attackIndex: number): void {
+  private beginSupportWarnings(startsAt: number, attackIndex: number): number {
+    const dueAt = startsAt + GAME_TUNING.projectiles.bossSupport.warningMs;
     const playerX = clamp(this.options.player.x, 24, GAME_WIDTH - 24);
     const secondX = clamp(playerX + (attackIndex % 2 === 0 ? 90 : -90), 24, GAME_WIDTH - 24);
     for (const x of [playerX, secondX]) {
       const marker = this.warningGroup.create(x, GAME_HEIGHT - 16, 'boss-drop-marker') as BossSprite;
       marker.setDepth(BOSS_ACTION_DEPTH);
-      this.warnings.push({ kind: 'supportDrop', dueAt: startsAt + SUPPORT_WARNING_MS, marker, x });
+      this.warnings.push({ kind: 'supportDrop', dueAt, marker, x });
     }
+    return dueAt;
   }
 
   private resolveWarnings(now: number): void {
@@ -537,32 +594,72 @@ export class BossManager {
         continue;
       }
       warning.marker.destroy();
-      if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
+      if (warning.kind === 'basicShot') this.fireBasicShot(now);
+      else if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
       else this.spawnFallingHazard(warning.x);
     }
     this.warnings = pending;
   }
 
+  private fireBasicShot(now: number): void {
+    const tuning = GAME_TUNING.projectiles.bossBasic;
+    this.nextBasicShotAt = now + tuning.intervalMs;
+    if (this.options.getEnemyBulletCount() + this.getBulletCount()
+      >= GAME_TUNING.projectiles.hostileCap) return;
+    const origin = { x: this.motion.x, y: GAME_TUNING.boss.y };
+    const direction = normalize({
+      x: this.options.player.x - origin.x,
+      y: this.options.player.y - origin.y,
+    });
+    const bullet = this.aimedBulletGroup.create(
+      origin.x,
+      origin.y,
+      'boss-basic-bullet',
+    ) as BossProjectileSprite;
+    bullet.bossProjectileKind = 'basic';
+    bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
+      direction.x * tuning.speed,
+      direction.y * tuning.speed,
+    );
+  }
+
   private fireAimedFan(target: Vector): void {
+    const tuning = GAME_TUNING.projectiles.bossAimed;
     const origin = { x: this.motion.x, y: GAME_TUNING.boss.y };
     const aimed = normalize({
       x: target.x - origin.x,
       y: target.y - origin.y,
     });
-    for (const angle of [-12, 0, 12]) {
-      if (this.options.getEnemyBulletCount() + this.getBulletCount() >= HOSTILE_BULLET_CAP) break;
+    for (const angle of tuning.fanDegrees) {
+      if (this.options.getEnemyBulletCount() + this.getBulletCount()
+        >= GAME_TUNING.projectiles.hostileCap) break;
       const direction = this.rotate(aimed, angle);
-      const bullet = this.aimedBulletGroup.create(origin.x, origin.y, 'boss-aimed-bullet') as BossSprite;
-      bullet.setCircle(5).setDepth(BOSS_ACTION_DEPTH).setVelocity(
-        direction.x * AIMED_BULLET_SPEED,
-        direction.y * AIMED_BULLET_SPEED,
+      const bullet = this.aimedBulletGroup.create(
+        origin.x,
+        origin.y,
+        'boss-aimed-bullet',
+      ) as BossProjectileSprite;
+      bullet.bossProjectileKind = 'aimed';
+      bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
+        direction.x * tuning.speed,
+        direction.y * tuning.speed,
       );
     }
   }
 
   private spawnFallingHazard(x: number): void {
+    const tuning = GAME_TUNING.projectiles.bossSupport;
     const hazard = this.fallingHazardGroup.create(x, -8, 'boss-falling-hazard') as BossSprite;
-    hazard.setDepth(BOSS_ACTION_DEPTH).setVelocity(0, FALLING_HAZARD_SPEED);
+    hazard.setSize(tuning.width, tuning.height)
+      .setDepth(BOSS_ACTION_DEPTH)
+      .setVelocity(0, tuning.speed);
+  }
+
+  private consumeBossProjectile(projectile: BossProjectileSprite): void {
+    const damage = projectile.bossProjectileKind === 'basic'
+      ? GAME_TUNING.projectiles.bossBasic.damage
+      : GAME_TUNING.projectiles.bossAimed.damage;
+    this.consumeHostile(projectile, damage);
   }
 
   private consumeHostile(hostile: BossSprite, damage: number): void {
@@ -572,14 +669,15 @@ export class BossManager {
   }
 
   private cleanOffscreenHostiles(): void {
+    const margin = GAME_TUNING.projectiles.offscreenMargin;
     for (const hostile of this.aimedBulletGroup.getChildren() as BossSprite[]) {
       if (hostile.active && (
-        hostile.x < -HOSTILE_MARGIN || hostile.x > GAME_WIDTH + HOSTILE_MARGIN
-        || hostile.y < -HOSTILE_MARGIN || hostile.y > GAME_HEIGHT + HOSTILE_MARGIN
+        hostile.x < -margin || hostile.x > GAME_WIDTH + margin
+        || hostile.y < -margin || hostile.y > GAME_HEIGHT + margin
       )) hostile.destroy();
     }
     for (const hazard of this.fallingHazardGroup.getChildren() as BossSprite[]) {
-      if (hazard.active && hazard.y > GAME_HEIGHT + HOSTILE_MARGIN) hazard.destroy();
+      if (hazard.active && hazard.y > GAME_HEIGHT + margin) hazard.destroy();
     }
   }
 
@@ -612,6 +710,21 @@ export class BossManager {
       GAME_TUNING.boss.y,
     );
     this.partSprites.core.setPosition(this.motion.x, GAME_TUNING.boss.y);
+    for (const warning of this.warnings) {
+      if (warning.kind === 'basicShot') {
+        warning.marker.setPosition(this.motion.x, GAME_TUNING.boss.y);
+      }
+    }
+  }
+
+  private activeProjectiles(): BossProjectileSnapshot[] {
+    return (this.aimedBulletGroup.getChildren() as BossProjectileSprite[])
+      .filter((projectile) => projectile.active)
+      .map((projectile) => ({
+        kind: projectile.bossProjectileKind,
+        position: { x: projectile.x, y: projectile.y },
+        velocity: { ...(projectile.body as Phaser.Physics.Arcade.Body).velocity },
+      }));
   }
 
   private activeCount(group: Phaser.Physics.Arcade.Group): number {
