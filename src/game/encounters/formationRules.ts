@@ -1,3 +1,4 @@
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import type { ThreatPhase } from './encounterRules';
 
@@ -15,13 +16,11 @@ interface Cell {
 }
 
 const COLUMNS = 8;
-const SPEED = 18;
 const BAG = [
   'cluster', 'cluster', 'pockets', 'pockets',
   'bands', 'bands', 'scatter', 'scatter', 'grid',
 ] as const;
 const ORGANIC = ['cluster', 'pockets', 'bands', 'scatter'] as const;
-const SIZE_RANGES = [[9, 11], [11, 13], [13, 15]] as const;
 
 function validateSeed(seed: number, name = 'seed'): void {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
@@ -274,7 +273,7 @@ function assignKinds(enemies: EnemySpec[], armored: number, shooters: number, se
     const kind: EnemyKind = armoredIndices.has(index)
       ? 'armored'
       : shooterIndices.has(index) ? 'shooter' : 'basic';
-    return { ...enemy, kind, hp: kind === 'armored' ? 3 : 1 };
+    return { ...enemy, kind, hp: GAME_TUNING.enemies.hp[kind] };
   });
 }
 
@@ -306,7 +305,14 @@ function generateWithPressure(
   const enemies = selected.map((cell) => {
     const column = mirror ? COLUMNS - 1 - cell.column : cell.column;
     const x = Math.max(36, Math.min(414, 36 + column * 54 + rowOffsets[cell.row]!));
-    return { kind: 'basic' as const, hp: 1, x, y: originY + cell.row * 42, column, speed: SPEED };
+    return {
+      kind: 'basic' as const,
+      hp: GAME_TUNING.enemies.hp.basic,
+      x,
+      y: originY + cell.row * 42,
+      column,
+      speed: GAME_TUNING.enemies.descentSpeed,
+    };
   });
   return assignKinds(enemies, armored, shooters, kindSeed);
 }
@@ -359,8 +365,15 @@ export function createInitialFormation(runSeed: number): FormationResult {
   validateSeed(runSeed, 'runSeed');
   const style = ORGANIC[mix(runSeed, 0x494e4954) % ORGANIC.length]!;
   const layoutSeed = mix(runSeed, 0x4c41594f);
+  const tuning = GAME_TUNING.encounter.initialFormation;
   const enemies = generateWithPressure(
-    style, 20, layoutSeed, 80, 3, 3, mix(runSeed, 0x4b494e44),
+    style,
+    tuning.count,
+    layoutSeed,
+    tuning.originY,
+    tuning.armored,
+    tuning.shooters,
+    mix(runSeed, 0x4b494e44),
   );
   return { id: `${runSeed}:initial:${style}:${layoutSeed}`, style, enemies };
 }
@@ -375,14 +388,19 @@ export function createReinforcementFormation(
   }
   validateSeed(runSeed, 'runSeed');
   const style = styleAt(runSeed, sequence);
-  const [minimum, maximum] = SIZE_RANGES[phase];
+  const phaseTuning = GAME_TUNING.encounter.phases[phase];
+  const { minimum, maximum } = phaseTuning.formation;
   const countSeed = mix(runSeed, sequence ^ 0x53495a45);
   const count = minimum + countSeed % (maximum - minimum + 1);
   const layoutSeed = mix(runSeed, sequence ^ 0x4c41594f);
-  const specialPressure = [[1, 0], [2, 1], [2, 2]] as const;
-  const [armored, shooters] = specialPressure[phase];
   const enemies = generateWithPressure(
-    style, count, layoutSeed, -28, armored, shooters, mix(runSeed, sequence ^ 0x4b494e44),
+    style,
+    count,
+    layoutSeed,
+    GAME_TUNING.encounter.reinforcementOriginY,
+    phaseTuning.armored,
+    phaseTuning.shooters,
+    mix(runSeed, sequence ^ 0x4b494e44),
   );
   return { id: `${runSeed}:${sequence}:${style}:${layoutSeed}`, style, enemies };
 }

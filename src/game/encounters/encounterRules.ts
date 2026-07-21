@@ -1,3 +1,5 @@
+import { GAME_TUNING } from '../config/gameTuning';
+
 export type ThreatPhase = 0 | 1 | 2;
 
 export interface ThreatConfig {
@@ -25,9 +27,8 @@ export function threatPhaseForSection(section: number, elapsedMs: number): Threa
 
 export function threatConfigAt(elapsedMs: number, section = 0): ThreatConfig {
   const phase = threatPhaseForSection(section, elapsedMs);
-  if (phase === 2) return { phase, activeCap: 48, spawnIntervalMs: 6_000 };
-  if (phase === 1) return { phase, activeCap: 40, spawnIntervalMs: 7_000 };
-  return { phase: 0, activeCap: 32, spawnIntervalMs: 8_000 };
+  const tuning = GAME_TUNING.encounter.phases[phase];
+  return { phase, activeCap: tuning.activeCap, spawnIntervalMs: tuning.spawnIntervalMs };
 }
 
 export function canSpawnReinforcement(input: SpawnGateInput): boolean {

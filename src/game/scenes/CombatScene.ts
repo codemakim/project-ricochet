@@ -313,6 +313,7 @@ export class CombatScene extends Phaser.Scene {
         hp: enemy.hp,
         position: { ...enemy.position },
         warning: enemy.warning,
+        speed: enemy.speed,
       })),
       activeShooters: enemySnapshot.activeShooters,
       bullets: enemySnapshot.bullets,

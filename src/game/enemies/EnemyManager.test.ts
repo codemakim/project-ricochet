@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
+import { GAME_TUNING } from '../config/gameTuning';
 import { createInitialFormation } from '../encounters/formationRules';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
@@ -296,12 +297,19 @@ describe('EnemyManager', () => {
     const snapshot = manager.getSnapshot();
     const expected = createInitialFormation(0).enemies;
 
-    expect(snapshot.enemies).toHaveLength(20);
-    expect(snapshot.enemies.map((enemy) => enemy.id)).toEqual([...Array(20).keys()]);
-    expect(snapshot.enemies.map(({ kind, hp, position }) => ({ kind, hp, position }))).toEqual(
-      expected.map(({ kind, hp, x, y }) => ({ kind, hp, position: { x, y } })),
+    expect(snapshot.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count);
+    expect(snapshot.enemies.map((enemy) => enemy.id))
+      .toEqual([...Array(GAME_TUNING.encounter.initialFormation.count).keys()]);
+    expect(snapshot.enemies.map(({ kind, hp, position, speed }) => ({ kind, hp, position, speed }))).toEqual(
+      expected.map(({ kind, hp, x, y, speed }) => ({ kind, hp, position: { x, y }, speed })),
     );
-    expect(groups[0]!.children.every((enemy) => enemy.body.velocity.y === 18)).toBe(true);
+    expect(groups[0]!.children.every(
+      (enemy) => enemy.body.velocity.y === GAME_TUNING.enemies.descentSpeed,
+    )).toBe(true);
+    expect(snapshot.enemies.every(
+      ({ kind, hp, speed }) => hp === GAME_TUNING.enemies.hp[kind]
+        && speed === GAME_TUNING.enemies.descentSpeed,
+    )).toBe(true);
   });
 
   it('appends formations with monotonic IDs and reports topmost position', () => {
@@ -313,8 +321,11 @@ describe('EnemyManager', () => {
     ]);
 
     const snapshot = manager.getSnapshot();
-    expect(snapshot.enemies).toHaveLength(22);
-    expect(snapshot.enemies.slice(-2).map((enemy) => enemy.id)).toEqual([20, 21]);
+    expect(snapshot.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count + 2);
+    expect(snapshot.enemies.slice(-2).map((enemy) => enemy.id)).toEqual([
+      GAME_TUNING.encounter.initialFormation.count,
+      GAME_TUNING.encounter.initialFormation.count + 1,
+    ]);
     expect(snapshot.topmostEnemyY).toBe(-28);
     expect(colliders).toHaveLength(colliderCount);
   });
@@ -322,12 +333,14 @@ describe('EnemyManager', () => {
   it('debug-removes selected enemies without reusing IDs', () => {
     const { manager } = createBoundary();
     manager.debugRemoveEnemies!([0, 3, 7, 11]);
-    expect(manager.getSnapshot().enemies).toHaveLength(16);
+    expect(manager.getSnapshot().enemies)
+      .toHaveLength(GAME_TUNING.encounter.initialFormation.count - 4);
 
     manager.spawnFormation([
       { kind: 'basic', hp: 1, x: 90, y: -28, column: 1, speed: 22 },
     ]);
-    expect(manager.getSnapshot().enemies.at(-1)?.id).toBe(20);
+    expect(manager.getSnapshot().enemies.at(-1)?.id)
+      .toBe(GAME_TUNING.encounter.initialFormation.count);
   });
 
   it('debug-sets exactly one active enemy with valid position and HP', () => {
@@ -460,7 +473,12 @@ describe('EnemyManager', () => {
     const enemy = groups[0]!.children[basicIds[0]!]!;
     const orbCollider = colliders[0]!;
     orb.setVelocity(50, -100);
-    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 2, damage: 1.5, reflect: false });
+    handleEnemyHit.mockReturnValueOnce({
+      charged: true,
+      charges: 2,
+      damage: GAME_TUNING.enemies.hp.basic,
+      reflect: false,
+    });
 
     expect(orbCollider.trigger(orb, enemy)).toBe(false);
     expect(handleEnemyHit).toHaveBeenCalledOnce();
@@ -468,7 +486,12 @@ describe('EnemyManager', () => {
     expect(enemy.destroyed).toBe(true);
 
     const reflectedEnemy = groups[0]!.children[basicIds[1]!]!;
-    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 1, damage: 1, reflect: true });
+    handleEnemyHit.mockReturnValueOnce({
+      charged: true,
+      charges: 1,
+      damage: GAME_TUNING.enemies.hp.basic,
+      reflect: true,
+    });
     expect(orbCollider.trigger(orb, reflectedEnemy)).toBe(true);
     expect(handleEnemyHit).toHaveBeenCalledTimes(2);
     expect(orb.body.velocity).toEqual({ x: -50, y: -100 });
@@ -479,7 +502,12 @@ describe('EnemyManager', () => {
     const { manager, orb, handleEnemyHit, groups, colliders, onDirectHit, onEnemyKilled } = createBoundary();
     const target = manager.getSnapshot().enemies.find(({ kind }) => kind === 'basic')!;
     const enemy = groups[0]!.children[target.id]!;
-    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 0, damage: 1.5, reflect: false });
+    handleEnemyHit.mockReturnValueOnce({
+      charged: true,
+      charges: 0,
+      damage: GAME_TUNING.enemies.hp.basic,
+      reflect: false,
+    });
 
     colliders[0]!.trigger(orb, enemy);
 
@@ -526,9 +554,14 @@ describe('EnemyManager', () => {
 
     expect(colliders[1]!.trigger(temporaryOrb, enemy)).toBe(true);
 
-    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(temporaryOrb, target.id, 1, 123);
+    expect(handleTemporaryEnemyHit).toHaveBeenCalledWith(
+      temporaryOrb,
+      target.id,
+      GAME_TUNING.enemies.hp.basic,
+      123,
+    );
     expect(temporaryOrbManager!.synchronizeOrb).toHaveBeenCalledWith(temporaryOrb);
-    expect(enemy.hp).toBe(0.5);
+    expect(enemy.hp).toBe(GAME_TUNING.enemies.hp.basic - 0.5);
     expect(onDirectHit).toHaveBeenCalledWith({
       source: 'temporary',
       enemyId: target.id,
@@ -572,7 +605,12 @@ describe('EnemyManager', () => {
     const { manager, handleEnemyHit, groups, colliders, time } = createBoundary();
     time.advance(1300);
     const warningShooter = groups[0]!.children.find((enemy) => enemy.tint !== undefined)!;
-    handleEnemyHit.mockReturnValueOnce({ charged: true, charges: 2, damage: 1.5, reflect: false });
+    handleEnemyHit.mockReturnValueOnce({
+      charged: true,
+      charges: 2,
+      damage: GAME_TUNING.enemies.hp.shooter,
+      reflect: false,
+    });
 
     colliders[0]!.trigger(new FakeSprite(0, 0, 'orb'), warningShooter);
     time.advance(350);

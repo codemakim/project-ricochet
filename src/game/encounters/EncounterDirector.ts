@@ -1,4 +1,4 @@
-import { PLAYER_MIN_Y } from '../constants';
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { canSpawnReinforcement, threatConfigAt, type ThreatPhase } from './encounterRules';
 import {
@@ -69,7 +69,7 @@ export class EncounterDirector {
 
     const threat = threatConfigAt(this.sectionElapsedMs, this.section);
     if (this.elapsedSinceSpawnMs < threat.spawnIntervalMs
-      || enemyState.topmostEnemyY < PLAYER_MIN_Y) return NO_UPDATE;
+      || enemyState.topmostEnemyY < GAME_TUNING.encounter.reinforcementReleaseY) return NO_UPDATE;
 
     if (this.pendingFormation?.phase !== threat.phase
       || this.pendingFormation.sequence !== this.spawnSequence) {
@@ -84,7 +84,7 @@ export class EncounterDirector {
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
       spawnIntervalMs: threat.spawnIntervalMs,
       topmostEnemyY: enemyState.topmostEnemyY,
-      requiredTopmostY: PLAYER_MIN_Y,
+      requiredTopmostY: GAME_TUNING.encounter.reinforcementReleaseY,
       activeEnemies: enemyState.activeEnemies,
       incomingEnemies: formation.enemies.length,
       activeCap: threat.activeCap,

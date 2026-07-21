@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import { canSpawnReinforcement, threatConfigAt, threatPhaseForSection } from './encounterRules';
 
 describe('encounter rules', () => {
-  it.each([
-    [0, { phase: 0, activeCap: 32, spawnIntervalMs: 8_000 }],
-    [59_999, { phase: 0, activeCap: 32, spawnIntervalMs: 8_000 }],
-    [60_000, { phase: 1, activeCap: 40, spawnIntervalMs: 7_000 }],
-    [120_000, { phase: 2, activeCap: 48, spawnIntervalMs: 6_000 }],
-    [180_000, { phase: 2, activeCap: 48, spawnIntervalMs: 6_000 }],
-  ] as const)('maps %ims to its threat config', (elapsedMs, expected) => {
-    expect(threatConfigAt(elapsedMs)).toEqual(expected);
-  });
+  it.each([[0, 0], [59_999, 0], [60_000, 1], [120_000, 2], [180_000, 2]] as const)(
+    'maps %ims to its tuned threat config', (elapsedMs, phase) => {
+      const tuning = GAME_TUNING.encounter.phases[phase];
+      expect(threatConfigAt(elapsedMs)).toEqual({
+        phase,
+        activeCap: tuning.activeCap,
+        spawnIntervalMs: tuning.spawnIntervalMs,
+      });
+    },
+  );
 
   it.each([
     [0, 0, 0],

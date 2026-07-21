@@ -394,8 +394,8 @@ describe('BossManager', () => {
   it('maps only vertically overlapping enemies to exact padded forbidden intervals', () => {
     const boundary = createBoundary();
     boundary.enemies.push(
-      { id: 1, kind: 'basic', hp: 1, position: { x: 330, y: 120 }, warning: false },
-      { id: 2, kind: 'basic', hp: 1, position: { x: 100, y: 300 }, warning: false },
+      { id: 1, kind: 'basic', hp: 1, position: { x: 330, y: 120 }, warning: false, speed: 8 },
+      { id: 2, kind: 'basic', hp: 1, position: { x: 100, y: 300 }, warning: false, speed: 8 },
     );
 
     boundary.gameplay.now = 1000;

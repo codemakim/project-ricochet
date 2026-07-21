@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
@@ -7,9 +8,6 @@ import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryO
 import { createInitialFormation } from '../encounters/formationRules';
 import { canFire, type EnemyKind, type EnemySpec } from './enemyRules';
 
-const SHOOTER_INTERVAL_MS = 1300;
-const SHOOTER_WARNING_MS = 350;
-const BULLET_SPEED = 180;
 const CONTACT_SEPARATION = 6;
 const BULLET_MARGIN = 16;
 
@@ -25,6 +23,7 @@ export interface EnemySnapshot {
   hp: number;
   position: Vector;
   warning: boolean;
+  speed: number;
 }
 
 export interface EnemyManagerSnapshot {
@@ -136,7 +135,7 @@ export class EnemyManager {
     ));
 
     this.shooterTimer = scene.time.addEvent({
-      delay: SHOOTER_INTERVAL_MS,
+      delay: GAME_TUNING.enemies.shooter.intervalMs,
       loop: true,
       callback: () => this.beginShooterWarnings(),
     });
@@ -228,6 +227,7 @@ export class EnemyManager {
         hp: enemy.hp,
         position: { x: enemy.x, y: enemy.y },
         warning: this.activeShooters.has(enemy.enemyId),
+        speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
       })),
       topmostEnemyY,
       activeShooters: this.activeShooters.size,
@@ -404,7 +404,7 @@ export class EnemyManager {
   private handleBulletHit(bullet: Phaser.Physics.Arcade.Sprite): void {
     if (!bullet.active) return;
     bullet.destroy();
-    this.options.onBulletHit(1);
+    this.options.onBulletHit(GAME_TUNING.enemies.shooter.damage);
   }
 
   private beginShooterWarnings(): void {
@@ -417,7 +417,10 @@ export class EnemyManager {
       if (!canFire(this.activeShooters.size, bulletCount)) break;
       this.activeShooters.add(shooter.enemyId);
       shooter.setTint(0xffff66);
-      const timer = this.scene.time.delayedCall(SHOOTER_WARNING_MS, () => this.finishShooterAttack(shooter));
+      const timer = this.scene.time.delayedCall(
+        GAME_TUNING.enemies.shooter.warningMs,
+        () => this.finishShooterAttack(shooter),
+      );
       this.warningTimers.set(shooter.enemyId, timer);
     }
   }
@@ -436,7 +439,10 @@ export class EnemyManager {
       x: this.options.player.x - shooter.x,
       y: this.options.player.y - shooter.y,
     });
-    bullet.setCircle(5).setVelocity(direction.x * BULLET_SPEED, direction.y * BULLET_SPEED);
+    bullet.setCircle(5).setVelocity(
+      direction.x * GAME_TUNING.enemies.shooter.bulletSpeed,
+      direction.y * GAME_TUNING.enemies.shooter.bulletSpeed,
+    );
   }
 
   private destroyEnemy(enemy: EnemySprite): void {

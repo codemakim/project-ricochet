@@ -1,9 +1,10 @@
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
 
-export const BOSS_PROGRESS_TARGET = 70;
-export const BOSS_ENTRY_MIN_MS = 120_000;
-export const BOSS_ENTRY_HARD_MAX_MS = 210_000;
-export const BOSS_WARNING_MS = 2_000;
+export const BOSS_PROGRESS_TARGET = GAME_TUNING.encounter.bossEntry.scoreTarget;
+export const BOSS_ENTRY_MIN_MS = GAME_TUNING.encounter.bossEntry.minimumMs;
+export const BOSS_ENTRY_HARD_MAX_MS = GAME_TUNING.encounter.bossEntry.hardMaximumMs;
+export const BOSS_WARNING_MS = GAME_TUNING.encounter.bossEntry.warningMs;
 
 export type EncounterState = 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused';
 export type EncounterTransition = 'bossWarningStarted' | 'bossStarted';

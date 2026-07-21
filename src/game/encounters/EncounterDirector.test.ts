@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 
 const createFormationSpy = vi.hoisted(() => vi.fn());
 
@@ -13,6 +14,11 @@ import { createReinforcementFormation } from './formationRules';
 
 describe('EncounterDirector', () => {
   const clearTop = { activeEnemies: 20, topmostEnemyY: 120 };
+  const phase0CapacityBlocked = {
+    activeEnemies: GAME_TUNING.encounter.phases[0].activeCap
+      - GAME_TUNING.encounter.phases[0].formation.minimum + 1,
+    topmostEnemyY: 120,
+  };
 
   beforeEach(() => {
     createFormationSpy.mockClear();
@@ -22,15 +28,15 @@ describe('EncounterDirector', () => {
     const director = new EncounterDirector(1234);
 
     expect(director.update(7_999, clearTop)).toEqual({ formation: null, transition: null });
-    expect(director.update(1, { activeEnemies: 0, topmostEnemyY: 97 })).toEqual({ formation: null, transition: null });
-    expect(director.update(1_000, { activeEnemies: 0, topmostEnemyY: 97 })).toEqual({ formation: null, transition: null });
+    expect(director.update(1, { activeEnemies: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
+    expect(director.update(1_000, { activeEnemies: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
 
     expect(createFormationSpy).not.toHaveBeenCalled();
   });
 
   it('generates once while capacity is blocked and admits the cached formation', () => {
     const director = new EncounterDirector(1234);
-    const capacityBlocked = { activeEnemies: 24, topmostEnemyY: 120 };
+    const capacityBlocked = phase0CapacityBlocked;
 
     expect(director.update(8_000, capacityBlocked).formation).toBeNull();
     expect(director.update(16, capacityBlocked).formation).toBeNull();
@@ -45,8 +51,10 @@ describe('EncounterDirector', () => {
   it('regenerates a capacity-blocked pending formation when phase changes', () => {
     const director = new EncounterDirector(1234);
 
-    expect(director.update(8_000, { activeEnemies: 32, topmostEnemyY: 120 }).formation).toBeNull();
-    expect(director.update(52_000, { activeEnemies: 40, topmostEnemyY: 120 }).formation).toBeNull();
+    const activeEnemies = GAME_TUNING.encounter.phases[1].activeCap
+      - GAME_TUNING.encounter.phases[1].formation.minimum + 1;
+    expect(director.update(8_000, { activeEnemies, topmostEnemyY: 120 }).formation).toBeNull();
+    expect(director.update(52_000, { activeEnemies, topmostEnemyY: 120 }).formation).toBeNull();
     expect(createFormationSpy).toHaveBeenNthCalledWith(1, 0, 0, 1234);
     expect(createFormationSpy).toHaveBeenNthCalledWith(2, 1, 0, 1234);
 
@@ -59,8 +67,8 @@ describe('EncounterDirector', () => {
     const director = new EncounterDirector(1234);
     expect(director.update(7_999, clearTop).formation).toBeNull();
     const formation = director.update(1, clearTop).formation;
-    expect(formation?.length).toBeGreaterThanOrEqual(9);
-    expect(formation?.length).toBeLessThanOrEqual(11);
+    expect(formation?.length).toBeGreaterThanOrEqual(GAME_TUNING.encounter.phases[0].formation.minimum);
+    expect(formation?.length).toBeLessThanOrEqual(GAME_TUNING.encounter.phases[0].formation.maximum);
     const expected = createReinforcementFormation(0, 0, 1234);
     expect(formation).toEqual(expected.enemies);
     expect(director.getSnapshot()).toMatchObject({
@@ -73,14 +81,14 @@ describe('EncounterDirector', () => {
 
   it('keeps a blocked spawn pending and releases it without another interval', () => {
     const director = new EncounterDirector(1234);
-    expect(director.update(8_000, { activeEnemies: 24, topmostEnemyY: 120 }).formation).toBeNull();
+    expect(director.update(8_000, phase0CapacityBlocked).formation).toBeNull();
     expect(director.getSnapshot()).toMatchObject({
       spawnSequence: 0,
       lastFormationId: null,
     });
     const formation = director.update(16, clearTop).formation;
-    expect(formation?.length).toBeGreaterThanOrEqual(9);
-    expect(formation?.length).toBeLessThanOrEqual(11);
+    expect(formation?.length).toBeGreaterThanOrEqual(GAME_TUNING.encounter.phases[0].formation.minimum);
+    expect(formation?.length).toBeLessThanOrEqual(GAME_TUNING.encounter.phases[0].formation.maximum);
   });
 
   it('never emits catch-up formations in one update', () => {
@@ -92,8 +100,11 @@ describe('EncounterDirector', () => {
 
   it('waits for top clearance even when time and capacity pass', () => {
     const director = new EncounterDirector(1234);
-    expect(director.update(8_000, { activeEnemies: 0, topmostEnemyY: 97 }).formation).toBeNull();
-    expect(director.update(0, { activeEnemies: 0, topmostEnemyY: 98 }).formation).not.toBeNull();
+    director.update(8_000, { activeEnemies: 20, topmostEnemyY: 49 });
+    expect(director.getSnapshot().spawnSequence).toBe(0);
+    const released = director.update(0, { activeEnemies: 20, topmostEnemyY: 50 });
+    expect(released.formation).not.toBeNull();
+    expect(director.getSnapshot().spawnSequence).toBe(1);
   });
 
   it('emits different consecutive admitted formations', () => {
@@ -137,7 +148,7 @@ describe('EncounterDirector', () => {
 
   it('discards a cached formation on warning and emits no warning formations', () => {
     const director = new EncounterDirector(1234);
-    const capacityBlocked = { activeEnemies: 32, topmostEnemyY: 120 };
+    const capacityBlocked = phase0CapacityBlocked;
     expect(director.update(8_000, capacityBlocked).formation).toBeNull();
     expect(createFormationSpy).toHaveBeenCalledTimes(1);
     for (let index = 0; index < 70; index += 1) director.recordEnemyKill('basic');

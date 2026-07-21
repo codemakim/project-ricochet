@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import {
   createInitialFormation,
   createReinforcementFormation,
@@ -60,7 +61,7 @@ describe('procedural formation generation', () => {
       expect(enemies).toHaveLength(count);
       expect(new Set(enemies.map(({ x, y }) => `${x}:${y}`)).size).toBe(count);
       expect(enemies.every(({ x }) => x >= 36 && x <= 414)).toBe(true);
-      expect(enemies.every(({ speed }) => speed === 18)).toBe(true);
+      expect(enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
     }
   });
 
@@ -112,25 +113,28 @@ describe('procedural formation generation', () => {
     expect(publicLayouts(100)).not.toEqual(publicLayouts(101));
   });
 
-  it('creates non-grid 20-enemy initial formations', () => {
+  it('creates the tuned non-grid initial formation', () => {
     for (let seed = 0; seed < 16; seed += 1) {
       const result = createInitialFormation(seed);
-      expect(result.enemies).toHaveLength(20);
+      expect(result.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count);
       expect(result.style).not.toBe('grid');
-      expect(result.enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(3);
-      expect(result.enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(3);
+      expect(result.enemies.filter(({ kind }) => kind === 'armored'))
+        .toHaveLength(GAME_TUNING.encounter.initialFormation.armored);
+      expect(result.enemies.filter(({ kind }) => kind === 'shooter'))
+        .toHaveLength(GAME_TUNING.encounter.initialFormation.shooters);
+      expect(result.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
+      expect(result.enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind])).toBe(true);
     }
   });
 
-  it.each([[0, 9, 11], [1, 11, 13], [2, 13, 15]] as const)(
-    'keeps phase %i within %i..%i', (phase, minimum, maximum) => {
-      for (let sequence = 0; sequence < 27; sequence += 1) {
-        const size = createReinforcementFormation(phase, sequence, 99).enemies.length;
-        expect(size).toBeGreaterThanOrEqual(minimum);
-        expect(size).toBeLessThanOrEqual(maximum);
-      }
-    },
-  );
+  it('covers each tuned reinforcement size range', () => {
+    for (const phase of [0, 1, 2] as const) {
+      const counts = Array.from({ length: 64 }, (_, sequence) =>
+        createReinforcementFormation(phase, sequence, 808).enemies.length);
+      expect(Math.min(...counts)).toBe(GAME_TUNING.encounter.phases[phase].formation.minimum);
+      expect(Math.max(...counts)).toBe(GAME_TUNING.encounter.phases[phase].formation.maximum);
+    }
+  });
 
   it('uses a 2/2/2/2/1 bag and never repeats adjacent styles', () => {
     const styles = Array.from({ length: 27 }, (_, sequence) =>
@@ -145,18 +149,16 @@ describe('procedural formation generation', () => {
     expect(styles.every((style, index) => index === 0 || style !== styles[index - 1])).toBe(true);
   });
 
-  it.each([
-    [0, 1, 0],
-    [1, 2, 1],
-    [2, 2, 2],
-  ] as const)(
-    'uses exact phase-%i reinforcement pressure: %i armored and %i shooters',
-    (phase, armored, shooters) => {
+  it.each([0, 1, 2] as const)(
+    'uses exact tuned phase-%i reinforcement pressure',
+    (phase) => {
+      const { armored, shooters } = GAME_TUNING.encounter.phases[phase];
       for (const runSeed of [0, 55, 808]) {
         for (const sequence of [0, 1, 8, 9, 17, 26]) {
           const enemies = createReinforcementFormation(phase, sequence, runSeed).enemies;
           expect(enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(armored);
           expect(enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(shooters);
+          expect(enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind])).toBe(true);
         }
       }
     },
