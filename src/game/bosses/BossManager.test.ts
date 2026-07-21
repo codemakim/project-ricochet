@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
@@ -590,8 +591,15 @@ describe('BossManager', () => {
     boundary.gameplay.now = 6400;
     boundary.manager.update();
     const hazard = boundary.groups[1]!.children.find((child) => child.active)!;
-    boundary.overlaps[1]!.trigger(boundary.player, hazard);
-    expect(boundary.onPlayerHit).toHaveBeenLastCalledWith(2);
+    const supportTuning = GAME_TUNING.projectiles.bossSupport as { damage: number };
+    const configuredDamage = supportTuning.damage;
+    supportTuning.damage = configuredDamage + 5;
+    try {
+      boundary.overlaps[1]!.trigger(boundary.player, hazard);
+      expect(boundary.onPlayerHit).toHaveBeenLastCalledWith(supportTuning.damage);
+    } finally {
+      supportTuning.damage = configuredDamage;
+    }
     expect(hazard.destroyed).toBe(true);
   });
 

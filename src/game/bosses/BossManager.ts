@@ -171,7 +171,10 @@ export class BossManager {
     this.colliders.push(scene.physics.add.overlap(
       options.player,
       this.fallingHazardGroup,
-      (_player, hazard) => this.consumeHostile(hazard as BossSprite, 2),
+      (_player, hazard) => this.consumeHostile(
+        hazard as BossSprite,
+        GAME_TUNING.projectiles.bossSupport.damage,
+      ),
     ));
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
       this.debugSetPosition = (x) => {
