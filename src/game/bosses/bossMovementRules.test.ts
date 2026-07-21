@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
+import { BOSS_GEOMETRY } from './bossGeometry';
 import { updateBossMotion, type HorizontalInterval } from './bossMovementRules';
 
 const CENTER_BOUNDS: HorizontalInterval = { minimum: 60, maximum: 390 };
@@ -39,40 +41,42 @@ describe('boss movement rules', () => {
     );
   });
 
-  it('moves freely across the full-width center bounds at 55px/s', () => {
+  it('moves freely across the derived center bounds at 35px/s', () => {
     expect(updateBossMotion({ x: 225, direction: 1 }, 1000, [])).toEqual({
-      x: 280,
+      x: 260,
       direction: 1,
     });
 
-    expect(updateBossMotion({ x: 380, direction: 1 }, 1000, [])).toEqual({
-      x: 390,
+    expect(updateBossMotion({ x: 340, direction: 1 }, 1000, [])).toEqual({
+      x: 351,
       direction: 1,
     });
   });
 
   it('decelerates near a boundary, settles there, then reverses on a later update', () => {
-    const decelerating = updateBossMotion({ x: 360, direction: 1 }, 500, []);
-    expect(decelerating).toEqual({ x: 375, direction: 1 });
+    const decelerating = updateBossMotion({ x: 321, direction: 1 }, 500, []);
+    expect(decelerating).toEqual({ x: 336, direction: 1 });
 
     const settling = updateBossMotion(decelerating, 1000, []);
-    expect(settling).toEqual({ x: 390, direction: 1 });
+    expect(settling).toEqual({ x: 351, direction: 1 });
 
     const reversing = updateBossMotion(settling, 16, []);
-    expect(reversing).toEqual({ x: 390, direction: -1 });
+    expect(reversing).toEqual({ x: 351, direction: -1 });
   });
 
   it('clips movement to a padded obstacle interval', () => {
-    const bossHalfWidth = 60;
-    const obstaclePadding = 12;
-    const enemy = { minimum: 220, maximum: 264 };
+    const enemy = { minimum: 300, maximum: 344 };
     const paddedObstacle = {
-      minimum: enemy.minimum - bossHalfWidth - obstaclePadding,
-      maximum: enemy.maximum + bossHalfWidth + obstaclePadding,
+      minimum: enemy.minimum
+        - BOSS_GEOMETRY.collisionHalfWidth
+        - GAME_TUNING.boss.movement.obstaclePadding,
+      maximum: enemy.maximum
+        + BOSS_GEOMETRY.collisionHalfWidth
+        + GAME_TUNING.boss.movement.obstaclePadding,
     };
 
     expect(updateBossMotion({ x: 120, direction: 1 }, 1000, [paddedObstacle])).toEqual({
-      x: 148,
+      x: 155,
       direction: 1,
     });
   });
@@ -101,13 +105,13 @@ describe('boss movement rules', () => {
       { x: 200, direction: 0 },
       1000,
       [
-        { minimum: 60, maximum: 200 },
-        { minimum: 200, maximum: 390 },
+        { minimum: 99, maximum: 200 },
+        { minimum: 200, maximum: 351 },
       ],
     );
 
     expect(stopped).toEqual({ x: 200, direction: 0 });
-    expect(updateBossMotion(stopped, 1000, [])).toEqual({ x: 255, direction: 1 });
+    expect(updateBossMotion(stopped, 1000, [])).toEqual({ x: 235, direction: 1 });
   });
 
   it('merges overlapping forbidden intervals and never crosses them on a large delta', () => {

@@ -1,10 +1,12 @@
 import type Phaser from 'phaser';
+import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
+import { BOSS_GEOMETRY } from './bossGeometry';
 import { updateBossMotion, type BossMotion, type HorizontalInterval } from './bossMovementRules';
 import {
   bossPhase,
@@ -17,14 +19,6 @@ import {
   type BossState,
 } from './bossRules';
 
-const BOSS_Y = 120;
-const BODY_HALF_WIDTH = 60;
-const BODY_HALF_HEIGHT = 36;
-const ENEMY_HALF_SIZE = 22;
-const OBSTACLE_PADDING = 12;
-const WEAKPOINT_OFFSET_X = 64;
-const WEAKPOINT_HITBOX_WIDTH = 18;
-const WEAKPOINT_HITBOX_HEIGHT = 42;
 const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
 const BOSS_ACTION_DEPTH = 1;
@@ -111,35 +105,41 @@ export class BossManager {
     this.lastGameplayElapsedMs = now;
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
 
-    this.body = scene.physics.add.sprite(this.motion.x, BOSS_Y, 'boss-body');
+    this.body = scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, 'boss-body');
     this.body
       .setImmovable(true)
-      .setSize(BODY_HALF_WIDTH * 2, BODY_HALF_HEIGHT * 2)
+      .setSize(GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height)
       .setDepth(BOSS_BODY_DEPTH);
     this.partSprites = {
       leftWeakpoint: scene.physics.add.sprite(
-        this.motion.x - WEAKPOINT_OFFSET_X,
-        BOSS_Y,
+        this.motion.x - BOSS_GEOMETRY.weakpointOffsetX,
+        GAME_TUNING.boss.y,
         'boss-left-weakpoint',
       ),
       rightWeakpoint: scene.physics.add.sprite(
-        this.motion.x + WEAKPOINT_OFFSET_X,
-        BOSS_Y,
+        this.motion.x + BOSS_GEOMETRY.weakpointOffsetX,
+        GAME_TUNING.boss.y,
         'boss-right-weakpoint',
       ),
-      core: scene.physics.add.sprite(this.motion.x, BOSS_Y, 'boss-core'),
+      core: scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, 'boss-core'),
     };
     this.partSprites.leftWeakpoint
       .setImmovable(true)
-      .setSize(WEAKPOINT_HITBOX_WIDTH, WEAKPOINT_HITBOX_HEIGHT)
+      .setSize(
+        GAME_TUNING.boss.weakpoint.hitbox.width,
+        GAME_TUNING.boss.weakpoint.hitbox.height,
+      )
       .setDepth(BOSS_PART_DEPTH);
     this.partSprites.rightWeakpoint
       .setImmovable(true)
-      .setSize(WEAKPOINT_HITBOX_WIDTH, WEAKPOINT_HITBOX_HEIGHT)
+      .setSize(
+        GAME_TUNING.boss.weakpoint.hitbox.width,
+        GAME_TUNING.boss.weakpoint.hitbox.height,
+      )
       .setDepth(BOSS_PART_DEPTH);
     this.partSprites.core
       .setImmovable(true)
-      .setSize(28, 28)
+      .setSize(GAME_TUNING.boss.core.hitboxSize, GAME_TUNING.boss.core.hitboxSize)
       .setDepth(BOSS_PART_DEPTH)
       .setVisible(false);
     (this.partSprites.core.body as Phaser.Physics.Arcade.Body).enable = false;
@@ -168,7 +168,11 @@ export class BossManager {
     ));
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
       this.debugSetPosition = (x) => {
-        if (!Number.isFinite(x) || x < 60 || x > GAME_WIDTH - 60) {
+        if (
+          !Number.isFinite(x)
+          || x < BOSS_GEOMETRY.movementBounds.minimum
+          || x > BOSS_GEOMETRY.movementBounds.maximum
+        ) {
           throw new RangeError('boss x must be finite and within movement bounds');
         }
         this.motion = { x, direction: 1 };
@@ -207,7 +211,7 @@ export class BossManager {
     return {
       active: true,
       phase: bossPhase(this.state),
-      position: { x: this.motion.x, y: BOSS_Y },
+      position: { x: this.motion.x, y: GAME_TUNING.boss.y },
       parts: {
         leftWeakpoint: this.state.leftWeakpointHp,
         rightWeakpoint: this.state.rightWeakpointHp,
@@ -540,7 +544,7 @@ export class BossManager {
   }
 
   private fireAimedFan(target: Vector): void {
-    const origin = { x: this.motion.x, y: BOSS_Y };
+    const origin = { x: this.motion.x, y: GAME_TUNING.boss.y };
     const aimed = normalize({
       x: target.x - origin.x,
       y: target.y - origin.y,
@@ -580,13 +584,16 @@ export class BossManager {
   }
 
   private enemyObstacles(): HorizontalInterval[] {
-    const bandMinimum = BOSS_Y - BODY_HALF_HEIGHT;
-    const bandMaximum = BOSS_Y + BODY_HALF_HEIGHT;
-    const horizontalMargin = BODY_HALF_WIDTH + ENEMY_HALF_SIZE + OBSTACLE_PADDING;
+    const { enemyHalfSize, obstaclePadding } = GAME_TUNING.boss.movement;
+    const bandMinimum = GAME_TUNING.boss.y - BOSS_GEOMETRY.collisionHalfHeight;
+    const bandMaximum = GAME_TUNING.boss.y + BOSS_GEOMETRY.collisionHalfHeight;
+    const horizontalMargin = BOSS_GEOMETRY.collisionHalfWidth
+      + enemyHalfSize
+      + obstaclePadding;
     return this.options.getEnemies()
       .filter(({ position }) => (
-        position.y + ENEMY_HALF_SIZE >= bandMinimum
-        && position.y - ENEMY_HALF_SIZE <= bandMaximum
+        position.y + enemyHalfSize >= bandMinimum
+        && position.y - enemyHalfSize <= bandMaximum
       ))
       .map(({ position }) => ({
         minimum: position.x - horizontalMargin,
@@ -595,10 +602,16 @@ export class BossManager {
   }
 
   private positionBossSprites(): void {
-    this.body.setPosition(this.motion.x, BOSS_Y);
-    this.partSprites.leftWeakpoint.setPosition(this.motion.x - WEAKPOINT_OFFSET_X, BOSS_Y);
-    this.partSprites.rightWeakpoint.setPosition(this.motion.x + WEAKPOINT_OFFSET_X, BOSS_Y);
-    this.partSprites.core.setPosition(this.motion.x, BOSS_Y);
+    this.body.setPosition(this.motion.x, GAME_TUNING.boss.y);
+    this.partSprites.leftWeakpoint.setPosition(
+      this.motion.x - BOSS_GEOMETRY.weakpointOffsetX,
+      GAME_TUNING.boss.y,
+    );
+    this.partSprites.rightWeakpoint.setPosition(
+      this.motion.x + BOSS_GEOMETRY.weakpointOffsetX,
+      GAME_TUNING.boss.y,
+    );
+    this.partSprites.core.setPosition(this.motion.x, GAME_TUNING.boss.y);
   }
 
   private activeCount(group: Phaser.Physics.Arcade.Group): number {

@@ -1,3 +1,6 @@
+import { GAME_TUNING } from '../config/gameTuning';
+import { BOSS_GEOMETRY } from './bossGeometry';
+
 export interface HorizontalInterval {
   minimum: number;
   maximum: number;
@@ -8,15 +11,11 @@ export interface BossMotion {
   direction: -1 | 0 | 1;
 }
 
-const DEFAULT_BOUNDS: HorizontalInterval = { minimum: 60, maximum: 390 };
-const BOSS_SPEED_PX_PER_SECOND = 55;
-const MIN_TURN_SPEED_PX_PER_SECOND = 15;
-
 export function updateBossMotion(
   current: BossMotion,
   deltaMs: number,
   obstacles: readonly HorizontalInterval[],
-  bounds: HorizontalInterval = DEFAULT_BOUNDS,
+  bounds: HorizontalInterval = BOSS_GEOMETRY.movementBounds,
 ): BossMotion {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     throw new Error('deltaMs must be finite and non-negative');
@@ -52,8 +51,8 @@ export function updateBossMotion(
   const boundary = direction === 1 ? range.maximum : range.minimum;
   const remaining = Math.abs(boundary - current.x);
   const speed = Math.min(
-    BOSS_SPEED_PX_PER_SECOND,
-    Math.max(MIN_TURN_SPEED_PX_PER_SECOND, remaining),
+    GAME_TUNING.boss.movement.maxSpeed,
+    Math.max(GAME_TUNING.boss.movement.minimumTurnSpeed, remaining),
   );
   const distance = Math.min(remaining, (deltaMs / 1000) * speed);
   return { x: current.x + direction * distance, direction };

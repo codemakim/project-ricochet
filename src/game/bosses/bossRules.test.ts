@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import {
   bossPhase,
   createBossState,
@@ -12,9 +13,9 @@ describe('boss part rules', () => {
     const state = createBossState();
 
     expect(state).toEqual({
-      leftWeakpointHp: 14,
-      rightWeakpointHp: 14,
-      coreHp: 36,
+      leftWeakpointHp: GAME_TUNING.boss.weakpoint.hp,
+      rightWeakpointHp: GAME_TUNING.boss.weakpoint.hp,
+      coreHp: GAME_TUNING.boss.core.hp,
       attackIndex: 0,
     });
     expect(bossPhase(state)).toBe('twoWeakpoints');
@@ -68,15 +69,24 @@ describe('boss attack schedule', () => {
     const first = nextBossAttack(createBossState());
     const second = nextBossAttack(first.state);
 
-    expect(first).toMatchObject({ patterns: ['aimedShot'], intervalMs: 2800 });
-    expect(second).toMatchObject({ patterns: ['supportDrop'], intervalMs: 2800 });
+    expect(first).toMatchObject({
+      patterns: ['aimedShot'],
+      intervalMs: GAME_TUNING.boss.majorIntervalsMs.twoWeakpoints,
+    });
+    expect(second).toMatchObject({
+      patterns: ['supportDrop'],
+      intervalMs: GAME_TUNING.boss.majorIntervalsMs.twoWeakpoints,
+    });
     expect(second.state.attackIndex).toBe(2);
   });
 
   it('uses 2300ms with one weakpoint', () => {
     const state = damageBossPart(createBossState(), 'leftWeakpoint', 14);
 
-    expect(nextBossAttack(state)).toMatchObject({ patterns: ['aimedShot'], intervalMs: 2300 });
+    expect(nextBossAttack(state)).toMatchObject({
+      patterns: ['aimedShot'],
+      intervalMs: GAME_TUNING.boss.majorIntervalsMs.oneWeakpoint,
+    });
   });
 
   it.each([1, 2])(
@@ -90,7 +100,7 @@ describe('boss attack schedule', () => {
 
       expect(nextBossAttack(state)).toMatchObject({
         patterns: ['aimedShot'],
-        intervalMs: 1900,
+        intervalMs: GAME_TUNING.boss.majorIntervalsMs.core,
       });
     },
   );

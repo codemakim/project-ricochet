@@ -260,9 +260,20 @@ describe('BossManager', () => {
     const right = sprites.find((sprite) => sprite.texture === 'boss-right-weakpoint')!;
     const core = sprites.find((sprite) => sprite.texture === 'boss-core')!;
 
-    expect({ width: left.body.halfWidth * 2, height: left.body.halfHeight * 2 }).toEqual({
-      width: 18,
-      height: 42,
+    expect({ width: body.body.halfWidth * 2, height: body.body.halfHeight * 2 }).toEqual({
+      width: 168,
+      height: 96,
+    });
+    expect({
+      width: left.body.halfWidth * 2,
+      height: left.body.halfHeight * 2,
+      leftCenterX: left.x,
+      rightCenterX: right.x,
+    }).toEqual({
+      width: 22,
+      height: 52,
+      leftCenterX: 137,
+      rightCenterX: 313,
     });
     expect(right.body.halfWidth).toBe(left.body.halfWidth);
     expect(body.depth).toBeLessThan(0);
@@ -287,6 +298,8 @@ describe('BossManager', () => {
     manager.debugSetPosition!(120);
 
     expect(manager.getSnapshot().position).toEqual({ x: 120, y: 120 });
+    expect(() => manager.debugSetPosition!(98)).toThrow(RangeError);
+    expect(() => manager.debugSetPosition!(352)).toThrow(RangeError);
     expect(() => manager.debugSetPosition!(Number.NaN)).toThrow(RangeError);
   });
 
@@ -309,7 +322,7 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body');
     const weakpoint = boundary.colliderFor('boss-left-weakpoint');
-    boundary.orb.setPosition(161, 120);
+    boundary.orb.setPosition(137, 120);
 
     expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
     expect(weakpoint.trigger(boundary.orb, weakpoint.second as FakeSprite)).toBe(true);
@@ -320,7 +333,7 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body');
     const weakpoint = boundary.colliderFor('boss-left-weakpoint');
-    boundary.orb.setPosition(165, 143);
+    boundary.orb.setPosition(145, 153);
 
     expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
     expect(boundary.handleEnemyHit).not.toHaveBeenCalled();
@@ -332,7 +345,7 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body', boundary.temporaryGroup);
     const weakpoint = boundary.colliderFor('boss-left-weakpoint', boundary.temporaryGroup);
-    boundary.temporaryOrb.setPosition(165, 141);
+    boundary.temporaryOrb.setPosition(145, 151);
 
     expect(body.trigger(boundary.temporaryOrb, body.second as FakeSprite)).toBe(false);
     expect(boundary.handleTemporaryHit).not.toHaveBeenCalled();
@@ -359,8 +372,8 @@ describe('BossManager', () => {
     const core = boundary.colliderFor('boss-core');
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(false);
 
-    boundary.manager.applyAreaDamage({ x: 161, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 289, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
 
     expect(boundary.manager.getSnapshot().phase).toBe('core');
     expect((core.second as FakeSprite).visible).toBe(true);
@@ -394,14 +407,14 @@ describe('BossManager', () => {
   it('maps only vertically overlapping enemies to exact padded forbidden intervals', () => {
     const boundary = createBoundary();
     boundary.enemies.push(
-      { id: 1, kind: 'basic', hp: 1, position: { x: 330, y: 120 }, warning: false, speed: 8 },
+      { id: 1, kind: 'basic', hp: 1, position: { x: 360, y: 120 }, warning: false, speed: 8 },
       { id: 2, kind: 'basic', hp: 1, position: { x: 100, y: 300 }, warning: false, speed: 8 },
     );
 
     boundary.gameplay.now = 1000;
     boundary.manager.update();
 
-    expect(boundary.manager.getSnapshot().position?.x).toBe(236);
+    expect(boundary.manager.getSnapshot().position?.x).toBe(227);
   });
 
   it('uses gameplay delta for the 600ms aimed telegraph and three-shot fan', () => {
@@ -502,8 +515,8 @@ describe('BossManager', () => {
 
   it('defeats once when the exposed core reaches zero', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 161, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 289, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 36);
 
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
@@ -514,8 +527,8 @@ describe('BossManager', () => {
 
   it('settles the killing direct-hit event before reporting defeat', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 161, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 289, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 33);
     boundary.gameplay.now = 1;
     const core = boundary.colliderFor('boss-core');

@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
+import { BOSS_GEOMETRY } from '../bosses/bossGeometry';
 import { BossManager, type BossDirectHitEvent } from '../bosses/BossManager';
 import type { BossPartId } from '../bosses/bossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
+import { GAME_TUNING } from '../config/gameTuning';
 import {
   applyDamage,
   breachDamage,
@@ -217,7 +219,11 @@ export class CombatScene extends Phaser.Scene {
         }
         const snapshot = this.bossManager?.getSnapshot();
         if (!snapshot?.position) return;
-        const offset = partId === 'leftWeakpoint' ? -64 : partId === 'rightWeakpoint' ? 64 : 0;
+        const offset = partId === 'leftWeakpoint'
+          ? -BOSS_GEOMETRY.weakpointOffsetX
+          : partId === 'rightWeakpoint'
+            ? BOSS_GEOMETRY.weakpointOffsetX
+            : 0;
         this.bossManager?.applyAreaDamage(
           { x: snapshot.position.x + offset, y: snapshot.position.y },
           0,
@@ -682,18 +688,57 @@ export class CombatScene extends Phaser.Scene {
       graphics.clear().fillStyle(0xffe45c).fillCircle(5, 5, 5).generateTexture('enemy-bullet', 10, 10);
     }
     if (createBossTextures) {
-      graphics.clear().fillStyle(0x3b315d).fillRoundedRect(0, 0, 120, 72, 12);
-      graphics.lineStyle(4, 0x7d6ab3).strokeRoundedRect(2, 2, 116, 68, 10)
-        .generateTexture('boss-body', 120, 72);
-      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(0, 0, 14, 38, 6);
-      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(1, 1, 12, 36, 5)
-        .generateTexture('boss-left-weakpoint', 14, 38);
-      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(0, 0, 14, 38, 6);
-      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(1, 1, 12, 36, 5)
-        .generateTexture('boss-right-weakpoint', 14, 38);
-      graphics.clear().fillStyle(0xffd15c).fillCircle(16, 16, 14);
-      graphics.lineStyle(3, 0xffffff).strokeCircle(16, 16, 13)
-        .generateTexture('boss-core', 32, 32);
+      const { body, weakpoint, core } = GAME_TUNING.boss;
+      const bodyStrokeInset = 2;
+      const weakpointStrokeInset = 1;
+      graphics.clear().fillStyle(0x3b315d).fillRoundedRect(0, 0, body.width, body.height, 12);
+      graphics.lineStyle(4, 0x7d6ab3).strokeRoundedRect(
+        bodyStrokeInset,
+        bodyStrokeInset,
+        body.width - bodyStrokeInset * 2,
+        body.height - bodyStrokeInset * 2,
+        10,
+      ).generateTexture('boss-body', body.width, body.height);
+      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(
+        0,
+        0,
+        weakpoint.visual.width,
+        weakpoint.visual.height,
+        6,
+      );
+      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(
+        weakpointStrokeInset,
+        weakpointStrokeInset,
+        weakpoint.visual.width - weakpointStrokeInset * 2,
+        weakpoint.visual.height - weakpointStrokeInset * 2,
+        5,
+      ).generateTexture(
+        'boss-left-weakpoint',
+        weakpoint.visual.width,
+        weakpoint.visual.height,
+      );
+      graphics.clear().fillStyle(0xff6c8c).fillRoundedRect(
+        0,
+        0,
+        weakpoint.visual.width,
+        weakpoint.visual.height,
+        6,
+      );
+      graphics.lineStyle(2, 0xffd1dc).strokeRoundedRect(
+        weakpointStrokeInset,
+        weakpointStrokeInset,
+        weakpoint.visual.width - weakpointStrokeInset * 2,
+        weakpoint.visual.height - weakpointStrokeInset * 2,
+        5,
+      ).generateTexture(
+        'boss-right-weakpoint',
+        weakpoint.visual.width,
+        weakpoint.visual.height,
+      );
+      const coreCenter = core.visualSize / 2;
+      graphics.clear().fillStyle(0xffd15c).fillCircle(coreCenter, coreCenter, coreCenter - 2);
+      graphics.lineStyle(3, 0xffffff).strokeCircle(coreCenter, coreCenter, coreCenter - 3)
+        .generateTexture('boss-core', core.visualSize, core.visualSize);
       graphics.clear().fillStyle(0xfff08a).fillCircle(5, 5, 5)
         .generateTexture('boss-aimed-bullet', 10, 10);
       graphics.clear().fillStyle(0xff7b55).fillRoundedRect(0, 0, 16, 24, 5)

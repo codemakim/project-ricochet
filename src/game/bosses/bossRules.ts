@@ -1,3 +1,5 @@
+import { GAME_TUNING } from '../config/gameTuning';
+
 export type BossPartId = 'leftWeakpoint' | 'rightWeakpoint' | 'core';
 export type BossPhase = 'twoWeakpoints' | 'oneWeakpoint' | 'core' | 'defeated';
 export type BossPattern = 'aimedShot' | 'supportDrop';
@@ -11,9 +13,9 @@ export interface BossState {
 
 export function createBossState(): BossState {
   return {
-    leftWeakpointHp: 14,
-    rightWeakpointHp: 14,
-    coreHp: 36,
+    leftWeakpointHp: GAME_TUNING.boss.weakpoint.hp,
+    rightWeakpointHp: GAME_TUNING.boss.weakpoint.hp,
+    coreHp: GAME_TUNING.boss.core.hp,
     attackIndex: 0,
   };
 }
@@ -79,8 +81,7 @@ export function nextBossAttack(
           ? ['supportDrop']
           : ['aimedShot', 'supportDrop']
       : [state.attackIndex % 2 === 0 ? 'aimedShot' : 'supportDrop'];
-  const intervalMs =
-    phase === 'twoWeakpoints' ? 2800 : phase === 'oneWeakpoint' ? 2300 : 1900;
+  const intervalMs = GAME_TUNING.boss.majorIntervalsMs[phase];
 
   return {
     patterns,
