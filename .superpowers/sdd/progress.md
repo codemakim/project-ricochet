@@ -33,6 +33,6 @@
 - Task 2 enemy ingress tuning: complete (`f7fc573..4945c0d`, review clean)
 - Task 3 boss geometry and movement: complete (`2999a8c..009f4ff`, review clean)
 - Task 4 projectile visual separation: complete (`54a3ea2..6b9fe94`, review clean; browser contrast verified)
-- Task 5 boss basic shot: pending
+- Task 5 boss basic shot: complete (`23b14b4..72d0d27`, review clean after configured support-damage fix)
 - Task 6 browser acceptance and playtest handoff: pending
 - Final review and verification: pending
