@@ -23,3 +23,16 @@
 - Task 2 review: validate invariants on public `BossState` inputs.
 - Task 2 review: define and test accurate post-defeat damage behavior.
 - Task 2 review: add asymmetric left-side reopening movement coverage.
+
+## Combat density tuning execution
+
+- Branch: `codex/combat-density-tuning`
+- Base: `57afd9c`
+- Baseline: 30 files, 260 unit tests passed
+- Task 1 typed tuning foundation: complete (`57afd9c..e7645a9`, review clean)
+- Task 2 enemy ingress tuning: pending
+- Task 3 boss geometry and movement: pending
+- Task 4 projectile visual separation: pending
+- Task 5 boss basic shot: pending
+- Task 6 browser acceptance and playtest handoff: pending
+- Final review and verification: pending
