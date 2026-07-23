@@ -209,6 +209,7 @@ describe('TemporaryOrbManager', () => {
       damage: 1.75,
       killed: true,
       reflect: true,
+      preserveChargedKinetics: false,
     });
     expect(manager.handleEnemyHit(
       orb as unknown as never,

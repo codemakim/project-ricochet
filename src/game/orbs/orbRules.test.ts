@@ -9,6 +9,7 @@ describe('orb rules', () => {
       damage: 1.5,
       killed: true,
       reflect: true,
+      preserveChargedKinetics: false,
     });
   });
 
@@ -19,6 +20,7 @@ describe('orb rules', () => {
       damage: 1.25,
       killed: false,
       reflect: true,
+      preserveChargedKinetics: false,
     });
   });
 
@@ -49,9 +51,19 @@ describe('orb rules', () => {
       charges: 0,
       killed: true,
       reflect: false,
+      preserveChargedKinetics: true,
     });
-    expect(directHit(1, 2, { passThroughOnKill: false }, false, 0, 0, true).reflect).toBe(true);
-    expect(directHit(0, 1, { passThroughOnKill: false }, false, 0, 0, true).reflect).toBe(true);
+    expect(directHit(1, 2, { passThroughOnKill: false }, false, 0, 0, true))
+      .toMatchObject({ reflect: true, preserveChargedKinetics: false });
+    expect(directHit(0, 1, { passThroughOnKill: false }, false, 0, 0, true))
+      .toMatchObject({ reflect: true, preserveChargedKinetics: false });
+  });
+
+  it('does not preserve charged kinetics for experiment or ordinary piercing pass-through', () => {
+    expect(directHit(1, 1, { passThroughOnKill: true }, false))
+      .toMatchObject({ reflect: false, preserveChargedKinetics: false });
+    expect(directHit(1, 99, { passThroughOnKill: false }, true))
+      .toMatchObject({ reflect: false, preserveChargedKinetics: false });
   });
 
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(

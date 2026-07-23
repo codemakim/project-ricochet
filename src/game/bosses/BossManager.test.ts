@@ -119,7 +119,14 @@ class FakeCollider {
 }
 
 function hitResult(damage = 3, charged = true): HitResult {
-  return { damage, charged, charges: charged ? 2 : 0, killed: false, reflect: true };
+  return {
+    damage,
+    charged,
+    charges: charged ? 2 : 0,
+    killed: false,
+    reflect: true,
+    preserveChargedKinetics: false,
+  };
 }
 
 function createBoundary() {

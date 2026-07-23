@@ -60,6 +60,7 @@ describe('GAME_TUNING', () => {
         leftTravel: { minimum: 96, maximum: 168 },
         rightTravel: { minimum: 282, maximum: 354 },
         speed: 30,
+        hitCooldownMs: 80,
         minimumCorridorWidth: 96,
       },
       timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
@@ -133,6 +134,26 @@ describe('GAME_TUNING', () => {
     }],
     ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = 451;
+    }],
+    ['derived hive shooter outside the game', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.core.x = 30;
+    }],
+    ['hive core hitbox larger than its visual', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.core.hitboxSize = value.hiveBoss.core.visualSize + 1;
+    }],
+    ['worst-case reflector corridor below minimum', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.reflector.rightTravel.minimum = 281;
+    }],
+    ['reflector path overlapping the core', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.reflector.y = 140;
+      value.hiveBoss.reflector.leftTravel = { minimum: 138, maximum: 210 };
+      value.hiveBoss.reflector.rightTravel = { minimum: 324, maximum: 396 };
+    }],
+    ['non-positive reflector hit cooldown', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.reflector.hitCooldownMs = 0;
+    }],
+    ['invalid permanent orb cap', (value: Mutable<GameTuning>) => {
+      value.relics.secondBoss.auxiliaryOrbit.orbLimit = 2;
     }],
     ['non-finite hive core x', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = Number.NaN;

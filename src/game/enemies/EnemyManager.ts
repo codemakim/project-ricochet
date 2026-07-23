@@ -6,7 +6,12 @@ import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import { createInitialFormation } from '../encounters/formationRules';
-import { canFire, type EnemyKind, type EnemySpec } from './enemyRules';
+import {
+  canFire,
+  type EnemyKind,
+  type EnemySpec,
+  type FragmentSide,
+} from './enemyRules';
 import { fragmentSpecsAt, populationCostForEnemy } from './splitterRules';
 
 const CONTACT_SEPARATION = 6;
@@ -16,6 +21,7 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   enemyId: number;
   kind: EnemyKind;
   hp: number;
+  side?: FragmentSide;
 };
 
 export interface EnemySnapshot {
@@ -69,7 +75,7 @@ export interface EnemyManagerOptions {
   onEnemyKilled?: (event: EnemyKilledEvent) => void;
   onDirectHit?: (event: DirectHitEvent) => void;
   getExternalBulletCount?: () => number;
-  textureKeys?: Partial<Record<EnemyKind | 'bullet', string>>;
+  textureKeys?: Partial<Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>>;
 }
 
 export class EnemyManager {
@@ -90,7 +96,7 @@ export class EnemyManager {
     sourceOrbId: number;
   }>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
-  private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
+  private readonly textureKeys: Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>;
   private readonly bulletTextureKey: string;
   private readonly unsubscribeOrbAdded: () => void;
   private nextEnemyId = 0;
@@ -108,6 +114,8 @@ export class EnemyManager {
       shooter: 'enemy-shooter',
       splitter: 'enemy-basic',
       fragment: 'enemy-basic',
+      fragmentLeft: 'enemy-fragment-left',
+      fragmentRight: 'enemy-fragment-right',
       bullet: 'enemy-bullet',
       ...options.textureKeys,
     };
@@ -189,10 +197,14 @@ export class EnemyManager {
   spawnFormation(formation: readonly EnemySpec[]): void {
     if (this.destroyed) return;
     for (const spec of formation) {
-      const enemy = this.enemyGroup.create(spec.x, spec.y, this.textureKeys[spec.kind]) as EnemySprite;
+      const textureKey = spec.kind === 'fragment' && spec.side
+        ? this.textureKeys[spec.side === 'left' ? 'fragmentLeft' : 'fragmentRight']
+        : this.textureKeys[spec.kind];
+      const enemy = this.enemyGroup.create(spec.x, spec.y, textureKey) as EnemySprite;
       enemy.enemyId = this.nextEnemyId;
       this.nextEnemyId += 1;
       enemy.kind = spec.kind;
+      enemy.side = spec.side;
       enemy.hp = spec.hp;
       enemy.setImmovable(true).setVelocityY(spec.speed);
       this.enemies.set(enemy.enemyId, enemy);

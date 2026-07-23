@@ -330,13 +330,22 @@ describe('EnemyManager', () => {
     expect(colliders).toHaveLength(colliderCount);
   });
 
-  it('uses the basic texture fallback for splitter and fragment sprites', () => {
+  it('selects complementary fragment textures from deterministic fragment sides', () => {
     const { groups } = createBoundary([
       { kind: 'splitter', hp: 3, x: 90, y: -28, column: 1, speed: 22 },
-      { kind: 'fragment', hp: 1, x: 144, y: 14, column: -1, speed: 22 },
+      {
+        kind: 'fragment', side: 'left', hp: 1, x: 144, y: 14, column: -1, speed: 22,
+      },
+      {
+        kind: 'fragment', side: 'right', hp: 1, x: 168, y: 14, column: -1, speed: 22,
+      },
     ]);
 
-    expect(groups[0]!.children.map(({ texture }) => texture)).toEqual(['enemy-basic', 'enemy-basic']);
+    expect(groups[0]!.children.map(({ texture }) => texture)).toEqual([
+      'enemy-basic',
+      'enemy-fragment-left',
+      'enemy-fragment-right',
+    ]);
   });
 
   it('splits a directly killed splitter into exactly two fragments once', () => {
@@ -355,6 +364,8 @@ describe('EnemyManager', () => {
       expect.objectContaining({ kind: 'fragment', hp: 1, position: { x: 237, y: 180 } }),
     ]);
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
+    expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
+      .toEqual(['enemy-fragment-left', 'enemy-fragment-right']);
   });
 
   it('uses an area-damage snapshot before splitting, then kills fragments on the next event', () => {

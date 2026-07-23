@@ -4,8 +4,8 @@ import { fragmentSpecsAt, populationCostForEnemy } from './splitterRules';
 describe('splitter rules', () => {
   it('spawns fragments symmetrically around a centered splitter', () => {
     expect(fragmentSpecsAt({ x: 225, y: 180 }, 8)).toEqual([
-      { kind: 'fragment', hp: 1, x: 213, y: 180, column: -1, speed: 8 },
-      { kind: 'fragment', hp: 1, x: 237, y: 180, column: -1, speed: 8 },
+      { kind: 'fragment', side: 'left', hp: 1, x: 213, y: 180, column: -1, speed: 8 },
+      { kind: 'fragment', side: 'right', hp: 1, x: 237, y: 180, column: -1, speed: 8 },
     ]);
   });
 

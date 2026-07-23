@@ -93,6 +93,7 @@ export interface GameTuning {
       leftTravel: RangeTuning;
       rightTravel: RangeTuning;
       speed: number;
+      hitCooldownMs: number;
       minimumCorridorWidth: number;
     };
     timing: { shieldedMs: number; telegraphMs: number; exposedMs: number };
@@ -178,6 +179,7 @@ export const GAME_TUNING = {
       leftTravel: { minimum: 96, maximum: 168 },
       rightTravel: { minimum: 282, maximum: 354 },
       speed: 30,
+      hitCooldownMs: 80,
       minimumCorridorWidth: 96,
     },
     timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
@@ -232,7 +234,10 @@ function nonNegativeInteger(value: number, name: string): void {
 }
 
 export function validateGameTuning(tuning: GameTuning): void {
-  const { boss, enemies, encounter, projectiles, temporaryOrbs, hiveBoss, relics, visual } = tuning;
+  const {
+    boss, enemies, encounter, projectiles, temporaryOrbs,
+    hiveBoss, relics, visual,
+  } = tuning;
   finite(boss.y, 'boss.y');
   positive(boss.body.width, 'boss.body.width');
   positive(boss.body.height, 'boss.body.height');
@@ -362,6 +367,9 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(hiveBoss.core.visualSize, 'hiveBoss.core.visualSize');
   positive(hiveBoss.core.hitboxSize, 'hiveBoss.core.hitboxSize');
   positive(hiveBoss.core.hp, 'hiveBoss.core.hp');
+  if (hiveBoss.core.hitboxSize > hiveBoss.core.visualSize) {
+    throw new RangeError('hiveBoss core hitbox must fit its visual');
+  }
   finite(hiveBoss.core.x, 'hiveBoss.core.x');
   finite(hiveBoss.core.y, 'hiveBoss.core.y');
   if (
@@ -375,6 +383,31 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(hiveBoss.shooter.width, 'hiveBoss.shooter.width');
   positive(hiveBoss.shooter.height, 'hiveBoss.shooter.height');
   positive(hiveBoss.shooter.hp, 'hiveBoss.shooter.hp');
+  const shooterOffsetX = hiveBoss.core.visualSize / 2 + hiveBoss.shooter.width / 2;
+  const deployedShooterY = hiveBoss.core.y
+    - hiveBoss.core.visualSize / 2
+    - hiveBoss.shooter.height / 2;
+  if (
+    hiveBoss.core.x - shooterOffsetX - hiveBoss.shooter.width / 2 < 0
+    || hiveBoss.core.x + shooterOffsetX + hiveBoss.shooter.width / 2 > GAME_WIDTH
+    || deployedShooterY - hiveBoss.shooter.height / 2 < 0
+    || deployedShooterY + hiveBoss.shooter.height / 2 > GAME_HEIGHT
+  ) {
+    throw new RangeError('hiveBoss derived shooter positions must fit the game bounds');
+  }
+  const recalledReflectorOffsetX = hiveBoss.core.visualSize / 2
+    + hiveBoss.reflector.width / 2;
+  const recalledReflectorY = hiveBoss.core.y
+    + hiveBoss.core.visualSize / 2
+    + hiveBoss.reflector.height / 2;
+  if (
+    hiveBoss.core.x - recalledReflectorOffsetX - hiveBoss.reflector.width / 2 < 0
+    || hiveBoss.core.x + recalledReflectorOffsetX + hiveBoss.reflector.width / 2
+      > GAME_WIDTH
+    || recalledReflectorY + hiveBoss.reflector.height / 2 > GAME_HEIGHT
+  ) {
+    throw new RangeError('hiveBoss recalled module positions must fit the game bounds');
+  }
   positive(hiveBoss.reflector.width, 'hiveBoss.reflector.width');
   positive(hiveBoss.reflector.height, 'hiveBoss.reflector.height');
   positive(hiveBoss.reflector.hp, 'hiveBoss.reflector.hp');
@@ -400,12 +433,45 @@ export function validateGameTuning(tuning: GameTuning): void {
     throw new RangeError('hiveBoss reflector must fit the game bounds');
   }
   positive(hiveBoss.reflector.speed, 'hiveBoss.reflector.speed');
+  positive(hiveBoss.reflector.hitCooldownMs, 'hiveBoss.reflector.hitCooldownMs');
   positive(hiveBoss.reflector.minimumCorridorWidth, 'hiveBoss.reflector.minimumCorridorWidth');
+  const worstCaseCorridor = hiveBoss.reflector.rightTravel.minimum
+    - hiveBoss.reflector.leftTravel.maximum
+    - hiveBoss.reflector.width;
+  if (worstCaseCorridor < hiveBoss.reflector.minimumCorridorWidth) {
+    throw new RangeError('hiveBoss reflector paths must preserve the minimum corridor');
+  }
+  const coreBounds = {
+    left: hiveBoss.core.x - hiveBoss.core.visualSize / 2,
+    right: hiveBoss.core.x + hiveBoss.core.visualSize / 2,
+    top: hiveBoss.core.y - hiveBoss.core.visualSize / 2,
+    bottom: hiveBoss.core.y + hiveBoss.core.visualSize / 2,
+  };
+  const reflectorTop = hiveBoss.reflector.y - hiveBoss.reflector.height / 2;
+  const reflectorBottom = hiveBoss.reflector.y + hiveBoss.reflector.height / 2;
+  const verticallyOverlapsCore = reflectorTop < coreBounds.bottom
+    && reflectorBottom > coreBounds.top;
+  const pathOverlapsCore = (
+    travel: RangeTuning,
+  ) => travel.minimum - hiveBoss.reflector.width / 2 < coreBounds.right
+    && travel.maximum + hiveBoss.reflector.width / 2 > coreBounds.left;
+  if (
+    verticallyOverlapsCore
+    && (
+      pathOverlapsCore(hiveBoss.reflector.leftTravel)
+      || pathOverlapsCore(hiveBoss.reflector.rightTravel)
+    )
+  ) {
+    throw new RangeError('hiveBoss reflector paths must not overlap the core');
+  }
   for (const [phase, duration] of Object.entries(hiveBoss.timing)) {
     positive(duration, `hiveBoss.timing.${phase}`);
   }
   const { secondBoss } = relics;
   positiveInteger(secondBoss.auxiliaryOrbit.orbLimit, 'relics.secondBoss.auxiliaryOrbit.orbLimit');
+  if (secondBoss.auxiliaryOrbit.orbLimit < 3) {
+    throw new RangeError('auxiliary orbit limit must fit the starting orb count');
+  }
   positiveInteger(secondBoss.recoverySalvo.temporaryOrbCount, 'relics.secondBoss.recoverySalvo.temporaryOrbCount');
   positiveInteger(secondBoss.siegeResonance.hitsRequired, 'relics.secondBoss.siegeResonance.hitsRequired');
   positive(secondBoss.siegeResonance.radius, 'relics.secondBoss.siegeResonance.radius');

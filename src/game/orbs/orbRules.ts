@@ -16,6 +16,7 @@ export interface HitResult {
   damage: number;
   killed: boolean;
   reflect: boolean;
+  preserveChargedKinetics: boolean;
 }
 
 const LEGAL_TRANSITIONS: Record<OrbState, readonly OrbState[]> = {
@@ -66,5 +67,6 @@ export function directHit(
     damage,
     killed,
     reflect: piercing ? false : !(killed && (settings.passThroughOnKill || rewardPiercing)),
+    preserveChargedKinetics: rewardPiercing,
   };
 }

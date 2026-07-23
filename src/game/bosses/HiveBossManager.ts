@@ -23,7 +23,6 @@ import {
 
 const PART_DEPTH = -2;
 const WARNING_DEPTH = 1;
-const HIT_DEBOUNCE_MS = 80;
 const SHIELDED_TINT = 0x5d72ff;
 const TELEGRAPH_TINT = 0xffd36a;
 const PART_HIT_IDS: Record<HivePartId, number> = {
@@ -117,10 +116,8 @@ export class HiveBossManager implements BossEncounter {
     const now = options.getGameplayElapsedMs();
     this.lastGameplayElapsedMs = now;
     this.nextShooterWarningAt = {
-      leftShooter: now + GAME_TUNING.projectiles.hiveShooter.intervalMs,
-      rightShooter: now
-        + GAME_TUNING.projectiles.hiveShooter.intervalMs
-        + GAME_TUNING.projectiles.hiveShooter.offsetMs,
+      leftShooter: Number.POSITIVE_INFINITY,
+      rightShooter: Number.POSITIVE_INFINITY,
     };
     this.coreGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.moduleGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
@@ -128,39 +125,41 @@ export class HiveBossManager implements BossEncounter {
     this.reflectorGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.bulletGroup = scene.physics.add.group({ allowGravity: false });
 
-    const { core, shooters, reflectors } = HIVE_BOSS_GEOMETRY;
+    const {
+      core, shooters, reflectors, recalled,
+    } = HIVE_BOSS_GEOMETRY;
     const leftReflectorX = midpoint(reflectors.leftReflector.travel);
     const rightReflectorX = midpoint(reflectors.rightReflector.travel);
     this.parts = {
       core: this.createPart(this.coreGroup, core.x, core.y, 'hive-core', core.width, core.height),
       leftShooter: this.createPart(
         this.moduleGroup,
-        shooters.leftShooter.x,
-        shooters.leftShooter.y,
+        recalled.leftShooter.x,
+        recalled.leftShooter.y,
         'hive-left-shooter',
         shooters.leftShooter.width,
         shooters.leftShooter.height,
       ),
       rightShooter: this.createPart(
         this.moduleGroup,
-        shooters.rightShooter.x,
-        shooters.rightShooter.y,
+        recalled.rightShooter.x,
+        recalled.rightShooter.y,
         'hive-right-shooter',
         shooters.rightShooter.width,
         shooters.rightShooter.height,
       ),
       leftReflector: this.createPart(
         this.reflectorGroup,
-        leftReflectorX,
-        reflectors.leftReflector.y,
+        recalled.leftReflector.x,
+        recalled.leftReflector.y,
         'hive-left-reflector',
         reflectors.leftReflector.width,
         reflectors.leftReflector.height,
       ),
       rightReflector: this.createPart(
         this.reflectorGroup,
-        rightReflectorX,
-        reflectors.rightReflector.y,
+        recalled.rightReflector.x,
+        recalled.rightReflector.y,
         'hive-right-reflector',
         reflectors.rightReflector.width,
         reflectors.rightReflector.height,
@@ -357,11 +356,11 @@ export class HiveBossManager implements BossEncounter {
       PART_HIT_IDS[partId],
       this.state.parts[partId],
       this.options.getGameplayElapsedMs(),
-      false,
+      this.isRecalledReflector(partId),
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
-    if (!result.reflect) {
+    if (!result.reflect || this.isRecalledReflector(partId)) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -382,7 +381,7 @@ export class HiveBossManager implements BossEncounter {
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
-    if (!result.reflect) {
+    if (!result.reflect || this.isRecalledReflector(partId)) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -420,7 +419,10 @@ export class HiveBossManager implements BossEncounter {
     const key = `${sourceKey}:${partId}`;
     const now = this.options.getGameplayElapsedMs();
     const lastAcceptedAt = this.acceptedAt.get(key);
-    if (lastAcceptedAt !== undefined && now - lastAcceptedAt < HIT_DEBOUNCE_MS) return false;
+    if (
+      lastAcceptedAt !== undefined
+      && now - lastAcceptedAt < GAME_TUNING.hiveBoss.reflector.hitCooldownMs
+    ) return false;
     this.acceptedAt.set(key, now);
     return true;
   }
@@ -512,12 +514,36 @@ export class HiveBossManager implements BossEncounter {
       this.cancelCoreWarnings();
       this.nextCoreFanAt = now + GAME_TUNING.projectiles.hiveCore.intervalMs;
     }
-    if (this.state.phase === 'shielded' && previousPhase === 'exposed') this.recallReflectors();
+    if (this.state.phase === 'exposed') {
+      this.deployModules();
+      this.restartShooterSchedules(now);
+    }
+    if (this.state.phase === 'shielded' && previousPhase === 'exposed') {
+      this.recallModules();
+      this.cancelAllShooterWarnings();
+      this.stopShooterSchedules();
+    }
     this.synchronizeParts();
     this.options.onPhaseChanged?.(this.state.phase);
   }
 
-  private recallReflectors(): void {
+  private recallModules(): void {
+    for (const partId of [
+      'leftShooter',
+      'rightShooter',
+      'leftReflector',
+      'rightReflector',
+    ] as const) {
+      const position = HIVE_BOSS_GEOMETRY.recalled[partId];
+      this.parts[partId].setPosition(position.x, position.y);
+    }
+  }
+
+  private deployModules(): void {
+    for (const partId of ['leftShooter', 'rightShooter'] as const) {
+      const position = HIVE_BOSS_GEOMETRY.shooters[partId];
+      this.parts[partId].setPosition(position.x, position.y);
+    }
     for (const partId of ['leftReflector', 'rightReflector'] as const) {
       const geometry = HIVE_BOSS_GEOMETRY.reflectors[partId];
       const x = midpoint(geometry.travel);
@@ -544,6 +570,7 @@ export class HiveBossManager implements BossEncounter {
   }
 
   private scheduleAttacks(now: number): void {
+    if (this.state.phase !== 'exposed' && this.state.phase !== 'permanentlyExposed') return;
     for (const moduleId of ['leftShooter', 'rightShooter'] as const) {
       if (now < this.nextShooterWarningAt[moduleId]) continue;
       this.nextShooterWarningAt[moduleId] = now
@@ -604,7 +631,10 @@ export class HiveBossManager implements BossEncounter {
       warning.marker.destroy();
       if (!this.hasHostileCapacity()) continue;
       if (warning.kind === 'coreFan') this.fireCoreFan();
-      else if (this.state.parts[warning.moduleId] > 0) {
+      else if (
+        (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed')
+        && this.state.parts[warning.moduleId] > 0
+      ) {
         this.fireShooter(warning.moduleId, warning.target);
       }
     }
@@ -677,6 +707,28 @@ export class HiveBossManager implements BossEncounter {
       warning.marker.destroy();
       return false;
     });
+  }
+
+  private cancelAllShooterWarnings(): void {
+    this.cancelShooterWarning('leftShooter');
+    this.cancelShooterWarning('rightShooter');
+  }
+
+  private stopShooterSchedules(): void {
+    this.nextShooterWarningAt.leftShooter = Number.POSITIVE_INFINITY;
+    this.nextShooterWarningAt.rightShooter = Number.POSITIVE_INFINITY;
+  }
+
+  private restartShooterSchedules(now: number): void {
+    const { intervalMs, offsetMs } = GAME_TUNING.projectiles.hiveShooter;
+    this.nextShooterWarningAt.leftShooter = now + intervalMs;
+    this.nextShooterWarningAt.rightShooter = now + intervalMs + offsetMs;
+  }
+
+  private isRecalledReflector(partId: HivePartId): boolean {
+    return (partId === 'leftReflector' || partId === 'rightReflector')
+      && this.state.phase !== 'exposed'
+      && this.state.phase !== 'permanentlyExposed';
   }
 
   private cancelCoreWarnings(): void {

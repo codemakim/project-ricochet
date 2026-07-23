@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import { EXPERIMENT_DEFAULTS, MAX_ORB_COUNT, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
+import { GAME_TUNING } from '../config/gameTuning';
+import { EXPERIMENT_DEFAULTS, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
 import { OrbManager, OrbStore } from './OrbManager';
 
 const player = { x: 100, y: 200 };
@@ -75,6 +76,8 @@ function createManager(
   getDirectDamageBonus: () => number = () => 0,
   getChargedSpeed: () => number = () => ORB_SPEED,
   passThroughOnKill = false,
+  chargedKillPierces: () => boolean = () => false,
+  getOrbLimit: () => number = () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
 ) {
   const world = new FakeWorld();
   const sprites: FakeSprite[] = [];
@@ -95,6 +98,8 @@ function createManager(
     hasFixedTerrainLineOfSight,
     getDirectDamageBonus,
     getChargedSpeed,
+    chargedKillPierces,
+    getOrbLimit,
   });
   return { manager, sprites, world };
 }
@@ -115,7 +120,37 @@ describe('OrbStore', () => {
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
-    expect(store.getSnapshot()).toHaveLength(MAX_ORB_COUNT);
+    expect(store.getSnapshot()).toHaveLength(
+      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+    );
+  });
+
+  it('honors a runtime build orb-limit provider up to the central cap', () => {
+    let orbLimit = 3;
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => 0,
+      () => false,
+      () => orbLimit,
+    );
+
+    expect(store.addOrb()).toBe(false);
+    orbLimit = 4;
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(false);
+    orbLimit = 99;
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(false);
+    expect(store.getSnapshot()).toHaveLength(
+      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+    );
   });
 
   it('queues the three permanent orbs once and releases them 100ms apart', () => {
@@ -385,36 +420,67 @@ describe('OrbStore', () => {
     });
   });
 
-  it('applies charged-only damage and lethal penetration providers through the store', () => {
+  it.each([440, 480, 520])(
+    'preserves rank-derived charged speed %i and direction on the final inertial lethal hit',
+    (chargedSpeed) => {
     const store = new OrbStore(
       EXPERIMENT_DEFAULTS,
       {},
       () => false,
       () => 0.25,
-      () => ORB_SPEED,
+      () => chargedSpeed,
       () => 3,
       () => 0,
       () => 0.75,
       () => true,
     );
     store.activateAim();
-    store.update(0, 0, player, up);
+    store.update(0, 0, player, { x: 3, y: 4 });
+    store.handleEnemyHit(0, 10, 99, 900, false);
+    store.handleEnemyHit(0, 11, 99, 900, false);
 
     expect(store.handleEnemyHit(0, 1, 2.5, 1_000, false)).toMatchObject({
       charged: true,
-      charges: 2,
+      charges: 0,
       damage: 2.5,
       killed: true,
       reflect: false,
+      preserveChargedKinetics: true,
     });
-    store.handleEnemyHit(0, 2, 99, 1_000, false);
-    store.handleEnemyHit(0, 3, 99, 1_000, false);
+    const after = store.getSnapshot()[0]!;
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(chargedSpeed);
+    expect(after.velocity.x / after.velocity.y).toBeCloseTo(3 / 4);
     expect(store.handleEnemyHit(0, 4, 1.25, 1_000, false)).toMatchObject({
       charged: false,
       damage: 1.25,
       killed: true,
       reflect: true,
+      preserveChargedKinetics: false,
     });
+  });
+
+  it('drops to base speed when a non-reward pass-through consumes the final charge', () => {
+    const store = new OrbStore(
+      { ...EXPERIMENT_DEFAULTS, passThroughOnKill: true },
+      {},
+      () => false,
+      () => 0,
+      () => 480,
+    );
+    store.activateAim();
+    store.update(0, 0, player, { x: 3, y: 4 });
+    store.handleEnemyHit(0, 1, 99, 900, false);
+    store.handleEnemyHit(0, 2, 99, 900, false);
+
+    expect(store.handleEnemyHit(0, 3, 1, 1_000, false)).toMatchObject({
+      charges: 0,
+      reflect: false,
+      preserveChargedKinetics: false,
+    });
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED);
   });
 
   it('rejects an invalid charged bonus without consuming charge, cooldown, or damage callback', () => {
@@ -523,6 +589,26 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites).toHaveLength(3);
   });
 
+  it('honors the live build limit before creating a runtime orb sprite', () => {
+    let limit = 3;
+    const { manager, sprites } = createManager(
+      true,
+      () => false,
+      null,
+      () => 0,
+      () => ORB_SPEED,
+      false,
+      () => false,
+      () => limit,
+    );
+
+    expect(manager.addOrb()).toBe(false);
+    expect(sprites).toHaveLength(3);
+    limit = 4;
+    expect(manager.addOrb()).toBe(true);
+    expect(sprites).toHaveLength(4);
+  });
+
   it('launches with injected charged speed', () => {
     const { manager, sprites } = createManager(true, () => false, null, () => 0, () => 480);
     manager.activateAim();
@@ -544,6 +630,37 @@ describe('OrbManager Phaser adapter', () => {
     const after = manager.getSnapshot()[0]!;
     expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
     expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(400);
+  });
+
+  it('keeps the pre-hit charged body velocity after inertial penetration spends its last charge', () => {
+    const { manager, sprites } = createManager(
+      true,
+      () => false,
+      null,
+      () => 0,
+      () => 480,
+      false,
+      () => true,
+    );
+    manager.activateAim();
+    manager.update(0, 0, player, { x: 3, y: 4 });
+    manager.handleEnemyHit(0, 1, 99, 900, false);
+    manager.handleEnemyHit(0, 2, 99, 900, false);
+
+    const result = manager.handleEnemyHit(0, 3, 1.5, 1_000, false);
+
+    expect(result).toMatchObject({
+      charged: true,
+      charges: 0,
+      reflect: false,
+      preserveChargedKinetics: true,
+    });
+    expect(manager.getSnapshot()[0]!.velocity).toEqual(sprites[0]!.body.velocity);
+    expect(Math.hypot(
+      sprites[0]!.body.velocity.x,
+      sprites[0]!.body.velocity.y,
+    )).toBeCloseTo(480);
+    expect(sprites[0]!.body.velocity.x / sprites[0]!.body.velocity.y).toBeCloseTo(3 / 4);
   });
 
   it('normalizes a reflected body to 400 after the last charge', () => {

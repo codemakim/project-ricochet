@@ -114,7 +114,14 @@ class FakeCollider {
 }
 
 function result(damage = 3, reflect = true): HitResult {
-  return { damage, charged: true, charges: 2, killed: false, reflect };
+  return {
+    damage,
+    charged: true,
+    charges: 2,
+    killed: false,
+    reflect,
+    preserveChargedKinetics: false,
+  };
 }
 
 function createBoundary() {
@@ -239,6 +246,29 @@ describe('HiveBossManager', () => {
     expect(boundary.groups).toHaveLength(5);
   });
 
+  it('recalls every module around the core until exposure, then deploys exact combat positions', () => {
+    const boundary = createBoundary();
+    const positions = () => boundary.manager.getSnapshot().partPositions;
+    const recalled = {
+      core: { x: 225, y: 140 },
+      leftShooter: { x: 180, y: 140 },
+      rightShooter: { x: 270, y: 140 },
+      leftReflector: { x: 188, y: 216 },
+      rightReflector: { x: 262, y: 216 },
+    };
+
+    expect(positions()).toEqual(recalled);
+    expect(boundary.updateAt(4000).partPositions).toEqual(recalled);
+    expect(boundary.updateAt(5500).partPositions).toEqual({
+      core: { x: 225, y: 140 },
+      leftShooter: { x: 180, y: 98 },
+      rightShooter: { x: 270, y: 98 },
+      leftReflector: { x: 132, y: 280 },
+      rightReflector: { x: 318, y: 280 },
+    });
+    expect(boundary.updateAt(12_500).partPositions).toEqual(recalled);
+  });
+
   it('reflects both orb kinds from the shielded core without consuming or reporting hits', () => {
     const boundary = createBoundary();
     const permanent = boundary.colliderFor('hive-core');
@@ -356,7 +386,8 @@ describe('HiveBossManager', () => {
     const left = boundary.sprite('hive-left-reflector');
     const right = boundary.sprite('hive-right-reflector');
 
-    for (const now of [1000, 4000, 5500, 8500, 12_500, 20_000]) {
+    boundary.updateAt(4000);
+    for (const now of [5500, 6500, 8500, 12_499]) {
       boundary.updateAt(now);
       expect(left.x).toBeGreaterThanOrEqual(GAME_TUNING.hiveBoss.reflector.leftTravel.minimum);
       expect(left.x).toBeLessThanOrEqual(GAME_TUNING.hiveBoss.reflector.leftTravel.maximum);
@@ -416,27 +447,70 @@ describe('HiveBossManager', () => {
     expect({ left: left.x, right: right.x }).toEqual(start);
   });
 
-  it('uses the destructible reflector sprite itself as the orb wall and no player/bullet wall', () => {
+  it('damages recalled reflectors without wall reflection, then reflects only while deployed', () => {
     const boundary = createBoundary();
     const reflector = boundary.colliderFor('hive-left-reflector');
     const temporaryReflector = boundary.colliderFor(
       'hive-left-reflector',
       boundary.temporaryGroup,
     );
+    const initialPermanentVelocity = { ...boundary.orb.body.velocity };
+    const initialTemporaryVelocity = { ...boundary.temporaryOrb.body.velocity };
 
-    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
+    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(false);
     expect(temporaryReflector.trigger(
       boundary.temporaryOrb,
       temporaryReflector.second as FakeSprite,
-    )).toBe(true);
+    )).toBe(false);
+    expect(boundary.orb.body.velocity).toEqual(initialPermanentVelocity);
+    expect(boundary.temporaryOrb.body.velocity).toEqual(initialTemporaryVelocity);
     expect(boundary.handleEnemyHit).toHaveBeenCalledOnce();
     expect(boundary.handleTemporaryHit).toHaveBeenCalledOnce();
-    expect(boundary.synchronizeOrb).toHaveBeenCalledWith(boundary.orb);
-    expect(boundary.synchronizeTemporary).toHaveBeenCalledWith(boundary.temporaryOrb);
     expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(10.5);
+
+    boundary.updateAt(4000);
+    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(false);
+    expect(boundary.orb.body.velocity).toEqual(initialPermanentVelocity);
+    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(7.5);
+
+    boundary.updateAt(5500);
+    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
+    expect(boundary.orb.body.velocity.x).toBe(-initialPermanentVelocity.x);
+    expect(boundary.synchronizeOrb).toHaveBeenCalledWith(boundary.orb);
+    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(4.5);
     expect(boundary.colliders.some((collider) => collider.first === boundary.player)).toBe(false);
     expect(boundary.overlaps.every((overlap) => overlap.first === boundary.player)).toBe(true);
     expect(boundary.sprites.filter((sprite) => sprite.texture.includes('reflector'))).toHaveLength(0);
+  });
+
+  it('keeps shooters silent while recalled, cancels deployment warnings, and restarts offsets', () => {
+    const boundary = createBoundary();
+    const tuning = GAME_TUNING.projectiles.hiveShooter;
+
+    expect(boundary.updateAt(tuning.intervalMs).warnings).toBe(0);
+    expect(boundary.updateAt(4000)).toMatchObject({ phase: 'telegraph', warnings: 1, bullets: 0 });
+    expect(boundary.updateAt(5499)).toMatchObject({ phase: 'telegraph', warnings: 1, bullets: 0 });
+    expect(boundary.updateAt(5500)).toMatchObject({ phase: 'exposed', warnings: 0, bullets: 5 });
+
+    expect(boundary.updateAt(6900).warnings).toBe(1);
+    expect(boundary.updateAt(7200).projectiles.filter(({ kind }) => kind === 'hiveShooter'))
+      .toHaveLength(1);
+
+    const beforeRecallBullets = boundary.manager.getSnapshot().bullets;
+    expect(boundary.updateAt(11_900).warnings).toBe(2);
+    expect(boundary.updateAt(12_500)).toMatchObject({
+      phase: 'shielded',
+      warnings: 0,
+      bullets: beforeRecallBullets,
+    });
+    boundary.groups[4]!.children.forEach((bullet) => bullet.active && bullet.destroy());
+    expect(boundary.updateAt(16_500)).toMatchObject({ phase: 'telegraph', warnings: 1 });
+    expect(boundary.updateAt(18_000)).toMatchObject({ phase: 'exposed', warnings: 0 });
+    expect(boundary.updateAt(19_399).warnings).toBe(0);
+    expect(boundary.updateAt(19_400).warnings).toBe(1);
+    expect(boundary.updateAt(19_700).projectiles.filter(({ kind }) => kind === 'hiveShooter'))
+      .toHaveLength(1);
+    expect(boundary.updateAt(20_100).warnings).toBe(1);
   });
 
   it('debounces only the same orb/module pair for 80ms', () => {
@@ -500,18 +574,21 @@ describe('HiveBossManager', () => {
   it('offsets 1400ms shooter warnings by 700ms and locks each 300ms target', () => {
     const boundary = createBoundary();
     const shooterTuning = GAME_TUNING.projectiles.hiveShooter;
+    const exposureAt = 5500;
+    boundary.updateAt(4000);
+    boundary.updateAt(exposureAt);
 
-    expect(boundary.updateAt(shooterTuning.intervalMs - 1).warnings).toBe(0);
-    expect(boundary.updateAt(shooterTuning.intervalMs).warnings).toBe(1);
+    expect(boundary.updateAt(exposureAt + shooterTuning.intervalMs - 1).warnings).toBe(0);
+    expect(boundary.updateAt(exposureAt + shooterTuning.intervalMs).warnings).toBe(1);
     const lockedTarget = { x: boundary.player.x, y: boundary.player.y };
     boundary.player.setPosition(400, 80);
 
     expect(boundary.updateAt(
-      shooterTuning.intervalMs + shooterTuning.warningMs - 1,
-    ).projectiles).toHaveLength(0);
+      exposureAt + shooterTuning.intervalMs + shooterTuning.warningMs - 1,
+    ).projectiles.filter(({ kind }) => kind === 'hiveShooter')).toHaveLength(0);
     const first = boundary.updateAt(
-      shooterTuning.intervalMs + shooterTuning.warningMs,
-    ).projectiles;
+      exposureAt + shooterTuning.intervalMs + shooterTuning.warningMs,
+    ).projectiles.filter(({ kind }) => kind === 'hiveShooter');
     expect(first).toHaveLength(1);
     const projectile = first[0]!;
     const distance = Math.hypot(
@@ -527,27 +604,31 @@ describe('HiveBossManager', () => {
     );
 
     expect(boundary.updateAt(
-      shooterTuning.intervalMs + shooterTuning.offsetMs,
+      exposureAt + shooterTuning.intervalMs + shooterTuning.offsetMs,
     ).warnings).toBe(1);
     expect(boundary.updateAt(
-      shooterTuning.intervalMs + shooterTuning.offsetMs + shooterTuning.warningMs,
-    ).projectiles).toHaveLength(2);
+      exposureAt + shooterTuning.intervalMs + shooterTuning.offsetMs
+        + shooterTuning.warningMs,
+    ).projectiles.filter(({ kind }) => kind === 'hiveShooter')).toHaveLength(2);
   });
 
   it('cancels a destroyed shooter warning and never schedules that module again', () => {
     const boundary = createBoundary();
-    boundary.updateAt(GAME_TUNING.projectiles.hiveShooter.intervalMs);
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
+    boundary.updateAt(6900);
     const left = boundary.sprite('hive-left-shooter');
 
     expect(boundary.manager.applyAreaDamage({ x: left.x, y: left.y }, 1, 12))
       .toBe('leftShooter');
     expect(boundary.manager.getSnapshot().warnings).toBe(0);
 
-    boundary.updateAt(2100);
-    boundary.updateAt(2400);
-    boundary.updateAt(3500);
-    expect(boundary.manager.getSnapshot().projectiles).toHaveLength(1);
-    expect(boundary.manager.getSnapshot().projectiles[0]).toMatchObject({
+    boundary.updateAt(7600);
+    boundary.updateAt(7900);
+    const shooterProjectiles = boundary.manager.getSnapshot().projectiles
+      .filter(({ kind }) => kind === 'hiveShooter');
+    expect(shooterProjectiles).toHaveLength(1);
+    expect(shooterProjectiles[0]).toMatchObject({
       kind: 'hiveShooter',
       position: {
         x: boundary.sprite('hive-right-shooter').x,
@@ -561,12 +642,15 @@ describe('HiveBossManager', () => {
 
     expect(boundary.updateAt(100_000)).toMatchObject({
       bullets: 0,
-      warnings: 3,
+      phase: 'telegraph',
+      warnings: 1,
       projectiles: [],
     });
-    expect(boundary.updateAt(
-      100_000 + GAME_TUNING.projectiles.hiveShooter.warningMs,
-    ).projectiles.filter(({ kind }) => kind === 'hiveShooter')).toHaveLength(2);
+    boundary.updateAt(101_500);
+    expect(boundary.updateAt(102_900).warnings).toBe(1);
+    expect(boundary.updateAt(103_200).projectiles.filter(
+      ({ kind }) => kind === 'hiveShooter',
+    )).toHaveLength(1);
   });
 
   it('emits one configured five-shot core fan on each deployment', () => {
@@ -614,21 +698,22 @@ describe('HiveBossManager', () => {
   it('checks the shared hostile cap before warning and again before firing', () => {
     const boundary = createBoundary();
     const tuning = GAME_TUNING.projectiles.hiveShooter;
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
     boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap);
 
-    expect(boundary.updateAt(tuning.intervalMs).warnings).toBe(0);
+    expect(boundary.updateAt(5500 + tuning.intervalMs).warnings).toBe(0);
     boundary.setEnemyBulletCount(0);
-    expect(boundary.updateAt(tuning.intervalMs + tuning.warningMs).bullets).toBe(0);
-
-    boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap);
-    boundary.updateAt(tuning.intervalMs + tuning.offsetMs);
-    boundary.setEnemyBulletCount(0);
-    boundary.updateAt(tuning.intervalMs * 2);
+    boundary.updateAt(5500 + tuning.intervalMs + tuning.offsetMs);
     expect(boundary.manager.getSnapshot().warnings).toBe(1);
     boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap);
     expect(boundary.updateAt(
-      tuning.intervalMs * 2 + tuning.warningMs,
-    ).bullets).toBe(0);
+      5500 + tuning.intervalMs + tuning.offsetMs + tuning.warningMs,
+    ).projectiles.filter(({ kind }) => kind === 'hiveShooter')).toHaveLength(0);
+
+    boundary.setEnemyBulletCount(0);
+    boundary.updateAt(5500 + tuning.intervalMs * 2);
+    expect(boundary.manager.getSnapshot().warnings).toBe(1);
   });
 
   it('limits a core fan to the slots left by enemy bullets', () => {
@@ -649,8 +734,10 @@ describe('HiveBossManager', () => {
 
   it('deals configured damage once and cleans hive bullets outside the playfield', () => {
     const boundary = createBoundary();
-    boundary.updateAt(1400);
-    boundary.updateAt(1700);
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
+    boundary.updateAt(6900);
+    boundary.updateAt(7200);
     const bullet = boundary.sprite('hive-shooter-bullet');
     const playerOverlap = boundary.overlaps.find(
       (overlap) => overlap.second === boundary.groups[4],
@@ -664,8 +751,8 @@ describe('HiveBossManager', () => {
     playerOverlap.trigger(boundary.player, bullet);
     expect(boundary.onPlayerHit).toHaveBeenCalledOnce();
 
-    boundary.updateAt(2800);
-    boundary.updateAt(3100);
+    boundary.updateAt(7600);
+    boundary.updateAt(7900);
     const offscreen = boundary.groups[4]!.children.find((child) => child.active)!;
     offscreen.setPosition(-GAME_TUNING.projectiles.offscreenMargin - 1, offscreen.y);
     boundary.manager.update();
@@ -674,14 +761,18 @@ describe('HiveBossManager', () => {
 
   it('does not advance pending warnings while gameplay time is paused', () => {
     const boundary = createBoundary();
-    boundary.updateAt(1400);
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
+    boundary.updateAt(6900);
     const paused = boundary.manager.getSnapshot();
 
     boundary.manager.update();
     boundary.manager.update();
     expect(boundary.manager.getSnapshot()).toEqual(paused);
-    expect(boundary.updateAt(1699).warnings).toBe(1);
-    expect(boundary.updateAt(1700)).toMatchObject({ warnings: 0, bullets: 1 });
+    expect(boundary.updateAt(7199).warnings).toBe(1);
+    expect(boundary.updateAt(7200).projectiles.filter(
+      ({ kind }) => kind === 'hiveShooter',
+    )).toHaveLength(1);
   });
 
   it('clears hive attacks on explicit cleanup, defeat, and destroy', () => {

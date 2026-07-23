@@ -137,6 +137,7 @@ export class TemporaryOrbManager {
       damage,
       killed: enemyHp <= damage,
       reflect: true,
+      preserveChargedKinetics: false,
     };
   }
 

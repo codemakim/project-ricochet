@@ -203,6 +203,7 @@ export class CombatScene extends Phaser.Scene {
       chargedKillPierces: () => (
         this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
       ),
+      getOrbLimit: () => this.bossBuild?.orbLimit() ?? 3,
       onRecovery: (source) => this.handleOrbRecovery(source),
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
@@ -225,7 +226,8 @@ export class CombatScene extends Phaser.Scene {
       getExternalBulletCount: () => this.activeBoss?.getBulletCount() ?? 0,
       textureKeys: {
         splitter: 'enemy-splitter',
-        fragment: 'enemy-fragment-left',
+        fragmentLeft: 'enemy-fragment-left',
+        fragmentRight: 'enemy-fragment-right',
       },
     });
 

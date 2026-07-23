@@ -1664,8 +1664,12 @@ test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure',
 test('@desktop hive reflector changes a real orb trajectory without blocking player bullets', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await enterHiveByScore(page);
-  await sceneCall(page, (scene) => scene.update(0, 5_500));
+  await sceneCall(page, (scene) => {
+    scene.debugAdvanceHiveCycle(4_000);
+    scene.debugAdvanceHiveCycle(1_500);
+  });
   const exposed = await snapshot(page);
+  expect(exposed.boss.phase).toBe('exposed');
   const aim = clientPoint(box, { x: exposed.player.x, y: exposed.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
@@ -1708,6 +1712,8 @@ test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ 
   await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.player.setPosition(225, 730);
+    scene.debugAdvanceHiveCycle(4_000);
+    scene.debugAdvanceHiveCycle(1_500);
   });
   await expect.poll(async () => {
     const current = await snapshot(page);
