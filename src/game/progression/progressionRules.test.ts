@@ -10,7 +10,8 @@ const empty: AbilityRanks = { firepower: 0, kinetic: 0, explosion: 0, split: 0 }
 
 describe('progression rules', () => {
   it('maps enemy kinds to XP and levels to exact costs', () => {
-    expect((['basic', 'shooter', 'armored'] as const).map(xpForEnemy)).toEqual([1, 2, 3]);
+    expect((['basic', 'shooter', 'armored', 'splitter', 'fragment'] as const).map(xpForEnemy))
+      .toEqual([1, 2, 3, 1, 1]);
     expect([0, 1, 2, 3, 4].map(xpRequiredForLevel)).toEqual([12, 17, 22, 27, 32]);
   });
 

@@ -20,9 +20,10 @@ describe('encounter rules', () => {
     [0, 60_000, 1],
     [0, 119_999, 1],
     [0, 120_000, 2],
-    [1, 0, 1],
-    [1, 59_999, 1],
-    [1, 60_000, 2],
+    [1, 0, 2],
+    [1, 59_999, 2],
+    [1, 60_000, 3],
+    [2, 0, 3],
   ] as const)('maps section %i at %ims to phase %i', (section, elapsedMs, phase) => {
     expect(threatPhaseForSection(section, elapsedMs)).toBe(phase);
   });

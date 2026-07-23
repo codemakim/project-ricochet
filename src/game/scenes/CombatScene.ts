@@ -1,10 +1,19 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
 import { BOSS_GEOMETRY } from '../bosses/bossGeometry';
-import { BossManager, type BossDirectHitEvent } from '../bosses/BossManager';
+import { BossManager, type BossManagerSnapshot } from '../bosses/BossManager';
+import type {
+  BossDirectHitEvent,
+  BossEncounter,
+  BossEncounterSnapshot,
+  BossTargetId,
+} from '../bosses/bossEncounter';
+import { HiveBossManager } from '../bosses/HiveBossManager';
 import type { BossPartId } from '../bosses/bossRules';
+import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
-import { GAME_TUNING } from '../config/gameTuning';
+import { CombatEffectScheduler, type ScheduledAreaEffect } from '../combat/CombatEffectScheduler';
+import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import {
   applyDamage,
   breachDamage,
@@ -23,6 +32,7 @@ import { createInitialFormation } from '../encounters/formationRules';
 import {
   EnemyManager,
   type DirectHitEvent,
+  type EnemyAreaDamageEffect,
   type EnemyManagerSnapshot,
 } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
@@ -34,12 +44,29 @@ import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
 import type { AbilityId, AbilityRanks } from '../progression/progressionRules';
-import { selectBossRewardOptions, type BossRewardId } from '../progression/bossRewardRules';
+import {
+  selectBossRewardOptions,
+  type BossRewardId,
+  type BossRewardTier,
+} from '../progression/bossRewardRules';
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
-import { shouldFinalizeBossReward } from './combatSceneRules';
-import { combatProjectileTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
+import {
+  bossKindAfterTransition,
+  bossOrbModifiers,
+  createBossForKind,
+  finalizeCombatLifecycle,
+  inactiveBossSnapshot,
+  planDirectHitEffects,
+  rewardAddsPermanentOrb,
+  rewardTierForBoss,
+  schedulePlannedAftershock,
+  sectionAfterBossReward,
+  settlePlannedAreaEffects,
+  shouldFinalizeBossReward,
+} from './combatSceneRules';
+import { renderableCombatTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
@@ -65,11 +92,18 @@ export interface CombatDebugSnapshot {
   buildRanks: AbilityRanks;
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
-  boss: ReturnType<BossManager['getSnapshot']>;
+  boss: BossEncounterSnapshot & Partial<Pick<
+    BossManagerSnapshot,
+    'basicBullets' | 'aimedBullets' | 'fallingHazards'
+  >>;
+  bossRewardTier: BossRewardTier | null;
   bossRewards: BossRewardId[];
   bossRewardChoices: BossRewardId[];
   bossRewardVisible: boolean;
   temporaryOrbs: number;
+  temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
+  scheduledEffects: ScheduledAreaEffect[];
+  activePopulation: number;
   gameplayElapsedMs: number;
 }
 
@@ -85,8 +119,10 @@ export class CombatScene extends Phaser.Scene {
   declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
   declare debugAdvanceEncounter?: (deltaMs: number) => void;
   declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
-  declare debugDamageBossPart?: (partId: BossPartId, damage: number) => void;
+  declare debugDamageBossPart?: (partId: BossPartId | HivePartId, damage: number) => void;
   declare debugSetBossPosition?: (x: number) => void;
+  declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
+  declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -94,7 +130,10 @@ export class CombatScene extends Phaser.Scene {
   private temporaryOrbManager?: TemporaryOrbManager;
   private enemyManager?: EnemyManager;
   private encounterDirector?: EncounterDirector;
-  private bossManager?: BossManager;
+  private activeBoss?: BossEncounter;
+  private activeBossKind?: BossKind;
+  private bossRewardTier: BossRewardTier | null = null;
+  private readonly combatEffects = new CombatEffectScheduler();
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private progressionText!: Phaser.GameObjects.Text;
@@ -130,6 +169,9 @@ export class CombatScene extends Phaser.Scene {
     this.aimQueueActivated = false;
     this.defeated = false;
     this.bossDefeatPending = false;
+    this.activeBossKind = undefined;
+    this.bossRewardTier = null;
+    this.combatEffects.clear();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
@@ -155,6 +197,14 @@ export class CombatScene extends Phaser.Scene {
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
       ),
+      getChargedDamageBonus: () => (
+        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedDamageBonus : 0
+      ),
+      chargedKillPierces: () => (
+        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
+      ),
+      getOrbLimit: () => this.bossBuild?.orbLimit() ?? 3,
+      onRecovery: (source) => this.handleOrbRecovery(source),
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
@@ -173,7 +223,12 @@ export class CombatScene extends Phaser.Scene {
       onBulletHit: (damage) => this.damagePlayer(damage),
       onEnemyKilled: ({ kind }) => this.handleEnemyKilled(kind),
       onDirectHit: (event) => this.handleDirectHit(event),
-      getExternalBulletCount: () => this.bossManager?.getBulletCount() ?? 0,
+      getExternalBulletCount: () => this.activeBoss?.getBulletCount() ?? 0,
+      textureKeys: {
+        splitter: 'enemy-splitter',
+        fragmentLeft: 'enemy-fragment-left',
+        fragmentRight: 'enemy-fragment-right',
+      },
     });
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -218,20 +273,47 @@ export class CombatScene extends Phaser.Scene {
         if (!Number.isFinite(damage) || damage <= 0) {
           throw new RangeError('boss damage must be finite and positive');
         }
-        const snapshot = this.bossManager?.getSnapshot();
+        const boss = this.activeBoss;
+        if (!boss) return;
+        const snapshot = boss.getSnapshot();
         if (!snapshot?.position) return;
-        const offset = partId === 'leftWeakpoint'
-          ? -BOSS_GEOMETRY.weakpointOffsetX
-          : partId === 'rightWeakpoint'
-            ? BOSS_GEOMETRY.weakpointOffsetX
-            : 0;
-        this.bossManager?.applyAreaDamage(
-          { x: snapshot.position.x + offset, y: snapshot.position.y },
-          0,
-          damage,
-        );
+        if (this.activeBossKind === 'sentinel') {
+          if (!['leftWeakpoint', 'rightWeakpoint', 'core'].includes(partId)) return;
+          const offset = partId === 'leftWeakpoint'
+            ? -BOSS_GEOMETRY.weakpointOffsetX
+            : partId === 'rightWeakpoint'
+              ? BOSS_GEOMETRY.weakpointOffsetX
+              : 0;
+          boss.applyAreaDamage(
+            { x: snapshot.position.x + offset, y: snapshot.position.y },
+            0,
+            damage,
+          );
+          return;
+        }
+        if (this.activeBossKind !== 'hive') return;
+        const hiveSnapshot = snapshot as BossEncounterSnapshot & {
+          partPositions?: Partial<Record<HivePartId, Vector>>;
+        };
+        const position = hiveSnapshot.partPositions?.[partId as HivePartId];
+        if (position) boss.applyAreaDamage(position, 0, damage);
       };
-      this.debugSetBossPosition = (x) => this.bossManager?.debugSetPosition?.(x);
+      this.debugSetBossPosition = (x) => {
+        if (this.activeBossKind === 'sentinel' && this.activeBoss instanceof BossManager) {
+          this.activeBoss.debugSetPosition?.(x);
+        }
+      };
+      this.debugAdvanceHiveCycle = (deltaMs) => {
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+          throw new RangeError('hive cycle delta must be finite and non-negative');
+        }
+        if (this.activeBossKind === 'hive' && this.activeBoss instanceof HiveBossManager) {
+          this.activeBoss.debugAdvanceCycle?.(deltaMs);
+        }
+      };
+      this.debugPlaceTemporaryOrb = (id, position) => (
+        this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
+      );
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
@@ -288,13 +370,15 @@ export class CombatScene extends Phaser.Scene {
     this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
     this.temporaryOrbManager?.update(this.gameplayElapsedMs);
     this.enemyManager.update();
-    this.bossManager?.update();
+    this.activeBoss?.update();
+    this.drainCombatEffects();
     this.advanceEncounter(gameplayDelta);
   }
 
   getDebugSnapshot(): CombatDebugSnapshot {
     const enemySnapshot = this.enemyManager?.getSnapshot() ?? {
       enemies: [],
+      activePopulation: 0,
       topmostEnemyY: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,
@@ -337,6 +421,7 @@ export class CombatScene extends Phaser.Scene {
         sectionElapsedMs: 0,
         bossScore: 0,
         warningElapsedMs: 0,
+        pendingBossKind: null,
         bossesDefeated: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
@@ -354,21 +439,24 @@ export class CombatScene extends Phaser.Scene {
       },
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
-      boss: this.bossManager?.getSnapshot() ?? {
-        active: false,
-        phase: null,
-        position: null,
-        parts: null,
+      boss: this.activeBoss?.getSnapshot() ?? {
+        ...inactiveBossSnapshot(this.activeBossKind ?? null),
         basicBullets: 0,
         aimedBullets: 0,
         fallingHazards: 0,
-        warnings: 0,
-        projectiles: [],
       },
+      bossRewardTier: this.bossRewardTier,
       bossRewards: this.bossBuild?.snapshot() ?? [],
       bossRewardChoices: [...this.bossRewardChoices],
       bossRewardVisible: this.bossRewardOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
+      temporaryOrbSnapshots: this.temporaryOrbManager?.getSnapshot().map((orb) => ({
+        ...orb,
+        position: { ...orb.position },
+        velocity: { ...orb.velocity },
+      })) ?? [],
+      scheduledEffects: this.combatEffects.getSnapshot(),
+      activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
     };
   }
@@ -382,37 +470,92 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleDirectHit(event: DirectHitEvent): void {
-    this.handlePostDirectHit(event, (radius, damage) => {
-      this.enemyManager?.applyAreaDamage(
-        event.position,
-        radius,
-        damage,
-        event.enemyId,
-      );
-      this.bossManager?.applyAreaDamage(event.position, radius, damage);
-    });
+    this.handlePostDirectHit(event, event.enemyId);
   }
 
   private handleBossDirectHit(event: BossDirectHitEvent): void {
-    this.handlePostDirectHit(event, (radius, damage) => {
-      this.enemyManager?.applyAreaDamage(event.position, radius, damage, -1);
-      this.bossManager?.applyAreaDamage(event.position, radius, damage, event.partId);
-    });
+    this.handlePostDirectHit(event, -1, event.targetId);
   }
 
   private handlePostDirectHit(
-    event: Pick<DirectHitEvent, 'source' | 'position' | 'charged' | 'direction'>,
-    applyExplosion: (radius: number, damage: number) => void,
+    event: Pick<
+      DirectHitEvent,
+      'source' | 'sourceOrbId' | 'position' | 'charged' | 'direction'
+    >,
+    excludedEnemyId: number,
+    excludedBossTargetId?: BossTargetId,
   ): void {
-    if (event.source === 'temporary' && !this.bossBuild?.temporaryExplosionEnabled()) return;
-    const explosion = this.build?.explosion();
-    if (explosion) {
-      applyExplosion(explosion.radius, explosion.damage);
-      this.drawExplosion(event.position, explosion.radius);
+    if (!this.build || !this.bossBuild) return;
+    const plan = planDirectHitEffects(event, this.build, this.bossBuild);
+    if (plan.spawnChildren) {
+      this.temporaryOrbManager?.spawnChildren(
+        event.sourceOrbId,
+        event.position,
+        event.direction,
+      );
     }
-    if (event.source !== 'permanent' || !event.charged) return;
-    const count = this.build?.splitCount() ?? 0;
-    if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
+    if (plan.immediateAreas.length > 0) {
+      this.applyAreaEffects(
+        event.position,
+        plan.immediateAreas,
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
+      for (const effect of plan.immediateAreas) {
+        this.drawExplosion(event.position, effect.radius);
+      }
+    }
+    schedulePlannedAftershock(
+      plan,
+      this.combatEffects,
+      this.gameplayElapsedMs,
+      event.position,
+    );
+    if (plan.chargedSplitCount > 0) {
+      this.temporaryOrbManager?.spawn(
+        event.position,
+        event.direction,
+        plan.chargedSplitCount,
+      );
+    }
+  }
+
+  private applyAreaEffects(
+    position: Vector,
+    effects: readonly Pick<EnemyAreaDamageEffect, 'radius' | 'damage'>[],
+    excludedEnemyId = -1,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
+    settlePlannedAreaEffects(
+      position,
+      effects,
+      excludedEnemyId,
+      excludedBossTargetId,
+      {
+        applyEnemyBatch: (batch) => this.enemyManager?.applyAreaDamageBatch(batch),
+        applyBossArea: (center, radius, damage, excludedTargetId) => (
+          this.activeBoss?.applyAreaDamage(center, radius, damage, excludedTargetId)
+        ),
+      },
+    );
+  }
+
+  private drainCombatEffects(): void {
+    for (const effect of this.combatEffects.drainDue(this.gameplayElapsedMs)) {
+      this.applyAreaEffects(effect.position, [effect]);
+      this.drawExplosion(effect.position, effect.radius);
+    }
+  }
+
+  private handleOrbRecovery(source: Parameters<BossBuild['recoverySalvoCount']>[0]): void {
+    const count = this.bossBuild?.recoverySalvoCount(source) ?? 0;
+    if (count > 0 && this.player) {
+      this.temporaryOrbManager?.spawn(
+        { x: this.player.x, y: this.player.y },
+        this.aim,
+        count,
+      );
+    }
   }
 
   private drawExplosion(position: Vector, radius: number): void {
@@ -427,12 +570,18 @@ export class CombatScene extends Phaser.Scene {
     if (!this.encounterDirector || !this.enemyManager) return;
     const enemies = this.enemyManager.getSnapshot();
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
-      activeEnemies: enemies.enemies.length,
+      activePopulation: enemies.activePopulation,
       topmostEnemyY: enemies.topmostEnemyY,
     });
     if (formation) this.enemyManager.spawnFormation(formation);
-    if (transition === 'bossWarningStarted') this.showBossWarning();
-    if (transition === 'bossStarted') this.startBoss();
+    if (transition) {
+      this.activeBossKind = bossKindAfterTransition(
+        this.activeBossKind ?? null,
+        transition,
+      );
+      if (transition.type === 'bossWarningStarted') this.showBossWarning();
+      else this.startBoss(transition.bossKind);
+    }
   }
 
   private showBossWarning(): void {
@@ -449,61 +598,108 @@ export class CombatScene extends Phaser.Scene {
     this.bossWarning = undefined;
   }
 
-  private startBoss(): void {
+  private startBoss(kind: BossKind): void {
     if (!this.player || !this.orbManager || !this.temporaryOrbManager || !this.enemyManager) return;
     this.clearBossWarning();
-    this.bossManager?.destroy();
-    this.bossManager = new BossManager(this, {
+    this.activeBoss?.destroy();
+    const commonOptions = {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
-      getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
       getEnemyBulletCount: () => this.enemyManager?.getBulletCount() ?? 0,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
-      onPlayerHit: (damage) => this.damagePlayer(damage),
-      onDirectHit: (event) => this.handleBossDirectHit(event),
+      onPlayerHit: (damage: number) => this.damagePlayer(damage),
+      onDirectHit: (event: BossDirectHitEvent) => this.handleBossDirectHit(event),
       onDefeated: () => this.handleBossDefeatSignal(),
+    };
+    this.activeBoss = createBossForKind<BossEncounter>(kind, {
+      sentinel: () => new BossManager(this, {
+        ...commonOptions,
+        getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
+      }),
+      hive: () => new HiveBossManager(this, commonOptions),
     });
   }
 
   private handleBossDefeatSignal(): void {
     if (this.defeated || this.bossDefeatPending) return;
     this.enemyManager?.clearHostileActions();
-    this.bossManager?.clearHostileActions();
+    this.activeBoss?.clearHostileActions();
+    this.combatEffects.clear();
     this.bossDefeatPending = true;
   }
 
   private finalizeBossDefeat(): void {
     if (!this.bossDefeatPending || this.defeated) return;
     this.bossDefeatPending = false;
-    this.clearBossWarning();
-    this.enemyManager?.clearHostileActions();
-    this.bossManager?.clearHostileActions();
+    const defeatedBossKind = this.activeBossKind;
+    if (!defeatedBossKind) throw new Error('boss defeat has no active boss kind');
+    this.bossRewardTier = rewardTierForBoss(defeatedBossKind);
     this.encounterDirector?.markBossDefeated();
     const owned = new Set(this.bossBuild?.snapshot() ?? []);
     this.bossRewardChoices = selectBossRewardOptions(
+      this.bossRewardTier,
       owned,
       this.build?.getRanks() ?? { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
       BOSS_REWARD_SEED,
     );
+    this.applyLifecycle('rewardOpened');
     this.pause.add('bossReward');
     this.syncPauseState();
-    this.bossRewardOverlay?.show(this.bossRewardChoices, (id) => this.chooseBossReward(id));
+    this.bossRewardOverlay?.show(
+      this.bossRewardTier,
+      this.bossRewardChoices,
+      (id) => this.chooseBossReward(id),
+    );
   }
 
   private chooseBossReward(id: BossRewardId): boolean {
     if (this.defeated || !this.bossRewardOverlay?.isVisible() || !this.bossBuild) return false;
+    if (!this.bossRewardTier) return false;
     if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
     this.bossBuild.acquire(id);
-    if (id === 'expanded-magazine') this.orbManager?.addOrb();
+    if (rewardAddsPermanentOrb(id)) this.orbManager?.addOrb();
+    const expectedSection = sectionAfterBossReward(this.bossRewardTier);
     this.encounterDirector?.resumeAfterBossReward();
-    this.bossManager?.destroy();
-    this.bossManager = undefined;
-    this.bossRewardOverlay.hide();
-    this.bossRewardChoices = [];
+    if (this.encounterDirector?.getSnapshot().section !== expectedSection) {
+      throw new Error(`boss reward did not resume section ${expectedSection}`);
+    }
+    this.applyLifecycle('rewardCompleted');
     this.pause.remove('bossReward');
     this.syncPauseState();
     return true;
+  }
+
+  private clearTemporaryOrbs(): void {
+    const manager = this.temporaryOrbManager;
+    if (!manager || manager.getSnapshot().length === 0) return;
+    manager.getGroup().clear(true, true);
+    manager.update(this.gameplayElapsedMs);
+  }
+
+  private applyLifecycle(
+    reason: Parameters<typeof finalizeCombatLifecycle>[0],
+  ): void {
+    const next = finalizeCombatLifecycle(reason, {
+      activeBoss: this.activeBoss,
+      activeBossKind: this.activeBossKind,
+      bossRewardTier: this.bossRewardTier,
+      bossRewardChoices: this.bossRewardChoices,
+      bossDefeatPending: this.bossDefeatPending,
+      bossBuild: this.bossBuild ?? new BossBuild(),
+    }, {
+      scheduler: this.combatEffects,
+      clearEnemyHostileActions: () => this.enemyManager?.clearHostileActions(),
+      clearWarning: () => this.clearBossWarning(),
+      clearTemporaryOrbs: () => this.clearTemporaryOrbs(),
+      hideRewardOverlay: () => this.bossRewardOverlay?.hide(),
+    });
+    this.activeBoss = next.activeBoss;
+    this.activeBossKind = next.activeBossKind;
+    this.bossRewardTier = next.bossRewardTier;
+    this.bossRewardChoices = [...next.bossRewardChoices];
+    this.bossDefeatPending = next.bossDefeatPending;
+    this.bossBuild = next.bossBuild;
   }
 
   private openNextLevelUp(): void {
@@ -565,18 +761,12 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated) return;
     this.defeated = true;
     this.bossDefeatPending = false;
-    this.clearBossWarning();
+    this.applyLifecycle('defeat');
     this.levelUpOverlay?.hide();
-    this.bossRewardOverlay?.hide();
-    this.bossRewardChoices = [];
     this.pause.remove('levelUp');
     this.pause.remove('bossReward');
     this.pause.add('defeated');
     this.syncPauseState();
-    this.enemyManager?.clearHostileActions();
-    this.bossManager?.destroy();
-    this.bossManager = undefined;
-    this.bossBuild = new BossBuild();
     this.temporaryOrbManager?.destroy();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
@@ -592,7 +782,10 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(21)
       .setInteractive({ useHandCursor: true })
-      .once('pointerup', () => this.scene.restart());
+      .once('pointerup', () => {
+        this.handleShutdown();
+        this.scene.restart();
+      });
   }
 
   private drawAimGuide(): void {
@@ -640,8 +833,7 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-    this.clearBossWarning();
-    this.bossManager?.destroy();
+    this.applyLifecycle('shutdown');
     this.enemyManager?.destroy();
     this.temporaryOrbManager?.destroy();
     this.orbManager?.destroy();
@@ -649,8 +841,6 @@ export class CombatScene extends Phaser.Scene {
     this.levelUpOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
     this.bossDefeatPending = false;
-    this.bossRewardChoices = [];
-    this.bossManager = undefined;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
     this.orbManager = undefined;
@@ -665,12 +855,14 @@ export class CombatScene extends Phaser.Scene {
     this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;
     this.debugSetBossPosition = undefined;
+    this.debugAdvanceHiveCycle = undefined;
+    this.debugPlaceTemporaryOrb = undefined;
   };
 
   private createTextures(): void {
     const createBaseTextures = !this.textures.exists('player');
     const createBossTextures = !this.textures.exists('boss-body');
-    const projectileTextures = combatProjectileTextureDescriptors();
+    const projectileTextures = renderableCombatTextureDescriptors();
     const createProjectileTextures = Object.keys(projectileTextures)
       .some((key) => !this.textures.exists(key));
     if (!createBaseTextures && !createBossTextures && !createProjectileTextures) return;
@@ -805,6 +997,67 @@ export class CombatScene extends Phaser.Scene {
           .strokePath();
         break;
       }
+      case 'crackedRoundedRect':
+        graphics.fillStyle(descriptor.fill)
+          .fillRoundedRect(0, 0, descriptor.width, descriptor.height, 5);
+        graphics.lineStyle(3, descriptor.accent)
+          .beginPath()
+          .moveTo(centerX - 2, 1)
+          .lineTo(centerX + 3, centerY - 3)
+          .lineTo(centerX - 3, centerY + 3)
+          .lineTo(centerX + 2, descriptor.height - 1)
+          .strokePath();
+        break;
+      case 'fragmentLeft':
+      case 'fragmentRight': {
+        const isLeft = descriptor.shape === 'fragmentLeft';
+        const innerX = isLeft ? descriptor.width : 0;
+        const outerX = isLeft ? 0 : descriptor.width;
+        graphics.fillStyle(descriptor.fill)
+          .beginPath()
+          .moveTo(outerX, 1)
+          .lineTo(innerX, 1)
+          .lineTo(innerX + (isLeft ? -5 : 5), centerY)
+          .lineTo(innerX, descriptor.height - 1)
+          .lineTo(outerX, descriptor.height - 1)
+          .closePath()
+          .fillPath();
+        graphics.lineStyle(2, descriptor.accent)
+          .beginPath()
+          .moveTo(innerX, 1)
+          .lineTo(innerX + (isLeft ? -5 : 5), centerY)
+          .lineTo(innerX, descriptor.height - 1)
+          .strokePath();
+        break;
+      }
+      case 'hiveCore':
+        graphics.fillStyle(descriptor.fill)
+          .fillCircle(centerX, centerY, radius);
+        graphics.lineStyle(4, descriptor.accent)
+          .strokeCircle(centerX, centerY, radius - 2)
+          .strokeCircle(centerX, centerY, radius * 0.45);
+        break;
+      case 'hiveShooter':
+        graphics.fillStyle(descriptor.fill)
+          .fillRoundedRect(0, 0, descriptor.width, descriptor.height, 7);
+        graphics.lineStyle(2, descriptor.accent)
+          .strokeRoundedRect(1, 1, descriptor.width - 2, descriptor.height - 2, 6);
+        graphics.fillStyle(descriptor.accent)
+          .fillCircle(centerX, descriptor.height - 5, 4);
+        break;
+      case 'reflectorWall':
+        graphics.fillStyle(descriptor.fill)
+          .fillRoundedRect(0, 0, descriptor.width, descriptor.height, 4);
+        graphics.lineStyle(3, descriptor.accent)
+          .strokeRoundedRect(2, 1, descriptor.width - 4, descriptor.height - 2, 3);
+        for (let y = 9; y < descriptor.height; y += 16) {
+          graphics.lineStyle(2, descriptor.accent)
+            .beginPath()
+            .moveTo(3, y)
+            .lineTo(descriptor.width - 3, y + 7)
+            .strokePath();
+        }
+        break;
     }
     graphics.generateTexture(key, descriptor.width, descriptor.height);
   }

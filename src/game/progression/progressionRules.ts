@@ -1,3 +1,4 @@
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
 
 export const ABILITY_IDS = ['firepower', 'kinetic', 'explosion', 'split'] as const;
@@ -5,7 +6,13 @@ export type AbilityId = typeof ABILITY_IDS[number];
 export type AbilityRanks = Record<AbilityId, number>;
 
 export function xpForEnemy(kind: EnemyKind): number {
-  return kind === 'armored' ? 3 : kind === 'shooter' ? 2 : 1;
+  switch (kind) {
+    case 'armored': return 3;
+    case 'shooter': return 2;
+    case 'splitter': return GAME_TUNING.enemies.splitter.xp;
+    case 'fragment': return GAME_TUNING.enemies.fragment.xp;
+    case 'basic': return 1;
+  }
 }
 
 export function xpRequiredForLevel(level: number): number {

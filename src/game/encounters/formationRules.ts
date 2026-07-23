@@ -1,5 +1,6 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
+import { populationCostForEnemy } from '../enemies/splitterRules';
 import type { ThreatPhase } from './encounterRules';
 
 export type FormationStyle = 'cluster' | 'pockets' | 'bands' | 'scatter' | 'grid';
@@ -8,6 +9,7 @@ export interface FormationResult {
   id: string;
   style: FormationStyle;
   enemies: EnemySpec[];
+  populationCost: number;
 }
 
 interface Cell {
@@ -265,14 +267,22 @@ function preserveOrganicShape(
   return result;
 }
 
-function assignKinds(enemies: EnemySpec[], armored: number, shooters: number, seed: number): EnemySpec[] {
+function assignKinds(
+  enemies: EnemySpec[],
+  armored: number,
+  shooters: number,
+  splitters: number,
+  seed: number,
+): EnemySpec[] {
   const indices = shuffled(enemies.map((_, index) => index), createRandom(seed));
   const armoredIndices = new Set(indices.slice(0, armored));
   const shooterIndices = new Set(indices.slice(armored, armored + shooters));
+  const splitterIndices = new Set(indices.slice(armored + shooters, armored + shooters + splitters));
   return enemies.map((enemy, index) => {
     const kind: EnemyKind = armoredIndices.has(index)
       ? 'armored'
-      : shooterIndices.has(index) ? 'shooter' : 'basic';
+      : shooterIndices.has(index) ? 'shooter'
+        : splitterIndices.has(index) ? 'splitter' : 'basic';
     return { ...enemy, kind, hp: GAME_TUNING.enemies.hp[kind] };
   });
 }
@@ -284,6 +294,7 @@ function generateWithPressure(
   originY: number,
   armored: number,
   shooters: number,
+  splitters: number,
   kindSeed: number,
 ): EnemySpec[] {
   const rows = Math.max(3, Math.ceil(count / COLUMNS) + 2);
@@ -314,7 +325,7 @@ function generateWithPressure(
       speed: GAME_TUNING.enemies.descentSpeed,
     };
   });
-  return assignKinds(enemies, armored, shooters, kindSeed);
+  return assignKinds(enemies, armored, shooters, splitters, kindSeed);
 }
 
 export function generateFormation(
@@ -327,7 +338,7 @@ export function generateFormation(
     throw new RangeError('count must be a positive integer');
   }
   validateSeed(seed);
-  return generateWithPressure(style, count, seed, originY, 3, 3, mix(seed, 0x4b494e44));
+  return generateWithPressure(style, count, seed, originY, 3, 3, 0, mix(seed, 0x4b494e44));
 }
 
 function createBag(runSeed: number, cycle: number, previous?: FormationStyle): FormationStyle[] {
@@ -373,9 +384,15 @@ export function createInitialFormation(runSeed: number): FormationResult {
     tuning.originY,
     tuning.armored,
     tuning.shooters,
+    0,
     mix(runSeed, 0x4b494e44),
   );
-  return { id: `${runSeed}:initial:${style}:${layoutSeed}`, style, enemies };
+  return {
+    id: `${runSeed}:initial:${style}:${layoutSeed}`,
+    style,
+    enemies,
+    populationCost: enemies.reduce((sum, enemy) => sum + populationCostForEnemy(enemy.kind), 0),
+  };
 }
 
 export function createReinforcementFormation(
@@ -400,7 +417,13 @@ export function createReinforcementFormation(
     GAME_TUNING.encounter.reinforcementOriginY,
     phaseTuning.armored,
     phaseTuning.shooters,
+    phaseTuning.splitters,
     mix(runSeed, sequence ^ 0x4b494e44),
   );
-  return { id: `${runSeed}:${sequence}:${style}:${layoutSeed}`, style, enemies };
+  return {
+    id: `${runSeed}:${sequence}:${style}:${layoutSeed}`,
+    style,
+    enemies,
+    populationCost: enemies.reduce((sum, enemy) => sum + populationCostForEnemy(enemy.kind), 0),
+  };
 }

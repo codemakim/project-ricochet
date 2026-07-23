@@ -6,6 +6,7 @@ import {
   generateFormation,
   type FormationStyle,
 } from './formationRules';
+import { populationCostForEnemy } from '../enemies/splitterRules';
 
 const ORGANIC = ['cluster', 'pockets', 'bands', 'scatter'] as const;
 
@@ -124,11 +125,14 @@ describe('procedural formation generation', () => {
         .toHaveLength(GAME_TUNING.encounter.initialFormation.shooters);
       expect(result.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
       expect(result.enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind])).toBe(true);
+      expect(result.populationCost).toBe(
+        result.enemies.reduce((sum, enemy) => sum + populationCostForEnemy(enemy.kind), 0),
+      );
     }
   });
 
   it('covers each tuned reinforcement size range', () => {
-    for (const phase of [0, 1, 2] as const) {
+    for (const phase of [0, 1, 2, 3] as const) {
       const counts = Array.from({ length: 64 }, (_, sequence) =>
         createReinforcementFormation(phase, sequence, 808).enemies.length);
       expect(Math.min(...counts)).toBe(GAME_TUNING.encounter.phases[phase].formation.minimum);
@@ -163,6 +167,21 @@ describe('procedural formation generation', () => {
       }
     },
   );
+
+  it('uses phase-three splitter pressure without generating fragments', () => {
+    for (const sequence of Array.from({ length: 64 }, (_, index) => index)) {
+      const result = createReinforcementFormation(3, sequence, 808);
+      expect(result.enemies.length).toBeGreaterThanOrEqual(21);
+      expect(result.enemies.length).toBeLessThanOrEqual(25);
+      expect(result.enemies.filter(({ kind }) => kind === 'splitter')).toHaveLength(2);
+      expect(result.enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(3);
+      expect(result.enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(3);
+      expect(result.enemies.some(({ kind }) => kind === 'fragment')).toBe(false);
+      expect(result.populationCost).toBe(
+        result.enemies.reduce((sum, enemy) => sum + populationCostForEnemy(enemy.kind), 0),
+      );
+    }
+  });
 
   it('rejects invalid counts, seeds, and sequences with clear RangeErrors', () => {
     for (const count of [0, -1, 1.5]) {

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
 import {
-  BOSS_ENTRY_HARD_MAX_MS,
-  BOSS_ENTRY_MIN_MS,
-  BOSS_PROGRESS_TARGET,
-  BOSS_WARNING_MS,
+  bossEntryForSection,
   bossEntryReady,
   bossProgressForKill,
 } from './encounterProgressionRules';
@@ -14,22 +11,33 @@ describe('encounter progression rules', () => {
     ['basic', 1],
     ['armored', 2],
     ['shooter', 2],
+    ['splitter', 2],
+    ['fragment', 0],
   ] as const)('scores a %s kill as %i boss progress', (kind, expected) => {
     expect(bossProgressForKill(kind)).toBe(expected);
   });
 
-  it('requires the target score and minimum time together', () => {
-    expect(BOSS_PROGRESS_TARGET).toBe(GAME_TUNING.encounter.bossEntry.scoreTarget);
-    expect(BOSS_ENTRY_MIN_MS).toBe(GAME_TUNING.encounter.bossEntry.minimumMs);
-    expect(BOSS_WARNING_MS).toBe(GAME_TUNING.encounter.bossEntry.warningMs);
-    expect(bossEntryReady(119_999, 70)).toBe(false);
-    expect(bossEntryReady(120_000, 69)).toBe(false);
-    expect(bossEntryReady(120_000, 70)).toBe(true);
+  it('looks up each configured boss schedule by section', () => {
+    expect(bossEntryForSection(0)).toEqual(GAME_TUNING.encounter.bossSchedule[0]);
+    expect(bossEntryForSection(1)).toEqual(GAME_TUNING.encounter.bossSchedule[1]);
+    expect(bossEntryForSection(2)).toBeNull();
   });
 
-  it('forces entry at the hard maximum without the target score', () => {
-    expect(BOSS_ENTRY_HARD_MAX_MS).toBe(GAME_TUNING.encounter.bossEntry.hardMaximumMs);
-    expect(bossEntryReady(209_999, 0)).toBe(false);
-    expect(bossEntryReady(210_000, 0)).toBe(true);
+  it.each(GAME_TUNING.encounter.bossSchedule)(
+    'requires time and score or the hard maximum for $kind',
+    (entry) => {
+      expect(bossEntryReady(entry, entry.minimumMs - 1, entry.scoreTarget)).toBe(false);
+      expect(bossEntryReady(entry, entry.minimumMs, entry.scoreTarget - 1)).toBe(false);
+      expect(bossEntryReady(entry, entry.minimumMs, entry.scoreTarget)).toBe(true);
+      expect(bossEntryReady(entry, entry.hardMaximumMs - 1, 0)).toBe(false);
+      expect(bossEntryReady(entry, entry.hardMaximumMs, 0)).toBe(true);
+    },
+  );
+
+  it('uses the exact hive score and time boundaries', () => {
+    const hive = GAME_TUNING.encounter.bossSchedule[1];
+    expect(bossEntryReady(hive, 149_999, 110)).toBe(false);
+    expect(bossEntryReady(hive, 150_000, 110)).toBe(true);
+    expect(bossEntryReady(hive, 210_000, 0)).toBe(true);
   });
 });

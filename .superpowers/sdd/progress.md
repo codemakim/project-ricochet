@@ -36,3 +36,21 @@
 - Task 5 boss basic shot: complete (`23b14b4..72d0d27`, review clean after configured support-damage fix)
 - Task 6 browser acceptance and playtest handoff: complete (focused 4/4, browser 27/27, unit 277/277, build passed)
 - Final review and verification: complete (`24cf72a`; re-review clean; unit 292/292, browser 27/27, build and diff check passed)
+
+## Second hive midboss execution
+
+- Branch: `codex/second-hive-midboss`
+- Base: `87a488a`
+- Baseline: 33 files, 292 unit tests passed
+- Task 1 central tuning and threat phase 3: complete (`b3f2c82..f934aa4`, review clean)
+- Task 2 splitter rules and formation population: complete (`02d42a3..94e1c62`, review clean)
+- Task 3 runtime splitter enemy: complete (`53cf618..eafc02a`, review clean)
+- Task 4 data-driven two-boss encounter: complete (`bb2cb38..2650065`, review clean)
+- Task 5 common boss contract and pure hive rules: complete (`7185b3b..1cea82f`, review clean)
+- Task 6 hive core, modules, and reflectors: complete (`286e54e..60c7e16`, review clean; Task 7 to cover permanent-exposure timing observably)
+- Task 7 hive shooter and core attacks: complete (`9e47901..0b06aa9`, review clean)
+- Task 8 second-tier rewards and UI: complete (`43e3ae1..4fa4514`, review clean)
+- Task 9 runtime relic combat effects: complete (`195927d..88437a0`, review clean)
+- Task 10 scene integration and lifecycle: complete (`ad87b2d..175b1bf`, review clean)
+- Task 11 browser acceptance and playtest handoff: complete (focused desktop 21/21 repeated, mobile case passed, unit 432/432, browser 35/35, build passed; review clean)
+- Final review and verification: complete (final review clean; unit 451/451, browser 35/35, build and diff check passed)

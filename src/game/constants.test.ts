@@ -3,10 +3,10 @@ import {
   EXPERIMENT_DEFAULTS,
   GAME_HEIGHT,
   GAME_WIDTH,
-  MAX_ORB_COUNT,
   PLAYER_MIN_Y,
   STARTING_ORB_COUNT,
 } from './constants';
+import { GAME_TUNING } from './config/gameTuning';
 
 describe('logical playfield', () => {
   it('keeps combat inside the approved portrait dimensions', () => {
@@ -19,7 +19,7 @@ describe('logical playfield', () => {
 
   it('starts with three permanent orbs and caps them at six', () => {
     expect(STARTING_ORB_COUNT).toBe(3);
-    expect(MAX_ORB_COUNT).toBe(6);
+    expect(GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit).toBe(6);
   });
 
   it('uses the approved experiment defaults', () => {

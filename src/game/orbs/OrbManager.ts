@@ -1,13 +1,13 @@
 import type Phaser from 'phaser';
 import {
   LAUNCH_INTERVAL_MS,
-  MAX_ORB_COUNT,
   ORB_PICKUP_RADIUS,
   ORB_SPEED,
   PLAYER_RADIUS,
   STARTING_ORB_COUNT,
   type ExperimentSettings,
 } from '../constants';
+import { GAME_TUNING } from '../config/gameTuning';
 import { normalize, type Vector } from '../math/vector';
 import { LaunchQueue } from './launchQueue';
 import {
@@ -65,12 +65,17 @@ export class OrbStore {
     private readonly getChargedSpeed: () => number = () => ORB_SPEED,
     private readonly getRestoredCharges: (source: RecoverySource) => number = () => DEFAULT_RESTORED_CHARGES,
     private readonly getOpeningHitBonus: (source: RecoverySource, firstHitPending: boolean) => number = () => 0,
+    private readonly getChargedDamageBonus: () => number = () => 0,
+    private readonly chargedKillPierces: () => boolean = () => false,
+    private readonly getOrbLimit: () => number = () => (
+      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit
+    ),
   ) {
     this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => this.createRecord(id));
   }
 
   addOrb(): boolean {
-    if (this.records.length >= MAX_ORB_COUNT) return false;
+    if (this.records.length >= this.runtimeOrbLimit()) return false;
     const record = this.createRecord(this.records.length);
     this.records.push(record);
     if (this.aimActivated) this.enqueue(record);
@@ -158,17 +163,19 @@ export class OrbStore {
         throw new RangeError('opening hit bonus must be exactly 0 or 1');
       }
     }
-    record.enemyHits.set(enemyId, nowMs);
     const result = directHit(
       record.charges,
       enemyHp,
       this.settings,
       piercing,
       this.getDirectDamageBonus() + openingBonus,
+      this.getChargedDamageBonus(),
+      this.chargedKillPierces(),
     );
+    record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
     record.charges = result.charges;
-    this.normalizeActiveSpeed(record);
+    if (!result.preserveChargedKinetics) this.normalizeActiveSpeed(record);
     this.callbacks.onEnemyDamage?.(enemyId, result.damage, result.reflect);
     return result;
   }
@@ -314,6 +321,19 @@ export class OrbStore {
   private speedTarget(record: OrbRecord): number {
     return record.charges > 0 ? this.getChargedSpeed() : ORB_SPEED;
   }
+
+  private runtimeOrbLimit(): number {
+    const limit = this.getOrbLimit();
+    if (
+      !Number.isInteger(limit)
+      || limit < STARTING_ORB_COUNT
+    ) {
+      throw new RangeError(
+        `orb limit must be an integer of at least ${STARTING_ORB_COUNT}`,
+      );
+    }
+    return Math.min(limit, GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit);
+  }
 }
 
 export type OrbSprite = Phaser.Physics.Arcade.Sprite & { orbId: number };
@@ -325,6 +345,9 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getChargedSpeed(): number;
   getRestoredCharges?(source: RecoverySource): number;
   getOpeningHitBonus?(source: RecoverySource, firstHitPending: boolean): number;
+  getChargedDamageBonus?(): number;
+  chargedKillPierces?(): boolean;
+  getOrbLimit?(): number;
   textureKey?: string;
 }
 
@@ -364,6 +387,9 @@ export class OrbManager {
       options.getChargedSpeed,
       options.getRestoredCharges,
       options.getOpeningHitBonus,
+      options.getChargedDamageBonus,
+      options.chargedKillPierces,
+      options.getOrbLimit,
     );
     this.world = scene.physics.world;
     this.sprites = this.store.getSnapshot().map(({ id }) => this.createSprite(id));

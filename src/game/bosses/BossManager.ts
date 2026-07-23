@@ -6,6 +6,12 @@ import { clamp, normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
+import type {
+  BossDirectHitEvent,
+  BossEncounter,
+  BossEncounterSnapshot,
+  BossProjectileSnapshot as CommonBossProjectileSnapshot,
+} from './bossEncounter';
 import { BOSS_GEOMETRY } from './bossGeometry';
 import { updateBossMotion, type BossMotion, type HorizontalInterval } from './bossMovementRules';
 import {
@@ -41,16 +47,11 @@ interface PendingHit {
   result: HitResult;
   partId: BossPartId;
   source: BossDirectHitEvent['source'];
+  sourceOrbId: number;
   direction: Vector;
 }
 
-export interface BossDirectHitEvent {
-  partId: BossPartId;
-  source: 'permanent' | 'temporary';
-  position: Vector;
-  charged: boolean;
-  direction: Vector;
-}
+export type { BossDirectHitEvent } from './bossEncounter';
 
 export interface BossManagerOptions {
   player: Phaser.Physics.Arcade.Sprite;
@@ -64,11 +65,13 @@ export interface BossManagerOptions {
   onDefeated(): void;
 }
 
-export interface BossManagerSnapshot {
+export interface BossManagerSnapshot extends BossEncounterSnapshot {
+  kind: 'sentinel';
   active: boolean;
   phase: BossPhase | null;
   position: Vector | null;
   parts: Record<BossPartId, number> | null;
+  bullets: number;
   basicBullets: number;
   aimedBullets: number;
   fallingHazards: number;
@@ -76,13 +79,11 @@ export interface BossManagerSnapshot {
   projectiles: BossProjectileSnapshot[];
 }
 
-export interface BossProjectileSnapshot {
+export interface BossProjectileSnapshot extends CommonBossProjectileSnapshot {
   kind: BossProjectileKind;
-  position: Vector;
-  velocity: Vector;
 }
 
-export class BossManager {
+export class BossManager implements BossEncounter {
   declare debugSetPosition?: (x: number) => void;
 
   private readonly body: BossSprite;
@@ -209,10 +210,12 @@ export class BossManager {
   getSnapshot(): BossManagerSnapshot {
     if (this.destroyed) {
       return {
+        kind: 'sentinel',
         active: false,
         phase: null,
         position: null,
         parts: null,
+        bullets: 0,
         basicBullets: 0,
         aimedBullets: 0,
         fallingHazards: 0,
@@ -222,6 +225,7 @@ export class BossManager {
     }
     const projectiles = this.activeProjectiles();
     return {
+      kind: 'sentinel',
       active: true,
       phase: bossPhase(this.state),
       position: { x: this.motion.x, y: GAME_TUNING.boss.y },
@@ -230,6 +234,7 @@ export class BossManager {
         rightWeakpoint: this.state.rightWeakpointHp,
         core: this.state.coreHp,
       },
+      bullets: this.getBulletCount(),
       basicBullets: projectiles.filter(({ kind }) => kind === 'basic').length,
       aimedBullets: projectiles.filter(({ kind }) => kind === 'aimed').length,
       fallingHazards: this.activeCount(this.fallingHazardGroup),
@@ -246,11 +251,11 @@ export class BossManager {
     center: Vector,
     radius: number,
     damage: number,
-    excludedPartId?: BossPartId,
+    excludedTargetId?: string,
   ): BossPartId | null {
     if (this.destroyed || bossPhase(this.state) === 'defeated') return null;
     const target = exposedBossParts(this.state)
-      .filter((partId) => partId !== excludedPartId)
+      .filter((partId) => partId !== excludedTargetId)
       .map((partId) => ({
         partId,
         distance: Math.hypot(
@@ -340,7 +345,7 @@ export class BossManager {
       false,
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'permanent', orb);
+    const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -360,7 +365,7 @@ export class BossManager {
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'temporary', orb);
+    const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -453,10 +458,11 @@ export class BossManager {
     result: HitResult,
     partId: BossPartId,
     source: BossDirectHitEvent['source'],
+    sourceOrbId: number,
     orb: Phaser.Physics.Arcade.Sprite,
   ): PendingHit {
     const body = orb.body as Phaser.Physics.Arcade.Body;
-    return { result, partId, source, direction: normalize(body.velocity) };
+    return { result, partId, source, sourceOrbId, direction: normalize(body.velocity) };
   }
 
   private applyPendingHit(pending: PendingHit): void {
@@ -464,8 +470,10 @@ export class BossManager {
     const part = this.partSprites[pending.partId];
     const defeated = this.damagePart(pending.partId, pending.result.damage, false);
     this.options.onDirectHit({
-      partId: pending.partId,
+      bossKind: 'sentinel',
+      targetId: pending.partId,
       source: pending.source,
+      sourceOrbId: pending.sourceOrbId,
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,

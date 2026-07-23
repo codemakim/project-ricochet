@@ -1,6 +1,7 @@
 import { GAME_TUNING } from '../config/gameTuning';
 
-export type EnemyKind = 'basic' | 'armored' | 'shooter';
+export type EnemyKind = 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment';
+export type FragmentSide = 'left' | 'right';
 
 export interface EnemySpec {
   kind: EnemyKind;
@@ -9,6 +10,7 @@ export interface EnemySpec {
   y: number;
   column: number;
   speed: number;
+  side?: FragmentSide;
 }
 
 export function canFire(

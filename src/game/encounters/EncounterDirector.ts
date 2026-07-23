@@ -1,8 +1,8 @@
-import { GAME_TUNING } from '../config/gameTuning';
+import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { canSpawnReinforcement, threatConfigAt, type ThreatPhase } from './encounterRules';
 import {
-  BOSS_WARNING_MS,
+  bossEntryForSection,
   bossEntryReady,
   bossProgressForKill,
   type EncounterState,
@@ -11,7 +11,7 @@ import {
 import { createReinforcementFormation, type FormationResult } from './formationRules';
 
 export interface EncounterEnemyState {
-  activeEnemies: number;
+  activePopulation: number;
   topmostEnemyY: number;
 }
 
@@ -36,6 +36,8 @@ export class EncounterDirector {
   private elapsedSinceSpawnMs = 0;
   private bossScore = 0;
   private warningElapsedMs = 0;
+  private pendingBossKind: BossKind | null = null;
+  private pendingBossWarningMs = 0;
   private bossesDefeated = 0;
   private spawnSequence = 0;
   private lastFormationId: string | null = null;
@@ -51,9 +53,15 @@ export class EncounterDirector {
 
     if (this.state === 'bossWarning') {
       this.warningElapsedMs += deltaMs;
-      if (this.warningElapsedMs >= BOSS_WARNING_MS) {
+      if (this.warningElapsedMs >= this.pendingBossWarningMs) {
+        if (!this.pendingBossKind) {
+          throw new Error('boss warning has no pending boss kind');
+        }
         this.state = 'boss';
-        return { formation: null, transition: 'bossStarted' };
+        return {
+          formation: null,
+          transition: { type: 'bossStarted', bossKind: this.pendingBossKind },
+        };
       }
       return NO_UPDATE;
     }
@@ -61,10 +69,17 @@ export class EncounterDirector {
 
     this.sectionElapsedMs += deltaMs;
     this.elapsedSinceSpawnMs += deltaMs;
-    if (this.section === 0 && bossEntryReady(this.sectionElapsedMs, this.bossScore)) {
+    const entry = bossEntryForSection(this.section);
+    if (entry && bossEntryReady(entry, this.sectionElapsedMs, this.bossScore)) {
       this.state = 'bossWarning';
+      this.pendingBossKind = entry.kind;
+      this.pendingBossWarningMs = entry.warningMs;
+      this.warningElapsedMs = 0;
       this.pendingFormation = null;
-      return { formation: null, transition: 'bossWarningStarted' };
+      return {
+        formation: null,
+        transition: { type: 'bossWarningStarted', bossKind: entry.kind },
+      };
     }
 
     const threat = threatConfigAt(this.sectionElapsedMs, this.section);
@@ -85,8 +100,8 @@ export class EncounterDirector {
       spawnIntervalMs: threat.spawnIntervalMs,
       topmostEnemyY: enemyState.topmostEnemyY,
       requiredTopmostY: GAME_TUNING.encounter.reinforcementReleaseY,
-      activeEnemies: enemyState.activeEnemies,
-      incomingEnemies: formation.enemies.length,
+      activeEnemies: enemyState.activePopulation,
+      incomingEnemies: formation.populationCost,
       activeCap: threat.activeCap,
     })) return NO_UPDATE;
 
@@ -98,7 +113,7 @@ export class EncounterDirector {
   }
 
   recordEnemyKill(kind: EnemyKind): void {
-    if (this.state === 'running' && this.section === 0) {
+    if (this.state === 'running' && bossEntryForSection(this.section)) {
       this.bossScore += bossProgressForKill(kind);
     }
   }
@@ -121,6 +136,8 @@ export class EncounterDirector {
     this.elapsedSinceSpawnMs = 0;
     this.bossScore = 0;
     this.warningElapsedMs = 0;
+    this.pendingBossKind = null;
+    this.pendingBossWarningMs = 0;
     this.pendingFormation = null;
   }
 
@@ -138,6 +155,7 @@ export class EncounterDirector {
       sectionElapsedMs: this.sectionElapsedMs,
       bossScore: this.bossScore,
       warningElapsedMs: this.warningElapsedMs,
+      pendingBossKind: this.pendingBossKind,
       bossesDefeated: this.bossesDefeated,
     } as const;
   }

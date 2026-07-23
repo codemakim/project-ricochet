@@ -1,12 +1,7 @@
 import type Phaser from 'phaser';
+import { GAME_TUNING } from '../config/gameTuning';
 import { normalize, type Vector } from '../math/vector';
 import type { HitResult } from './orbRules';
-
-const TEMPORARY_ORB_RADIUS = 6;
-const TEMPORARY_ORB_SPEED = 440;
-const TEMPORARY_ORB_CAP = 12;
-const TEMPORARY_ORB_LIFETIME_MS = 1500;
-const HIT_COOLDOWN_MS = 80;
 
 export type TemporaryOrbSprite = Phaser.Physics.Arcade.Sprite & {
   temporaryOrbId: number;
@@ -18,6 +13,8 @@ export interface TemporaryOrbSnapshot {
   expiresAt: number;
   position: Vector;
   velocity: Vector;
+  generation: 0 | 1;
+  splitConsumed: boolean;
 }
 
 interface TemporaryOrbRecord extends TemporaryOrbSnapshot {
@@ -42,6 +39,7 @@ function rotate(direction: Vector, angleDegrees: number): Vector {
 }
 
 export class TemporaryOrbManager {
+  declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
   private readonly group: Phaser.Physics.Arcade.Group;
   private readonly records = new Map<TemporaryOrbSprite, TemporaryOrbRecord>();
   private nextId = 0;
@@ -53,45 +51,68 @@ export class TemporaryOrbManager {
     private readonly options: TemporaryOrbManagerOptions,
   ) {
     this.group = scene.physics.add.group({ allowGravity: false });
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugPlaceOrb = (id, position) => {
+        if (!Number.isInteger(id) || id < 0) {
+          throw new RangeError('temporary orb ID must be a non-negative integer');
+        }
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+          throw new RangeError('temporary orb position must be finite');
+        }
+        const record = [...this.records.values()].find((candidate) => candidate.id === id);
+        if (!record?.sprite.active) return false;
+        const body = record.sprite.body as Phaser.Physics.Arcade.Body;
+        const velocity = { x: body.velocity.x, y: body.velocity.y };
+        record.sprite.setPosition(position.x, position.y);
+        body.reset(position.x, position.y);
+        body.setVelocity(velocity.x, velocity.y);
+        record.position = { ...position };
+        record.velocity = velocity;
+        return true;
+      };
+    }
   }
 
   spawn(position: Vector, direction: Vector, count: number): number {
     if (this.destroyed || count <= 0) return 0;
     const angles = this.spawnAngles(count);
-    const available = TEMPORARY_ORB_CAP - this.records.size;
+    const available = GAME_TUNING.temporaryOrbs.cap - this.records.size;
     const spawnCount = Math.min(count, available);
     if (spawnCount <= 0) return 0;
 
     const incoming = normalize(direction);
     for (const angle of angles.slice(0, spawnCount)) {
-      const launch = rotate(incoming, angle);
-      const expiresAt = this.options.getGameplayElapsedMs() + TEMPORARY_ORB_LIFETIME_MS;
-      const sprite = this.group.create(
-        position.x,
-        position.y,
-        this.options.textureKey ?? 'orb-temporary',
-      ) as TemporaryOrbSprite;
-      sprite.temporaryOrbId = this.nextId;
-      sprite.expiresAt = expiresAt;
-      this.nextId += 1;
-      sprite
-        .setCircle(TEMPORARY_ORB_RADIUS)
-        .setBounce(1, 1)
-        .setCollideWorldBounds(true)
-        .setVelocity(launch.x * TEMPORARY_ORB_SPEED, launch.y * TEMPORARY_ORB_SPEED);
-      this.records.set(sprite, {
-        id: sprite.temporaryOrbId,
-        expiresAt,
-        position: { ...position },
-        velocity: {
-          x: launch.x * TEMPORARY_ORB_SPEED,
-          y: launch.y * TEMPORARY_ORB_SPEED,
-        },
-        sprite,
-        enemyHits: new Map(),
-      });
+      this.createOrb(position, rotate(incoming, angle), 0);
     }
     return spawnCount;
+  }
+
+  spawnChildren(parentId: number, position: Vector, direction: Vector): number {
+    const parent = [...this.records.values()].find((record) => record.id === parentId);
+    if (
+      this.destroyed
+      || !parent
+      || !parent.sprite.active
+      || parent.generation !== 0
+      || parent.splitConsumed
+    ) return 0;
+
+    const { childCount, angles: configuredAngles } = GAME_TUNING.relics.secondBoss.chainSplit;
+    if (
+      !Number.isInteger(childCount)
+      || childCount < 1
+      || childCount > configuredAngles.length
+    ) {
+      throw new RangeError('chain split child count must fit configured angles');
+    }
+    parent.splitConsumed = true;
+    const available = GAME_TUNING.temporaryOrbs.cap - this.records.size;
+    const angles = configuredAngles.slice(0, Math.min(childCount, available));
+    const incoming = normalize(direction);
+    for (const angle of angles) {
+      this.createOrb(position, rotate(incoming, angle), 1);
+    }
+    return angles.length;
   }
 
   getGroup(): Phaser.Physics.Arcade.Group {
@@ -107,7 +128,7 @@ export class TemporaryOrbManager {
     const record = this.records.get(orb);
     if (!record || !orb.active) return null;
     const lastHitMs = record.enemyHits.get(enemyId);
-    if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
+    if (lastHitMs !== undefined && nowMs - lastHitMs < GAME_TUNING.temporaryOrbs.hitCooldownMs) return null;
     record.enemyHits.set(enemyId, nowMs);
     const damage = 0.5 + this.options.getDirectDamageBonus();
     return {
@@ -116,6 +137,7 @@ export class TemporaryOrbManager {
       damage,
       killed: enemyHp <= damage,
       reflect: true,
+      preserveChargedKinetics: false,
     };
   }
 
@@ -145,6 +167,8 @@ export class TemporaryOrbManager {
       expiresAt: record.expiresAt,
       position: { ...record.position },
       velocity: { ...record.velocity },
+      generation: record.generation,
+      splitConsumed: record.splitConsumed,
     }));
   }
 
@@ -164,5 +188,36 @@ export class TemporaryOrbManager {
     if (count === 2) return [-25, 25];
     if (count === 3) return [-30, 0, 30];
     throw new RangeError('temporary orb count must be from 1 through 3');
+  }
+
+  private createOrb(position: Vector, direction: Vector, generation: 0 | 1): void {
+    const expiresAt = this.options.getGameplayElapsedMs() + GAME_TUNING.temporaryOrbs.lifetimeMs;
+    const velocity = {
+      x: direction.x * GAME_TUNING.temporaryOrbs.speed,
+      y: direction.y * GAME_TUNING.temporaryOrbs.speed,
+    };
+    const sprite = this.group.create(
+      position.x,
+      position.y,
+      this.options.textureKey ?? 'orb-temporary',
+    ) as TemporaryOrbSprite;
+    sprite.temporaryOrbId = this.nextId;
+    sprite.expiresAt = expiresAt;
+    this.nextId += 1;
+    sprite
+      .setCircle(GAME_TUNING.temporaryOrbs.radius)
+      .setBounce(1, 1)
+      .setCollideWorldBounds(true)
+      .setVelocity(velocity.x, velocity.y);
+    this.records.set(sprite, {
+      id: sprite.temporaryOrbId,
+      expiresAt,
+      position: { ...position },
+      velocity,
+      generation,
+      splitConsumed: false,
+      sprite,
+      enemyHits: new Map(),
+    });
   }
 }

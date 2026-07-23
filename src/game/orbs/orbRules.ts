@@ -16,6 +16,7 @@ export interface HitResult {
   damage: number;
   killed: boolean;
   reflect: boolean;
+  preserveChargedKinetics: boolean;
 }
 
 const LEGAL_TRANSITIONS: Record<OrbState, readonly OrbState[]> = {
@@ -44,19 +45,28 @@ export function directHit(
   settings: Pick<ExperimentSettings, 'passThroughOnKill'>,
   piercing: boolean,
   directDamageBonus = 0,
+  chargedDamageBonus = 0,
+  chargedKillPierces = false,
 ): HitResult {
   if (!Number.isFinite(directDamageBonus) || directDamageBonus < 0) {
     throw new RangeError('direct damage bonus must be finite and non-negative');
   }
+  if (!Number.isFinite(chargedDamageBonus) || chargedDamageBonus < 0) {
+    throw new RangeError('charged damage bonus must be finite and non-negative');
+  }
   const charged = charges > 0;
-  const damage = (charged ? 1.5 : 1) + directDamageBonus;
+  const damage = (charged ? 1.5 : 1)
+    + directDamageBonus
+    + (charged ? chargedDamageBonus : 0);
   const killed = enemyHp <= damage;
+  const rewardPiercing = charged && killed && chargedKillPierces;
 
   return {
     charged,
     charges: charged ? charges - 1 : 0,
     damage,
     killed,
-    reflect: piercing ? false : !(killed && settings.passThroughOnKill),
+    reflect: piercing ? false : !(killed && (settings.passThroughOnKill || rewardPiercing)),
+    preserveChargedKinetics: rewardPiercing,
   };
 }

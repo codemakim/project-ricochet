@@ -1,12 +1,44 @@
 import Phaser from 'phaser';
+import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import type { BossRewardId } from '../progression/bossRewardRules';
+import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRules';
 
+const SECOND_RELIC_TUNING = GAME_TUNING.relics.secondBoss;
 const REWARD_COPY: Record<BossRewardId, { label: string; effect: string }> = {
-  'expanded-magazine': { label: '증설 탄창', effect: '영구 구슬 +1 · 최대 6개' },
+  'expanded-magazine': {
+    label: '증설 탄창',
+    get effect() {
+      return `영구 구슬 +1 · 최대 ${SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit}개`;
+    },
+  },
   'recovery-capacitor': { label: '회수 축전기', effect: '근접 회수 충전 3 → 5' },
   'opening-amplifier': { label: '초동 증폭기', effect: '근접 회수 후 첫 적중 직접 피해 +1' },
   'chain-warhead': { label: '연쇄 탄두', effect: '임시 분열 구슬도 폭발 효과 상속' },
+  'auxiliary-orbit': {
+    label: '보조 궤도',
+    effect: `영구 구슬 한도 +1 · 전체 최대 ${SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit}개`,
+  },
+  'recovery-salvo': {
+    label: '회수 일제사',
+    effect: `근접 직접 회수 재발사 시 좌우 임시 구슬 ${SECOND_RELIC_TUNING.recoverySalvo.temporaryOrbCount}개`,
+  },
+  'siege-resonance': {
+    label: '공성 공명',
+    effect: `영구 구슬 직접 적중 ${SECOND_RELIC_TUNING.siegeResonance.hitsRequired}회 후 반경 ${SECOND_RELIC_TUNING.siegeResonance.radius}px · 피해 ${SECOND_RELIC_TUNING.siegeResonance.damage} 충격파`,
+  },
+  'hyperpressure-core': {
+    label: '초고압 탄심',
+    effect: `충전 직접 피해 +${SECOND_RELIC_TUNING.hyperpressureCore.chargedDamageBonus}`,
+  },
+  'inertial-penetration': { label: '관성 관통', effect: '충전 구슬 직접 처치 시 반사 없이 방향·속도 유지' },
+  'aftershock-explosion': {
+    label: '잔향 폭발',
+    effect: `${SECOND_RELIC_TUNING.aftershockExplosion.delayMs}ms 뒤 반경 ${SECOND_RELIC_TUNING.aftershockExplosion.radiusScale * 100}% · 피해 ${SECOND_RELIC_TUNING.aftershockExplosion.damageScale * 100}% 잔향 폭발`,
+  },
+  'chain-split': {
+    label: '연쇄 분열',
+    effect: `임시 구슬 첫 직접 적중 시 ±${Math.abs(SECOND_RELIC_TUNING.chainSplit.angles[0])}° 자식 구슬 ${SECOND_RELIC_TUNING.chainSplit.childCount}개`,
+  },
 };
 
 const CARD_Y = [270, 400, 530] as const;
@@ -24,7 +56,22 @@ export class BossRewardOverlay {
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  show(choices: readonly BossRewardId[], onSelect: (id: BossRewardId) => boolean): void {
+  show(
+    tier: BossRewardTier,
+    choices: readonly BossRewardId[],
+    onSelect: (id: BossRewardId) => boolean,
+  ): void;
+  /** @deprecated Use the tiered overload. */
+  show(choices: readonly BossRewardId[], onSelect: (id: BossRewardId) => boolean): void;
+  show(
+    tierOrChoices: BossRewardTier | readonly BossRewardId[],
+    choicesOrSelect: readonly BossRewardId[] | ((id: BossRewardId) => boolean),
+    maybeOnSelect?: (id: BossRewardId) => boolean,
+  ): void {
+    const legacy = Array.isArray(tierOrChoices);
+    const tier: BossRewardTier = legacy ? 'first' : tierOrChoices as BossRewardTier;
+    const choices = (legacy ? tierOrChoices : choicesOrSelect) as readonly BossRewardId[];
+    const onSelect = (legacy ? choicesOrSelect : maybeOnSelect) as (id: BossRewardId) => boolean;
     this.hide();
     this.visible = true;
     this.consumed = false;
@@ -33,7 +80,7 @@ export class BossRewardOverlay {
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x02050d, 0.92)
         .setDepth(40)
         .setInteractive(),
-      this.scene.add.text(GAME_WIDTH / 2, 132, 'BOSS REWARD', {
+      this.scene.add.text(GAME_WIDTH / 2, 132, tier === 'second' ? '상위 유물 보상' : 'BOSS REWARD', {
         color: '#ffd166',
         fontSize: '30px',
         fontStyle: 'bold',

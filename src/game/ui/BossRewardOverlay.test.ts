@@ -7,6 +7,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { BossRewardOverlay } from './BossRewardOverlay';
+import { GAME_TUNING } from '../config/gameTuning';
 
 class FakeEmitter {
   private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
@@ -101,6 +102,7 @@ describe('BossRewardOverlay', () => {
     const onSelect = vi.fn(() => true);
 
     overlay.show(
+      'first',
       ['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'],
       onSelect,
     );
@@ -131,7 +133,7 @@ describe('BossRewardOverlay', () => {
     const overlay = new BossRewardOverlay(scene as never);
     const onSelect = vi.fn(() => true);
 
-    overlay.show(['chain-warhead', 'expanded-magazine', 'opening-amplifier'], onSelect);
+    overlay.show('first', ['chain-warhead', 'expanded-magazine', 'opening-amplifier'], onSelect);
     expect(objects.filter((object) => object.kind === 'text').map(({ text }) => text)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('연쇄 탄두'),
@@ -157,7 +159,7 @@ describe('BossRewardOverlay', () => {
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
 
-    overlay.show(['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'], onSelect);
+    overlay.show('first', ['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'], onSelect);
     const firstCard = objects.find((object) => object.kind === 'rectangle' && object.width === 380)!;
 
     firstCard.emit('pointerup');
@@ -170,5 +172,70 @@ describe('BossRewardOverlay', () => {
     expect(onSelect).toHaveBeenLastCalledWith('recovery-capacitor');
     expect(overlay.isVisible()).toBe(false);
     expect(objects.every((object) => object.destroyed)).toBe(true);
+  });
+
+  it('shows the stronger second-tier heading and Korean copy for all seven rewards', () => {
+    const rewards = [
+      ['auxiliary-orbit', '보조 궤도', '영구 구슬 한도 +1'],
+      ['recovery-salvo', '회수 일제사', '좌우 임시 구슬 2개'],
+      ['siege-resonance', '공성 공명', '반경 80px · 피해 2'],
+      ['hyperpressure-core', '초고압 탄심', '충전 직접 피해 +0.75'],
+      ['inertial-penetration', '관성 관통', '반사 없이 방향·속도 유지'],
+      ['aftershock-explosion', '잔향 폭발', '반경 80% · 피해 50%'],
+      ['chain-split', '연쇄 분열', '±25° 자식 구슬 2개'],
+    ] as const;
+
+    for (const [id, label, effect] of rewards) {
+      const { scene, objects } = makeScene();
+      const overlay = new BossRewardOverlay(scene as never);
+      overlay.show('second', [id, 'auxiliary-orbit', 'recovery-salvo'], () => true);
+      const text = objects.filter((object) => object.kind === 'text').map((object) => object.text);
+      expect(text).toEqual(expect.arrayContaining([
+        expect.stringContaining('상위 유물'),
+        expect.stringContaining(label),
+        expect.stringContaining(effect),
+      ]));
+    }
+  });
+
+  it('uses the central permanent-orb cap in expanded-magazine Korean copy', () => {
+    const tuning = GAME_TUNING.relics.secondBoss.auxiliaryOrbit as { orbLimit: number };
+    const originalLimit = tuning.orbLimit;
+    tuning.orbLimit = originalLimit + 1;
+    try {
+      const { scene, objects } = makeScene();
+      const overlay = new BossRewardOverlay(scene as never);
+      overlay.show(
+        'first',
+        ['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'],
+        () => true,
+      );
+
+      const text = objects.filter((object) => object.kind === 'text').map((object) => object.text);
+      expect(text).toContain(
+        `1. 증설 탄창\n영구 구슬 +1 · 최대 ${tuning.orbLimit}개`,
+      );
+    } finally {
+      tuning.orbLimit = originalLimit;
+    }
+  });
+
+  it('keeps second-tier touch and keyboard selection one-shot', () => {
+    const { scene, objects, keys } = makeScene();
+    const overlay = new BossRewardOverlay(scene as never);
+    const onSelect = vi.fn(() => true);
+    overlay.show(
+      'second',
+      ['auxiliary-orbit', 'recovery-salvo', 'siege-resonance'],
+      onSelect,
+    );
+    const firstCard = objects.find((object) => object.kind === 'rectangle' && object.width === 380)!;
+
+    keys.get(50)!.emit('down');
+    firstCard.emit('pointerup');
+    keys.get(51)!.emit('down');
+
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith('recovery-salvo');
   });
 });

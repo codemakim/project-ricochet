@@ -6,7 +6,13 @@ import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import { createInitialFormation } from '../encounters/formationRules';
-import { canFire, type EnemyKind, type EnemySpec } from './enemyRules';
+import {
+  canFire,
+  type EnemyKind,
+  type EnemySpec,
+  type FragmentSide,
+} from './enemyRules';
+import { fragmentSpecsAt, populationCostForEnemy } from './splitterRules';
 
 const CONTACT_SEPARATION = 6;
 const BULLET_MARGIN = 16;
@@ -15,6 +21,7 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   enemyId: number;
   kind: EnemyKind;
   hp: number;
+  side?: FragmentSide;
 };
 
 export interface EnemySnapshot {
@@ -28,6 +35,7 @@ export interface EnemySnapshot {
 
 export interface EnemyManagerSnapshot {
   enemies: EnemySnapshot[];
+  activePopulation: number;
   topmostEnemyY: number;
   activeShooters: number;
   bullets: number;
@@ -35,6 +43,7 @@ export interface EnemyManagerSnapshot {
 
 export interface DirectHitEvent {
   source: 'permanent' | 'temporary';
+  sourceOrbId: number;
   enemyId: number;
   position: Vector;
   charged: boolean;
@@ -45,6 +54,13 @@ export interface EnemyKilledEvent {
   enemyId: number;
   kind: EnemyKind;
   position: Vector;
+}
+
+export interface EnemyAreaDamageEffect {
+  center: Vector;
+  radius: number;
+  damage: number;
+  excludedEnemyId: number;
 }
 
 export interface EnemyManagerOptions {
@@ -59,7 +75,7 @@ export interface EnemyManagerOptions {
   onEnemyKilled?: (event: EnemyKilledEvent) => void;
   onDirectHit?: (event: DirectHitEvent) => void;
   getExternalBulletCount?: () => number;
-  textureKeys?: Partial<Record<EnemyKind | 'bullet', string>>;
+  textureKeys?: Partial<Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>>;
 }
 
 export class EnemyManager {
@@ -77,9 +93,10 @@ export class EnemyManager {
     result: HitResult;
     direction: Vector;
     source: DirectHitEvent['source'];
+    sourceOrbId: number;
   }>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
-  private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
+  private readonly textureKeys: Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>;
   private readonly bulletTextureKey: string;
   private readonly unsubscribeOrbAdded: () => void;
   private nextEnemyId = 0;
@@ -95,6 +112,10 @@ export class EnemyManager {
       basic: 'enemy-basic',
       armored: 'enemy-armored',
       shooter: 'enemy-shooter',
+      splitter: 'enemy-basic',
+      fragment: 'enemy-basic',
+      fragmentLeft: 'enemy-fragment-left',
+      fragmentRight: 'enemy-fragment-right',
       bullet: 'enemy-bullet',
       ...options.textureKeys,
     };
@@ -176,10 +197,14 @@ export class EnemyManager {
   spawnFormation(formation: readonly EnemySpec[]): void {
     if (this.destroyed) return;
     for (const spec of formation) {
-      const enemy = this.enemyGroup.create(spec.x, spec.y, this.textureKeys[spec.kind]) as EnemySprite;
+      const textureKey = spec.kind === 'fragment' && spec.side
+        ? this.textureKeys[spec.side === 'left' ? 'fragmentLeft' : 'fragmentRight']
+        : this.textureKeys[spec.kind];
+      const enemy = this.enemyGroup.create(spec.x, spec.y, textureKey) as EnemySprite;
       enemy.enemyId = this.nextEnemyId;
       this.nextEnemyId += 1;
       enemy.kind = spec.kind;
+      enemy.side = spec.side;
       enemy.hp = spec.hp;
       enemy.setImmovable(true).setVelocityY(spec.speed);
       this.enemies.set(enemy.enemyId, enemy);
@@ -210,6 +235,7 @@ export class EnemyManager {
     if (this.destroyed) {
       return {
         enemies: [],
+        activePopulation: 0,
         topmostEnemyY: Number.POSITIVE_INFINITY,
         activeShooters: 0,
         bullets: 0,
@@ -229,6 +255,10 @@ export class EnemyManager {
         warning: this.activeShooters.has(enemy.enemyId),
         speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
       })),
+      activePopulation: enemies.reduce(
+        (population, enemy) => population + populationCostForEnemy(enemy.kind),
+        0,
+      ),
       topmostEnemyY,
       activeShooters: this.activeShooters.size,
       bullets: (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
@@ -259,22 +289,27 @@ export class EnemyManager {
   }
 
   applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
-    const killedIds: number[] = [];
+    return this.applyAreaDamageBatch([{ center, radius, damage, excludedEnemyId }]);
+  }
+
+  applyAreaDamageBatch(effects: readonly EnemyAreaDamageEffect[]): number[] {
     const enemies = [...this.enemies.values()];
+    const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of enemies) {
-      if (
-        !enemy.active
-        || enemy.enemyId === excludedEnemyId
-        || Math.hypot(enemy.x - center.x, enemy.y - center.y) > radius
-      ) continue;
+      if (!enemy.active) continue;
       const killEvent = this.createKillEvent(enemy);
-      enemy.hp -= damage;
-      if (enemy.hp <= 0) {
-        killedIds.push(enemy.enemyId);
-        this.killEnemy(enemy, killEvent);
+      for (const effect of effects) {
+        if (
+          enemy.enemyId !== effect.excludedEnemyId
+          && Math.hypot(enemy.x - effect.center.x, enemy.y - effect.center.y) <= effect.radius
+        ) {
+          enemy.hp -= effect.damage;
+        }
       }
+      if (enemy.hp <= 0) lethal.push({ enemy, event: killEvent });
     }
-    return killedIds;
+    for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
+    return lethal.map(({ event }) => event.enemyId);
   }
 
   destroy(): void {
@@ -315,10 +350,15 @@ export class EnemyManager {
     if (!result) return false;
     const direction = this.orbDirection(orb);
     if (!result.reflect) {
-      this.applyHit(enemy, result, 'permanent', direction);
+      this.applyHit(enemy, result, 'permanent', orb.orbId, direction);
       return false;
     }
-    this.pendingReflections.set(this.hitKey(orb, enemy), { result, direction, source: 'permanent' });
+    this.pendingReflections.set(this.hitKey(orb, enemy), {
+      result,
+      direction,
+      source: 'permanent',
+      sourceOrbId: orb.orbId,
+    });
     return true;
   }
 
@@ -328,7 +368,7 @@ export class EnemyManager {
     if (!pending) return;
     this.pendingReflections.delete(key);
     this.options.orbManager.synchronizeOrb(orb);
-    this.applyHit(enemy, pending.result, pending.source, pending.direction);
+    this.applyHit(enemy, pending.result, pending.source, pending.sourceOrbId, pending.direction);
   }
 
   private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
@@ -343,7 +383,12 @@ export class EnemyManager {
     if (!result) return false;
     const direction = this.orbDirection(orb);
     const key = this.temporaryHitKey(orb, enemy);
-    this.pendingReflections.set(key, { result, direction, source: 'temporary' });
+    this.pendingReflections.set(key, {
+      result,
+      direction,
+      source: 'temporary',
+      sourceOrbId: orb.temporaryOrbId,
+    });
     return true;
   }
 
@@ -353,13 +398,14 @@ export class EnemyManager {
     if (!pending) return;
     this.pendingReflections.delete(key);
     this.options.temporaryOrbManager?.synchronizeOrb(orb);
-    this.applyHit(enemy, pending.result, pending.source, pending.direction);
+    this.applyHit(enemy, pending.result, pending.source, pending.sourceOrbId, pending.direction);
   }
 
   private applyHit(
     enemy: EnemySprite,
     result: HitResult,
     source: DirectHitEvent['source'],
+    sourceOrbId: number,
     direction: Vector,
   ): void {
     if (!enemy.active) return;
@@ -367,6 +413,7 @@ export class EnemyManager {
     enemy.hp -= result.damage;
     this.options.onDirectHit?.({
       source,
+      sourceOrbId,
       enemyId: enemy.enemyId,
       position: { ...killEvent.position },
       charged: result.charged,
@@ -467,7 +514,11 @@ export class EnemyManager {
   }
 
   private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
+    const fragments = enemy.kind === 'splitter'
+      ? fragmentSpecsAt(event.position, GAME_TUNING.enemies.descentSpeed)
+      : [];
     this.destroyEnemy(enemy);
     this.options.onEnemyKilled?.(event);
+    if (!this.destroyed) this.spawnFormation(fragments);
   }
 }

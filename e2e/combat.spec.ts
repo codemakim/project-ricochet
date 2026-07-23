@@ -42,7 +42,7 @@ interface CombatSnapshot {
   encounter: {
     elapsedMs: number;
     elapsedSinceSpawnMs: number;
-    phase: 0 | 1 | 2;
+    phase: 0 | 1 | 2 | 3;
     spawnSequence: number;
     runSeed: number;
     lastFormationId: string | null;
@@ -51,6 +51,7 @@ interface CombatSnapshot {
     sectionElapsedMs: number;
     bossScore: number;
     warningElapsedMs: number;
+    pendingBossKind: 'sentinel' | 'hive' | null;
     bossesDefeated: number;
   };
   progression: {
@@ -64,20 +65,37 @@ interface CombatSnapshot {
   pauseReasons: string[];
   levelUpVisible: boolean;
   boss: {
+    kind?: 'sentinel' | 'hive';
     active: boolean;
-    phase: 'twoWeakpoints' | 'oneWeakpoint' | 'core' | 'defeated' | null;
+    phase:
+      | 'twoWeakpoints' | 'oneWeakpoint' | 'core'
+      | 'shielded' | 'telegraph' | 'exposed' | 'permanentlyExposed'
+      | 'defeated' | null;
+    phaseElapsedMs?: number;
     position: Vector | null;
-    parts: { leftWeakpoint: number; rightWeakpoint: number; core: number } | null;
+    parts: Record<string, number> | null;
     basicBullets: number;
     aimedBullets: number;
     fallingHazards: number;
+    bullets?: number;
     warnings: number;
     projectiles: BossProjectileSnapshot[];
+    partPositions?: Record<string, Vector>;
   };
+  bossRewardTier: 'first' | 'second' | null;
   bossRewards: string[];
   bossRewardChoices: string[];
   bossRewardVisible: boolean;
   temporaryOrbs: number;
+  temporaryOrbSnapshots: Array<{
+    id: number;
+    generation: 0 | 1;
+    splitConsumed: boolean;
+    position: Vector;
+    velocity: Vector;
+  }>;
+  scheduledEffects: Array<{ dueAt: number }>;
+  activePopulation: number;
   gameplayElapsedMs: number;
 }
 
@@ -87,9 +105,13 @@ interface DevelopmentScene {
   children: {
     list: Array<{
       active?: boolean;
+      x?: number;
+      y?: number;
       displayWidth?: number;
       displayHeight?: number;
       texture?: { key?: string };
+      setPosition?(x: number, y: number): void;
+      body?: { velocity?: { x: number; y: number }; setVelocity?(x: number, y: number): void };
     }>;
   };
   player: { setPosition(x: number, y: number): void };
@@ -105,9 +127,16 @@ interface DevelopmentScene {
   debugUpgradeAbility(id: AbilityId): void;
   debugSetEnemy(id: number, position: Vector, hp: number): boolean;
   debugAdvanceEncounter(deltaMs: number): void;
-  debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter'): void;
-  debugDamageBossPart(partId: 'leftWeakpoint' | 'rightWeakpoint' | 'core', damage: number): void;
+  debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment'): void;
+  debugDamageBossPart(
+    partId:
+      | 'leftWeakpoint' | 'rightWeakpoint' | 'core'
+      | 'leftShooter' | 'rightShooter' | 'leftReflector' | 'rightReflector',
+    damage: number,
+  ): void;
   debugSetBossPosition(x: number): void;
+  debugAdvanceHiveCycle(deltaMs: number): void;
+  debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
 }
 
 async function sceneCall<T, A = undefined>(
@@ -201,6 +230,29 @@ async function defeatMidboss(page: Page): Promise<CombatSnapshot> {
     scene.update(0, 0);
   });
   await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  return snapshot(page);
+}
+
+async function resumeSectionOne(page: Page): Promise<CombatSnapshot> {
+  await enterMidbossByScore(page);
+  const reward = await defeatMidboss(page);
+  await page.keyboard.press('Digit1');
+  await expect.poll(async () => (await snapshot(page)).encounter.section).toBe(1);
+  const resumed = await snapshot(page);
+  expect(resumed.bossRewards).toEqual([reward.bossRewardChoices[0]]);
+  return resumed;
+}
+
+async function enterHiveByScore(page: Page): Promise<CombatSnapshot> {
+  await resumeSectionOne(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    for (let score = 0; score < 110; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(150_000);
+  });
+  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
+  await expect.poll(async () => (await snapshot(page)).boss.kind).toBe('hive');
   return snapshot(page);
 }
 
@@ -1093,15 +1145,16 @@ test('@desktop midboss enters from kill score and stops formations through warni
 
 test('@desktop midboss hard-time entry does not require kill score', async ({ page }) => {
   await loadCanvas(page);
-  const initialElapsed = (await snapshot(page)).encounter.sectionElapsedMs;
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(
-    209_999 - scene.getDebugSnapshot().encounter.sectionElapsedMs,
-  ));
-  expect(initialElapsed).toBeLessThan(209_999);
-  expect((await snapshot(page)).encounter).toMatchObject({ state: 'running', bossScore: 0 });
-
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(1));
-  expect((await snapshot(page)).encounter).toMatchObject({ state: 'bossWarning', bossScore: 0 });
+  const boundaries = await sceneCall(page, (scene) => {
+    const initialElapsed = scene.getDebugSnapshot().encounter.sectionElapsedMs;
+    scene.debugAdvanceEncounter(209_999 - initialElapsed);
+    const before = scene.getDebugSnapshot();
+    scene.debugAdvanceEncounter(1);
+    return { initialElapsed, before, at: scene.getDebugSnapshot() };
+  });
+  expect(boundaries.initialElapsed).toBeLessThan(209_999);
+  expect(boundaries.before.encounter).toMatchObject({ state: 'running', bossScore: 0 });
+  expect(boundaries.at.encounter).toMatchObject({ state: 'bossWarning', bossScore: 0 });
   await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
   expect((await snapshot(page)).boss.active).toBe(true);
 });
@@ -1299,7 +1352,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
   await expect.poll(async () => {
     const current = await snapshot(page);
     return {
-      weakpointDamaged: current.boss.parts!.leftWeakpoint < 14,
+      weakpointDamaged: (current.boss.parts?.leftWeakpoint ?? 14) < 14,
       temporaryOrbs: current.temporaryOrbs,
     };
   }, { timeout: 600 }).toEqual({ weakpointDamaged: true, temporaryOrbs: 1 });
@@ -1312,7 +1365,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
     scene.debugDamageBossPart('rightWeakpoint', 14);
   });
   expect((await snapshot(page)).boss.phase).toBe('core');
-  const coreBefore = (await snapshot(page)).boss.parts!.core;
+  const coreBefore = (await snapshot(page)).boss.parts!.core!;
   await sceneCall(page, (scene) => {
     scene.debugSetBossPosition(225);
     const orb = scene.getDebugSnapshot().orbs.find((candidate) => candidate.id === 0)!;
@@ -1360,7 +1413,7 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and resumes stro
   await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(false);
   const resumed = await snapshot(page);
   expect(resumed.bossRewards).toEqual([selected]);
-  expect(resumed.encounter).toMatchObject({ state: 'running', section: 1, phase: 1 });
+  expect(resumed.encounter).toMatchObject({ state: 'running', section: 1, phase: 2 });
   expect(resumed.pauseReasons).not.toContain('bossReward');
   expect(resumed.boss.active).toBe(false);
 });
@@ -1448,4 +1501,401 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
   expect(reset.bossRewardChoices).toEqual([]);
   expect(reset.bossRewardVisible).toBe(false);
   expect(reset.boss.active).toBe(false);
+});
+
+test('@desktop splitter reserves population, clamps fragments, and settles rewards', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await resumeSectionOne(page);
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    scene.debugAdvanceEncounter(60_000);
+    scene.debugAdvanceEncounter(5_500);
+    scene.debugFreezeEnemies();
+  });
+  const phaseThree = await snapshot(page);
+  expect(phaseThree.encounter.phase).toBe(3);
+  const parent = phaseThree.enemies.find(({ kind }) => kind === 'splitter')!;
+  expect(parent).toBeDefined();
+  const populationBefore = phaseThree.activePopulation;
+  const xpBefore = phaseThree.progression.xp;
+  const scoreBefore = phaseThree.encounter.bossScore;
+  await sceneCall(page, (scene, id) => {
+    scene.debugSetEnemy(id, { x: 0, y: 300 }, 1);
+  }, parent.id);
+  const aim = clientPoint(box, { x: phaseThree.player.x, y: phaseThree.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  await sceneCall(page, (scene) => {
+    const orb = scene.getDebugSnapshot().orbs.find(({ state }) => state === 'active')!;
+    scene.debugPlaceOrb(orb.id, { x: 11, y: 324 });
+  });
+  await expect.poll(async () => (await snapshot(page)).enemies.filter(({ kind }) => kind === 'fragment').length)
+    .toBe(2);
+  const split = await snapshot(page);
+  const fragments = split.enemies.filter(({ kind }) => kind === 'fragment');
+  expect(fragments.every(({ position }) => position.x >= 11)).toBe(true);
+  expect(split.activePopulation).toBe(populationBefore);
+  expect(split.progression.xp).toBe(xpBefore + 1);
+  expect(split.encounter.bossScore).toBe(scoreBefore + 2);
+  for (const [index, fragment] of fragments.entries()) {
+    const arranged = await sceneCall(page, (scene, target) => {
+      const orb = scene.getDebugSnapshot().orbs.filter(
+        ({ state, collisionEnabled, damageEnabled }) => (
+          state === 'active' && collisionEnabled && damageEnabled
+        ),
+      )[target.orb]!;
+      const position = { x: 150 + target.orb * 150, y: 300 };
+      scene.debugSetEnemy(target.id, position, 1);
+      const approachY = position.y + (orb.velocity.y < 0 ? 18 : -18);
+      return {
+        placed: scene.debugPlaceOrb(orb.id, { x: position.x, y: approachY }),
+        orbId: orb.id,
+      };
+    }, { id: fragment.id, orb: index });
+    expect(arranged.placed).toBe(true);
+    await expect.poll(async () => (
+      await snapshot(page)
+    ).enemies.some(({ id }) => id === fragment.id)).toBe(false);
+  }
+  const settled = await snapshot(page);
+  expect(settled.progression.xp).toBe(xpBefore + 3);
+  expect(settled.encounter.bossScore).toBe(scoreBefore + 2);
+  expect(settled.activePopulation).toBe(populationBefore - 2);
+});
+
+test('@desktop enters hive from section-local score and hard time', async ({ page }) => {
+  await loadCanvas(page);
+  await resumeSectionOne(page);
+  const scoreBoundaries = await sceneCall(page, (scene) => {
+    for (let score = 0; score < 110; score += 1) scene.debugRecordEnemyKill('basic');
+    const elapsed = scene.getDebugSnapshot().encounter.sectionElapsedMs;
+    scene.debugAdvanceEncounter(149_999 - elapsed);
+    const before = scene.getDebugSnapshot();
+    scene.debugAdvanceEncounter(1);
+    const warning = scene.getDebugSnapshot();
+    scene.debugAdvanceEncounter(1_999);
+    const beforeBoss = scene.getDebugSnapshot();
+    scene.debugAdvanceEncounter(1);
+    const boss = scene.getDebugSnapshot();
+    return { before, warning, beforeBoss, boss };
+  });
+  const beforeScoreBoundary = scoreBoundaries.before;
+  expect(beforeScoreBoundary.encounter).toMatchObject({
+    state: 'running', section: 1, sectionElapsedMs: 149_999, bossScore: 110,
+  });
+  const scoreEnemies = beforeScoreBoundary.enemies.map(({ id }) => id);
+  const scoreSpawnSequence = beforeScoreBoundary.encounter.spawnSequence;
+  const scoreWarning = scoreBoundaries.warning;
+  expect(scoreWarning.encounter).toMatchObject({
+    state: 'bossWarning', pendingBossKind: 'hive', sectionElapsedMs: 150_000,
+  });
+  expect(scoreWarning.enemies.map(({ id }) => id)).toEqual(scoreEnemies);
+  expect(scoreBoundaries.beforeBoss.encounter.state).toBe('bossWarning');
+  expect(scoreBoundaries.boss.boss.kind).toBe('hive');
+  expect(scoreBoundaries.boss.encounter.spawnSequence).toBe(scoreSpawnSequence);
+  expect(scoreBoundaries.boss.enemies.length).toBeGreaterThan(0);
+  const activeHive = await sceneCall(page, (scene) => {
+    scene.debugAdvanceEncounter(7_000);
+    scene.debugAdvanceHiveCycle(7_000);
+    return scene.getDebugSnapshot();
+  });
+  expect(activeHive.encounter.state).toBe('boss');
+  expect(activeHive.encounter.spawnSequence).toBe(scoreSpawnSequence);
+  expect(activeHive.enemies.map(({ id }) => id)).toEqual(scoreEnemies);
+
+  await loadCanvas(page);
+  await resumeSectionOne(page);
+  const hardBoundaries = await sceneCall(page, (scene) => {
+    const elapsed = scene.getDebugSnapshot().encounter.sectionElapsedMs;
+    scene.debugAdvanceEncounter(209_999 - elapsed);
+    const before = scene.getDebugSnapshot();
+    scene.debugAdvanceEncounter(1);
+    return { before, at: scene.getDebugSnapshot() };
+  });
+  expect(hardBoundaries.before.encounter).toMatchObject({ state: 'running', bossScore: 0 });
+  expect(hardBoundaries.at.encounter).toMatchObject({
+    state: 'bossWarning', pendingBossKind: 'hive', sectionElapsedMs: 210_000,
+  });
+});
+
+test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure', async ({ page }) => {
+  await loadCanvas(page);
+  await resumeSectionOne(page);
+  const phases = await sceneCall(page, (scene) => {
+    for (let score = 0; score < 110; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(
+      150_000 - scene.getDebugSnapshot().encounter.sectionElapsedMs,
+    );
+    scene.debugAdvanceEncounter(2_000);
+    const initial = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(3_999);
+    const beforeTelegraph = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(1);
+    const telegraph = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(1_499);
+    const beforeExposure = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(1);
+    const exposed = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(6_999);
+    const beforeShield = scene.getDebugSnapshot().boss.phase;
+    scene.debugAdvanceHiveCycle(1);
+    const shielded = scene.getDebugSnapshot().boss.phase;
+    scene.debugDamageBossPart('leftShooter', 12);
+    scene.debugDamageBossPart('rightShooter', 12);
+    scene.debugDamageBossPart('leftReflector', 14);
+    scene.debugDamageBossPart('rightReflector', 14);
+    const permanent = scene.getDebugSnapshot().boss.phase;
+    return {
+      initial, beforeTelegraph, telegraph, beforeExposure, exposed, beforeShield, shielded, permanent,
+    };
+  });
+  expect(phases).toEqual({
+    initial: 'shielded',
+    beforeTelegraph: 'shielded',
+    telegraph: 'telegraph',
+    beforeExposure: 'telegraph',
+    exposed: 'exposed',
+    beforeShield: 'exposed',
+    shielded: 'shielded',
+    permanent: 'permanentlyExposed',
+  });
+});
+
+test('@desktop hive reflector changes a real orb trajectory without blocking player bullets', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await enterHiveByScore(page);
+  await sceneCall(page, (scene) => {
+    scene.debugAdvanceHiveCycle(4_000);
+    scene.debugAdvanceHiveCycle(1_500);
+  });
+  const exposed = await snapshot(page);
+  expect(exposed.boss.phase).toBe('exposed');
+  const aim = clientPoint(box, { x: exposed.player.x, y: exposed.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  const reflector = (await snapshot(page)).boss.partPositions!.leftReflector!;
+  await sceneCall(page, (scene, position) => {
+    scene.debugPlaceOrb(0, { x: position.x, y: position.y + 60 });
+  }, reflector);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs[0]!.velocity.y).toBeGreaterThan(0);
+  const afterReflection = await snapshot(page);
+  expect(afterReflection.boss.parts!.leftReflector).toBeLessThan(14);
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'hive-shooter-bullet',
+  ))).toBe(true);
+  const projectileStart = await sceneCall(page, (scene, wall) => {
+    const projectile = scene.children.list.find(
+      (child) => child.active && child.texture?.key === 'hive-shooter-bullet',
+    )!;
+    projectile.setPosition!(wall.x - 30, wall.y);
+    projectile.body!.setVelocity!(200, 0);
+    return projectile.x!;
+  }, reflector);
+  await page.waitForTimeout(250);
+  const projectileEnd = await sceneCall(page, (scene) => {
+    const projectile = scene.children.list.find(
+      (child) => child.active && child.texture?.key === 'hive-shooter-bullet',
+    );
+    return projectile?.x ?? Number.POSITIVE_INFINITY;
+  });
+  expect(projectileStart).toBeLessThan(reflector.x);
+  expect(projectileEnd).toBeGreaterThan(reflector.x);
+});
+
+test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ page }) => {
+  await loadCanvas(page);
+  await enterHiveByScore(page);
+  await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    scene.player.setPosition(225, 730);
+    scene.debugAdvanceHiveCycle(4_000);
+    scene.debugAdvanceHiveCycle(1_500);
+  });
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return current.bullets > 0 && (current.boss.bullets ?? 0) > 0;
+  }, { timeout: 4_000 }).toBe(true);
+  const attacking = await snapshot(page);
+  expect(attacking.bullets).toBeGreaterThan(0);
+  expect(attacking.boss.bullets ?? 0).toBeGreaterThan(0);
+  expect(attacking.bullets + (attacking.boss.bullets ?? 0)).toBeLessThanOrEqual(12);
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftShooter', 12);
+    scene.debugDamageBossPart('rightShooter', 12);
+    scene.debugDamageBossPart('leftReflector', 14);
+    scene.debugDamageBossPart('rightReflector', 14);
+    scene.debugDamageBossPart('core', 72);
+    scene.update(0, 0);
+  });
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  const defeated = await snapshot(page);
+  expect(defeated.bullets).toBe(0);
+  expect(defeated.boss.bullets ?? 0).toBe(0);
+  expect(defeated.boss.warnings).toBe(0);
+});
+
+test('@desktop second relics apply once without recursive temporary growth', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugUpgradeAbility('split'));
+  await enterHiveByScore(page);
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftShooter', 12);
+    scene.debugDamageBossPart('rightShooter', 12);
+    scene.debugDamageBossPart('leftReflector', 14);
+    scene.debugDamageBossPart('rightReflector', 14);
+    scene.debugDamageBossPart('core', 72);
+    scene.update(0, 0);
+  });
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  const reward = await snapshot(page);
+  expect(reward.bossRewardTier).toBe('second');
+  expect(reward.bossRewardChoices).toHaveLength(3);
+  expect(new Set(reward.bossRewardChoices).size).toBe(3);
+  const chainSplit = reward.bossRewardChoices.indexOf('chain-split');
+  expect(chainSplit).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press(`Digit${chainSplit + 1}`);
+  await expect.poll(async () => (await snapshot(page)).bossRewards).toContain('chain-split');
+  const resumed = await snapshot(page);
+  const aim = clientPoint(box, { x: resumed.player.x, y: resumed.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  const chargedOrbId = await sceneCall(page, (scene) => (
+    scene.getDebugSnapshot().orbs.find(
+      ({ state, charges, damageEnabled }) => state === 'active' && charges > 0 && damageEnabled,
+    )!.id
+  ));
+  expect((await snapshot(page)).orbs.find(({ id }) => id === chargedOrbId)!.charges)
+    .toBeGreaterThan(0);
+  const targets = await sceneCall(page, (scene, orbId) => {
+    scene.debugFreezeEnemies();
+    const enemies = scene.getDebugSnapshot().enemies.slice(0, 3);
+    scene.debugRemoveEnemies(
+      scene.getDebugSnapshot().enemies.slice(3).map(({ id }) => id),
+    );
+    const [anchor, rootTarget, childTarget] = enemies;
+    scene.debugSetEnemy(anchor!.id, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(rootTarget!.id, { x: 250, y: 220 }, 99);
+    scene.debugSetEnemy(childTarget!.id, { x: 350, y: 220 }, 99);
+    const orb = scene.getDebugSnapshot().orbs.find(({ id }) => id === orbId)!;
+    if (!scene.debugPlaceOrb(orb.id, { x: 100, y: 324 })) {
+      throw new Error('charged permanent orb required');
+    }
+    return {
+      anchorId: anchor!.id,
+      childTargetId: childTarget!.id,
+    };
+  }, chargedOrbId);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find(({ id }) => id === targets.anchorId)?.hp).toBeLessThan(99);
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbSnapshots)
+    .toHaveLength(3);
+  const split = (await snapshot(page)).temporaryOrbSnapshots;
+  const root = split.find(({ generation }) => generation === 0)!;
+  expect(root).toMatchObject({
+    generation: 0,
+    splitConsumed: true,
+  });
+  expect(split.filter(({ generation }) => generation === 1)).toHaveLength(2);
+  const idsAfterRootHit = split.map(({ id }) => id).sort((left, right) => left - right);
+  const child = split.find(({ generation }) => generation === 1)!;
+  const childHpBefore = (await snapshot(page)).enemies.find(
+    ({ id }) => id === targets.childTargetId,
+  )!.hp;
+  await sceneCall(page, (scene, childId) => {
+    scene.debugPlaceTemporaryOrb(childId, { x: 350, y: 238 });
+  }, child.id);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find(({ id }) => id === targets.childTargetId)?.hp).toBeLessThan(childHpBefore);
+  const afterChildHit = (await snapshot(page)).temporaryOrbSnapshots;
+  expect(afterChildHit.map(({ id }) => id).sort((left, right) => left - right))
+    .toEqual(idsAfterRootHit);
+  expect(afterChildHit.filter(({ generation }) => generation === 1)).toHaveLength(2);
+  expect((await snapshot(page)).bossRewards.filter((id) => id === 'chain-split')).toHaveLength(1);
+  expect(afterChildHit).toHaveLength(3);
+});
+
+test('@desktop completes first boss through second reward and resumes section two', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await enterHiveByScore(page);
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftShooter', 12);
+    scene.debugDamageBossPart('rightShooter', 12);
+    scene.debugDamageBossPart('leftReflector', 14);
+    scene.debugDamageBossPart('rightReflector', 14);
+    scene.debugDamageBossPart('core', 71);
+  });
+  expect((await snapshot(page)).boss.phase).toBe('permanentlyExposed');
+  const before = await snapshot(page);
+  const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  await sceneCall(page, (scene) => {
+    scene.debugPlaceOrb(0, { x: 225, y: 172 });
+  });
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  const secondReward = await snapshot(page);
+  expect(secondReward.encounter).toMatchObject({
+    state: 'bossRewardPaused', section: 1, bossesDefeated: 2,
+  });
+  expect(secondReward.bossRewardTier).toBe('second');
+  await page.keyboard.press('Digit1');
+  await expect.poll(async () => (await snapshot(page)).encounter.section).toBe(2);
+  const sectionTwo = await snapshot(page);
+  expect(sectionTwo.encounter).toMatchObject({
+    state: 'running', section: 2, bossScore: 0, phase: 3,
+  });
+  expect(sectionTwo.encounter.sectionElapsedMs).toBeLessThan(100);
+  expect(sectionTwo.boss.active).toBe(false);
+  expect(sectionTwo.bossRewards).toHaveLength(2);
+});
+
+test('@mobile keeps movement and retained aim during phase-three density and hive combat', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  await resumeSectionOne(page);
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
+    scene.debugAdvanceEncounter(60_000);
+    scene.debugAdvanceEncounter(5_500);
+  });
+  const dense = await snapshot(page);
+  expect(dense.encounter.phase).toBe(3);
+  expect(dense.enemies.length).toBeGreaterThanOrEqual(21);
+  await sceneCall(page, (scene) => {
+    for (let score = scene.getDebugSnapshot().encounter.bossScore; score < 110; score += 1) {
+      scene.debugRecordEnemyKill('basic');
+    }
+    scene.debugAdvanceEncounter(90_000);
+    scene.debugAdvanceEncounter(2_000);
+  });
+  await expect.poll(async () => (await snapshot(page)).boss.kind).toBe('hive');
+  const before = await snapshot(page);
+  const touches = {
+    moveStart: { x: box.x + box.width * 0.22, y: box.y + box.height * 0.78 },
+    moveEnd: { x: box.x + box.width * 0.34, y: box.y + box.height * 0.66 },
+    aimStart: { x: box.x + box.width * 0.78, y: box.y + box.height * 0.78 },
+    aimEnd: { x: box.x + box.width * 0.66, y: box.y + box.height * 0.66 },
+  };
+  await dispatchTouchPointers(page, [
+    { type: 'pointerdown', pointerId: 41, point: touches.moveStart },
+    { type: 'pointerdown', pointerId: 77, point: touches.aimStart },
+    { type: 'pointermove', pointerId: 41, point: touches.moveEnd },
+    { type: 'pointermove', pointerId: 77, point: touches.aimEnd },
+  ]);
+  await page.waitForTimeout(250);
+  await dispatchTouchPointers(page, [
+    { type: 'pointerup', pointerId: 41, point: touches.moveEnd },
+    { type: 'pointerup', pointerId: 77, point: touches.aimEnd },
+  ]);
+  await page.waitForTimeout(100);
+  const after = await snapshot(page);
+  expect(after.player.x).toBeGreaterThan(before.player.x);
+  expect(after.player.y).toBeLessThan(before.player.y);
+  expect(after.aim.x).toBeLessThan(0);
+  expect(after.aim.y).toBeLessThan(0);
+  expect(after.boss.kind).toBe('hive');
+  expect(after.enemies.length).toBe(dense.enemies.length);
 });
