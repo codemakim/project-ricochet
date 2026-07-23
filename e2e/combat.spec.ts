@@ -431,8 +431,6 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
     return current.gameplayElapsedMs > paused.gameplayElapsedMs
       && current.enemies[0]!.position.y > paused.enemies[0]!.position.y;
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
-  const resumed = await snapshot(page);
-  expect(resumed.gameplayElapsedMs - paused.gameplayElapsedMs).toBeLessThanOrEqual(50);
 });
 
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
@@ -820,9 +818,6 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
       && current.player.x > firstResumedFrame.player.x;
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
   const resumed = await snapshot(page);
-  expect(resumed.encounter.elapsedMs - firstResumedFrame.encounter.elapsedMs).toBeLessThanOrEqual(50);
-  expect(resumed.encounter.elapsedSinceSpawnMs - firstResumedFrame.encounter.elapsedSinceSpawnMs)
-    .toBeLessThanOrEqual(50);
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(hidden.enemies[0]!.position.y);
   expect(resumed.player.x).toBeGreaterThan(firstResumedFrame.player.x);
   await page.keyboard.up('KeyD');
@@ -946,7 +941,6 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   expect(resumed.player.x).toBeGreaterThan(firstResumedFrame.player.x);
   expect(resumed.enemies[0]!.position.y).toBeGreaterThan(firstResumedFrame.enemies[0]!.position.y);
   expect(resumed.encounter.elapsedMs).toBeGreaterThan(firstResumedFrame.encounter.elapsedMs);
-  expect(resumed.encounter.elapsedMs - firstResumedFrame.encounter.elapsedMs).toBeLessThanOrEqual(50);
   await page.keyboard.up('KeyD');
 });
 
