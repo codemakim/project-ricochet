@@ -32,12 +32,12 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   });
 });
 
-it('excludes deferred prototype descriptors from immediate texture rendering', () => {
+it('renders splitter and fragment prototype descriptors for runtime managers', () => {
   const textures = renderableCombatTextureDescriptors();
 
-  expect(textures).not.toHaveProperty('enemy-splitter');
-  expect(textures).not.toHaveProperty('enemy-fragment-left');
-  expect(textures).not.toHaveProperty('enemy-fragment-right');
+  expect(textures).toHaveProperty('enemy-splitter');
+  expect(textures).toHaveProperty('enemy-fragment-left');
+  expect(textures).toHaveProperty('enemy-fragment-right');
   expect(textures).toHaveProperty('enemy-bullet');
 });
 
@@ -56,5 +56,25 @@ it('defines deferred red/orange centered hive bullets and warning markers', () =
   expect(textures['hive-core-warning']).toMatchObject({
     shape: 'flash', deferred: true,
   });
-  expect(renderableCombatTextureDescriptors()).not.toHaveProperty('hive-core-bullet');
+  expect(renderableCombatTextureDescriptors()).toHaveProperty('hive-core-bullet');
+});
+
+it('defines hostile hive body modules with a clear reflector wall silhouette', () => {
+  const textures = combatProjectileTextureDescriptors();
+
+  expect(textures['hive-core']).toMatchObject({
+    shape: 'hiveCore', fill: 0xff5c70, accent: 0xffd19a,
+  });
+  expect(textures['hive-left-shooter']).toMatchObject({
+    shape: 'hiveShooter', width: 34, height: 28,
+  });
+  expect(textures['hive-right-shooter']).toMatchObject({
+    shape: 'hiveShooter', width: 34, height: 28,
+  });
+  expect(textures['hive-left-reflector']).toMatchObject({
+    shape: 'reflectorWall', width: 18, height: 96,
+  });
+  expect(textures['hive-right-reflector']).toMatchObject({
+    shape: 'reflectorWall', width: 18, height: 96,
+  });
 });

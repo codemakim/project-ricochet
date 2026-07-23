@@ -7,7 +7,10 @@ type TextureShape =
   | 'flash'
   | 'crackedRoundedRect'
   | 'fragmentLeft'
-  | 'fragmentRight';
+  | 'fragmentRight'
+  | 'hiveCore'
+  | 'hiveShooter'
+  | 'reflectorWall';
 
 export type CombatTextureDescriptor = ProjectileVisualTuning & { shape: TextureShape; deferred?: boolean };
 
@@ -28,12 +31,49 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     'hive-core-bullet': { fill: 0xff8a3d, accent: 0x5c1800, width: 10, height: 10, shape: 'centeredCircle', deferred: true },
     'hive-shooter-warning': { fill: 0xff4d5a, accent: 0xffb0a8, width: 18, height: 18, shape: 'flash', deferred: true },
     'hive-core-warning': { fill: 0xff8a3d, accent: 0xffd19a, width: 64, height: 64, shape: 'flash', deferred: true },
+    'hive-core': {
+      fill: 0xff5c70,
+      accent: 0xffd19a,
+      width: GAME_TUNING.hiveBoss.core.visualSize,
+      height: GAME_TUNING.hiveBoss.core.visualSize,
+      shape: 'hiveCore',
+      deferred: true,
+    },
+    'hive-left-shooter': {
+      fill: 0xff784f,
+      accent: 0xffd19a,
+      width: GAME_TUNING.hiveBoss.shooter.width,
+      height: GAME_TUNING.hiveBoss.shooter.height,
+      shape: 'hiveShooter',
+      deferred: true,
+    },
+    'hive-right-shooter': {
+      fill: 0xff784f,
+      accent: 0xffd19a,
+      width: GAME_TUNING.hiveBoss.shooter.width,
+      height: GAME_TUNING.hiveBoss.shooter.height,
+      shape: 'hiveShooter',
+      deferred: true,
+    },
+    'hive-left-reflector': {
+      fill: 0x8f2037,
+      accent: 0xffb45c,
+      width: GAME_TUNING.hiveBoss.reflector.width,
+      height: GAME_TUNING.hiveBoss.reflector.height,
+      shape: 'reflectorWall',
+      deferred: true,
+    },
+    'hive-right-reflector': {
+      fill: 0x8f2037,
+      accent: 0xffb45c,
+      width: GAME_TUNING.hiveBoss.reflector.width,
+      height: GAME_TUNING.hiveBoss.reflector.height,
+      shape: 'reflectorWall',
+      deferred: true,
+    },
   };
 }
 
 export function renderableCombatTextureDescriptors(): Record<string, CombatTextureDescriptor> {
-  return Object.fromEntries(
-    Object.entries(combatProjectileTextureDescriptors())
-      .filter(([, descriptor]) => !descriptor.deferred),
-  );
+  return combatProjectileTextureDescriptors();
 }
