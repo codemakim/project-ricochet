@@ -7,6 +7,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { BossRewardOverlay } from './BossRewardOverlay';
+import { GAME_TUNING } from '../config/gameTuning';
 
 class FakeEmitter {
   private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
@@ -194,6 +195,28 @@ describe('BossRewardOverlay', () => {
         expect.stringContaining(label),
         expect.stringContaining(effect),
       ]));
+    }
+  });
+
+  it('uses the central permanent-orb cap in expanded-magazine Korean copy', () => {
+    const tuning = GAME_TUNING.relics.secondBoss.auxiliaryOrbit as { orbLimit: number };
+    const originalLimit = tuning.orbLimit;
+    tuning.orbLimit = originalLimit + 1;
+    try {
+      const { scene, objects } = makeScene();
+      const overlay = new BossRewardOverlay(scene as never);
+      overlay.show(
+        'first',
+        ['expanded-magazine', 'recovery-capacitor', 'opening-amplifier'],
+        () => true,
+      );
+
+      const text = objects.filter((object) => object.kind === 'text').map((object) => object.text);
+      expect(text).toContain(
+        `1. 증설 탄창\n영구 구슬 +1 · 최대 ${tuning.orbLimit}개`,
+      );
+    } finally {
+      tuning.orbLimit = originalLimit;
     }
   });
 

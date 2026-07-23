@@ -233,6 +233,34 @@ function nonNegativeInteger(value: number, name: string): void {
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
 }
 
+interface RectBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+function rectBounds(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): RectBounds {
+  return {
+    left: x - width / 2,
+    right: x + width / 2,
+    top: y - height / 2,
+    bottom: y + height / 2,
+  };
+}
+
+function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
+  return left.left < right.right
+    && left.right > right.left
+    && left.top < right.bottom
+    && left.bottom > right.top;
+}
+
 export function validateGameTuning(tuning: GameTuning): void {
   const {
     boss, enemies, encounter, projectiles, temporaryOrbs,
@@ -441,12 +469,12 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (worstCaseCorridor < hiveBoss.reflector.minimumCorridorWidth) {
     throw new RangeError('hiveBoss reflector paths must preserve the minimum corridor');
   }
-  const coreBounds = {
-    left: hiveBoss.core.x - hiveBoss.core.visualSize / 2,
-    right: hiveBoss.core.x + hiveBoss.core.visualSize / 2,
-    top: hiveBoss.core.y - hiveBoss.core.visualSize / 2,
-    bottom: hiveBoss.core.y + hiveBoss.core.visualSize / 2,
-  };
+  const coreBounds = rectBounds(
+    hiveBoss.core.x,
+    hiveBoss.core.y,
+    hiveBoss.core.visualSize,
+    hiveBoss.core.visualSize,
+  );
   const reflectorTop = hiveBoss.reflector.y - hiveBoss.reflector.height / 2;
   const reflectorBottom = hiveBoss.reflector.y + hiveBoss.reflector.height / 2;
   const verticallyOverlapsCore = reflectorTop < coreBounds.bottom
@@ -463,6 +491,73 @@ export function validateGameTuning(tuning: GameTuning): void {
     )
   ) {
     throw new RangeError('hiveBoss reflector paths must not overlap the core');
+  }
+  const deployedShooters = [
+    rectBounds(
+      hiveBoss.core.x - shooterOffsetX,
+      deployedShooterY,
+      hiveBoss.shooter.width,
+      hiveBoss.shooter.height,
+    ),
+    rectBounds(
+      hiveBoss.core.x + shooterOffsetX,
+      deployedShooterY,
+      hiveBoss.shooter.width,
+      hiveBoss.shooter.height,
+    ),
+  ];
+  const reflectorSweeps = [
+    {
+      left: hiveBoss.reflector.leftTravel.minimum - hiveBoss.reflector.width / 2,
+      right: hiveBoss.reflector.leftTravel.maximum + hiveBoss.reflector.width / 2,
+      top: reflectorTop,
+      bottom: reflectorBottom,
+    },
+    {
+      left: hiveBoss.reflector.rightTravel.minimum - hiveBoss.reflector.width / 2,
+      right: hiveBoss.reflector.rightTravel.maximum + hiveBoss.reflector.width / 2,
+      top: reflectorTop,
+      bottom: reflectorBottom,
+    },
+  ];
+  if (reflectorSweeps.some((sweep) => (
+    deployedShooters.some((shooterBounds) => rectsOverlap(sweep, shooterBounds))
+  ))) {
+    throw new RangeError('hiveBoss reflector paths must not overlap deployed shooters');
+  }
+  const recalledBodies = [
+    coreBounds,
+    rectBounds(
+      hiveBoss.core.x - shooterOffsetX,
+      hiveBoss.core.y,
+      hiveBoss.shooter.width,
+      hiveBoss.shooter.height,
+    ),
+    rectBounds(
+      hiveBoss.core.x + shooterOffsetX,
+      hiveBoss.core.y,
+      hiveBoss.shooter.width,
+      hiveBoss.shooter.height,
+    ),
+    rectBounds(
+      hiveBoss.core.x - recalledReflectorOffsetX,
+      recalledReflectorY,
+      hiveBoss.reflector.width,
+      hiveBoss.reflector.height,
+    ),
+    rectBounds(
+      hiveBoss.core.x + recalledReflectorOffsetX,
+      recalledReflectorY,
+      hiveBoss.reflector.width,
+      hiveBoss.reflector.height,
+    ),
+  ];
+  for (let left = 0; left < recalledBodies.length; left += 1) {
+    for (let right = left + 1; right < recalledBodies.length; right += 1) {
+      if (rectsOverlap(recalledBodies[left]!, recalledBodies[right]!)) {
+        throw new RangeError('hiveBoss recalled bodies must not overlap');
+      }
+    }
   }
   for (const [phase, duration] of Object.entries(hiveBoss.timing)) {
     positive(duration, `hiveBoss.timing.${phase}`);

@@ -5,7 +5,12 @@ import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRule
 
 const SECOND_RELIC_TUNING = GAME_TUNING.relics.secondBoss;
 const REWARD_COPY: Record<BossRewardId, { label: string; effect: string }> = {
-  'expanded-magazine': { label: '증설 탄창', effect: '영구 구슬 +1 · 최대 6개' },
+  'expanded-magazine': {
+    label: '증설 탄창',
+    get effect() {
+      return `영구 구슬 +1 · 최대 ${SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit}개`;
+    },
+  },
   'recovery-capacitor': { label: '회수 축전기', effect: '근접 회수 충전 3 → 5' },
   'opening-amplifier': { label: '초동 증폭기', effect: '근접 회수 후 첫 적중 직접 피해 +1' },
   'chain-warhead': { label: '연쇄 탄두', effect: '임시 분열 구슬도 폭발 효과 상속' },
