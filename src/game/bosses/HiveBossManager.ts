@@ -83,12 +83,14 @@ export interface HiveBossManagerOptions {
 export interface HiveBossManagerSnapshot extends BossEncounterSnapshot {
   kind: 'hive';
   phase: HivePhase | null;
+  phaseElapsedMs: number;
   parts: Record<HivePartId, number> | null;
   warnings: number;
   partPositions?: Record<HivePartId, Vector>;
 }
 
 export class HiveBossManager implements BossEncounter {
+  declare debugAdvanceCycle?: (deltaMs: number) => void;
   private readonly coreGroup: Phaser.Physics.Arcade.Group;
   private readonly moduleGroup: Phaser.Physics.Arcade.Group;
   private readonly warningGroup: Phaser.Physics.Arcade.Group;
@@ -182,6 +184,20 @@ export class HiveBossManager implements BossEncounter {
       this.bulletGroup,
       (_player, bullet) => this.consumeProjectile(bullet as HiveProjectileSprite),
     ));
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugAdvanceCycle = (deltaMs) => {
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+          throw new RangeError('hive cycle delta must be finite and non-negative');
+        }
+        const previousPhase = this.state.phase;
+        this.state = advanceHiveCycle(this.state, deltaMs);
+        if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
+        else if (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed') {
+          this.moveReflectors(deltaMs);
+        }
+        this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();
+      };
+    }
   }
 
   update(): void {
@@ -211,6 +227,7 @@ export class HiveBossManager implements BossEncounter {
         kind: 'hive',
         active: false,
         phase: null,
+        phaseElapsedMs: 0,
         position: null,
         parts: null,
         bullets: 0,
@@ -222,6 +239,7 @@ export class HiveBossManager implements BossEncounter {
       kind: 'hive',
       active: true,
       phase: this.state.phase,
+      phaseElapsedMs: this.state.phaseElapsedMs,
       position: {
         x: HIVE_BOSS_GEOMETRY.core.x,
         y: HIVE_BOSS_GEOMETRY.core.y,

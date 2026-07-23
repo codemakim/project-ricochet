@@ -120,6 +120,7 @@ export class CombatScene extends Phaser.Scene {
   declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
   declare debugDamageBossPart?: (partId: BossPartId | HivePartId, damage: number) => void;
   declare debugSetBossPosition?: (x: number) => void;
+  declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -296,6 +297,14 @@ export class CombatScene extends Phaser.Scene {
       this.debugSetBossPosition = (x) => {
         if (this.activeBossKind === 'sentinel' && this.activeBoss instanceof BossManager) {
           this.activeBoss.debugSetPosition?.(x);
+        }
+      };
+      this.debugAdvanceHiveCycle = (deltaMs) => {
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+          throw new RangeError('hive cycle delta must be finite and non-negative');
+        }
+        if (this.activeBossKind === 'hive' && this.activeBoss instanceof HiveBossManager) {
+          this.activeBoss.debugAdvanceCycle?.(deltaMs);
         }
       };
     }
@@ -762,7 +771,7 @@ export class CombatScene extends Phaser.Scene {
       .setDepth(21)
       .setInteractive({ useHandCursor: true })
       .once('pointerup', () => {
-        this.applyLifecycle('restart');
+        this.handleShutdown();
         this.scene.restart();
       });
   }
@@ -834,6 +843,7 @@ export class CombatScene extends Phaser.Scene {
     this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;
     this.debugSetBossPosition = undefined;
+    this.debugAdvanceHiveCycle = undefined;
   };
 
   private createTextures(): void {

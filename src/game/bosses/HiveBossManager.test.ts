@@ -488,6 +488,7 @@ describe('HiveBossManager', () => {
       kind: 'hive',
       active: false,
       phase: null,
+      phaseElapsedMs: 0,
       position: null,
       parts: null,
       bullets: 0,
