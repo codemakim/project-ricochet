@@ -263,4 +263,35 @@ describe('TemporaryOrbManager', () => {
     manager.update(gameplayElapsedMs);
     expect(manager.getSnapshot()).toEqual([]);
   });
+
+  it('honors configured child count and rejects a count larger than configured angles', () => {
+    const chainSplit = GAME_TUNING.relics.secondBoss.chainSplit as {
+      childCount: number;
+      angles: readonly [number, number];
+    };
+    const originalCount = chainSplit.childCount;
+    try {
+      const { manager, group } = createManager();
+      manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+      const firstRoot = manager.getSnapshot()[0]!.id;
+
+      chainSplit.childCount = 1;
+      expect(manager.spawnChildren(firstRoot, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(1);
+      expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
+
+      manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+      const secondRoot = manager.getSnapshot().at(-1)!.id;
+      chainSplit.childCount = 3;
+      expect(() => manager.spawnChildren(
+        secondRoot,
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+      )).toThrow(new RangeError('chain split child count must fit configured angles'));
+      expect(manager.getSnapshot().find(({ id }) => id === secondRoot)).toMatchObject({
+        splitConsumed: false,
+      });
+    } finally {
+      chainSplit.childCount = originalCount;
+    }
+  });
 });

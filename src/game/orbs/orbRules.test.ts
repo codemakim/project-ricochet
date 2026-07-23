@@ -61,6 +61,20 @@ describe('orb rules', () => {
     },
   );
 
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid charged damage bonus %s before calculating damage',
+    (bonus) => {
+      expect(() => directHit(
+        1,
+        1,
+        { passThroughOnKill: false },
+        false,
+        0,
+        bonus,
+      )).toThrow(new RangeError('charged damage bonus must be finite and non-negative'));
+    },
+  );
+
   it('continues through a kill only when enabled', () => {
     expect(directHit(3, 1, { passThroughOnKill: true }, false).reflect).toBe(false);
     expect(directHit(3, 3, { passThroughOnKill: true }, false).reflect).toBe(true);

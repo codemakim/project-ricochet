@@ -50,6 +50,9 @@ export function directHit(
   if (!Number.isFinite(directDamageBonus) || directDamageBonus < 0) {
     throw new RangeError('direct damage bonus must be finite and non-negative');
   }
+  if (!Number.isFinite(chargedDamageBonus) || chargedDamageBonus < 0) {
+    throw new RangeError('charged damage bonus must be finite and non-negative');
+  }
   const charged = charges > 0;
   const damage = (charged ? 1.5 : 1)
     + directDamageBonus

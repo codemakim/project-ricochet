@@ -417,6 +417,36 @@ describe('OrbStore', () => {
     });
   });
 
+  it('rejects an invalid charged bonus without consuming charge, cooldown, or damage callback', () => {
+    let chargedBonus = Number.NaN;
+    const onEnemyDamage = vi.fn();
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      { onEnemyDamage },
+      () => false,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => chargedBonus,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    expect(() => store.handleEnemyHit(0, 7, 2, 1_000, false)).toThrow(
+      new RangeError('charged damage bonus must be finite and non-negative'),
+    );
+    expect(store.getSnapshot()[0]?.charges).toBe(3);
+    expect(onEnemyDamage).not.toHaveBeenCalled();
+
+    chargedBonus = 0.75;
+    expect(store.handleEnemyHit(0, 7, 2, 1_000, false)).toMatchObject({
+      damage: 2.25,
+      killed: true,
+    });
+    expect(onEnemyDamage).toHaveBeenCalledOnce();
+  });
+
   it('reports each recovery once so only proximity recovery produces a two-orb salvo', () => {
     const reports: number[] = [];
     const create = (autoReturnAfterMs: number | null = null) => new OrbStore(

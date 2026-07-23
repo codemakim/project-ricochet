@@ -76,9 +76,17 @@ export class TemporaryOrbManager {
       || parent.splitConsumed
     ) return 0;
 
+    const { childCount, angles: configuredAngles } = GAME_TUNING.relics.secondBoss.chainSplit;
+    if (
+      !Number.isInteger(childCount)
+      || childCount < 1
+      || childCount > configuredAngles.length
+    ) {
+      throw new RangeError('chain split child count must fit configured angles');
+    }
     parent.splitConsumed = true;
     const available = GAME_TUNING.temporaryOrbs.cap - this.records.size;
-    const angles = GAME_TUNING.relics.secondBoss.chainSplit.angles.slice(0, available);
+    const angles = configuredAngles.slice(0, Math.min(childCount, available));
     const incoming = normalize(direction);
     for (const angle of angles) {
       this.createOrb(position, rotate(incoming, angle), 1);

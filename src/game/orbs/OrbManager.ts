@@ -160,7 +160,6 @@ export class OrbStore {
         throw new RangeError('opening hit bonus must be exactly 0 or 1');
       }
     }
-    record.enemyHits.set(enemyId, nowMs);
     const result = directHit(
       record.charges,
       enemyHp,
@@ -170,6 +169,7 @@ export class OrbStore {
       this.getChargedDamageBonus(),
       this.chargedKillPierces(),
     );
+    record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
     record.charges = result.charges;
     this.normalizeActiveSpeed(record);
