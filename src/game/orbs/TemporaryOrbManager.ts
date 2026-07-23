@@ -39,6 +39,7 @@ function rotate(direction: Vector, angleDegrees: number): Vector {
 }
 
 export class TemporaryOrbManager {
+  declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
   private readonly group: Phaser.Physics.Arcade.Group;
   private readonly records = new Map<TemporaryOrbSprite, TemporaryOrbRecord>();
   private nextId = 0;
@@ -50,6 +51,26 @@ export class TemporaryOrbManager {
     private readonly options: TemporaryOrbManagerOptions,
   ) {
     this.group = scene.physics.add.group({ allowGravity: false });
+    if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugPlaceOrb = (id, position) => {
+        if (!Number.isInteger(id) || id < 0) {
+          throw new RangeError('temporary orb ID must be a non-negative integer');
+        }
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+          throw new RangeError('temporary orb position must be finite');
+        }
+        const record = [...this.records.values()].find((candidate) => candidate.id === id);
+        if (!record?.sprite.active) return false;
+        const body = record.sprite.body as Phaser.Physics.Arcade.Body;
+        const velocity = { x: body.velocity.x, y: body.velocity.y };
+        record.sprite.setPosition(position.x, position.y);
+        body.reset(position.x, position.y);
+        body.setVelocity(velocity.x, velocity.y);
+        record.position = { ...position };
+        record.velocity = velocity;
+        return true;
+      };
+    }
   }
 
   spawn(position: Vector, direction: Vector, count: number): number {

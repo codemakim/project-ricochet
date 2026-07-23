@@ -87,6 +87,13 @@ interface CombatSnapshot {
   bossRewardChoices: string[];
   bossRewardVisible: boolean;
   temporaryOrbs: number;
+  temporaryOrbSnapshots: Array<{
+    id: number;
+    generation: 0 | 1;
+    splitConsumed: boolean;
+    position: Vector;
+    velocity: Vector;
+  }>;
   scheduledEffects: Array<{ dueAt: number }>;
   activePopulation: number;
   gameplayElapsedMs: number;
@@ -129,6 +136,7 @@ interface DevelopmentScene {
   ): void;
   debugSetBossPosition(x: number): void;
   debugAdvanceHiveCycle(deltaMs: number): void;
+  debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
 }
 
 async function sceneCall<T, A = undefined>(
@@ -1585,6 +1593,15 @@ test('@desktop enters hive from section-local score and hard time', async ({ pag
   expect(scoreBoundaries.beforeBoss.encounter.state).toBe('bossWarning');
   expect(scoreBoundaries.boss.boss.kind).toBe('hive');
   expect(scoreBoundaries.boss.encounter.spawnSequence).toBe(scoreSpawnSequence);
+  expect(scoreBoundaries.boss.enemies.length).toBeGreaterThan(0);
+  const activeHive = await sceneCall(page, (scene) => {
+    scene.debugAdvanceEncounter(7_000);
+    scene.debugAdvanceHiveCycle(7_000);
+    return scene.getDebugSnapshot();
+  });
+  expect(activeHive.encounter.state).toBe('boss');
+  expect(activeHive.encounter.spawnSequence).toBe(scoreSpawnSequence);
+  expect(activeHive.enemies.map(({ id }) => id)).toEqual(scoreEnemies);
 
   await loadCanvas(page);
   await resumeSectionOne(page);
@@ -1689,9 +1706,16 @@ test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ 
   await loadCanvas(page);
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
-    for (let step = 0; step < 80; step += 1) scene.update(0, 100);
+    scene.debugFreezeEnemies();
+    scene.player.setPosition(225, 730);
   });
+  await expect.poll(async () => {
+    const current = await snapshot(page);
+    return current.bullets > 0 && (current.boss.bullets ?? 0) > 0;
+  }, { timeout: 4_000 }).toBe(true);
   const attacking = await snapshot(page);
+  expect(attacking.bullets).toBeGreaterThan(0);
+  expect(attacking.boss.bullets ?? 0).toBeGreaterThan(0);
   expect(attacking.bullets + (attacking.boss.bullets ?? 0)).toBeLessThanOrEqual(12);
   await sceneCall(page, (scene) => {
     scene.debugDamageBossPart('leftShooter', 12);
@@ -1732,9 +1756,62 @@ test('@desktop second relics apply once without recursive temporary growth', asy
   const resumed = await snapshot(page);
   const aim = clientPoint(box, { x: resumed.player.x, y: resumed.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await page.waitForTimeout(250);
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  const chargedOrbId = await sceneCall(page, (scene) => (
+    scene.getDebugSnapshot().orbs.find(
+      ({ state, charges, damageEnabled }) => state === 'active' && charges > 0 && damageEnabled,
+    )!.id
+  ));
+  expect((await snapshot(page)).orbs.find(({ id }) => id === chargedOrbId)!.charges)
+    .toBeGreaterThan(0);
+  const targets = await sceneCall(page, (scene, orbId) => {
+    scene.debugFreezeEnemies();
+    const enemies = scene.getDebugSnapshot().enemies.slice(0, 3);
+    scene.debugRemoveEnemies(
+      scene.getDebugSnapshot().enemies.slice(3).map(({ id }) => id),
+    );
+    const [anchor, rootTarget, childTarget] = enemies;
+    scene.debugSetEnemy(anchor!.id, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(rootTarget!.id, { x: 250, y: 220 }, 99);
+    scene.debugSetEnemy(childTarget!.id, { x: 350, y: 220 }, 99);
+    const orb = scene.getDebugSnapshot().orbs.find(({ id }) => id === orbId)!;
+    if (!scene.debugPlaceOrb(orb.id, { x: 100, y: 324 })) {
+      throw new Error('charged permanent orb required');
+    }
+    return {
+      anchorId: anchor!.id,
+      childTargetId: childTarget!.id,
+    };
+  }, chargedOrbId);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find(({ id }) => id === targets.anchorId)?.hp).toBeLessThan(99);
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbSnapshots)
+    .toHaveLength(3);
+  const split = (await snapshot(page)).temporaryOrbSnapshots;
+  const root = split.find(({ generation }) => generation === 0)!;
+  expect(root).toMatchObject({
+    generation: 0,
+    splitConsumed: true,
+  });
+  expect(split.filter(({ generation }) => generation === 1)).toHaveLength(2);
+  const idsAfterRootHit = split.map(({ id }) => id).sort((left, right) => left - right);
+  const child = split.find(({ generation }) => generation === 1)!;
+  const childHpBefore = (await snapshot(page)).enemies.find(
+    ({ id }) => id === targets.childTargetId,
+  )!.hp;
+  await sceneCall(page, (scene, childId) => {
+    scene.debugPlaceTemporaryOrb(childId, { x: 350, y: 238 });
+  }, child.id);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).enemies.find(({ id }) => id === targets.childTargetId)?.hp).toBeLessThan(childHpBefore);
+  const afterChildHit = (await snapshot(page)).temporaryOrbSnapshots;
+  expect(afterChildHit.map(({ id }) => id).sort((left, right) => left - right))
+    .toEqual(idsAfterRootHit);
+  expect(afterChildHit.filter(({ generation }) => generation === 1)).toHaveLength(2);
   expect((await snapshot(page)).bossRewards.filter((id) => id === 'chain-split')).toHaveLength(1);
-  expect((await snapshot(page)).temporaryOrbs).toBeLessThanOrEqual(12);
+  expect(afterChildHit).toHaveLength(3);
 });
 
 test('@desktop completes first boss through second reward and resumes section two', async ({ page }) => {

@@ -101,6 +101,7 @@ export interface CombatDebugSnapshot {
   bossRewardChoices: BossRewardId[];
   bossRewardVisible: boolean;
   temporaryOrbs: number;
+  temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
   scheduledEffects: ScheduledAreaEffect[];
   activePopulation: number;
   gameplayElapsedMs: number;
@@ -121,6 +122,7 @@ export class CombatScene extends Phaser.Scene {
   declare debugDamageBossPart?: (partId: BossPartId | HivePartId, damage: number) => void;
   declare debugSetBossPosition?: (x: number) => void;
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
+  declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -307,6 +309,9 @@ export class CombatScene extends Phaser.Scene {
           this.activeBoss.debugAdvanceCycle?.(deltaMs);
         }
       };
+      this.debugPlaceTemporaryOrb = (id, position) => (
+        this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
+      );
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
@@ -443,6 +448,11 @@ export class CombatScene extends Phaser.Scene {
       bossRewardChoices: [...this.bossRewardChoices],
       bossRewardVisible: this.bossRewardOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
+      temporaryOrbSnapshots: this.temporaryOrbManager?.getSnapshot().map((orb) => ({
+        ...orb,
+        position: { ...orb.position },
+        velocity: { ...orb.velocity },
+      })) ?? [],
       scheduledEffects: this.combatEffects.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
@@ -844,6 +854,7 @@ export class CombatScene extends Phaser.Scene {
     this.debugDamageBossPart = undefined;
     this.debugSetBossPosition = undefined;
     this.debugAdvanceHiveCycle = undefined;
+    this.debugPlaceTemporaryOrb = undefined;
   };
 
   private createTextures(): void {

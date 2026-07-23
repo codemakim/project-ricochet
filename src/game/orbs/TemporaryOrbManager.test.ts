@@ -14,6 +14,11 @@ class FakeBody {
     this.velocity = { x, y };
     return this;
   }
+
+  reset(x: number, y: number): this {
+    this.center = { x, y };
+    return this;
+  }
 }
 
 class FakeSprite {
@@ -32,6 +37,12 @@ class FakeSprite {
   setBounce(x: number, y: number): this { this.bounce = [x, y]; return this; }
   setCollideWorldBounds(value: boolean): this { this.collideWorldBounds = value; return this; }
   setVelocity(x: number, y: number): this { this.body.setVelocity(x, y); return this; }
+  setPosition(x: number, y: number): this {
+    this.x = x;
+    this.y = y;
+    this.body.center = { x, y };
+    return this;
+  }
 
   destroy(): void {
     this.active = false;
@@ -80,6 +91,31 @@ function angleDegrees(sprite: FakeSprite): number {
 }
 
 describe('TemporaryOrbManager', () => {
+  it('positions an active temporary orb through the validated development helper', () => {
+    const { manager, group } = createManager();
+    manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 1);
+    const orb = manager.getSnapshot()[0]!;
+    const velocity = { ...group.children[0]!.body.velocity };
+
+    expect(manager.debugPlaceOrb?.(orb.id, { x: 70, y: 80 })).toBe(true);
+    expect(manager.getSnapshot()[0]).toMatchObject({
+      position: { x: 70, y: 80 },
+      velocity,
+    });
+    expect(group.children[0]).toMatchObject({
+      x: 70,
+      y: 80,
+      body: { center: { x: 70, y: 80 }, velocity },
+    });
+    expect(manager.debugPlaceOrb?.(999, { x: 0, y: 0 })).toBe(false);
+    expect(() => manager.debugPlaceOrb?.(-1, { x: 0, y: 0 })).toThrow(
+      new RangeError('temporary orb ID must be a non-negative integer'),
+    );
+    expect(() => manager.debugPlaceOrb?.(orb.id, { x: Number.NaN, y: 0 })).toThrow(
+      new RangeError('temporary orb position must be finite'),
+    );
+  });
+
   it('uses exact split angles and speed for one, two, and three-orb spawns', () => {
     const { manager, group, scene } = createManager();
 
