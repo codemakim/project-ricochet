@@ -2,7 +2,7 @@ import type { BossKind } from '../config/gameTuning';
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EncounterTransition } from '../encounters/encounterProgressionRules';
 import type { BuildState } from '../progression/BuildState';
-import type { BossBuild } from '../progression/BossBuild';
+import { BossBuild } from '../progression/BossBuild';
 import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRules';
 import type {
   BossEncounterSnapshot,
@@ -169,33 +169,57 @@ export function rewardAddsPermanentOrb(id: BossRewardId): boolean {
   return id === 'expanded-magazine' || id === 'auxiliary-orbit';
 }
 
-export type CombatCleanupReason = 'defeat' | 'bossReward' | 'restart' | 'shutdown';
+export type CombatLifecycleReason =
+  | 'defeat'
+  | 'rewardOpened'
+  | 'rewardCompleted'
+  | 'restart'
+  | 'shutdown';
 
-interface CombatCleanupDependencies {
-  scheduler: Pick<CombatEffectScheduler, 'clear'>;
-  bossBuild?: Pick<BossBuild, 'resetTransientState'>;
-  activeBoss?: { clearHostileActions(): void; destroy(): void };
-  clearWarning(): void;
-  clearTemporaryOrbs(): void;
+interface CombatLifecycleBoss {
+  clearHostileActions(): void;
+  destroy(): void;
 }
 
-export function cleanupCombatRuntime(
-  reason: CombatCleanupReason,
-  dependencies: CombatCleanupDependencies,
-): void {
-  switch (reason) {
-    case 'defeat':
-    case 'bossReward':
-    case 'restart':
-    case 'shutdown':
-      break;
-  }
+export interface CombatLifecycleState<TBoss extends CombatLifecycleBoss = CombatLifecycleBoss> {
+  activeBoss?: TBoss;
+  activeBossKind?: BossKind;
+  bossRewardTier: BossRewardTier | null;
+  bossRewardChoices: readonly BossRewardId[];
+  bossDefeatPending: boolean;
+  bossBuild: BossBuild;
+}
+
+export interface CombatLifecycleDependencies {
+  scheduler: Pick<CombatEffectScheduler, 'clear'>;
+  clearEnemyHostileActions(): void;
+  clearWarning(): void;
+  clearTemporaryOrbs(): void;
+  hideRewardOverlay(): void;
+}
+
+export function finalizeCombatLifecycle<TBoss extends CombatLifecycleBoss>(
+  reason: CombatLifecycleReason,
+  state: CombatLifecycleState<TBoss>,
+  dependencies: CombatLifecycleDependencies,
+): CombatLifecycleState<TBoss> {
+  dependencies.clearEnemyHostileActions();
   dependencies.clearWarning();
   dependencies.scheduler.clear();
-  dependencies.activeBoss?.clearHostileActions();
+  state.activeBoss?.clearHostileActions();
   dependencies.clearTemporaryOrbs();
-  dependencies.bossBuild?.resetTransientState();
-  dependencies.activeBoss?.destroy();
+  if (reason !== 'rewardOpened') dependencies.hideRewardOverlay();
+  state.bossBuild.resetTransientState();
+  state.activeBoss?.destroy();
+  const preservesRun = reason === 'rewardOpened' || reason === 'rewardCompleted';
+  return {
+    activeBoss: undefined,
+    activeBossKind: undefined,
+    bossRewardTier: reason === 'rewardOpened' ? state.bossRewardTier : null,
+    bossRewardChoices: reason === 'rewardOpened' ? [...state.bossRewardChoices] : [],
+    bossDefeatPending: false,
+    bossBuild: preservesRun ? state.bossBuild : new BossBuild(),
+  };
 }
 
 export function inactiveBossSnapshot(kind: BossKind | null): BossEncounterSnapshot {

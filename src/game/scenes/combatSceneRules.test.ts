@@ -5,8 +5,8 @@ import { BossBuild } from '../progression/BossBuild';
 import {
   bossKindAfterTransition,
   bossOrbModifiers,
-  cleanupCombatRuntime,
   createBossForKind,
+  finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
   rewardAddsPermanentOrb,
@@ -134,37 +134,121 @@ describe('combat relic runtime decisions', () => {
   });
 });
 
-describe('combat runtime cleanup', () => {
-  it.each(['defeat', 'bossReward', 'restart', 'shutdown'] as const)(
-    'clears effects, warnings, temporary orbs, boss objects, and transient counters on %s',
-    (reason) => {
-      const scheduler = new CombatEffectScheduler();
-      scheduler.scheduleAftershock(0, { x: 10, y: 20 }, 30, 1);
-      const bossBuild = new BossBuild();
-      bossBuild.acquire('siege-resonance');
-      for (let hit = 0; hit < 10; hit += 1) bossBuild.recordPermanentDirectHit();
-      const activeBoss = {
-        clearHostileActions: vi.fn(),
-        destroy: vi.fn(),
-      };
-      const clearWarning = vi.fn();
-      const clearTemporaryOrbs = vi.fn();
-
-      cleanupCombatRuntime(reason, {
-        scheduler,
-        bossBuild,
+describe('combat scene lifecycle finalization', () => {
+  function lifecycleBoundary() {
+    const scheduler = new CombatEffectScheduler();
+    scheduler.scheduleAftershock(0, { x: 10, y: 20 }, 30, 1);
+    const bossBuild = new BossBuild();
+    bossBuild.acquire('auxiliary-orbit');
+    bossBuild.acquire('siege-resonance');
+    for (let hit = 0; hit < 10; hit += 1) bossBuild.recordPermanentDirectHit();
+    const activeBoss = {
+      clearHostileActions: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const dependencies = {
+      scheduler,
+      clearEnemyHostileActions: vi.fn(),
+      clearWarning: vi.fn(),
+      clearTemporaryOrbs: vi.fn(),
+      hideRewardOverlay: vi.fn(),
+    };
+    return {
+      state: {
         activeBoss,
-        clearWarning,
-        clearTemporaryOrbs,
-      });
+        activeBossKind: 'hive' as const,
+        bossRewardTier: 'second' as const,
+        bossRewardChoices: ['auxiliary-orbit'] as const,
+        bossDefeatPending: true,
+        bossBuild,
+      },
+      dependencies,
+      activeBoss,
+      scheduler,
+      bossBuild,
+    };
+  }
 
-      expect(scheduler.getSnapshot()).toEqual([]);
-      expect(activeBoss.clearHostileActions).toHaveBeenCalledOnce();
-      expect(activeBoss.destroy).toHaveBeenCalledOnce();
-      expect(clearWarning).toHaveBeenCalledOnce();
-      expect(clearTemporaryOrbs).toHaveBeenCalledOnce();
-      expect(bossBuild.owns('siege-resonance')).toBe(true);
-      expect(bossBuild.recordPermanentDirectHit()).toBe(false);
+  it('completes a normal boss reward with clean transient state and permanent rewards preserved', () => {
+    const boundary = lifecycleBoundary();
+
+    const next = finalizeCombatLifecycle(
+      'rewardCompleted',
+      boundary.state,
+      boundary.dependencies,
+    );
+
+    expect(next).toEqual({
+      activeBoss: undefined,
+      activeBossKind: undefined,
+      bossRewardTier: null,
+      bossRewardChoices: [],
+      bossDefeatPending: false,
+      bossBuild: boundary.bossBuild,
+    });
+    expect(next.bossBuild.snapshot()).toEqual([
+      'auxiliary-orbit',
+      'siege-resonance',
+    ]);
+    expect(next.bossBuild.recordPermanentDirectHit()).toBe(false);
+    expect(boundary.scheduler.getSnapshot()).toEqual([]);
+    expect(boundary.activeBoss.clearHostileActions).toHaveBeenCalledOnce();
+    expect(boundary.activeBoss.destroy).toHaveBeenCalledOnce();
+    expect(boundary.dependencies.clearEnemyHostileActions).toHaveBeenCalledOnce();
+    expect(boundary.dependencies.clearWarning).toHaveBeenCalledOnce();
+    expect(boundary.dependencies.clearTemporaryOrbs).toHaveBeenCalledOnce();
+    expect(boundary.dependencies.hideRewardOverlay).toHaveBeenCalledOnce();
+  });
+
+  it('opens a boss reward after destroying combat objects while retaining its tier and choices', () => {
+    const boundary = lifecycleBoundary();
+
+    const next = finalizeCombatLifecycle(
+      'rewardOpened',
+      boundary.state,
+      boundary.dependencies,
+    );
+
+    expect(next).toEqual({
+      activeBoss: undefined,
+      activeBossKind: undefined,
+      bossRewardTier: 'second',
+      bossRewardChoices: ['auxiliary-orbit'],
+      bossDefeatPending: false,
+      bossBuild: boundary.bossBuild,
+    });
+    expect(boundary.dependencies.hideRewardOverlay).not.toHaveBeenCalled();
+  });
+
+  it.each(['defeat', 'restart', 'shutdown'] as const)(
+    'discards the build and clears exact scene state on terminal %s',
+    (reason) => {
+      const boundary = lifecycleBoundary();
+
+      const next = finalizeCombatLifecycle(
+        reason,
+        boundary.state,
+        boundary.dependencies,
+      );
+
+      expect(next).toEqual({
+        activeBoss: undefined,
+        activeBossKind: undefined,
+        bossRewardTier: null,
+        bossRewardChoices: [],
+        bossDefeatPending: false,
+        bossBuild: expect.any(BossBuild),
+      });
+      expect(next.bossBuild).not.toBe(boundary.bossBuild);
+      expect(next.bossBuild.snapshot()).toEqual([]);
+      expect(boundary.bossBuild.recordPermanentDirectHit()).toBe(false);
+      expect(boundary.scheduler.getSnapshot()).toEqual([]);
+      expect(boundary.activeBoss.clearHostileActions).toHaveBeenCalledOnce();
+      expect(boundary.activeBoss.destroy).toHaveBeenCalledOnce();
+      expect(boundary.dependencies.clearEnemyHostileActions).toHaveBeenCalledOnce();
+      expect(boundary.dependencies.clearWarning).toHaveBeenCalledOnce();
+      expect(boundary.dependencies.clearTemporaryOrbs).toHaveBeenCalledOnce();
+      expect(boundary.dependencies.hideRewardOverlay).toHaveBeenCalledOnce();
     },
   );
 

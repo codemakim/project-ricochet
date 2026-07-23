@@ -55,8 +55,8 @@ import { progressionHudState } from '../ui/progressionHud';
 import {
   bossKindAfterTransition,
   bossOrbModifiers,
-  cleanupCombatRuntime,
   createBossForKind,
+  finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
   rewardAddsPermanentOrb,
@@ -622,7 +622,7 @@ export class CombatScene extends Phaser.Scene {
       this.build?.getRanks() ?? { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
       BOSS_REWARD_SEED,
     );
-    this.cleanupRuntime('bossReward');
+    this.applyLifecycle('rewardOpened');
     this.pause.add('bossReward');
     this.syncPauseState();
     this.bossRewardOverlay?.show(
@@ -643,9 +643,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.encounterDirector?.getSnapshot().section !== expectedSection) {
       throw new Error(`boss reward did not resume section ${expectedSection}`);
     }
-    this.bossRewardOverlay.hide();
-    this.bossRewardChoices = [];
-    this.bossRewardTier = null;
+    this.applyLifecycle('rewardCompleted');
     this.pause.remove('bossReward');
     this.syncPauseState();
     return true;
@@ -658,19 +656,29 @@ export class CombatScene extends Phaser.Scene {
     manager.update(this.gameplayElapsedMs);
   }
 
-  private cleanupRuntime(
-    reason: Parameters<typeof cleanupCombatRuntime>[0],
+  private applyLifecycle(
+    reason: Parameters<typeof finalizeCombatLifecycle>[0],
   ): void {
-    this.enemyManager?.clearHostileActions();
-    cleanupCombatRuntime(reason, {
-      scheduler: this.combatEffects,
-      bossBuild: this.bossBuild,
+    const next = finalizeCombatLifecycle(reason, {
       activeBoss: this.activeBoss,
+      activeBossKind: this.activeBossKind,
+      bossRewardTier: this.bossRewardTier,
+      bossRewardChoices: this.bossRewardChoices,
+      bossDefeatPending: this.bossDefeatPending,
+      bossBuild: this.bossBuild ?? new BossBuild(),
+    }, {
+      scheduler: this.combatEffects,
+      clearEnemyHostileActions: () => this.enemyManager?.clearHostileActions(),
       clearWarning: () => this.clearBossWarning(),
       clearTemporaryOrbs: () => this.clearTemporaryOrbs(),
+      hideRewardOverlay: () => this.bossRewardOverlay?.hide(),
     });
-    this.activeBoss = undefined;
-    this.activeBossKind = undefined;
+    this.activeBoss = next.activeBoss;
+    this.activeBossKind = next.activeBossKind;
+    this.bossRewardTier = next.bossRewardTier;
+    this.bossRewardChoices = [...next.bossRewardChoices];
+    this.bossDefeatPending = next.bossDefeatPending;
+    this.bossBuild = next.bossBuild;
   }
 
   private openNextLevelUp(): void {
@@ -732,16 +740,12 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated) return;
     this.defeated = true;
     this.bossDefeatPending = false;
-    this.cleanupRuntime('defeat');
+    this.applyLifecycle('defeat');
     this.levelUpOverlay?.hide();
-    this.bossRewardOverlay?.hide();
-    this.bossRewardChoices = [];
     this.pause.remove('levelUp');
     this.pause.remove('bossReward');
     this.pause.add('defeated');
     this.syncPauseState();
-    this.bossRewardTier = null;
-    this.bossBuild = new BossBuild();
     this.temporaryOrbManager?.destroy();
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
@@ -758,8 +762,7 @@ export class CombatScene extends Phaser.Scene {
       .setDepth(21)
       .setInteractive({ useHandCursor: true })
       .once('pointerup', () => {
-        this.cleanupRuntime('restart');
-        this.bossRewardTier = null;
+        this.applyLifecycle('restart');
         this.scene.restart();
       });
   }
@@ -809,7 +812,7 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-    this.cleanupRuntime('shutdown');
+    this.applyLifecycle('shutdown');
     this.enemyManager?.destroy();
     this.temporaryOrbManager?.destroy();
     this.orbManager?.destroy();
@@ -817,8 +820,6 @@ export class CombatScene extends Phaser.Scene {
     this.levelUpOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
     this.bossDefeatPending = false;
-    this.bossRewardChoices = [];
-    this.bossRewardTier = null;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
     this.orbManager = undefined;
