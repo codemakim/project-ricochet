@@ -40,3 +40,21 @@ it('excludes deferred prototype descriptors from immediate texture rendering', (
   expect(textures).not.toHaveProperty('enemy-fragment-right');
   expect(textures).toHaveProperty('enemy-bullet');
 });
+
+it('defines deferred red/orange centered hive bullets and warning markers', () => {
+  const textures = combatProjectileTextureDescriptors();
+
+  expect(textures['hive-shooter-bullet']).toMatchObject({
+    shape: 'centeredCircle', fill: 0xff4d5a, width: 10, height: 10, deferred: true,
+  });
+  expect(textures['hive-core-bullet']).toMatchObject({
+    shape: 'centeredCircle', fill: 0xff8a3d, width: 10, height: 10, deferred: true,
+  });
+  expect(textures['hive-shooter-warning']).toMatchObject({
+    shape: 'flash', deferred: true,
+  });
+  expect(textures['hive-core-warning']).toMatchObject({
+    shape: 'flash', deferred: true,
+  });
+  expect(renderableCombatTextureDescriptors()).not.toHaveProperty('hive-core-bullet');
+});

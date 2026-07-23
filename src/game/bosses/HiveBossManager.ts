@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
+import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { normalize, type Vector } from '../math/vector';
 import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
@@ -41,6 +42,18 @@ const PART_ORDER = [
 ] as const satisfies readonly HivePartId[];
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
+type HiveProjectileKind = 'hiveShooter' | 'hiveCore';
+type HiveProjectileSprite = BossSprite & { hiveProjectileKind: HiveProjectileKind };
+type ShooterPartId = 'leftShooter' | 'rightShooter';
+type HiveWarning =
+  | {
+    kind: 'shooter';
+    moduleId: ShooterPartId;
+    dueAt: number;
+    target: Vector;
+    marker: BossSprite;
+  }
+  | { kind: 'coreFan'; dueAt: number; marker: BossSprite };
 
 interface PendingHit {
   result: HitResult;
@@ -79,6 +92,7 @@ export class HiveBossManager implements BossEncounter {
   private readonly moduleGroup: Phaser.Physics.Arcade.Group;
   private readonly warningGroup: Phaser.Physics.Arcade.Group;
   private readonly reflectorGroup: Phaser.Physics.Arcade.Group;
+  private readonly bulletGroup: Phaser.Physics.Arcade.Group;
   private readonly parts: Record<HivePartId, BossSprite>;
   private readonly colliders: Phaser.Physics.Arcade.Collider[] = [];
   private readonly pendingHits = new Map<string, PendingHit>();
@@ -88,18 +102,28 @@ export class HiveBossManager implements BossEncounter {
   private lastGameplayElapsedMs: number;
   private destroyed = false;
   private defeatReported = false;
-  private warningMarker?: BossSprite;
+  private warnings: HiveWarning[] = [];
+  private readonly nextShooterWarningAt: Record<ShooterPartId, number>;
+  private nextCoreFanAt?: number;
   private readonly unsubscribeOrbAdded: () => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly options: HiveBossManagerOptions,
   ) {
-    this.lastGameplayElapsedMs = options.getGameplayElapsedMs();
+    const now = options.getGameplayElapsedMs();
+    this.lastGameplayElapsedMs = now;
+    this.nextShooterWarningAt = {
+      leftShooter: now + GAME_TUNING.projectiles.hiveShooter.intervalMs,
+      rightShooter: now
+        + GAME_TUNING.projectiles.hiveShooter.intervalMs
+        + GAME_TUNING.projectiles.hiveShooter.offsetMs,
+    };
     this.coreGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.moduleGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.warningGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.reflectorGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
+    this.bulletGroup = scene.physics.add.group({ allowGravity: false });
 
     const { core, shooters, reflectors } = HIVE_BOSS_GEOMETRY;
     const leftReflectorX = midpoint(reflectors.leftReflector.travel);
@@ -152,6 +176,11 @@ export class HiveBossManager implements BossEncounter {
     for (const partId of PART_ORDER) {
       this.addTemporaryCollider(options.temporaryOrbManager.getGroup(), partId);
     }
+    this.colliders.push(scene.physics.add.overlap(
+      options.player,
+      this.bulletGroup,
+      (_player, bullet) => this.consumeProjectile(bullet as HiveProjectileSprite),
+    ));
   }
 
   update(): void {
@@ -168,6 +197,11 @@ export class HiveBossManager implements BossEncounter {
     ) {
       this.moveReflectors(deltaMs);
     }
+    if (this.state.phase !== 'defeated') {
+      this.scheduleAttacks(now);
+      this.resolveWarnings(now);
+    }
+    this.cleanOffscreenBullets();
   }
 
   getSnapshot(): HiveBossManagerSnapshot {
@@ -193,8 +227,8 @@ export class HiveBossManager implements BossEncounter {
       },
       parts: { ...this.state.parts },
       bullets: this.getBulletCount(),
-      warnings: this.warningMarker?.active ? 1 : 0,
-      projectiles: [],
+      warnings: this.warnings.length,
+      projectiles: this.activeProjectiles(),
       partPositions: Object.fromEntries(PART_ORDER.map((partId) => [
         partId,
         { x: this.parts[partId].x, y: this.parts[partId].y },
@@ -203,7 +237,7 @@ export class HiveBossManager implements BossEncounter {
   }
 
   getBulletCount(): number {
-    return 0;
+    return this.destroyed ? 0 : this.activeCount(this.bulletGroup);
   }
 
   applyAreaDamage(
@@ -236,7 +270,8 @@ export class HiveBossManager implements BossEncounter {
   clearHostileActions(): void {
     if (this.destroyed) return;
     this.warningGroup.clear(true, true);
-    this.warningMarker = undefined;
+    this.bulletGroup.clear(true, true);
+    this.warnings = [];
   }
 
   destroy(): void {
@@ -252,6 +287,7 @@ export class HiveBossManager implements BossEncounter {
     this.moduleGroup.destroy(true);
     this.warningGroup.destroy(true);
     this.reflectorGroup.destroy(true);
+    this.bulletGroup.destroy(true);
   }
 
   private createPart(
@@ -405,6 +441,9 @@ export class HiveBossManager implements BossEncounter {
       this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();
     }
     this.synchronizeParts();
+    if (this.state.parts[partId] === 0 && isShooter(partId)) {
+      this.cancelShooterWarning(partId);
+    }
     if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
     if (this.state.phase === 'defeated') this.reportDefeat();
   }
@@ -443,25 +482,17 @@ export class HiveBossManager implements BossEncounter {
   }
 
   private onPhaseTransition(previousPhase: HivePhase): void {
-    if (previousPhase === 'telegraph') this.clearWarning();
-    if (this.state.phase === 'telegraph') this.createWarning();
+    const now = this.options.getGameplayElapsedMs();
+    if (this.state.phase === 'telegraph') this.createCoreWarning(
+      now + GAME_TUNING.hiveBoss.timing.telegraphMs,
+    );
+    if (this.state.phase === 'permanentlyExposed') {
+      this.cancelCoreWarnings();
+      this.nextCoreFanAt = now + GAME_TUNING.projectiles.hiveCore.intervalMs;
+    }
     if (this.state.phase === 'shielded' && previousPhase === 'exposed') this.recallReflectors();
     this.synchronizeParts();
     this.options.onPhaseChanged?.(this.state.phase);
-  }
-
-  private createWarning(): void {
-    this.clearWarning();
-    this.warningMarker = (this.warningGroup.create(
-      HIVE_BOSS_GEOMETRY.core.x,
-      HIVE_BOSS_GEOMETRY.core.y,
-      'hive-deploy-warning',
-    ) as BossSprite).setDepth(WARNING_DEPTH);
-  }
-
-  private clearWarning(): void {
-    this.warningMarker?.destroy();
-    this.warningMarker = undefined;
   }
 
   private recallReflectors(): void {
@@ -489,10 +520,172 @@ export class HiveBossManager implements BossEncounter {
       this.parts[partId].setPosition(motion.x, geometry.y);
     }
   }
+
+  private scheduleAttacks(now: number): void {
+    for (const moduleId of ['leftShooter', 'rightShooter'] as const) {
+      if (now < this.nextShooterWarningAt[moduleId]) continue;
+      this.nextShooterWarningAt[moduleId] = now
+        + GAME_TUNING.projectiles.hiveShooter.intervalMs;
+      if (
+        this.state.parts[moduleId] > 0
+        && !this.warnings.some((warning) => (
+          warning.kind === 'shooter' && warning.moduleId === moduleId
+        ))
+        && this.hasHostileCapacity()
+      ) {
+        this.createShooterWarning(moduleId, now);
+      }
+    }
+    if (
+      this.state.phase === 'permanentlyExposed'
+      && this.nextCoreFanAt !== undefined
+      && now >= this.nextCoreFanAt
+    ) {
+      this.nextCoreFanAt = now + GAME_TUNING.projectiles.hiveCore.intervalMs;
+      this.createCoreWarning(now);
+    }
+  }
+
+  private createShooterWarning(moduleId: ShooterPartId, now: number): void {
+    const target = { x: this.options.player.x, y: this.options.player.y };
+    const marker = (this.warningGroup.create(
+      target.x,
+      target.y,
+      'hive-shooter-warning',
+    ) as BossSprite).setDepth(WARNING_DEPTH);
+    this.warnings.push({
+      kind: 'shooter',
+      moduleId,
+      dueAt: now + GAME_TUNING.projectiles.hiveShooter.warningMs,
+      target,
+      marker,
+    });
+  }
+
+  private createCoreWarning(dueAt: number): void {
+    if (!this.hasHostileCapacity()) return;
+    const marker = (this.warningGroup.create(
+      HIVE_BOSS_GEOMETRY.core.x,
+      HIVE_BOSS_GEOMETRY.core.y,
+      'hive-core-warning',
+    ) as BossSprite).setDepth(WARNING_DEPTH);
+    this.warnings.push({ kind: 'coreFan', dueAt, marker });
+  }
+
+  private resolveWarnings(now: number): void {
+    const pending: HiveWarning[] = [];
+    for (const warning of this.warnings) {
+      if (now < warning.dueAt) {
+        pending.push(warning);
+        continue;
+      }
+      warning.marker.destroy();
+      if (!this.hasHostileCapacity()) continue;
+      if (warning.kind === 'coreFan') this.fireCoreFan();
+      else if (this.state.parts[warning.moduleId] > 0) {
+        this.fireShooter(warning.moduleId, warning.target);
+      }
+    }
+    this.warnings = pending;
+  }
+
+  private fireShooter(moduleId: ShooterPartId, target: Vector): void {
+    const tuning = GAME_TUNING.projectiles.hiveShooter;
+    const origin = this.parts[moduleId];
+    const direction = normalize({ x: target.x - origin.x, y: target.y - origin.y });
+    const bullet = this.bulletGroup.create(
+      origin.x,
+      origin.y,
+      'hive-shooter-bullet',
+    ) as HiveProjectileSprite;
+    bullet.hiveProjectileKind = 'hiveShooter';
+    bullet.setCircle(tuning.radius).setDepth(WARNING_DEPTH).setVelocity(
+      direction.x * tuning.speed,
+      direction.y * tuning.speed,
+    );
+  }
+
+  private fireCoreFan(): void {
+    const tuning = GAME_TUNING.projectiles.hiveCore;
+    for (const degrees of tuning.fanDegrees) {
+      if (!this.hasHostileCapacity()) break;
+      const radians = degrees * Math.PI / 180;
+      const bullet = this.bulletGroup.create(
+        HIVE_BOSS_GEOMETRY.core.x,
+        HIVE_BOSS_GEOMETRY.core.y,
+        'hive-core-bullet',
+      ) as HiveProjectileSprite;
+      bullet.hiveProjectileKind = 'hiveCore';
+      bullet.setCircle(tuning.radius).setDepth(WARNING_DEPTH).setVelocity(
+        Math.sin(radians) * tuning.speed,
+        Math.cos(radians) * tuning.speed,
+      );
+    }
+  }
+
+  private hasHostileCapacity(): boolean {
+    return this.options.getEnemyBulletCount() + this.getBulletCount()
+      < GAME_TUNING.projectiles.hostileCap;
+  }
+
+  private consumeProjectile(projectile: HiveProjectileSprite): void {
+    if (!projectile.active) return;
+    const damage = projectile.hiveProjectileKind === 'hiveShooter'
+      ? GAME_TUNING.projectiles.hiveShooter.damage
+      : GAME_TUNING.projectiles.hiveCore.damage;
+    projectile.destroy();
+    this.options.onPlayerHit(damage);
+  }
+
+  private cleanOffscreenBullets(): void {
+    const margin = GAME_TUNING.projectiles.offscreenMargin;
+    for (const bullet of this.bulletGroup.getChildren() as BossSprite[]) {
+      if (bullet.active && (
+        bullet.x < -margin
+        || bullet.x > GAME_WIDTH + margin
+        || bullet.y < -margin
+        || bullet.y > GAME_HEIGHT + margin
+      )) bullet.destroy();
+    }
+  }
+
+  private cancelShooterWarning(moduleId: ShooterPartId): void {
+    this.warnings = this.warnings.filter((warning) => {
+      if (warning.kind !== 'shooter' || warning.moduleId !== moduleId) return true;
+      warning.marker.destroy();
+      return false;
+    });
+  }
+
+  private cancelCoreWarnings(): void {
+    this.warnings = this.warnings.filter((warning) => {
+      if (warning.kind !== 'coreFan') return true;
+      warning.marker.destroy();
+      return false;
+    });
+  }
+
+  private activeProjectiles(): BossEncounterSnapshot['projectiles'] {
+    return (this.bulletGroup.getChildren() as HiveProjectileSprite[])
+      .filter((projectile) => projectile.active)
+      .map((projectile) => ({
+        kind: projectile.hiveProjectileKind,
+        position: { x: projectile.x, y: projectile.y },
+        velocity: { ...(projectile.body as Phaser.Physics.Arcade.Body).velocity },
+      }));
+  }
+
+  private activeCount(group: Phaser.Physics.Arcade.Group): number {
+    return (group.getChildren() as BossSprite[]).filter((sprite) => sprite.active).length;
+  }
 }
 
 function midpoint(range: { minimum: number; maximum: number }): number {
   return (range.minimum + range.maximum) / 2;
+}
+
+function isShooter(partId: HivePartId): partId is ShooterPartId {
+  return partId === 'leftShooter' || partId === 'rightShooter';
 }
 
 function moveWithinPath(
