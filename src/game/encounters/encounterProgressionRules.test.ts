@@ -19,16 +19,16 @@ describe('encounter progression rules', () => {
   });
 
   it('requires the target score and minimum time together', () => {
-    expect(BOSS_PROGRESS_TARGET).toBe(GAME_TUNING.encounter.bossEntry.scoreTarget);
-    expect(BOSS_ENTRY_MIN_MS).toBe(GAME_TUNING.encounter.bossEntry.minimumMs);
-    expect(BOSS_WARNING_MS).toBe(GAME_TUNING.encounter.bossEntry.warningMs);
+    expect(BOSS_PROGRESS_TARGET).toBe(GAME_TUNING.encounter.bossSchedule[0].scoreTarget);
+    expect(BOSS_ENTRY_MIN_MS).toBe(GAME_TUNING.encounter.bossSchedule[0].minimumMs);
+    expect(BOSS_WARNING_MS).toBe(GAME_TUNING.encounter.bossSchedule[0].warningMs);
     expect(bossEntryReady(119_999, 70)).toBe(false);
     expect(bossEntryReady(120_000, 69)).toBe(false);
     expect(bossEntryReady(120_000, 70)).toBe(true);
   });
 
   it('forces entry at the hard maximum without the target score', () => {
-    expect(BOSS_ENTRY_HARD_MAX_MS).toBe(GAME_TUNING.encounter.bossEntry.hardMaximumMs);
+    expect(BOSS_ENTRY_HARD_MAX_MS).toBe(GAME_TUNING.encounter.bossSchedule[0].hardMaximumMs);
     expect(bossEntryReady(209_999, 0)).toBe(false);
     expect(bossEntryReady(210_000, 0)).toBe(true);
   });

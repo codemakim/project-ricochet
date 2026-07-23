@@ -156,7 +156,6 @@ export const GAME_TUNING = {
       { formation: { minimum: 21, maximum: 25 }, activeCap: 84, spawnIntervalMs: 5500, armored: 3, shooters: 3, splitters: 2 },
     ],
     bossSchedule: BOSS_SCHEDULE,
-    bossEntry: BOSS_SCHEDULE[0],
   },
   projectiles: {
     hostileCap: 12,
@@ -206,7 +205,7 @@ export const GAME_TUNING = {
       bossMuzzleFlash: { fill: 0xff704d, accent: 0xffd6a3, width: 20, height: 20 },
     },
   },
-} as const satisfies GameTuning & { encounter: { bossEntry: BossScheduleTuning } };
+} as const satisfies GameTuning;
 
 function positive(value: number, name: string): void {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be finite and positive`);
@@ -363,6 +362,8 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(hiveBoss.core.visualSize, 'hiveBoss.core.visualSize');
   positive(hiveBoss.core.hitboxSize, 'hiveBoss.core.hitboxSize');
   positive(hiveBoss.core.hp, 'hiveBoss.core.hp');
+  finite(hiveBoss.core.x, 'hiveBoss.core.x');
+  finite(hiveBoss.core.y, 'hiveBoss.core.y');
   if (
     hiveBoss.core.x - hiveBoss.core.visualSize / 2 < 0
     || hiveBoss.core.x + hiveBoss.core.visualSize / 2 > GAME_WIDTH

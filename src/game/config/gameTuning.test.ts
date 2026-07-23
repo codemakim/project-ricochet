@@ -48,6 +48,7 @@ describe('GAME_TUNING', () => {
       { section: 0, kind: 'sentinel', minimumMs: 120000, scoreTarget: 70, hardMaximumMs: 210000, warningMs: 2000 },
       { section: 1, kind: 'hive', minimumMs: 150000, scoreTarget: 110, hardMaximumMs: 210000, warningMs: 2000 },
     ]);
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
     expect(GAME_TUNING.temporaryOrbs).toEqual({
       radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
     });
@@ -132,6 +133,12 @@ describe('GAME_TUNING', () => {
     }],
     ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = 451;
+    }],
+    ['non-finite hive core x', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.core.x = Number.NaN;
+    }],
+    ['non-finite hive core y', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.core.y = Number.NaN;
     }],
     ['non-positive hive timing', (value: Mutable<GameTuning>) => {
       value.hiveBoss.timing.shieldedMs = 0;
