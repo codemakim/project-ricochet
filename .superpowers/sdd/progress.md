@@ -45,7 +45,7 @@
 - Task 1 central tuning and threat phase 3: complete (`b3f2c82..f934aa4`, review clean)
 - Task 2 splitter rules and formation population: complete (`02d42a3..94e1c62`, review clean)
 - Task 3 runtime splitter enemy: complete (`53cf618..eafc02a`, review clean)
-- Task 4 data-driven two-boss encounter: pending
+- Task 4 data-driven two-boss encounter: complete (`bb2cb38..2650065`, review clean)
 - Task 5 common boss contract and pure hive rules: pending
 - Task 6 hive core, modules, and reflectors: pending
 - Task 7 hive shooter and core attacks: pending
