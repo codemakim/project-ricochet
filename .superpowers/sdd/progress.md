@@ -53,4 +53,4 @@
 - Task 9 runtime relic combat effects: complete (`195927d..88437a0`, review clean)
 - Task 10 scene integration and lifecycle: complete (`ad87b2d..175b1bf`, review clean)
 - Task 11 browser acceptance and playtest handoff: complete (focused desktop 21/21 repeated, mobile case passed, unit 432/432, browser 35/35, build passed; review clean)
-- Final review and verification: pending
+- Final review and verification: complete (final review clean; unit 451/451, browser 35/35, build and diff check passed)
