@@ -496,15 +496,15 @@ describe('HiveBossManager', () => {
     expect(boundary.updateAt(7200).projectiles.filter(({ kind }) => kind === 'hiveShooter'))
       .toHaveLength(1);
 
-    const beforeRecallBullets = boundary.manager.getSnapshot().bullets;
     expect(boundary.updateAt(11_900).warnings).toBe(2);
     expect(boundary.updateAt(12_500)).toMatchObject({
       phase: 'shielded',
       warnings: 0,
-      bullets: beforeRecallBullets,
+      bullets: 0,
     });
-    boundary.groups[4]!.children.forEach((bullet) => bullet.active && bullet.destroy());
-    expect(boundary.updateAt(16_500)).toMatchObject({ phase: 'telegraph', warnings: 1 });
+    expect(boundary.updateAt(16_500)).toMatchObject({
+      phase: 'telegraph', warnings: 1, bullets: 0,
+    });
     expect(boundary.updateAt(18_000)).toMatchObject({ phase: 'exposed', warnings: 0 });
     expect(boundary.updateAt(19_399).warnings).toBe(0);
     expect(boundary.updateAt(19_400).warnings).toBe(1);
@@ -673,7 +673,7 @@ describe('HiveBossManager', () => {
     boundary.updateAt(16_500);
     core = boundary.updateAt(18_000).projectiles
       .filter(({ kind }) => kind === 'hiveCore');
-    expect(core).toHaveLength(10);
+    expect(core).toHaveLength(5);
   });
 
   it('starts permanent core cadence at module destruction and fires at 6999/7000 boundary', () => {

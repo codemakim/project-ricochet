@@ -522,6 +522,7 @@ export class HiveBossManager implements BossEncounter {
       this.recallModules();
       this.cancelAllShooterWarnings();
       this.stopShooterSchedules();
+      this.bulletGroup.clear(true, true);
     }
     this.synchronizeParts();
     this.options.onPhaseChanged?.(this.state.phase);
