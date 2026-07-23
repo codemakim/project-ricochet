@@ -10,7 +10,7 @@ type Mutable<T> = T extends readonly [unknown, ...unknown[]]
       : T;
 
 function mutableTuning(): Mutable<GameTuning> {
-  return structuredClone(GAME_TUNING) as Mutable<GameTuning>;
+  return structuredClone(GAME_TUNING) as unknown as Mutable<GameTuning>;
 }
 
 describe('GAME_TUNING', () => {
@@ -19,17 +19,64 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
       descentSpeed: 8,
-      hp: { basic: 2, shooter: 2, armored: 5 },
+      hp: { basic: 2, shooter: 2, armored: 5, splitter: 3, fragment: 1 },
+      splitter: {
+        width: 38, height: 30, fragmentOffsetX: 12,
+        populationCost: 2, score: 2, xp: 1, breachDamage: 3,
+      },
+      fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
     });
     expect(GAME_TUNING.encounter.initialFormation).toEqual({
       count: 26, originY: 80, armored: 3, shooters: 3,
     });
     expect(GAME_TUNING.encounter.reinforcementReleaseY).toBe(50);
     expect(GAME_TUNING.encounter.phases).toEqual([
-      { formation: { minimum: 13, maximum: 15 }, activeCap: 48, spawnIntervalMs: 8000, armored: 1, shooters: 0 },
-      { formation: { minimum: 15, maximum: 18 }, activeCap: 60, spawnIntervalMs: 7000, armored: 2, shooters: 1 },
-      { formation: { minimum: 18, maximum: 21 }, activeCap: 72, spawnIntervalMs: 6000, armored: 2, shooters: 2 },
+      { formation: { minimum: 13, maximum: 15 }, activeCap: 48, spawnIntervalMs: 8000, armored: 1, shooters: 0, splitters: 0 },
+      { formation: { minimum: 15, maximum: 18 }, activeCap: 60, spawnIntervalMs: 7000, armored: 2, shooters: 1, splitters: 0 },
+      { formation: { minimum: 18, maximum: 21 }, activeCap: 72, spawnIntervalMs: 6000, armored: 2, shooters: 2, splitters: 0 },
+      { formation: { minimum: 21, maximum: 25 }, activeCap: 84, spawnIntervalMs: 5500, armored: 3, shooters: 3, splitters: 2 },
     ]);
+    expect(GAME_TUNING.encounter.phases[3]).toEqual({
+      formation: { minimum: 21, maximum: 25 },
+      activeCap: 84,
+      spawnIntervalMs: 5500,
+      armored: 3,
+      shooters: 3,
+      splitters: 2,
+    });
+    expect(GAME_TUNING.encounter.bossSchedule).toEqual([
+      { section: 0, kind: 'sentinel', minimumMs: 120000, scoreTarget: 70, hardMaximumMs: 210000, warningMs: 2000 },
+      { section: 1, kind: 'hive', minimumMs: 150000, scoreTarget: 110, hardMaximumMs: 210000, warningMs: 2000 },
+    ]);
+    expect(GAME_TUNING.temporaryOrbs).toEqual({
+      radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
+    });
+    expect(GAME_TUNING.hiveBoss).toMatchObject({
+      core: { x: 225, y: 140, visualSize: 56, hitboxSize: 48, hp: 72 },
+      shooter: { width: 34, height: 28, hp: 12 },
+      reflector: {
+        width: 18, height: 96, y: 280, hp: 14,
+        leftTravel: { minimum: 96, maximum: 168 },
+        rightTravel: { minimum: 282, maximum: 354 },
+        speed: 30,
+        minimumCorridorWidth: 96,
+      },
+      timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
+    });
+    expect(GAME_TUNING.projectiles.hiveShooter).toEqual({
+      intervalMs: 1400, offsetMs: 700, warningMs: 300, speed: 170, damage: 1, radius: 5,
+    });
+    expect(GAME_TUNING.projectiles.hiveCore).toEqual({
+      intervalMs: 7000, speed: 140, damage: 1, radius: 5, fanDegrees: [-36, -18, 0, 18, 36],
+    });
+    expect(GAME_TUNING.relics.secondBoss).toEqual({
+      auxiliaryOrbit: { orbLimit: 6 },
+      recoverySalvo: { temporaryOrbCount: 2 },
+      siegeResonance: { hitsRequired: 10, radius: 80, damage: 2 },
+      hyperpressureCore: { chargedDamageBonus: 0.75 },
+      aftershockExplosion: { delayMs: 350, radiusScale: 0.8, damageScale: 0.5 },
+      chainSplit: { childCount: 2, angles: [-25, 25] },
+    });
   });
 
   it('uses shape and palette separation for friendly and hostile projectiles', () => {
@@ -68,11 +115,38 @@ describe('GAME_TUNING', () => {
     ['fractional initial formation count', (value: Mutable<GameTuning>) => {
       value.encounter.initialFormation.count = 26.5;
     }],
-    ['non-positive boss entry timing', (value: Mutable<GameTuning>) => {
-      value.encounter.bossEntry.warningMs = 0;
+    ['negative phase splitters', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[3]!.splitters = -1;
     }],
-    ['reversed boss entry timings', (value: Mutable<GameTuning>) => {
-      value.encounter.bossEntry.minimumMs = value.encounter.bossEntry.hardMaximumMs + 1;
+    ['special counts exceeding formation minimum', (value: Mutable<GameTuning>) => {
+      value.encounter.phases[3]!.splitters = 16;
+    }],
+    ['duplicate schedule sections', (value: Mutable<GameTuning>) => {
+      value.encounter.bossSchedule[1]!.section = 0;
+    }],
+    ['misordered schedule sections', (value: Mutable<GameTuning>) => {
+      value.encounter.bossSchedule[0]!.section = 1;
+    }],
+    ['reversed boss schedule timings', (value: Mutable<GameTuning>) => {
+      value.encounter.bossSchedule[1]!.minimumMs = value.encounter.bossSchedule[1]!.hardMaximumMs + 1;
+    }],
+    ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.core.x = 451;
+    }],
+    ['non-positive hive timing', (value: Mutable<GameTuning>) => {
+      value.hiveBoss.timing.shieldedMs = 0;
+    }],
+    ['non-positive hive projectile value', (value: Mutable<GameTuning>) => {
+      value.projectiles.hiveShooter.speed = 0;
+    }],
+    ['invalid temporary orb cap', (value: Mutable<GameTuning>) => {
+      value.temporaryOrbs.cap = 0;
+    }],
+    ['invalid temporary orb lifetime', (value: Mutable<GameTuning>) => {
+      value.temporaryOrbs.lifetimeMs = -1;
+    }],
+    ['non-finite relic value', (value: Mutable<GameTuning>) => {
+      value.relics.secondBoss.aftershockExplosion.radiusScale = Number.NaN;
     }],
     ['non-finite obstacle padding', (value: Mutable<GameTuning>) => {
       value.boss.movement.obstaclePadding = Number.POSITIVE_INFINITY;

@@ -182,7 +182,7 @@ describe('EncounterDirector', () => {
       elapsedSinceSpawnMs: 0,
       bossScore: 0,
       warningElapsedMs: 0,
-      phase: 1,
+      phase: 2,
       bossesDefeated: 1,
     });
   });
@@ -208,7 +208,7 @@ describe('EncounterDirector', () => {
     for (let index = 0; index < 70; index += 1) director.recordEnemyKill('basic');
 
     expect(director.update(210_000, clearTop).transition).toBeNull();
-    expect(director.getSnapshot()).toMatchObject({ state: 'running', section: 1, phase: 2 });
+    expect(director.getSnapshot()).toMatchObject({ state: 'running', section: 1, phase: 3 });
   });
 
   it('rejects illegal boss lifecycle transitions', () => {

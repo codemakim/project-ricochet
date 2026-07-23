@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import { TemporaryOrbManager } from './TemporaryOrbManager';
 
 class FakeBody {
@@ -94,20 +95,22 @@ describe('TemporaryOrbManager', () => {
     expect(group.children.every((sprite) => Math.hypot(
       sprite.body.velocity.x,
       sprite.body.velocity.y,
-    ) === 440)).toBe(true);
+    ) === GAME_TUNING.temporaryOrbs.speed)).toBe(true);
     expect(group.children.every((sprite) => (
       sprite.x === 10
       && sprite.y === 20
       && sprite.texture === 'orb-temporary'
-      && sprite.circle === 6
+      && sprite.circle === GAME_TUNING.temporaryOrbs.radius
       && sprite.bounce?.[0] === 1
       && sprite.bounce[1] === 1
       && sprite.collideWorldBounds
     ))).toBe(true);
-    expect(manager.getSnapshot().every((orb) => orb.expiresAt === scene.time.now + 1500)).toBe(true);
+    expect(manager.getSnapshot().every((orb) => (
+      orb.expiresAt === scene.time.now + GAME_TUNING.temporaryOrbs.lifetimeMs
+    ))).toBe(true);
   });
 
-  it('caps at twelve without evicting active records and keeps IDs monotonic', () => {
+  it('caps at its tuning without evicting active records and keeps IDs monotonic', () => {
     const { manager } = createManager();
 
     for (let index = 0; index < 4; index += 1) expect(manager.spawn({ x: index, y: 0 }, { x: 0, y: -1 }, 3)).toBe(3);
@@ -115,7 +118,7 @@ describe('TemporaryOrbManager', () => {
     expect(manager.spawn({ x: 99, y: 99 }, { x: 0, y: -1 }, 3)).toBe(0);
     expect(manager.getSnapshot()).toEqual(before);
 
-    manager.update(1500);
+    manager.update(GAME_TUNING.temporaryOrbs.lifetimeMs);
     expect(manager.spawn({ x: 1, y: 2 }, { x: 0, y: -1 }, 1)).toBe(1);
     expect(manager.getSnapshot()[0]!.id).toBe(12);
   });
@@ -127,19 +130,19 @@ describe('TemporaryOrbManager', () => {
     }
 
     expect(manager.spawn({ x: 99, y: 99 }, { x: 1, y: 0 }, 1)).toBe(0);
-    manager.update(1500);
+    manager.update(GAME_TUNING.temporaryOrbs.lifetimeMs);
     expect(manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1)).toBe(1);
     expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
   });
 
-  it('expires and destroys temporary orbs exactly at 1500ms', () => {
+  it('expires and destroys temporary orbs exactly at its configured lifetime', () => {
     const { manager, group } = createManager();
     manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 2);
 
-    manager.update(1499);
+    manager.update(GAME_TUNING.temporaryOrbs.lifetimeMs - 1);
     expect(manager.getSnapshot()).toHaveLength(2);
     expect(group.children.every((sprite) => sprite.active)).toBe(true);
-    manager.update(1500);
+    manager.update(GAME_TUNING.temporaryOrbs.lifetimeMs);
     expect(manager.getSnapshot()).toEqual([]);
     expect(group.children.every((sprite) => sprite.destroyed)).toBe(true);
   });
@@ -159,7 +162,7 @@ describe('TemporaryOrbManager', () => {
     expect(manager.getSnapshot()).toEqual([]);
   });
 
-  it('applies temporary damage and rejects a repeated enemy hit newer than 80ms', () => {
+  it('applies temporary damage and rejects a repeated enemy hit before its configured cooldown', () => {
     const { manager, group } = createManager(() => 1.25);
     manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);
     const orb = group.children[0]!;
@@ -171,8 +174,18 @@ describe('TemporaryOrbManager', () => {
       killed: true,
       reflect: true,
     });
-    expect(manager.handleEnemyHit(orb as unknown as never, 4, 99, 179)).toBeNull();
-    expect(manager.handleEnemyHit(orb as unknown as never, 4, 99, 180)).toMatchObject({ damage: 1.75 });
+    expect(manager.handleEnemyHit(
+      orb as unknown as never,
+      4,
+      99,
+      100 + GAME_TUNING.temporaryOrbs.hitCooldownMs - 1,
+    )).toBeNull();
+    expect(manager.handleEnemyHit(
+      orb as unknown as never,
+      4,
+      99,
+      100 + GAME_TUNING.temporaryOrbs.hitCooldownMs,
+    )).toMatchObject({ damage: 1.75 });
   });
 
   it('synchronizes reflected velocity and destroys owned group and records', () => {

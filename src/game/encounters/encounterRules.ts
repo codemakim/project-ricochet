@@ -1,6 +1,6 @@
-import { GAME_TUNING } from '../config/gameTuning';
+import { GAME_TUNING, type ThreatPhase } from '../config/gameTuning';
 
-export type ThreatPhase = 0 | 1 | 2;
+export type { ThreatPhase } from '../config/gameTuning';
 
 export interface ThreatConfig {
   phase: ThreatPhase;
@@ -19,7 +19,8 @@ export interface SpawnGateInput {
 }
 
 export function threatPhaseForSection(section: number, elapsedMs: number): ThreatPhase {
-  if (section > 0) return elapsedMs >= 60_000 ? 2 : 1;
+  if (section >= 2) return 3;
+  if (section === 1) return elapsedMs >= 60_000 ? 3 : 2;
   if (elapsedMs >= 120_000) return 2;
   if (elapsedMs >= 60_000) return 1;
   return 0;

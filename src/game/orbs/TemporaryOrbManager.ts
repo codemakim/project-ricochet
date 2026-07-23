@@ -1,12 +1,7 @@
 import type Phaser from 'phaser';
+import { GAME_TUNING } from '../config/gameTuning';
 import { normalize, type Vector } from '../math/vector';
 import type { HitResult } from './orbRules';
-
-const TEMPORARY_ORB_RADIUS = 6;
-const TEMPORARY_ORB_SPEED = 440;
-const TEMPORARY_ORB_CAP = 12;
-const TEMPORARY_ORB_LIFETIME_MS = 1500;
-const HIT_COOLDOWN_MS = 80;
 
 export type TemporaryOrbSprite = Phaser.Physics.Arcade.Sprite & {
   temporaryOrbId: number;
@@ -58,14 +53,14 @@ export class TemporaryOrbManager {
   spawn(position: Vector, direction: Vector, count: number): number {
     if (this.destroyed || count <= 0) return 0;
     const angles = this.spawnAngles(count);
-    const available = TEMPORARY_ORB_CAP - this.records.size;
+    const available = GAME_TUNING.temporaryOrbs.cap - this.records.size;
     const spawnCount = Math.min(count, available);
     if (spawnCount <= 0) return 0;
 
     const incoming = normalize(direction);
     for (const angle of angles.slice(0, spawnCount)) {
       const launch = rotate(incoming, angle);
-      const expiresAt = this.options.getGameplayElapsedMs() + TEMPORARY_ORB_LIFETIME_MS;
+      const expiresAt = this.options.getGameplayElapsedMs() + GAME_TUNING.temporaryOrbs.lifetimeMs;
       const sprite = this.group.create(
         position.x,
         position.y,
@@ -75,17 +70,17 @@ export class TemporaryOrbManager {
       sprite.expiresAt = expiresAt;
       this.nextId += 1;
       sprite
-        .setCircle(TEMPORARY_ORB_RADIUS)
+        .setCircle(GAME_TUNING.temporaryOrbs.radius)
         .setBounce(1, 1)
         .setCollideWorldBounds(true)
-        .setVelocity(launch.x * TEMPORARY_ORB_SPEED, launch.y * TEMPORARY_ORB_SPEED);
+        .setVelocity(launch.x * GAME_TUNING.temporaryOrbs.speed, launch.y * GAME_TUNING.temporaryOrbs.speed);
       this.records.set(sprite, {
         id: sprite.temporaryOrbId,
         expiresAt,
         position: { ...position },
         velocity: {
-          x: launch.x * TEMPORARY_ORB_SPEED,
-          y: launch.y * TEMPORARY_ORB_SPEED,
+          x: launch.x * GAME_TUNING.temporaryOrbs.speed,
+          y: launch.y * GAME_TUNING.temporaryOrbs.speed,
         },
         sprite,
         enemyHits: new Map(),
@@ -107,7 +102,7 @@ export class TemporaryOrbManager {
     const record = this.records.get(orb);
     if (!record || !orb.active) return null;
     const lastHitMs = record.enemyHits.get(enemyId);
-    if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
+    if (lastHitMs !== undefined && nowMs - lastHitMs < GAME_TUNING.temporaryOrbs.hitCooldownMs) return null;
     record.enemyHits.set(enemyId, nowMs);
     const damage = 0.5 + this.options.getDirectDamageBonus();
     return {
