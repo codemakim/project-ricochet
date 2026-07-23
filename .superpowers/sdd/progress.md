@@ -36,3 +36,21 @@
 - Task 5 boss basic shot: complete (`23b14b4..72d0d27`, review clean after configured support-damage fix)
 - Task 6 browser acceptance and playtest handoff: complete (focused 4/4, browser 27/27, unit 277/277, build passed)
 - Final review and verification: complete (`24cf72a`; re-review clean; unit 292/292, browser 27/27, build and diff check passed)
+
+## Second hive midboss execution
+
+- Branch: `codex/second-hive-midboss`
+- Base: `87a488a`
+- Baseline: 33 files, 292 unit tests passed
+- Task 1 central tuning and threat phase 3: pending
+- Task 2 splitter rules and formation population: pending
+- Task 3 runtime splitter enemy: pending
+- Task 4 data-driven two-boss encounter: pending
+- Task 5 common boss contract and pure hive rules: pending
+- Task 6 hive core, modules, and reflectors: pending
+- Task 7 hive shooter and core attacks: pending
+- Task 8 second-tier rewards and UI: pending
+- Task 9 runtime relic combat effects: pending
+- Task 10 scene integration and lifecycle: pending
+- Task 11 browser acceptance and playtest handoff: pending
+- Final review and verification: pending
