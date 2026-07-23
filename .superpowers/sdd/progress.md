@@ -42,7 +42,7 @@
 - Branch: `codex/second-hive-midboss`
 - Base: `87a488a`
 - Baseline: 33 files, 292 unit tests passed
-- Task 1 central tuning and threat phase 3: pending
+- Task 1 central tuning and threat phase 3: complete (`b3f2c82..f934aa4`, review clean)
 - Task 2 splitter rules and formation population: pending
 - Task 3 runtime splitter enemy: pending
 - Task 4 data-driven two-boss encounter: pending
