@@ -358,6 +358,54 @@ describe('HiveBossManager', () => {
     }
   });
 
+  it('starts reflector motion after exposure entry instead of reusing telegraph delta', () => {
+    const boundary = createBoundary();
+    const left = boundary.sprite('hive-left-reflector');
+    const right = boundary.sprite('hive-right-reflector');
+    const leftStart = (
+      GAME_TUNING.hiveBoss.reflector.leftTravel.minimum
+      + GAME_TUNING.hiveBoss.reflector.leftTravel.maximum
+    ) / 2;
+    const rightStart = (
+      GAME_TUNING.hiveBoss.reflector.rightTravel.minimum
+      + GAME_TUNING.hiveBoss.reflector.rightTravel.maximum
+    ) / 2;
+
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
+
+    expect({ left: left.x, right: right.x }).toEqual({
+      left: leftStart,
+      right: rightStart,
+    });
+
+    boundary.updateAt(6500);
+    expect(left.x).toBeCloseTo(leftStart + GAME_TUNING.hiveBoss.reflector.speed);
+    expect(right.x).toBeCloseTo(rightStart - GAME_TUNING.hiveBoss.reflector.speed);
+  });
+
+  it('starts permanent-exposure motion from the gameplay time modules are destroyed', () => {
+    const boundary = createBoundary();
+    const left = boundary.sprite('hive-left-reflector');
+    const right = boundary.sprite('hive-right-reflector');
+    const start = { left: left.x, right: right.x };
+    boundary.gameplay.now = 1000;
+
+    for (const [texture, hp] of [
+      ['hive-left-shooter', 12],
+      ['hive-right-shooter', 12],
+      ['hive-left-reflector', 14],
+      ['hive-right-reflector', 14],
+    ] as const) {
+      const part = boundary.sprite(texture);
+      boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp);
+    }
+    boundary.manager.update();
+
+    expect(boundary.manager.getSnapshot().phase).toBe('permanentlyExposed');
+    expect({ left: left.x, right: right.x }).toEqual(start);
+  });
+
   it('uses the destructible reflector sprite itself as the orb wall and no player/bullet wall', () => {
     const boundary = createBoundary();
     const reflector = boundary.colliderFor('hive-left-reflector');

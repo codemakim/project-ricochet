@@ -162,7 +162,10 @@ export class HiveBossManager implements BossEncounter {
     const previousPhase = this.state.phase;
     this.state = advanceHiveCycle(this.state, deltaMs);
     if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
-    if (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed') {
+    if (
+      this.state.phase === previousPhase
+      && (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed')
+    ) {
       this.moveReflectors(deltaMs);
     }
   }
@@ -398,6 +401,9 @@ export class HiveBossManager implements BossEncounter {
   private damagePart(partId: HivePartId, damage: number): void {
     const previousPhase = this.state.phase;
     this.state = damageHivePart(this.state, partId, damage);
+    if (this.state.phase !== previousPhase) {
+      this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();
+    }
     this.synchronizeParts();
     if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
     if (this.state.phase === 'defeated') this.reportDefeat();
