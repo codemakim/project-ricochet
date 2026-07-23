@@ -339,6 +339,109 @@ describe('EnemyManager', () => {
     expect(groups[0]!.children.map(({ texture }) => texture)).toEqual(['enemy-basic', 'enemy-basic']);
   });
 
+  it('splits a directly killed splitter into exactly two fragments once', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'splitter', hp: 3, x: 225, y: 180, column: 0, speed: 0 },
+    ];
+    const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary(formation);
+    const splitter = groups[0]!.children[0]!;
+    handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+
+    colliders[0]!.trigger(orb, splitter);
+    colliders[0]!.trigger(orb, splitter);
+
+    expect(manager.getSnapshot().enemies).toEqual([
+      expect.objectContaining({ kind: 'fragment', hp: 1, position: { x: 213, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 1, position: { x: 237, y: 180 } }),
+    ]);
+    expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
+  });
+
+  it('uses an area-damage snapshot before splitting, then kills fragments on the next event', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'splitter', hp: 1, x: 225, y: 180, column: 0, speed: 0 },
+    ];
+    const { manager, onEnemyKilled } = createBoundary(formation);
+
+    expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 1, -1)).toEqual([0]);
+    expect(manager.getSnapshot().enemies.map(({ id, kind, hp }) => ({ id, kind, hp }))).toEqual([
+      { id: 1, kind: 'fragment', hp: 1 },
+      { id: 2, kind: 'fragment', hp: 1 },
+    ]);
+    expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 1, -1)).toEqual([1, 2]);
+    expect(onEnemyKilled.mock.calls.map(([event]) => event.kind))
+      .toEqual(['splitter', 'fragment', 'fragment']);
+  });
+
+  it('allows splitter fragments to overlap an existing enemy', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 2, x: 225, y: 180, column: 0, speed: 0 },
+      { kind: 'splitter', hp: 3, x: 225, y: 180, column: 1, speed: 0 },
+    ];
+    const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary(formation);
+    handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+
+    colliders[0]!.trigger(orb, groups[0]!.children[1]!);
+
+    expect(manager.getSnapshot().enemies.map(({ kind, position }) => ({ kind, position }))).toEqual([
+      { kind: 'basic', position: { x: 225, y: 180 } },
+      { kind: 'fragment', position: { x: 213, y: 180 } },
+      { kind: 'fragment', position: { x: 237, y: 180 } },
+    ]);
+  });
+
+  it('keeps split fragments inside the left and right boundaries', () => {
+    const left = createBoundary([
+      { kind: 'splitter', hp: 3, x: 0, y: 180, column: 0, speed: 0 },
+    ]);
+    left.handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+    left.colliders[0]!.trigger(left.orb, left.groups[0]!.children[0]!);
+
+    const right = createBoundary([
+      { kind: 'splitter', hp: 3, x: 450, y: 180, column: 0, speed: 0 },
+    ]);
+    right.handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+    right.colliders[0]!.trigger(right.orb, right.groups[0]!.children[0]!);
+
+    expect(left.manager.getSnapshot().enemies.every(({ position }) => position.x >= 11)).toBe(true);
+    expect(right.manager.getSnapshot().enemies.every(({ position }) => position.x <= 439)).toBe(true);
+  });
+
+  it('preserves splitter population when it becomes two fragments', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'splitter', hp: 3, x: 225, y: 180, column: 0, speed: 0 },
+    ];
+    const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary(formation);
+    handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+
+    expect(manager.getSnapshot().activePopulation).toBe(2);
+    colliders[0]!.trigger(orb, groups[0]!.children[0]!);
+    expect(manager.getSnapshot().activePopulation).toBe(2);
+  });
+
+  it('does not split debug-removed, breached, or destroyed splitters', () => {
+    const debug = createBoundary([
+      { kind: 'splitter', hp: 3, x: 225, y: 180, column: 0, speed: 0 },
+    ]);
+    debug.manager.debugRemoveEnemies!([0]);
+    expect(debug.manager.getSnapshot().enemies).toEqual([]);
+    expect(debug.onEnemyKilled).not.toHaveBeenCalled();
+
+    const breach = createBoundary([
+      { kind: 'splitter', hp: 3, x: 225, y: GAME_HEIGHT - PLAYER_RADIUS, column: 0, speed: 0 },
+    ]);
+    breach.manager.update();
+    expect(breach.manager.getSnapshot().enemies).toEqual([]);
+    expect(breach.onEnemyKilled).not.toHaveBeenCalled();
+
+    const cleanup = createBoundary([
+      { kind: 'splitter', hp: 3, x: 225, y: 180, column: 0, speed: 0 },
+    ]);
+    cleanup.manager.destroy();
+    expect(cleanup.groups[0]!.children).toHaveLength(1);
+    expect(cleanup.onEnemyKilled).not.toHaveBeenCalled();
+  });
+
   it('debug-removes selected enemies without reusing IDs', () => {
     const { manager } = createBoundary();
     manager.debugRemoveEnemies!([0, 3, 7, 11]);
@@ -664,6 +767,7 @@ describe('EnemyManager', () => {
     expect(time.activeCount()).toBe(0);
     expect(manager.getSnapshot()).toEqual({
       enemies: [],
+      activePopulation: 0,
       topmostEnemyY: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,

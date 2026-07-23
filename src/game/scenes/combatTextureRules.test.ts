@@ -14,3 +14,17 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   });
   expect(textures['boss-muzzle-flash']).toMatchObject({ shape: 'flash' });
 });
+
+it('defines distinct prototype textures for a splitter and complementary fragments', () => {
+  const textures = combatProjectileTextureDescriptors();
+
+  expect(textures['enemy-splitter']).toMatchObject({
+    shape: 'crackedRoundedRect', width: 38, height: 30,
+  });
+  expect(textures['enemy-fragment-left']).toMatchObject({
+    shape: 'fragmentLeft', width: 22, height: 18,
+  });
+  expect(textures['enemy-fragment-right']).toMatchObject({
+    shape: 'fragmentRight', width: 22, height: 18,
+  });
+});

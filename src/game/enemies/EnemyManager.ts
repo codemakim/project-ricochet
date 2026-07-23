@@ -7,6 +7,7 @@ import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import { createInitialFormation } from '../encounters/formationRules';
 import { canFire, type EnemyKind, type EnemySpec } from './enemyRules';
+import { fragmentSpecsAt, populationCostForEnemy } from './splitterRules';
 
 const CONTACT_SEPARATION = 6;
 const BULLET_MARGIN = 16;
@@ -28,6 +29,7 @@ export interface EnemySnapshot {
 
 export interface EnemyManagerSnapshot {
   enemies: EnemySnapshot[];
+  activePopulation: number;
   topmostEnemyY: number;
   activeShooters: number;
   bullets: number;
@@ -212,6 +214,7 @@ export class EnemyManager {
     if (this.destroyed) {
       return {
         enemies: [],
+        activePopulation: 0,
         topmostEnemyY: Number.POSITIVE_INFINITY,
         activeShooters: 0,
         bullets: 0,
@@ -231,6 +234,10 @@ export class EnemyManager {
         warning: this.activeShooters.has(enemy.enemyId),
         speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
       })),
+      activePopulation: enemies.reduce(
+        (population, enemy) => population + populationCostForEnemy(enemy.kind),
+        0,
+      ),
       topmostEnemyY,
       activeShooters: this.activeShooters.size,
       bullets: (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
@@ -469,7 +476,11 @@ export class EnemyManager {
   }
 
   private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
+    const fragments = enemy.kind === 'splitter'
+      ? fragmentSpecsAt(event.position, GAME_TUNING.enemies.descentSpeed)
+      : [];
     this.destroyEnemy(enemy);
     this.options.onEnemyKilled?.(event);
+    if (!this.destroyed) this.spawnFormation(fragments);
   }
 }
