@@ -1,6 +1,16 @@
 import type { BossKind } from '../config/gameTuning';
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EncounterTransition } from '../encounters/encounterProgressionRules';
-import type { BossRewardTier } from '../progression/bossRewardRules';
+import type { BuildState } from '../progression/BuildState';
+import type { BossBuild } from '../progression/BossBuild';
+import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRules';
+import type {
+  BossEncounterSnapshot,
+  BossTargetId,
+} from '../bosses/bossEncounter';
+import type { CombatEffectScheduler } from '../combat/CombatEffectScheduler';
+import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
+import type { Vector } from '../math/vector';
 
 export function shouldFinalizeBossReward(
   bossDefeatPending: boolean,
@@ -39,4 +49,164 @@ export function createBossForKind<T>(
 
 export function sectionAfterBossReward(tier: BossRewardTier): number {
   return tier === 'first' ? 1 : 2;
+}
+
+export interface PlannedAreaEffect {
+  kind: 'siege' | 'explosion';
+  radius: number;
+  damage: number;
+}
+
+export interface DirectHitEffectPlan {
+  immediateAreas: PlannedAreaEffect[];
+  aftershock: { radius: number; damage: number } | null;
+  spawnChildren: boolean;
+  chargedSplitCount: number;
+}
+
+export function planDirectHitEffects(
+  event: { source: 'permanent' | 'temporary'; charged: boolean },
+  build: Pick<BuildState, 'explosion' | 'splitCount'>,
+  bossBuild: Pick<
+    BossBuild,
+    | 'recordPermanentDirectHit'
+    | 'temporaryExplosionEnabled'
+    | 'aftershock'
+    | 'chainSplitEnabled'
+  >,
+): DirectHitEffectPlan {
+  const immediateAreas: PlannedAreaEffect[] = [];
+  if (event.source === 'permanent' && bossBuild.recordPermanentDirectHit()) {
+    const { radius, damage } = GAME_TUNING.relics.secondBoss.siegeResonance;
+    immediateAreas.push({
+      kind: 'siege',
+      radius,
+      damage,
+    });
+  }
+  const explosion = build.explosion();
+  const explosionEnabled = event.source === 'permanent'
+    || bossBuild.temporaryExplosionEnabled();
+  if (explosion && explosionEnabled) {
+    immediateAreas.push({ kind: 'explosion', ...explosion });
+  }
+  const aftershock = event.source === 'permanent' && explosion
+    ? bossBuild.aftershock()
+    : null;
+  return {
+    immediateAreas,
+    aftershock: aftershock && explosion
+      ? {
+        radius: explosion.radius * aftershock.radiusScale,
+        damage: explosion.damage * aftershock.damageScale,
+      }
+      : null,
+    spawnChildren: event.source === 'temporary' && bossBuild.chainSplitEnabled(),
+    chargedSplitCount: event.source === 'permanent' && event.charged
+      ? build.splitCount()
+      : 0,
+  };
+}
+
+interface AreaEffectSettlement {
+  applyEnemyBatch(effects: readonly EnemyAreaDamageEffect[]): unknown;
+  applyBossArea(
+    position: Vector,
+    radius: number,
+    damage: number,
+    excludedTargetId?: BossTargetId,
+  ): unknown;
+}
+
+export function settlePlannedAreaEffects(
+  position: Vector,
+  effects: readonly Pick<PlannedAreaEffect, 'radius' | 'damage'>[],
+  excludedEnemyId: number,
+  excludedBossTargetId: BossTargetId | undefined,
+  settlement: AreaEffectSettlement,
+): void {
+  settlement.applyEnemyBatch(effects.map(({ radius, damage }) => ({
+    center: { ...position },
+    radius,
+    damage,
+    excludedEnemyId,
+  })));
+  for (const { radius, damage } of effects) {
+    settlement.applyBossArea(
+      position,
+      radius,
+      damage,
+      excludedBossTargetId,
+    );
+  }
+}
+
+export function schedulePlannedAftershock(
+  plan: Pick<DirectHitEffectPlan, 'aftershock'>,
+  scheduler: Pick<CombatEffectScheduler, 'scheduleAftershock'>,
+  gameplayElapsedMs: number,
+  position: Vector,
+): void {
+  if (!plan.aftershock) return;
+  scheduler.scheduleAftershock(
+    gameplayElapsedMs,
+    position,
+    plan.aftershock.radius,
+    plan.aftershock.damage,
+  );
+}
+
+export function bossOrbModifiers(
+  bossBuild: Pick<BossBuild, 'chargedDamageBonus' | 'chargedKillPierces'>,
+): { chargedDamageBonus: number; chargedKillPierces: boolean } {
+  return {
+    chargedDamageBonus: bossBuild.chargedDamageBonus(),
+    chargedKillPierces: bossBuild.chargedKillPierces(),
+  };
+}
+
+export function rewardAddsPermanentOrb(id: BossRewardId): boolean {
+  return id === 'expanded-magazine' || id === 'auxiliary-orbit';
+}
+
+export type CombatCleanupReason = 'defeat' | 'bossReward' | 'restart' | 'shutdown';
+
+interface CombatCleanupDependencies {
+  scheduler: Pick<CombatEffectScheduler, 'clear'>;
+  bossBuild?: Pick<BossBuild, 'resetTransientState'>;
+  activeBoss?: { clearHostileActions(): void; destroy(): void };
+  clearWarning(): void;
+  clearTemporaryOrbs(): void;
+}
+
+export function cleanupCombatRuntime(
+  reason: CombatCleanupReason,
+  dependencies: CombatCleanupDependencies,
+): void {
+  switch (reason) {
+    case 'defeat':
+    case 'bossReward':
+    case 'restart':
+    case 'shutdown':
+      break;
+  }
+  dependencies.clearWarning();
+  dependencies.scheduler.clear();
+  dependencies.activeBoss?.clearHostileActions();
+  dependencies.clearTemporaryOrbs();
+  dependencies.bossBuild?.resetTransientState();
+  dependencies.activeBoss?.destroy();
+}
+
+export function inactiveBossSnapshot(kind: BossKind | null): BossEncounterSnapshot {
+  return {
+    kind: kind ?? 'sentinel',
+    active: false,
+    phase: null,
+    position: null,
+    parts: null,
+    bullets: 0,
+    warnings: 0,
+    projectiles: [],
+  };
 }

@@ -32,6 +32,7 @@ import { createInitialFormation } from '../encounters/formationRules';
 import {
   EnemyManager,
   type DirectHitEvent,
+  type EnemyAreaDamageEffect,
   type EnemyManagerSnapshot,
 } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
@@ -53,9 +54,16 @@ import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import {
   bossKindAfterTransition,
+  bossOrbModifiers,
+  cleanupCombatRuntime,
   createBossForKind,
+  inactiveBossSnapshot,
+  planDirectHitEffects,
+  rewardAddsPermanentOrb,
   rewardTierForBoss,
+  schedulePlannedAftershock,
   sectionAfterBossReward,
+  settlePlannedAreaEffects,
   shouldFinalizeBossReward,
 } from './combatSceneRules';
 import { renderableCombatTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
@@ -186,8 +194,12 @@ export class CombatScene extends Phaser.Scene {
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
       ),
-      getChargedDamageBonus: () => this.bossBuild?.chargedDamageBonus() ?? 0,
-      chargedKillPierces: () => this.bossBuild?.chargedKillPierces() ?? false,
+      getChargedDamageBonus: () => (
+        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedDamageBonus : 0
+      ),
+      chargedKillPierces: () => (
+        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
+      ),
       onRecovery: (source) => this.handleOrbRecovery(source),
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
@@ -412,14 +424,7 @@ export class CombatScene extends Phaser.Scene {
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       boss: this.activeBoss?.getSnapshot() ?? {
-        kind: 'sentinel',
-        active: false,
-        phase: null,
-        position: null,
-        parts: null,
-        bullets: 0,
-        warnings: 0,
-        projectiles: [],
+        ...inactiveBossSnapshot(this.activeBossKind ?? null),
         basicBullets: 0,
         aimedBullets: 0,
         fallingHazards: 0,
@@ -459,71 +464,64 @@ export class CombatScene extends Phaser.Scene {
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
   ): void {
-    if (event.source === 'permanent' && this.bossBuild?.recordPermanentDirectHit()) {
-      const { radius, damage } = GAME_TUNING.relics.secondBoss.siegeResonance;
-      this.applyAreaEffect(
-        event.position,
-        radius,
-        damage,
-        excludedEnemyId,
-        excludedBossTargetId,
-      );
-      this.drawExplosion(event.position, radius);
-    }
-    if (event.source === 'temporary' && this.bossBuild?.chainSplitEnabled()) {
+    if (!this.build || !this.bossBuild) return;
+    const plan = planDirectHitEffects(event, this.build, this.bossBuild);
+    if (plan.spawnChildren) {
       this.temporaryOrbManager?.spawnChildren(
         event.sourceOrbId,
         event.position,
         event.direction,
       );
     }
-
-    const explosion = this.build?.explosion();
-    const explosionEnabled = event.source === 'permanent'
-      || this.bossBuild?.temporaryExplosionEnabled();
-    if (explosion && explosionEnabled) {
-      this.applyAreaEffect(
+    if (plan.immediateAreas.length > 0) {
+      this.applyAreaEffects(
         event.position,
-        explosion.radius,
-        explosion.damage,
+        plan.immediateAreas,
         excludedEnemyId,
         excludedBossTargetId,
       );
-      this.drawExplosion(event.position, explosion.radius);
-      const aftershock = event.source === 'permanent' ? this.bossBuild?.aftershock() : null;
-      if (aftershock) {
-        this.combatEffects.scheduleAftershock(
-          this.gameplayElapsedMs,
-          event.position,
-          explosion.radius * aftershock.radiusScale,
-          explosion.damage * aftershock.damageScale,
-        );
+      for (const effect of plan.immediateAreas) {
+        this.drawExplosion(event.position, effect.radius);
       }
     }
-    if (event.source !== 'permanent' || !event.charged) return;
-    const count = this.build?.splitCount() ?? 0;
-    if (count > 0) this.temporaryOrbManager?.spawn(event.position, event.direction, count);
+    schedulePlannedAftershock(
+      plan,
+      this.combatEffects,
+      this.gameplayElapsedMs,
+      event.position,
+    );
+    if (plan.chargedSplitCount > 0) {
+      this.temporaryOrbManager?.spawn(
+        event.position,
+        event.direction,
+        plan.chargedSplitCount,
+      );
+    }
   }
 
-  private applyAreaEffect(
+  private applyAreaEffects(
     position: Vector,
-    radius: number,
-    damage: number,
+    effects: readonly Pick<EnemyAreaDamageEffect, 'radius' | 'damage'>[],
     excludedEnemyId = -1,
     excludedBossTargetId?: BossTargetId,
   ): void {
-    this.enemyManager?.applyAreaDamage(position, radius, damage, excludedEnemyId);
-    this.activeBoss?.applyAreaDamage(
+    settlePlannedAreaEffects(
       position,
-      radius,
-      damage,
+      effects,
+      excludedEnemyId,
       excludedBossTargetId,
+      {
+        applyEnemyBatch: (batch) => this.enemyManager?.applyAreaDamageBatch(batch),
+        applyBossArea: (center, radius, damage, excludedTargetId) => (
+          this.activeBoss?.applyAreaDamage(center, radius, damage, excludedTargetId)
+        ),
+      },
     );
   }
 
   private drainCombatEffects(): void {
     for (const effect of this.combatEffects.drainDue(this.gameplayElapsedMs)) {
-      this.applyAreaEffect(effect.position, effect.radius, effect.damage);
+      this.applyAreaEffects(effect.position, [effect]);
       this.drawExplosion(effect.position, effect.radius);
     }
   }
@@ -613,12 +611,6 @@ export class CombatScene extends Phaser.Scene {
   private finalizeBossDefeat(): void {
     if (!this.bossDefeatPending || this.defeated) return;
     this.bossDefeatPending = false;
-    this.clearBossWarning();
-    this.enemyManager?.clearHostileActions();
-    this.activeBoss?.clearHostileActions();
-    this.combatEffects.clear();
-    this.clearTemporaryOrbs();
-    this.bossBuild?.resetTransientState();
     const defeatedBossKind = this.activeBossKind;
     if (!defeatedBossKind) throw new Error('boss defeat has no active boss kind');
     this.bossRewardTier = rewardTierForBoss(defeatedBossKind);
@@ -630,9 +622,7 @@ export class CombatScene extends Phaser.Scene {
       this.build?.getRanks() ?? { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
       BOSS_REWARD_SEED,
     );
-    this.activeBoss?.destroy();
-    this.activeBoss = undefined;
-    this.activeBossKind = undefined;
+    this.cleanupRuntime('bossReward');
     this.pause.add('bossReward');
     this.syncPauseState();
     this.bossRewardOverlay?.show(
@@ -647,7 +637,7 @@ export class CombatScene extends Phaser.Scene {
     if (!this.bossRewardTier) return false;
     if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
     this.bossBuild.acquire(id);
-    if (id === 'expanded-magazine' || id === 'auxiliary-orbit') this.orbManager?.addOrb();
+    if (rewardAddsPermanentOrb(id)) this.orbManager?.addOrb();
     const expectedSection = sectionAfterBossReward(this.bossRewardTier);
     this.encounterDirector?.resumeAfterBossReward();
     if (this.encounterDirector?.getSnapshot().section !== expectedSection) {
@@ -663,9 +653,24 @@ export class CombatScene extends Phaser.Scene {
 
   private clearTemporaryOrbs(): void {
     const manager = this.temporaryOrbManager;
-    if (!manager) return;
+    if (!manager || manager.getSnapshot().length === 0) return;
     manager.getGroup().clear(true, true);
     manager.update(this.gameplayElapsedMs);
+  }
+
+  private cleanupRuntime(
+    reason: Parameters<typeof cleanupCombatRuntime>[0],
+  ): void {
+    this.enemyManager?.clearHostileActions();
+    cleanupCombatRuntime(reason, {
+      scheduler: this.combatEffects,
+      bossBuild: this.bossBuild,
+      activeBoss: this.activeBoss,
+      clearWarning: () => this.clearBossWarning(),
+      clearTemporaryOrbs: () => this.clearTemporaryOrbs(),
+    });
+    this.activeBoss = undefined;
+    this.activeBossKind = undefined;
   }
 
   private openNextLevelUp(): void {
@@ -727,8 +732,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated) return;
     this.defeated = true;
     this.bossDefeatPending = false;
-    this.clearBossWarning();
-    this.combatEffects.clear();
+    this.cleanupRuntime('defeat');
     this.levelUpOverlay?.hide();
     this.bossRewardOverlay?.hide();
     this.bossRewardChoices = [];
@@ -736,10 +740,6 @@ export class CombatScene extends Phaser.Scene {
     this.pause.remove('bossReward');
     this.pause.add('defeated');
     this.syncPauseState();
-    this.enemyManager?.clearHostileActions();
-    this.activeBoss?.destroy();
-    this.activeBoss = undefined;
-    this.activeBossKind = undefined;
     this.bossRewardTier = null;
     this.bossBuild = new BossBuild();
     this.temporaryOrbManager?.destroy();
@@ -757,7 +757,11 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(21)
       .setInteractive({ useHandCursor: true })
-      .once('pointerup', () => this.scene.restart());
+      .once('pointerup', () => {
+        this.cleanupRuntime('restart');
+        this.bossRewardTier = null;
+        this.scene.restart();
+      });
   }
 
   private drawAimGuide(): void {
@@ -805,9 +809,7 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-    this.clearBossWarning();
-    this.combatEffects.clear();
-    this.activeBoss?.destroy();
+    this.cleanupRuntime('shutdown');
     this.enemyManager?.destroy();
     this.temporaryOrbManager?.destroy();
     this.orbManager?.destroy();
@@ -816,8 +818,6 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardOverlay?.destroy();
     this.bossDefeatPending = false;
     this.bossRewardChoices = [];
-    this.activeBoss = undefined;
-    this.activeBossKind = undefined;
     this.bossRewardTier = null;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;

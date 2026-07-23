@@ -50,6 +50,13 @@ export interface EnemyKilledEvent {
   position: Vector;
 }
 
+export interface EnemyAreaDamageEffect {
+  center: Vector;
+  radius: number;
+  damage: number;
+  excludedEnemyId: number;
+}
+
 export interface EnemyManagerOptions {
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
@@ -270,22 +277,27 @@ export class EnemyManager {
   }
 
   applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
-    const killedIds: number[] = [];
+    return this.applyAreaDamageBatch([{ center, radius, damage, excludedEnemyId }]);
+  }
+
+  applyAreaDamageBatch(effects: readonly EnemyAreaDamageEffect[]): number[] {
     const enemies = [...this.enemies.values()];
+    const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of enemies) {
-      if (
-        !enemy.active
-        || enemy.enemyId === excludedEnemyId
-        || Math.hypot(enemy.x - center.x, enemy.y - center.y) > radius
-      ) continue;
+      if (!enemy.active) continue;
       const killEvent = this.createKillEvent(enemy);
-      enemy.hp -= damage;
-      if (enemy.hp <= 0) {
-        killedIds.push(enemy.enemyId);
-        this.killEnemy(enemy, killEvent);
+      for (const effect of effects) {
+        if (
+          enemy.enemyId !== effect.excludedEnemyId
+          && Math.hypot(enemy.x - effect.center.x, enemy.y - effect.center.y) <= effect.radius
+        ) {
+          enemy.hp -= effect.damage;
+        }
       }
+      if (enemy.hp <= 0) lethal.push({ enemy, event: killEvent });
     }
-    return killedIds;
+    for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
+    return lethal.map(({ event }) => event.enemyId);
   }
 
   destroy(): void {

@@ -373,6 +373,27 @@ describe('EnemyManager', () => {
       .toEqual(['splitter', 'fragment', 'fragment']);
   });
 
+  it('settles same-hit area effects against one snapshot before spawning splitter fragments', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'splitter', hp: 2, x: 210, y: 180, column: 0, speed: 0 },
+      { kind: 'basic', hp: 4, x: 260, y: 180, column: 1, speed: 0 },
+      { kind: 'armored', hp: 5, x: 225, y: 180, column: 2, speed: 0 },
+    ];
+    const { manager } = createBoundary(formation);
+
+    expect(manager.applyAreaDamageBatch([
+      { center: { x: 225, y: 180 }, radius: 80, damage: 2, excludedEnemyId: 2 },
+      { center: { x: 225, y: 180 }, radius: 48, damage: 1, excludedEnemyId: 2 },
+    ])).toEqual([0]);
+
+    expect(manager.getSnapshot().enemies.map(({ kind, hp }) => ({ kind, hp }))).toEqual([
+      { kind: 'basic', hp: 1 },
+      { kind: 'armored', hp: 5 },
+      { kind: 'fragment', hp: 1 },
+      { kind: 'fragment', hp: 1 },
+    ]);
+  });
+
   it('allows splitter fragments to overlap an existing enemy', () => {
     const formation: EnemySpec[] = [
       { kind: 'basic', hp: 2, x: 225, y: 180, column: 0, speed: 0 },
