@@ -48,7 +48,7 @@
 - Task 4 data-driven two-boss encounter: complete (`bb2cb38..2650065`, review clean)
 - Task 5 common boss contract and pure hive rules: complete (`7185b3b..1cea82f`, review clean)
 - Task 6 hive core, modules, and reflectors: complete (`286e54e..60c7e16`, review clean; Task 7 to cover permanent-exposure timing observably)
-- Task 7 hive shooter and core attacks: pending
+- Task 7 hive shooter and core attacks: complete (`9e47901..0b06aa9`, review clean)
 - Task 8 second-tier rewards and UI: pending
 - Task 9 runtime relic combat effects: pending
 - Task 10 scene integration and lifecycle: pending
