@@ -1,6 +1,6 @@
 import { GAME_TUNING } from '../config/gameTuning';
 
-export type EnemyKind = 'basic' | 'armored' | 'shooter';
+export type EnemyKind = 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment';
 
 export interface EnemySpec {
   kind: EnemyKind;

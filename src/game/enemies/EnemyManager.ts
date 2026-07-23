@@ -95,6 +95,8 @@ export class EnemyManager {
       basic: 'enemy-basic',
       armored: 'enemy-armored',
       shooter: 'enemy-shooter',
+      splitter: 'enemy-basic',
+      fragment: 'enemy-basic',
       bullet: 'enemy-bullet',
       ...options.textureKeys,
     };

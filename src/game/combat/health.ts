@@ -1,3 +1,4 @@
+import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
 
 export interface HealthState {
@@ -24,5 +25,11 @@ export function canTakeDamage(now: number, invulnerableUntil: number): boolean {
 }
 
 export function breachDamage(kind: EnemyKind): number {
-  return kind === 'armored' ? 4 : 2;
+  switch (kind) {
+    case 'armored': return 4;
+    case 'splitter': return GAME_TUNING.enemies.splitter.breachDamage;
+    case 'fragment': return GAME_TUNING.enemies.fragment.breachDamage;
+    case 'basic':
+    case 'shooter': return 2;
+  }
 }

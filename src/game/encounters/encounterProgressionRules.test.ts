@@ -14,6 +14,8 @@ describe('encounter progression rules', () => {
     ['basic', 1],
     ['armored', 2],
     ['shooter', 2],
+    ['splitter', 2],
+    ['fragment', 0],
   ] as const)('scores a %s kill as %i boss progress', (kind, expected) => {
     expect(bossProgressForKill(kind)).toBe(expected);
   });

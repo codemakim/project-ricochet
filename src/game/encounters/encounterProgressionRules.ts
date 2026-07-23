@@ -16,6 +16,8 @@ export function bossProgressForKill(kind: EnemyKind): number {
     case 'basic': return 1;
     case 'armored':
     case 'shooter': return 2;
+    case 'splitter': return GAME_TUNING.enemies.splitter.score;
+    case 'fragment': return GAME_TUNING.enemies.fragment.score;
   }
 }
 

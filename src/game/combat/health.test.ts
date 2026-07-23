@@ -23,6 +23,8 @@ describe('player health', () => {
     expect(breachDamage('basic')).toBe(2);
     expect(breachDamage('armored')).toBe(4);
     expect(breachDamage('shooter')).toBe(2);
+    expect(breachDamage('splitter')).toBe(3);
+    expect(breachDamage('fragment')).toBe(1);
   });
 
   it('allows damage exactly when invulnerability expires', () => {

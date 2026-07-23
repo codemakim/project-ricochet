@@ -330,6 +330,15 @@ describe('EnemyManager', () => {
     expect(colliders).toHaveLength(colliderCount);
   });
 
+  it('uses the basic texture fallback for splitter and fragment sprites', () => {
+    const { groups } = createBoundary([
+      { kind: 'splitter', hp: 3, x: 90, y: -28, column: 1, speed: 22 },
+      { kind: 'fragment', hp: 1, x: 144, y: 14, column: -1, speed: 22 },
+    ]);
+
+    expect(groups[0]!.children.map(({ texture }) => texture)).toEqual(['enemy-basic', 'enemy-basic']);
+  });
+
   it('debug-removes selected enemies without reusing IDs', () => {
     const { manager } = createBoundary();
     manager.debugRemoveEnemies!([0, 3, 7, 11]);
