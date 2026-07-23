@@ -249,6 +249,7 @@ describe('BossManager', () => {
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'sentinel',
       targetId: 'leftWeakpoint',
+      sourceOrbId: 1,
     }));
 
     boundary.manager.destroy();

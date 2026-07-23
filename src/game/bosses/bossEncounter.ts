@@ -7,6 +7,7 @@ export interface BossDirectHitEvent {
   bossKind: BossKind;
   targetId: BossTargetId;
   source: 'permanent' | 'temporary';
+  sourceOrbId: number;
   position: Vector;
   charged: boolean;
   direction: Vector;

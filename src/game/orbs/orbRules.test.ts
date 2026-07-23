@@ -30,6 +30,30 @@ describe('orb rules', () => {
     });
   });
 
+  it('adds the charged bonus only while a permanent orb has a charge', () => {
+    expect(directHit(1, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
+      charged: true,
+      charges: 0,
+      damage: 2.5,
+    });
+    expect(directHit(0, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
+      charged: false,
+      charges: 0,
+      damage: 1.25,
+    });
+  });
+
+  it('lets only a charged lethal reward hit pass through while consuming its charge', () => {
+    expect(directHit(1, 1.5, { passThroughOnKill: false }, false, 0, 0, true)).toMatchObject({
+      charged: true,
+      charges: 0,
+      killed: true,
+      reflect: false,
+    });
+    expect(directHit(1, 2, { passThroughOnKill: false }, false, 0, 0, true).reflect).toBe(true);
+    expect(directHit(0, 1, { passThroughOnKill: false }, false, 0, 0, true).reflect).toBe(true);
+  });
+
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects invalid direct damage bonus %s',
     (bonus) => {

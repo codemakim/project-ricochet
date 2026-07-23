@@ -59,6 +59,7 @@ interface PendingHit {
   result: HitResult;
   partId: HivePartId;
   source: BossDirectHitEvent['source'];
+  sourceOrbId: number;
   direction: Vector;
 }
 
@@ -341,7 +342,7 @@ export class HiveBossManager implements BossEncounter {
       false,
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'permanent', orb);
+    const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -362,7 +363,7 @@ export class HiveBossManager implements BossEncounter {
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'temporary', orb);
+    const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -410,12 +411,14 @@ export class HiveBossManager implements BossEncounter {
     result: HitResult,
     partId: HivePartId,
     source: BossDirectHitEvent['source'],
+    sourceOrbId: number,
     orb: Phaser.Physics.Arcade.Sprite,
   ): PendingHit {
     return {
       result,
       partId,
       source,
+      sourceOrbId,
       direction: normalize((orb.body as Phaser.Physics.Arcade.Body).velocity),
     };
   }
@@ -428,6 +431,7 @@ export class HiveBossManager implements BossEncounter {
       bossKind: 'hive',
       targetId: pending.partId,
       source: pending.source,
+      sourceOrbId: pending.sourceOrbId,
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,

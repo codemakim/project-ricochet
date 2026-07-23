@@ -37,6 +37,7 @@ export interface EnemyManagerSnapshot {
 
 export interface DirectHitEvent {
   source: 'permanent' | 'temporary';
+  sourceOrbId: number;
   enemyId: number;
   position: Vector;
   charged: boolean;
@@ -79,6 +80,7 @@ export class EnemyManager {
     result: HitResult;
     direction: Vector;
     source: DirectHitEvent['source'];
+    sourceOrbId: number;
   }>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
   private readonly textureKeys: Record<EnemyKind | 'bullet', string>;
@@ -324,10 +326,15 @@ export class EnemyManager {
     if (!result) return false;
     const direction = this.orbDirection(orb);
     if (!result.reflect) {
-      this.applyHit(enemy, result, 'permanent', direction);
+      this.applyHit(enemy, result, 'permanent', orb.orbId, direction);
       return false;
     }
-    this.pendingReflections.set(this.hitKey(orb, enemy), { result, direction, source: 'permanent' });
+    this.pendingReflections.set(this.hitKey(orb, enemy), {
+      result,
+      direction,
+      source: 'permanent',
+      sourceOrbId: orb.orbId,
+    });
     return true;
   }
 
@@ -337,7 +344,7 @@ export class EnemyManager {
     if (!pending) return;
     this.pendingReflections.delete(key);
     this.options.orbManager.synchronizeOrb(orb);
-    this.applyHit(enemy, pending.result, pending.source, pending.direction);
+    this.applyHit(enemy, pending.result, pending.source, pending.sourceOrbId, pending.direction);
   }
 
   private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
@@ -352,7 +359,12 @@ export class EnemyManager {
     if (!result) return false;
     const direction = this.orbDirection(orb);
     const key = this.temporaryHitKey(orb, enemy);
-    this.pendingReflections.set(key, { result, direction, source: 'temporary' });
+    this.pendingReflections.set(key, {
+      result,
+      direction,
+      source: 'temporary',
+      sourceOrbId: orb.temporaryOrbId,
+    });
     return true;
   }
 
@@ -362,13 +374,14 @@ export class EnemyManager {
     if (!pending) return;
     this.pendingReflections.delete(key);
     this.options.temporaryOrbManager?.synchronizeOrb(orb);
-    this.applyHit(enemy, pending.result, pending.source, pending.direction);
+    this.applyHit(enemy, pending.result, pending.source, pending.sourceOrbId, pending.direction);
   }
 
   private applyHit(
     enemy: EnemySprite,
     result: HitResult,
     source: DirectHitEvent['source'],
+    sourceOrbId: number,
     direction: Vector,
   ): void {
     if (!enemy.active) return;
@@ -376,6 +389,7 @@ export class EnemyManager {
     enemy.hp -= result.damage;
     this.options.onDirectHit?.({
       source,
+      sourceOrbId,
       enemyId: enemy.enemyId,
       position: { ...killEvent.position },
       charged: result.charged,

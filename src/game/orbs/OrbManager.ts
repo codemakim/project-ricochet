@@ -65,6 +65,8 @@ export class OrbStore {
     private readonly getChargedSpeed: () => number = () => ORB_SPEED,
     private readonly getRestoredCharges: (source: RecoverySource) => number = () => DEFAULT_RESTORED_CHARGES,
     private readonly getOpeningHitBonus: (source: RecoverySource, firstHitPending: boolean) => number = () => 0,
+    private readonly getChargedDamageBonus: () => number = () => 0,
+    private readonly chargedKillPierces: () => boolean = () => false,
   ) {
     this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => this.createRecord(id));
   }
@@ -165,6 +167,8 @@ export class OrbStore {
       this.settings,
       piercing,
       this.getDirectDamageBonus() + openingBonus,
+      this.getChargedDamageBonus(),
+      this.chargedKillPierces(),
     );
     record.firstHitPending = false;
     record.charges = result.charges;
@@ -325,6 +329,8 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getChargedSpeed(): number;
   getRestoredCharges?(source: RecoverySource): number;
   getOpeningHitBonus?(source: RecoverySource, firstHitPending: boolean): number;
+  getChargedDamageBonus?(): number;
+  chargedKillPierces?(): boolean;
   textureKey?: string;
 }
 
@@ -364,6 +370,8 @@ export class OrbManager {
       options.getChargedSpeed,
       options.getRestoredCharges,
       options.getOpeningHitBonus,
+      options.getChargedDamageBonus,
+      options.chargedKillPierces,
     );
     this.world = scene.physics.world;
     this.sprites = this.store.getSnapshot().map(({ id }) => this.createSprite(id));

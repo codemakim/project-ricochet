@@ -626,6 +626,7 @@ describe('EnemyManager', () => {
     expect(onDirectHit).toHaveBeenCalledOnce();
     expect(onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       source: 'permanent',
+      sourceOrbId: 0,
       enemyId: target.id,
       charged: true,
       position: target.position,
@@ -676,6 +677,7 @@ describe('EnemyManager', () => {
     expect(enemy.hp).toBe(GAME_TUNING.enemies.hp.basic - 0.5);
     expect(onDirectHit).toHaveBeenCalledWith({
       source: 'temporary',
+      sourceOrbId: 7,
       enemyId: target.id,
       position: target.position,
       charged: false,

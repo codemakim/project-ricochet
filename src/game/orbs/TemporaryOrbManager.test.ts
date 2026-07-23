@@ -207,4 +207,60 @@ describe('TemporaryOrbManager', () => {
     expect(manager.getSnapshot()).toEqual([]);
     expect(manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1)).toBe(0);
   });
+
+  it('splits an active root once into generation-one children at -25 and 25 degrees', () => {
+    const { manager, group } = createManager();
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+    const root = manager.getSnapshot()[0]!;
+
+    expect(root).toMatchObject({ generation: 0, splitConsumed: false });
+    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 })).toBe(2);
+    expect(group.children.slice(1).map(angleDegrees)).toEqual([-25, 25]);
+    expect(manager.getSnapshot()).toMatchObject([
+      { id: root.id, generation: 0, splitConsumed: true },
+      { generation: 1, splitConsumed: false },
+      { generation: 1, splitConsumed: false },
+    ]);
+    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 })).toBe(0);
+  });
+
+  it('rejects unknown, inactive, child, and consumed split parents', () => {
+    const { manager, group } = createManager();
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+    const rootId = manager.getSnapshot()[0]!.id;
+    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(2);
+    const childId = manager.getSnapshot()[1]!.id;
+
+    expect(manager.spawnChildren(999, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+    expect(manager.spawnChildren(childId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+    const inactiveId = manager.getSnapshot().at(-1)!.id;
+    group.children.at(-1)!.active = false;
+    expect(manager.spawnChildren(inactiveId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+  });
+
+  it('truncates children deterministically at the cap and uses configured lifetime', () => {
+    let gameplayElapsedMs = 700;
+    const { manager, group } = createManager(() => 0, () => gameplayElapsedMs);
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+    const rootId = manager.getSnapshot()[0]!.id;
+    for (let index = 0; index < 3; index += 1) {
+      manager.spawn({ x: index, y: 0 }, { x: 1, y: 0 }, 3);
+    }
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+
+    expect(manager.getSnapshot()).toHaveLength(11);
+    expect(manager.spawnChildren(rootId, { x: 5, y: 6 }, { x: 1, y: 0 })).toBe(1);
+    expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
+    expect(manager.getSnapshot().at(-1)).toMatchObject({
+      generation: 1,
+      splitConsumed: false,
+      expiresAt: gameplayElapsedMs + GAME_TUNING.temporaryOrbs.lifetimeMs,
+    });
+    gameplayElapsedMs += GAME_TUNING.temporaryOrbs.lifetimeMs;
+    manager.update(gameplayElapsedMs);
+    expect(manager.getSnapshot()).toEqual([]);
+  });
 });

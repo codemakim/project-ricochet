@@ -385,6 +385,65 @@ describe('OrbStore', () => {
     });
   });
 
+  it('applies charged-only damage and lethal penetration providers through the store', () => {
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0.25,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => 0.75,
+      () => true,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    expect(store.handleEnemyHit(0, 1, 2.5, 1_000, false)).toMatchObject({
+      charged: true,
+      charges: 2,
+      damage: 2.5,
+      killed: true,
+      reflect: false,
+    });
+    store.handleEnemyHit(0, 2, 99, 1_000, false);
+    store.handleEnemyHit(0, 3, 99, 1_000, false);
+    expect(store.handleEnemyHit(0, 4, 1.25, 1_000, false)).toMatchObject({
+      charged: false,
+      damage: 1.25,
+      killed: true,
+      reflect: true,
+    });
+  });
+
+  it('reports each recovery once so only proximity recovery produces a two-orb salvo', () => {
+    const reports: number[] = [];
+    const create = (autoReturnAfterMs: number | null = null) => new OrbStore(
+      { ...EXPERIMENT_DEFAULTS, autoReturnAfterMs },
+      { onRecovery: (source) => reports.push(source === 'proximity' ? 2 : 0) },
+    );
+    const proximity = create();
+    proximity.activateAim();
+    proximity.update(0, 0, player, up);
+    proximity.beginProximityRecovery(0);
+    proximity.update(100, 100, player, up);
+
+    const floor = create();
+    floor.activateAim();
+    floor.update(0, 0, player, up);
+    floor.beginFloorRecall(0);
+    floor.update(1_000, 1_000, player, up);
+
+    const timeout = create(1);
+    timeout.activateAim();
+    timeout.update(0, 0, player, up);
+    timeout.update(1, 1, player, up);
+    timeout.update(1_001, 1_000, player, up);
+
+    expect(reports).toEqual([2, 0, 0]);
+  });
+
   it('accepts Phaser position and reflected velocity as active-orb state', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.activateAim();

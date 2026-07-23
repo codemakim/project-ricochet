@@ -47,6 +47,7 @@ interface PendingHit {
   result: HitResult;
   partId: BossPartId;
   source: BossDirectHitEvent['source'];
+  sourceOrbId: number;
   direction: Vector;
 }
 
@@ -344,7 +345,7 @@ export class BossManager implements BossEncounter {
       false,
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'permanent', orb);
+    const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -364,7 +365,7 @@ export class BossManager implements BossEncounter {
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return false;
-    const pending = this.createPending(result, partId, 'temporary', orb);
+    const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
     if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
@@ -457,10 +458,11 @@ export class BossManager implements BossEncounter {
     result: HitResult,
     partId: BossPartId,
     source: BossDirectHitEvent['source'],
+    sourceOrbId: number,
     orb: Phaser.Physics.Arcade.Sprite,
   ): PendingHit {
     const body = orb.body as Phaser.Physics.Arcade.Body;
-    return { result, partId, source, direction: normalize(body.velocity) };
+    return { result, partId, source, sourceOrbId, direction: normalize(body.velocity) };
   }
 
   private applyPendingHit(pending: PendingHit): void {
@@ -471,6 +473,7 @@ export class BossManager implements BossEncounter {
       bossKind: 'sentinel',
       targetId: pending.partId,
       source: pending.source,
+      sourceOrbId: pending.sourceOrbId,
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,

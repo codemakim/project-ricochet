@@ -273,10 +273,12 @@ describe('HiveBossManager', () => {
       bossKind: 'hive',
       targetId: 'leftShooter',
       source: 'permanent',
+      sourceOrbId: 0,
     }));
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       targetId: 'rightShooter',
       source: 'temporary',
+      sourceOrbId: 4,
     }));
   });
 
