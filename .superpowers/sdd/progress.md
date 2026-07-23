@@ -52,5 +52,5 @@
 - Task 8 second-tier rewards and UI: complete (`43e3ae1..4fa4514`, review clean)
 - Task 9 runtime relic combat effects: complete (`195927d..88437a0`, review clean)
 - Task 10 scene integration and lifecycle: complete (`ad87b2d..175b1bf`, review clean)
-- Task 11 browser acceptance and playtest handoff: complete (focused desktop 21/21 repeated, mobile case passed, unit 431/431, browser 35/35, build passed)
+- Task 11 browser acceptance and playtest handoff: complete (focused desktop 21/21 repeated, mobile case passed, unit 432/432, browser 35/35, build passed; review clean)
 - Final review and verification: pending
