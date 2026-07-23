@@ -295,6 +295,7 @@ export class CombatScene extends Phaser.Scene {
   getDebugSnapshot(): CombatDebugSnapshot {
     const enemySnapshot = this.enemyManager?.getSnapshot() ?? {
       enemies: [],
+      activePopulation: 0,
       topmostEnemyY: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,
@@ -337,6 +338,7 @@ export class CombatScene extends Phaser.Scene {
         sectionElapsedMs: 0,
         bossScore: 0,
         warningElapsedMs: 0,
+        pendingBossKind: null,
         bossesDefeated: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
@@ -427,12 +429,12 @@ export class CombatScene extends Phaser.Scene {
     if (!this.encounterDirector || !this.enemyManager) return;
     const enemies = this.enemyManager.getSnapshot();
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
-      activeEnemies: enemies.enemies.length,
+      activePopulation: enemies.activePopulation,
       topmostEnemyY: enemies.topmostEnemyY,
     });
     if (formation) this.enemyManager.spawnFormation(formation);
-    if (transition === 'bossWarningStarted') this.showBossWarning();
-    if (transition === 'bossStarted') this.startBoss();
+    if (transition?.type === 'bossWarningStarted') this.showBossWarning();
+    if (transition?.type === 'bossStarted') this.startBoss();
   }
 
   private showBossWarning(): void {

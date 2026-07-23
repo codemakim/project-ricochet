@@ -13,9 +13,9 @@ import { EncounterDirector } from './EncounterDirector';
 import { createReinforcementFormation } from './formationRules';
 
 describe('EncounterDirector', () => {
-  const clearTop = { activeEnemies: 20, topmostEnemyY: 120 };
+  const clearTop = { activePopulation: 20, topmostEnemyY: 120 };
   const phase0CapacityBlocked = {
-    activeEnemies: GAME_TUNING.encounter.phases[0].activeCap
+    activePopulation: GAME_TUNING.encounter.phases[0].activeCap
       - GAME_TUNING.encounter.phases[0].formation.minimum + 1,
     topmostEnemyY: 120,
   };
@@ -28,8 +28,8 @@ describe('EncounterDirector', () => {
     const director = new EncounterDirector(1234);
 
     expect(director.update(7_999, clearTop)).toEqual({ formation: null, transition: null });
-    expect(director.update(1, { activeEnemies: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
-    expect(director.update(1_000, { activeEnemies: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
+    expect(director.update(1, { activePopulation: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
+    expect(director.update(1_000, { activePopulation: 0, topmostEnemyY: 49 })).toEqual({ formation: null, transition: null });
 
     expect(createFormationSpy).not.toHaveBeenCalled();
   });
@@ -51,10 +51,10 @@ describe('EncounterDirector', () => {
   it('regenerates a capacity-blocked pending formation when phase changes', () => {
     const director = new EncounterDirector(1234);
 
-    const activeEnemies = GAME_TUNING.encounter.phases[1].activeCap
+    const activePopulation = GAME_TUNING.encounter.phases[1].activeCap
       - GAME_TUNING.encounter.phases[1].formation.minimum + 1;
-    expect(director.update(8_000, { activeEnemies, topmostEnemyY: 120 }).formation).toBeNull();
-    expect(director.update(52_000, { activeEnemies, topmostEnemyY: 120 }).formation).toBeNull();
+    expect(director.update(8_000, { activePopulation, topmostEnemyY: 120 }).formation).toBeNull();
+    expect(director.update(52_000, { activePopulation, topmostEnemyY: 120 }).formation).toBeNull();
     expect(createFormationSpy).toHaveBeenNthCalledWith(1, 0, 0, 1234);
     expect(createFormationSpy).toHaveBeenNthCalledWith(2, 1, 0, 1234);
 
@@ -100,9 +100,9 @@ describe('EncounterDirector', () => {
 
   it('waits for top clearance even when time and capacity pass', () => {
     const director = new EncounterDirector(1234);
-    director.update(8_000, { activeEnemies: 20, topmostEnemyY: 49 });
+    director.update(8_000, { activePopulation: 20, topmostEnemyY: 49 });
     expect(director.getSnapshot().spawnSequence).toBe(0);
-    const released = director.update(0, { activeEnemies: 20, topmostEnemyY: 50 });
+    const released = director.update(0, { activePopulation: 20, topmostEnemyY: 50 });
     expect(released.formation).not.toBeNull();
     expect(director.getSnapshot().spawnSequence).toBe(1);
   });
@@ -134,15 +134,22 @@ describe('EncounterDirector', () => {
 
     expect(director.update(120_000, clearTop)).toEqual({
       formation: null,
-      transition: 'bossWarningStarted',
+      transition: { type: 'bossWarningStarted', bossKind: 'sentinel' },
     });
-    expect(director.getSnapshot()).toMatchObject({ state: 'bossWarning', sectionElapsedMs: 120_000 });
+    expect(director.getSnapshot()).toMatchObject({
+      state: 'bossWarning',
+      sectionElapsedMs: 120_000,
+      pendingBossKind: 'sentinel',
+    });
   });
 
   it('starts the warning at 210 seconds without score', () => {
     const director = new EncounterDirector(1234);
 
-    expect(director.update(210_000, clearTop).transition).toBe('bossWarningStarted');
+    expect(director.update(210_000, clearTop).transition).toEqual({
+      type: 'bossWarningStarted',
+      bossKind: 'sentinel',
+    });
     expect(director.getSnapshot().state).toBe('bossWarning');
   });
 
@@ -153,7 +160,10 @@ describe('EncounterDirector', () => {
     expect(createFormationSpy).toHaveBeenCalledTimes(1);
     for (let index = 0; index < 70; index += 1) director.recordEnemyKill('basic');
 
-    expect(director.update(112_000, capacityBlocked).transition).toBe('bossWarningStarted');
+    expect(director.update(112_000, capacityBlocked).transition).toEqual({
+      type: 'bossWarningStarted',
+      bossKind: 'sentinel',
+    });
     expect(director.update(1_999, clearTop)).toEqual({ formation: null, transition: null });
     expect(createFormationSpy).toHaveBeenCalledTimes(1);
   });
@@ -161,9 +171,15 @@ describe('EncounterDirector', () => {
   it('starts the boss after 2000ms and consumes at most one transition per update', () => {
     const director = new EncounterDirector(1234);
 
-    expect(director.update(212_000, clearTop).transition).toBe('bossWarningStarted');
+    expect(director.update(212_000, clearTop).transition).toEqual({
+      type: 'bossWarningStarted',
+      bossKind: 'sentinel',
+    });
     expect(director.getSnapshot()).toMatchObject({ state: 'bossWarning', warningElapsedMs: 0 });
-    expect(director.update(2_000, clearTop).transition).toBe('bossStarted');
+    expect(director.update(2_000, clearTop).transition).toEqual({
+      type: 'bossStarted',
+      bossKind: 'sentinel',
+    });
     expect(director.getSnapshot()).toMatchObject({ state: 'boss', warningElapsedMs: 2_000 });
   });
 
@@ -199,17 +215,121 @@ describe('EncounterDirector', () => {
     expect(director.getSnapshot()).toMatchObject({ elapsedMs: 213_000, sectionElapsedMs: 1_000 });
   });
 
-  it('never starts another boss warning in section 1', () => {
+  it('pauses the section clock during the first reward then starts section 1 cleanly', () => {
+    const director = new EncounterDirector(1234);
+    director.update(210_000, clearTop);
+    director.update(2_000, clearTop);
+    director.markBossDefeated();
+    director.update(60_000, clearTop);
+    expect(director.getSnapshot()).toMatchObject({
+      elapsedMs: 272_000,
+      section: 0,
+      sectionElapsedMs: 210_000,
+      state: 'bossRewardPaused',
+    });
+    director.resumeAfterBossReward();
+    expect(director.getSnapshot()).toMatchObject({
+      section: 1,
+      sectionElapsedMs: 0,
+      elapsedSinceSpawnMs: 0,
+      bossScore: 0,
+      phase: 2,
+    });
+  });
+
+  it('starts the hive warning at its score/time threshold and preserves enemies', () => {
+    const director = startSectionOne();
+    for (let index = 0; index < 55; index += 1) director.recordEnemyKill('armored');
+
+    expect(director.update(149_999, clearTop).transition).toBeNull();
+    createFormationSpy.mockClear();
+    expect(director.update(1, clearTop)).toEqual({
+      formation: null,
+      transition: { type: 'bossWarningStarted', bossKind: 'hive' },
+    });
+    expect(director.getSnapshot()).toMatchObject({
+      state: 'bossWarning',
+      pendingBossKind: 'hive',
+      bossScore: 110,
+    });
+    expect(director.update(1_999, { activePopulation: 84, topmostEnemyY: 120 }))
+      .toEqual({ formation: null, transition: null });
+    expect(createFormationSpy).not.toHaveBeenCalled();
+    expect(director.update(1, { activePopulation: 84, topmostEnemyY: 120 })).toEqual({
+      formation: null,
+      transition: { type: 'bossStarted', bossKind: 'hive' },
+    });
+  });
+
+  it('forces the hive warning at 210 seconds without score', () => {
+    const director = startSectionOne();
+
+    expect(director.update(210_000, clearTop).transition).toEqual({
+      type: 'bossWarningStarted',
+      bossKind: 'hive',
+    });
+  });
+
+  it('scores splitter parents but not fragments in section 1', () => {
+    const director = startSectionOne();
+    director.recordEnemyKill('splitter');
+    director.recordEnemyKill('fragment');
+
+    expect(director.getSnapshot().bossScore).toBe(2);
+  });
+
+  it('resumes section 2 at phase 3 after the second reward and schedules no third boss', () => {
+    const director = startSectionOne();
+    director.update(210_000, clearTop);
+    director.update(2_000, clearTop);
+    director.markBossDefeated();
+    expect(director.getSnapshot()).toMatchObject({ bossesDefeated: 2, pendingBossKind: 'hive' });
+    director.resumeAfterBossReward();
+
+    expect(director.getSnapshot()).toMatchObject({
+      state: 'running',
+      section: 2,
+      sectionElapsedMs: 0,
+      phase: 3,
+      bossesDefeated: 2,
+      pendingBossKind: null,
+    });
+    expect(director.update(210_000, clearTop).transition).toBeNull();
+  });
+
+  it('returns at most one transition for a large update', () => {
+    const director = startSectionOne();
+
+    expect(director.update(500_000, clearTop).transition).toEqual({
+      type: 'bossWarningStarted',
+      bossKind: 'hive',
+    });
+    expect(director.getSnapshot()).toMatchObject({ state: 'bossWarning', warningElapsedMs: 0 });
+  });
+
+  it('uses population costs for both active and incoming capacity', () => {
+    const director = startSectionOne();
+    const phase2 = GAME_TUNING.encounter.phases[2];
+    const generated = createReinforcementFormation(2, 0, 1234);
+    const activePopulation = phase2.activeCap - generated.populationCost + 1;
+    createFormationSpy.mockClear();
+
+    expect(director.update(phase2.spawnIntervalMs, {
+      activePopulation,
+      topmostEnemyY: 120,
+    }).formation).toBeNull();
+    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+  });
+
+  function startSectionOne(): EncounterDirector {
     const director = new EncounterDirector(1234);
     director.update(210_000, clearTop);
     director.update(2_000, clearTop);
     director.markBossDefeated();
     director.resumeAfterBossReward();
-    for (let index = 0; index < 70; index += 1) director.recordEnemyKill('basic');
-
-    expect(director.update(210_000, clearTop).transition).toBeNull();
-    expect(director.getSnapshot()).toMatchObject({ state: 'running', section: 1, phase: 3 });
-  });
+    createFormationSpy.mockClear();
+    return director;
+  }
 
   it('rejects illegal boss lifecycle transitions', () => {
     const director = new EncounterDirector(1234);
