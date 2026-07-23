@@ -6,6 +6,7 @@ import type { OrbManager } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { BossManager } from './BossManager';
+import type { BossEncounter } from './bossEncounter';
 
 type Callback = (...objects: FakeSprite[]) => void;
 type Process = (...objects: FakeSprite[]) => boolean;
@@ -222,6 +223,17 @@ function updateAt(boundary: ReturnType<typeof createBoundary>, now: number) {
 }
 
 describe('BossManager', () => {
+  it('conforms to the common sentinel encounter contract', () => {
+    const boundary = createBoundary();
+    const encounter: BossEncounter = boundary.manager;
+    expect(encounter.getSnapshot()).toMatchObject({
+      kind: 'sentinel',
+      active: true,
+      bullets: 0,
+    });
+    encounter.destroy();
+  });
+
   it('registers all boss colliders for a runtime permanent orb and unsubscribes on destroy', () => {
     const boundary = createBoundary();
     expect(boundary.colliders.filter((collider) => collider.first === boundary.orb)).toHaveLength(4);
@@ -234,6 +246,10 @@ describe('BossManager', () => {
     )!;
     expect(weakpoint.trigger(runtimeOrb, weakpoint.second as FakeSprite)).toBe(true);
     expect(boundary.handleEnemyHit).toHaveBeenCalledWith(runtimeOrb, -1, 14, 0, false);
+    expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
+      bossKind: 'sentinel',
+      targetId: 'leftWeakpoint',
+    }));
 
     boundary.manager.destroy();
     expect(boundary.orbAddedListeners.size).toBe(0);
@@ -257,10 +273,12 @@ describe('BossManager', () => {
     expect(boundary.groups.every((group) => group.destroyed)).toBe(true);
     expect(boundary.colliders.every((collider) => collider.destroyed)).toBe(true);
     expect(boundary.manager.getSnapshot()).toEqual({
+      kind: 'sentinel',
       active: false,
       phase: null,
       position: null,
       parts: null,
+      bullets: 0,
       basicBullets: 0,
       aimedBullets: 0,
       fallingHazards: 0,
@@ -379,7 +397,7 @@ describe('BossManager', () => {
     expect(right.trigger(boundary.orb, right.second as FakeSprite)).toBe(false);
     expect(boundary.manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 11, rightWeakpoint: 14 });
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
-      partId: 'leftWeakpoint', source: 'permanent', charged: true,
+      bossKind: 'sentinel', targetId: 'leftWeakpoint', source: 'permanent', charged: true,
       direction: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
     }));
   });

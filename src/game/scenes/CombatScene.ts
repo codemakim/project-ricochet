@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
 import { BOSS_GEOMETRY } from '../bosses/bossGeometry';
-import { BossManager, type BossDirectHitEvent } from '../bosses/BossManager';
+import { BossManager } from '../bosses/BossManager';
+import type { BossDirectHitEvent } from '../bosses/bossEncounter';
 import type { BossPartId } from '../bosses/bossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import { GAME_TUNING } from '../config/gameTuning';
@@ -357,10 +358,12 @@ export class CombatScene extends Phaser.Scene {
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       boss: this.bossManager?.getSnapshot() ?? {
+        kind: 'sentinel',
         active: false,
         phase: null,
         position: null,
         parts: null,
+        bullets: 0,
         basicBullets: 0,
         aimedBullets: 0,
         fallingHazards: 0,
@@ -398,7 +401,7 @@ export class CombatScene extends Phaser.Scene {
   private handleBossDirectHit(event: BossDirectHitEvent): void {
     this.handlePostDirectHit(event, (radius, damage) => {
       this.enemyManager?.applyAreaDamage(event.position, radius, damage, -1);
-      this.bossManager?.applyAreaDamage(event.position, radius, damage, event.partId);
+      this.bossManager?.applyAreaDamage(event.position, radius, damage, event.targetId);
     });
   }
 
