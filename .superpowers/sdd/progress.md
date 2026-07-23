@@ -51,6 +51,6 @@
 - Task 7 hive shooter and core attacks: complete (`9e47901..0b06aa9`, review clean)
 - Task 8 second-tier rewards and UI: complete (`43e3ae1..4fa4514`, review clean)
 - Task 9 runtime relic combat effects: complete (`195927d..88437a0`, review clean)
-- Task 10 scene integration and lifecycle: pending
+- Task 10 scene integration and lifecycle: complete (`ad87b2d..175b1bf`, review clean)
 - Task 11 browser acceptance and playtest handoff: pending
 - Final review and verification: pending
