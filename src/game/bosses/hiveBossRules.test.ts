@@ -66,7 +66,15 @@ describe('hive boss rules', () => {
     const exposed = advanceHiveCycle(advanceHiveCycle(shielded, 4_000), 1_500);
     const damaged = damageHivePart(exposed, 'core', 10);
     expect(damaged.parts.core).toBe(GAME_TUNING.hiveBoss.core.hp - 10);
-    expect(damageHivePart(damaged, 'core', 1_000).phase).toBe('defeated');
+    const defeated = damageHivePart(damaged, 'core', 1_000);
+    expect(defeated.phase).toBe('defeated');
+    expect(aliveHiveModules(defeated)).toEqual([
+      'leftShooter',
+      'rightShooter',
+      'leftReflector',
+      'rightReflector',
+    ]);
+    expect(exposedHiveParts(defeated)).toEqual([]);
   });
 
   it('does not mutate prior state or its parts', () => {

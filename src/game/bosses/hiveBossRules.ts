@@ -139,6 +139,5 @@ export function exposedHiveParts(state: HiveBossState): HivePartId[] {
 }
 
 export function aliveHiveModules(state: HiveBossState): HivePartId[] {
-  if (state.phase === 'defeated') return [];
   return MODULE_IDS.filter((partId) => state.parts[partId] > 0);
 }
