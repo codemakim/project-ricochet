@@ -9,7 +9,7 @@ type TextureShape =
   | 'fragmentLeft'
   | 'fragmentRight';
 
-export type CombatTextureDescriptor = ProjectileVisualTuning & { shape: TextureShape };
+export type CombatTextureDescriptor = ProjectileVisualTuning & { shape: TextureShape; deferred?: boolean };
 
 export function combatProjectileTextureDescriptors(): Record<string, CombatTextureDescriptor> {
   const { friendly, hostile } = GAME_TUNING.visual;
@@ -21,8 +21,15 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     'boss-aimed-bullet': { ...hostile.bossAimed, shape: 'centeredCircle' },
     'boss-falling-hazard': { ...hostile.bossHazard, shape: 'outlinedRoundedRect' },
     'boss-muzzle-flash': { ...hostile.bossMuzzleFlash, shape: 'flash' },
-    'enemy-splitter': { fill: 0xff5c70, accent: 0x6d1730, width: 38, height: 30, shape: 'crackedRoundedRect' },
-    'enemy-fragment-left': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentLeft' },
-    'enemy-fragment-right': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentRight' },
+    'enemy-splitter': { fill: 0xff5c70, accent: 0x6d1730, width: 38, height: 30, shape: 'crackedRoundedRect', deferred: true },
+    'enemy-fragment-left': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentLeft', deferred: true },
+    'enemy-fragment-right': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentRight', deferred: true },
   };
+}
+
+export function renderableCombatTextureDescriptors(): Record<string, CombatTextureDescriptor> {
+  return Object.fromEntries(
+    Object.entries(combatProjectileTextureDescriptors())
+      .filter(([, descriptor]) => !descriptor.deferred),
+  );
 }

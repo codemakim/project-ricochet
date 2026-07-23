@@ -39,7 +39,7 @@ import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { shouldFinalizeBossReward } from './combatSceneRules';
-import { combatProjectileTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
+import { renderableCombatTextureDescriptors, type CombatTextureDescriptor } from './combatTextureRules';
 import { parseExperimentSettings } from './experimentSettings';
 
 const INVULNERABILITY_MS = 600;
@@ -670,7 +670,7 @@ export class CombatScene extends Phaser.Scene {
   private createTextures(): void {
     const createBaseTextures = !this.textures.exists('player');
     const createBossTextures = !this.textures.exists('boss-body');
-    const projectileTextures = combatProjectileTextureDescriptors();
+    const projectileTextures = renderableCombatTextureDescriptors();
     const createProjectileTextures = Object.keys(projectileTextures)
       .some((key) => !this.textures.exists(key));
     if (!createBaseTextures && !createBossTextures && !createProjectileTextures) return;

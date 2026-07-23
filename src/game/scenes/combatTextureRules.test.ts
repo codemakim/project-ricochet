@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { combatProjectileTextureDescriptors } from './combatTextureRules';
+import {
+  combatProjectileTextureDescriptors,
+  renderableCombatTextureDescriptors,
+} from './combatTextureRules';
 
 it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   const textures = combatProjectileTextureDescriptors();
@@ -19,12 +22,21 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   const textures = combatProjectileTextureDescriptors();
 
   expect(textures['enemy-splitter']).toMatchObject({
-    shape: 'crackedRoundedRect', width: 38, height: 30,
+    shape: 'crackedRoundedRect', width: 38, height: 30, deferred: true,
   });
   expect(textures['enemy-fragment-left']).toMatchObject({
-    shape: 'fragmentLeft', width: 22, height: 18,
+    shape: 'fragmentLeft', width: 22, height: 18, deferred: true,
   });
   expect(textures['enemy-fragment-right']).toMatchObject({
-    shape: 'fragmentRight', width: 22, height: 18,
+    shape: 'fragmentRight', width: 22, height: 18, deferred: true,
   });
+});
+
+it('excludes deferred prototype descriptors from immediate texture rendering', () => {
+  const textures = renderableCombatTextureDescriptors();
+
+  expect(textures).not.toHaveProperty('enemy-splitter');
+  expect(textures).not.toHaveProperty('enemy-fragment-left');
+  expect(textures).not.toHaveProperty('enemy-fragment-right');
+  expect(textures).toHaveProperty('enemy-bullet');
 });
