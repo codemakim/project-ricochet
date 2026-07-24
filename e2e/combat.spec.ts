@@ -1634,10 +1634,10 @@ test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure',
     const beforeShield = scene.getDebugSnapshot().boss.phase;
     scene.debugAdvanceHiveCycle(1);
     const shielded = scene.getDebugSnapshot().boss.phase;
-    scene.debugDamageBossPart('leftShooter', 12);
-    scene.debugDamageBossPart('rightShooter', 12);
-    scene.debugDamageBossPart('leftReflector', 14);
-    scene.debugDamageBossPart('rightReflector', 14);
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
     const permanent = scene.getDebugSnapshot().boss.phase;
     return {
       initial, beforeTelegraph, telegraph, beforeExposure, exposed, beforeShield, shielded, permanent,
@@ -1716,11 +1716,11 @@ test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ 
   expect(attacking.boss.bullets ?? 0).toBeGreaterThan(0);
   expect(attacking.bullets + (attacking.boss.bullets ?? 0)).toBeLessThanOrEqual(12);
   await sceneCall(page, (scene) => {
-    scene.debugDamageBossPart('leftShooter', 12);
-    scene.debugDamageBossPart('rightShooter', 12);
-    scene.debugDamageBossPart('leftReflector', 14);
-    scene.debugDamageBossPart('rightReflector', 14);
-    scene.debugDamageBossPart('core', 72);
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+    scene.debugDamageBossPart('core', 120);
     scene.update(0, 0);
   });
   await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
@@ -1735,11 +1735,11 @@ test('@desktop second relics apply once without recursive temporary growth', asy
   await sceneCall(page, (scene) => scene.debugUpgradeAbility('split'));
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
-    scene.debugDamageBossPart('leftShooter', 12);
-    scene.debugDamageBossPart('rightShooter', 12);
-    scene.debugDamageBossPart('leftReflector', 14);
-    scene.debugDamageBossPart('rightReflector', 14);
-    scene.debugDamageBossPart('core', 72);
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+    scene.debugDamageBossPart('core', 120);
     scene.update(0, 0);
   });
   await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
@@ -1816,11 +1816,11 @@ test('@desktop completes first boss through second reward and resumes section tw
   const { box } = await loadCanvas(page);
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
-    scene.debugDamageBossPart('leftShooter', 12);
-    scene.debugDamageBossPart('rightShooter', 12);
-    scene.debugDamageBossPart('leftReflector', 14);
-    scene.debugDamageBossPart('rightReflector', 14);
-    scene.debugDamageBossPart('core', 71);
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+    scene.debugDamageBossPart('core', 119);
   });
   expect((await snapshot(page)).boss.phase).toBe('permanentlyExposed');
   const before = await snapshot(page);

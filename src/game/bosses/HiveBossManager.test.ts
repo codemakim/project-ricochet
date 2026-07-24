@@ -541,6 +541,13 @@ describe('HiveBossManager', () => {
     });
   });
 
+  it('applies the requested hive debug direct damage without splash scaling', () => {
+    const encounter: BossEncounter = createBoundary().manager;
+
+    expect(encounter.applyDirectDamage('leftShooter', 4)).toBe(true);
+    expect(encounter.getSnapshot().parts).toMatchObject({ leftShooter: 16 });
+  });
+
   it('chooses one nearest hive secondary by target ID when distance ties', () => {
     const boundary = createBoundary();
 

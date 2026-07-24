@@ -40,6 +40,7 @@ export interface BossEncounter {
     damage: number,
     excludedTargetId?: BossTargetId,
   ): BossTargetId[];
+  applyDirectDamage(targetId: BossTargetId, damage: number): boolean;
   clearHostileActions(): void;
   destroy(): void;
 }

@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
-import { BOSS_GEOMETRY } from '../bosses/bossGeometry';
 import { BossManager, type BossManagerSnapshot } from '../bosses/BossManager';
 import type {
   BossDirectHitEvent,
@@ -273,30 +272,7 @@ export class CombatScene extends Phaser.Scene {
         if (!Number.isFinite(damage) || damage <= 0) {
           throw new RangeError('boss damage must be finite and positive');
         }
-        const boss = this.activeBoss;
-        if (!boss) return;
-        const snapshot = boss.getSnapshot();
-        if (!snapshot?.position) return;
-        if (this.activeBossKind === 'sentinel') {
-          if (!['leftWeakpoint', 'rightWeakpoint', 'core'].includes(partId)) return;
-          const offset = partId === 'leftWeakpoint'
-            ? -BOSS_GEOMETRY.weakpointOffsetX
-            : partId === 'rightWeakpoint'
-              ? BOSS_GEOMETRY.weakpointOffsetX
-              : 0;
-          boss.applyAreaDamage(
-            { x: snapshot.position.x + offset, y: snapshot.position.y },
-            0,
-            damage,
-          );
-          return;
-        }
-        if (this.activeBossKind !== 'hive') return;
-        const hiveSnapshot = snapshot as BossEncounterSnapshot & {
-          partPositions?: Partial<Record<HivePartId, Vector>>;
-        };
-        const position = hiveSnapshot.partPositions?.[partId as HivePartId];
-        if (position) boss.applyAreaDamage(position, 0, damage);
+        this.activeBoss?.applyDirectDamage(partId, damage);
       };
       this.debugSetBossPosition = (x) => {
         if (this.activeBossKind === 'sentinel' && this.activeBoss instanceof BossManager) {

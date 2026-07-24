@@ -285,6 +285,14 @@ export class HiveBossManager implements BossEncounter {
     return targets.map(({ partId }) => partId);
   }
 
+  applyDirectDamage(targetId: string, damage: number): boolean {
+    if (this.destroyed || this.state.phase === 'defeated') return false;
+    const partId = exposedHiveParts(this.state).find((candidate) => candidate === targetId);
+    if (!partId) return false;
+    this.damagePart(partId, damage);
+    return true;
+  }
+
   clearHostileActions(): void {
     if (this.destroyed) return;
     this.warningGroup.clear(true, true);

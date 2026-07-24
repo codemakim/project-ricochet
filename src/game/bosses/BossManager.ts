@@ -273,6 +273,14 @@ export class BossManager implements BossEncounter {
     return targets.map(({ partId }) => partId);
   }
 
+  applyDirectDamage(targetId: string, damage: number): boolean {
+    if (this.destroyed || bossPhase(this.state) === 'defeated') return false;
+    const partId = exposedBossParts(this.state).find((candidate) => candidate === targetId);
+    if (!partId) return false;
+    this.damagePart(partId, damage);
+    return true;
+  }
+
   clearHostileActions(): void {
     if (this.destroyed) return;
     this.clearGroup(this.aimedBulletGroup);

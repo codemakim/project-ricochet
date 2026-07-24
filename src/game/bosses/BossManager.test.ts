@@ -445,6 +445,13 @@ describe('BossManager', () => {
     expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 14, rightWeakpoint: 12 });
   });
 
+  it('applies the requested sentinel debug direct damage without splash scaling', () => {
+    const encounter: BossEncounter = createBoundary().manager;
+
+    expect(encounter.applyDirectDamage('leftWeakpoint', 4)).toBe(true);
+    expect(encounter.getSnapshot().parts).toMatchObject({ leftWeakpoint: 10 });
+  });
+
   it('chooses one nearest sentinel secondary by target ID when distance ties', () => {
     const { manager } = createBoundary();
 
