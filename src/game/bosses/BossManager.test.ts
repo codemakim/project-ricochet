@@ -644,8 +644,8 @@ describe('BossManager', () => {
 
   it('clamps the right-edge support anchor before applying its negative offset', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
+    boundary.manager.applyDirectDamage('leftWeakpoint', 14);
+    boundary.manager.applyDirectDamage('rightWeakpoint', 14);
     boundary.player.setPosition(432, boundary.player.y);
 
     updateAt(boundary, 5700);
