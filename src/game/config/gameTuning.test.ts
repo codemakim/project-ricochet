@@ -14,7 +14,7 @@ function mutableTuning(): Mutable<GameTuning> {
 }
 
 describe('GAME_TUNING', () => {
-  it('defines the approved boss, enemy, and encounter values once', () => {
+  it('defines the approved global boss, enemy, and encounter values once', () => {
     expect(GAME_TUNING.boss.body).toEqual({ width: 168, height: 96 });
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
@@ -30,24 +30,8 @@ describe('GAME_TUNING', () => {
       count: 26, originY: 80, armored: 3, shooters: 3,
     });
     expect(GAME_TUNING.encounter.reinforcementReleaseY).toBe(50);
-    expect(GAME_TUNING.encounter.phases).toEqual([
-      { formation: { minimum: 13, maximum: 15 }, activeCap: 48, spawnIntervalMs: 8000, armored: 1, shooters: 0, splitters: 0 },
-      { formation: { minimum: 15, maximum: 18 }, activeCap: 60, spawnIntervalMs: 7000, armored: 2, shooters: 1, splitters: 0 },
-      { formation: { minimum: 18, maximum: 21 }, activeCap: 72, spawnIntervalMs: 6000, armored: 2, shooters: 2, splitters: 0 },
-      { formation: { minimum: 21, maximum: 25 }, activeCap: 84, spawnIntervalMs: 5500, armored: 3, shooters: 3, splitters: 2 },
-    ]);
-    expect(GAME_TUNING.encounter.phases[3]).toEqual({
-      formation: { minimum: 21, maximum: 25 },
-      activeCap: 84,
-      spawnIntervalMs: 5500,
-      armored: 3,
-      shooters: 3,
-      splitters: 2,
-    });
-    expect(GAME_TUNING.encounter.bossSchedule).toEqual([
-      { section: 0, kind: 'sentinel', minimumMs: 120000, scoreTarget: 70, hardMaximumMs: 210000, warningMs: 2000 },
-      { section: 1, kind: 'hive', minimumMs: 150000, scoreTarget: 110, hardMaximumMs: 210000, warningMs: 2000 },
-    ]);
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
     expect(GAME_TUNING.temporaryOrbs).toEqual({
       radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
@@ -104,37 +88,8 @@ describe('GAME_TUNING', () => {
 
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
-    ['reversed formation range', (value: Mutable<GameTuning>) => { value.encounter.phases[0]!.formation.minimum = 16; }],
-    ['non-finite formation maximum', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[0]!.formation.maximum = Number.NaN;
-    }],
-    ['fractional formation count', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[0]!.formation.maximum = 14.5;
-    }],
-    ['cap below formation maximum', (value: Mutable<GameTuning>) => { value.encounter.phases[2]!.activeCap = 20; }],
-    ['non-finite active cap', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[0]!.activeCap = Number.NaN;
-    }],
-    ['fractional active cap', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[0]!.activeCap = 48.5;
-    }],
     ['fractional initial formation count', (value: Mutable<GameTuning>) => {
       value.encounter.initialFormation.count = 26.5;
-    }],
-    ['negative phase splitters', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[3]!.splitters = -1;
-    }],
-    ['special counts exceeding formation minimum', (value: Mutable<GameTuning>) => {
-      value.encounter.phases[3]!.splitters = 16;
-    }],
-    ['duplicate schedule sections', (value: Mutable<GameTuning>) => {
-      value.encounter.bossSchedule[1]!.section = 0;
-    }],
-    ['misordered schedule sections', (value: Mutable<GameTuning>) => {
-      value.encounter.bossSchedule[0]!.section = 1;
-    }],
-    ['reversed boss schedule timings', (value: Mutable<GameTuning>) => {
-      value.encounter.bossSchedule[1]!.minimumMs = value.encounter.bossSchedule[1]!.hardMaximumMs + 1;
     }],
     ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = 451;

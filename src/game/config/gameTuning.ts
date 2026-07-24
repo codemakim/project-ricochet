@@ -2,25 +2,6 @@ import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y } from '../constants';
 
 export interface RangeTuning { minimum: number; maximum: number }
 export type BossKind = 'sentinel' | 'hive';
-export type ThreatPhase = 0 | 1 | 2 | 3;
-
-export interface BossScheduleTuning {
-  section: number;
-  kind: BossKind;
-  minimumMs: number;
-  scoreTarget: number;
-  hardMaximumMs: number;
-  warningMs: number;
-}
-
-export interface PhaseTuning {
-  formation: RangeTuning;
-  activeCap: number;
-  spawnIntervalMs: number;
-  armored: number;
-  shooters: number;
-  splitters: number;
-}
 
 export interface ProjectileVisualTuning {
   fill: number;
@@ -69,8 +50,6 @@ export interface GameTuning {
     reinforcementOriginY: number;
     reinforcementReleaseY: number;
     initialFormation: { count: number; originY: number; armored: number; shooters: number };
-    phases: readonly [PhaseTuning, PhaseTuning, PhaseTuning, PhaseTuning];
-    bossSchedule: readonly [BossScheduleTuning, BossScheduleTuning];
   };
   projectiles: {
     hostileCap: number;
@@ -121,11 +100,6 @@ export interface GameTuning {
   };
 }
 
-const BOSS_SCHEDULE = [
-  { section: 0, kind: 'sentinel', minimumMs: 120000, scoreTarget: 70, hardMaximumMs: 210000, warningMs: 2000 },
-  { section: 1, kind: 'hive', minimumMs: 150000, scoreTarget: 110, hardMaximumMs: 210000, warningMs: 2000 },
-] as const satisfies readonly [BossScheduleTuning, BossScheduleTuning];
-
 export const GAME_TUNING = {
   boss: {
     y: 120,
@@ -151,13 +125,6 @@ export const GAME_TUNING = {
     initialFormation: { count: 26, originY: 80, armored: 3, shooters: 3 },
     reinforcementOriginY: -28,
     reinforcementReleaseY: 50,
-    phases: [
-      { formation: { minimum: 13, maximum: 15 }, activeCap: 48, spawnIntervalMs: 8000, armored: 1, shooters: 0, splitters: 0 },
-      { formation: { minimum: 15, maximum: 18 }, activeCap: 60, spawnIntervalMs: 7000, armored: 2, shooters: 1, splitters: 0 },
-      { formation: { minimum: 18, maximum: 21 }, activeCap: 72, spawnIntervalMs: 6000, armored: 2, shooters: 2, splitters: 0 },
-      { formation: { minimum: 21, maximum: 25 }, activeCap: 84, spawnIntervalMs: 5500, armored: 3, shooters: 3, splitters: 2 },
-    ],
-    bossSchedule: BOSS_SCHEDULE,
   },
   projectiles: {
     hostileCap: 12,
@@ -313,42 +280,11 @@ export function validateGameTuning(tuning: GameTuning): void {
       > encounter.initialFormation.count) {
     throw new RangeError('encounter initial special counts must fit the formation');
   }
-  for (const [index, phase] of encounter.phases.entries()) {
-    positiveInteger(phase.formation.minimum, `encounter.phases.${index}.formation.minimum`);
-    positiveInteger(phase.formation.maximum, `encounter.phases.${index}.formation.maximum`);
-    if (phase.formation.maximum < phase.formation.minimum) {
-      throw new RangeError(`encounter.phases.${index}.formation must be ordered`);
-    }
-    positiveInteger(phase.activeCap, `encounter.phases.${index}.activeCap`);
-    if (phase.activeCap < phase.formation.maximum) {
-      throw new RangeError(`encounter.phases.${index}.activeCap must fit one formation`);
-    }
-    positive(phase.spawnIntervalMs, `encounter.phases.${index}.spawnIntervalMs`);
-    nonNegativeInteger(phase.armored, `encounter.phases.${index}.armored`);
-    nonNegativeInteger(phase.shooters, `encounter.phases.${index}.shooters`);
-    nonNegativeInteger(phase.splitters, `encounter.phases.${index}.splitters`);
-    if (phase.armored + phase.shooters + phase.splitters > phase.formation.minimum) {
-      throw new RangeError(`encounter.phases.${index} special counts must fit the minimum formation`);
-    }
-  }
   finite(encounter.reinforcementOriginY, 'encounter.reinforcementOriginY');
   finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
   if (!(encounter.reinforcementOriginY < encounter.reinforcementReleaseY
     && encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
     throw new RangeError('encounter reinforcement heights must be ordered below PLAYER_MIN_Y');
-  }
-  for (const [index, entry] of encounter.bossSchedule.entries()) {
-    nonNegativeInteger(entry.section, `encounter.bossSchedule.${index}.section`);
-    if (entry.section !== index) {
-      throw new RangeError('encounter boss schedule sections must be unique and ordered');
-    }
-    positive(entry.scoreTarget, `encounter.bossSchedule.${index}.scoreTarget`);
-    positive(entry.minimumMs, `encounter.bossSchedule.${index}.minimumMs`);
-    positive(entry.hardMaximumMs, `encounter.bossSchedule.${index}.hardMaximumMs`);
-    positive(entry.warningMs, `encounter.bossSchedule.${index}.warningMs`);
-    if (entry.minimumMs > entry.hardMaximumMs) {
-      throw new RangeError('encounter boss schedule timings must be ordered');
-    }
   }
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;
