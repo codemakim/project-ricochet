@@ -779,6 +779,40 @@ describe('HiveBossManager', () => {
     expect(boundary.updateAt(5600).warningKinds).toContain('hiveEnrageFan');
   });
 
+  it('alternates actual enrage fans after a hostile-cap skipped cycle', () => {
+    const boundary = createBoundary();
+    for (const [texture, hp] of [
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
+    ] as const) {
+      const part = boundary.sprite(texture);
+      boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp * 2);
+    }
+
+    boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap);
+    expect(boundary.updateAt(2800).warnings).toBe(0);
+
+    boundary.setEnemyBulletCount(0);
+    boundary.updateAt(5600);
+    const firstFan = boundary.updateAt(5950).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageFan',
+    );
+    expect(firstFan.map(({ velocity }) => Math.round(
+      Math.atan2(velocity.x, velocity.y) * 180 / Math.PI,
+    ))).toEqual([-48, -36, -24, -12, 0, 12, 24, 36, 48]);
+
+    boundary.manager.clearHostileActions();
+    boundary.updateAt(8400);
+    const secondFan = boundary.updateAt(8750).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageFan',
+    );
+    expect(secondFan.map(({ velocity }) => Math.round(
+      Math.atan2(velocity.x, velocity.y) * 180 / Math.PI,
+    ))).toEqual([-42, -30, -18, -6, 6, 18, 30, 42, 54]);
+  });
+
   it('keeps enrage deadlines aligned after a late frame without catching up as a burst', () => {
     const boundary = createBoundary();
     for (const [texture, hp] of [

@@ -57,3 +57,16 @@
 - Preserved boss target exclusion from direct hit through scheduling, queue drain, and delayed settlement.
 - RED: missing manager/scheduler state; removed forwarding produced `excludedBossTargetId: undefined`; removed final cleanup made desktop E2E retain enemies.
 - GREEN: focused 61 tests; targeted desktop E2E; `npm test` 444 passed; `npm run build` passed.
+
+## Hive enrage fan follow-up
+
+- Fixed `enrageFanCount` so it increments only after an enrage fan warning is actually created. Hostile-cap-skipped cycles still advance their deadlines but no longer consume the 0°/6° alternation.
+- Added regression coverage: after a cap-skipped fan cycle, the first actual fan fires at 0° and the next at 6°.
+
+### TDD evidence
+
+- RED: `npm test -- src/game/bosses/HiveBossManager.test.ts` — exit 1; the first actual fan fired at 6° instead of 0°.
+- Focused GREEN: `npm test -- src/game/bosses/HiveBossManager.test.ts` — 1 file passed, 30 tests passed.
+- Full unit: `npm test` — 41 files passed, 442 tests passed.
+- Production build: `npm run build` — exit 0; `tsc --noEmit` and Vite build passed, with only the Vite large-chunk advisory.
+- Diff hygiene: `git diff --check` — passed.

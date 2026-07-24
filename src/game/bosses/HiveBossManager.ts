@@ -620,12 +620,16 @@ export class HiveBossManager implements BossEncounter {
     const { fan, aimedBurst: burst } = GAME_TUNING.projectiles.hiveEnrage;
     if (this.nextEnrageFanAt !== undefined && now >= this.nextEnrageFanAt) {
       this.nextEnrageFanAt = nextFutureDeadline(this.nextEnrageFanAt, fan.intervalMs, now);
-      const offsetDegrees = (this.enrageFanCount % 2) * fan.alternatingOffsetDegrees;
-      this.enrageFanCount += 1;
       if (
         this.hasHostileCapacity()
         && !this.warnings.some(({ kind }) => kind === 'hiveEnrageFan')
-      ) this.createEnrageFanWarning(now, offsetDegrees);
+      ) {
+        this.createEnrageFanWarning(
+          now,
+          (this.enrageFanCount % 2) * fan.alternatingOffsetDegrees,
+        );
+        this.enrageFanCount += 1;
+      }
     }
     if (this.nextEnrageAimedBurstAt !== undefined && now >= this.nextEnrageAimedBurstAt) {
       this.nextEnrageAimedBurstAt = nextFutureDeadline(
