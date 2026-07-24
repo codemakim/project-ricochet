@@ -1522,12 +1522,20 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
 test('@desktop splitter reserves population, clamps fragments, and settles rewards', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await startStageTwo(page);
-  await sceneCall(page, (scene) => {
+  const splitterReady = await sceneCall(page, (scene) => {
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
     scene.debugAdvanceEncounter(60_000);
-    scene.debugAdvanceEncounter(5_500);
-    scene.debugFreezeEnemies();
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      scene.debugAdvanceEncounter(5_500);
+      if (scene.getDebugSnapshot().enemies.some(({ kind }) => kind === 'splitter')) {
+        scene.debugFreezeEnemies();
+        return true;
+      }
+      scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
+    }
+    return false;
   });
+  expect(splitterReady).toBe(true);
   const pressurePhase = await snapshot(page);
   expect(pressurePhase.encounter.phase).toBe(1);
   const parent = pressurePhase.enemies.find(({ kind }) => kind === 'splitter')!;
