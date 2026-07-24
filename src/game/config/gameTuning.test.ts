@@ -26,9 +26,7 @@ describe('GAME_TUNING', () => {
       },
       fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
     });
-    expect(GAME_TUNING.encounter.initialFormation).toEqual({
-      count: 26, originY: 80, armored: 3, shooters: 3,
-    });
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'initialFormation')).toBe(false);
     expect(GAME_TUNING.encounter.reinforcementReleaseY).toBe(50);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
@@ -88,9 +86,6 @@ describe('GAME_TUNING', () => {
 
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
-    ['fractional initial formation count', (value: Mutable<GameTuning>) => {
-      value.encounter.initialFormation.count = 26.5;
-    }],
     ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = 451;
     }],
@@ -156,9 +151,6 @@ describe('GAME_TUNING', () => {
       value.boss.movement.obstaclePadding = Number.POSITIVE_INFINITY;
     }],
     ['non-finite boss y', (value: Mutable<GameTuning>) => { value.boss.y = Number.NaN; }],
-    ['non-finite initial formation y', (value: Mutable<GameTuning>) => {
-      value.encounter.initialFormation.originY = Number.NEGATIVE_INFINITY;
-    }],
     ['non-finite reinforcement y', (value: Mutable<GameTuning>) => {
       value.encounter.reinforcementOriginY = Number.NaN;
     }],

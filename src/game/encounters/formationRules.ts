@@ -378,84 +378,56 @@ export function generateFormation(
   return generateWithPressure(style, count, seed, originY, 3, 3, 0, mix(seed, 0x4b494e44));
 }
 
-function styleBag(styleWeights: Readonly<Partial<Record<FormationStyle, number>>>): FormationStyle[] {
-  const bag = Object.entries(styleWeights).flatMap(([style, weight]) =>
-    Array.from({ length: Math.max(1, Math.round(weight!)) }, () => style as FormationStyle));
-  const counts = bag.reduce((result, style) => ({ ...result, [style]: (result[style] ?? 0) + 1 }), {} as Partial<Record<FormationStyle, number>>);
-  const largest = Math.max(...Object.values(counts));
-  return largest > bag.length - largest + 1 ? [...new Set(bag)] : bag;
-}
-
-function createBag(
-  runSeed: number,
-  cycle: number,
-  styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
-  previous?: FormationStyle,
-): FormationStyle[] {
-  const random = createRandom(mix(runSeed, cycle));
-  const bag = styleBag(styleWeights);
-  const solve = (remaining: FormationStyle[], result: FormationStyle[]): FormationStyle[] | null => {
-    if (remaining.length === 0) return result;
-    const last = result.at(-1) ?? previous;
-    for (const style of shuffled([...new Set(remaining)], random)) {
-      if (style === last) continue;
-      const index = remaining.indexOf(style);
-      const next = [...remaining];
-      next.splice(index, 1);
-      const solved = solve(next, [...result, style]);
-      if (solved) return solved;
-    }
-    return null;
-  };
-  const result = solve(bag, []);
-  if (!result) throw new Error('unable to arrange formation bag');
-  return result;
-}
-
 function styleAt(
   runSeed: number,
   sequence: number,
   styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
 ): FormationStyle {
-  const bagSize = styleBag(styleWeights).length;
-  if (bagSize === 0) throw new RangeError('recipe profile needs a weighted style');
-  const cycle = Math.floor(sequence / bagSize);
+  const weighted = Object.entries(styleWeights) as [FormationStyle, number][];
+  if (weighted.length === 0) throw new RangeError('recipe profile needs a weighted style');
+  const random = createRandom(mix(runSeed, 0));
   let previous: FormationStyle | undefined;
-  let bag: FormationStyle[] = [];
-  for (let index = 0; index <= cycle; index += 1) {
-    bag = createBag(runSeed, index, styleWeights, previous);
-    previous = bag[bag.length - 1];
+  for (let index = 0; index <= sequence; index += 1) {
+    const candidates = weighted.length === 1
+      ? weighted
+      : weighted.filter(([style]) => style !== previous);
+    const total = candidates.reduce((sum, [, weight]) => sum + weight, 0);
+    let cursor = random() * total;
+    previous = candidates.find(([, weight]) => ((cursor -= weight) < 0))?.[0]
+      ?? candidates.at(-1)![0];
   }
-  return bag[sequence % bagSize]!;
+  return previous!;
 }
 
-const INITIAL_RECIPE: FormationRecipe = {
-  stageNumber: 1,
-  battlefield: 'default',
+const INITIAL_FORMATION_CONTENT = {
   profile: {
     id: 'initial',
     styleWeights: { cluster: 1, pockets: 1, bands: 1, scatter: 1 },
-    minimum: GAME_TUNING.encounter.initialFormation.count,
-    maximum: GAME_TUNING.encounter.initialFormation.count,
+    minimum: 26,
+    maximum: 26,
   },
-  hpMultiplier: 1,
-  descentSpeedMultiplier: 1,
+  originY: 80,
+  exactKinds: { armored: 3, shooters: 3, splitters: 0 },
+} as const satisfies {
+  profile: FormationProfile;
+  originY: number;
+  exactKinds: { armored: number; shooters: number; splitters: number };
 };
 
 export function createInitialFormation(runSeed: number): FormationResult {
   validateSeed(runSeed, 'runSeed');
-  const initialStyles = Object.keys(INITIAL_RECIPE.profile.styleWeights) as FormationStyle[];
+  const { profile, originY, exactKinds } = INITIAL_FORMATION_CONTENT;
+  const initialStyles = Object.keys(profile.styleWeights) as FormationStyle[];
   const style = initialStyles[mix(runSeed, 0x494e4954) % initialStyles.length]!;
   const layoutSeed = mix(runSeed, 0x4c41594f);
-  const tuning = GAME_TUNING.encounter.initialFormation;
   const enemies = generateWithPressure(
     style,
-    INITIAL_RECIPE.profile.minimum,
+    profile.minimum,
     layoutSeed,
-    tuning.originY,
-    tuning.armored,
-    tuning.shooters,
-    0,
+    originY,
+    exactKinds.armored,
+    exactKinds.shooters,
+    exactKinds.splitters,
     mix(runSeed, 0x4b494e44),
   );
   return {

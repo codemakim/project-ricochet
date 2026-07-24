@@ -49,7 +49,6 @@ export interface GameTuning {
   encounter: {
     reinforcementOriginY: number;
     reinforcementReleaseY: number;
-    initialFormation: { count: number; originY: number; armored: number; shooters: number };
   };
   projectiles: {
     hostileCap: number;
@@ -122,7 +121,6 @@ export const GAME_TUNING = {
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
-    initialFormation: { count: 26, originY: 80, armored: 3, shooters: 3 },
     reinforcementOriginY: -28,
     reinforcementReleaseY: 50,
   },
@@ -197,11 +195,6 @@ function positiveInteger(value: number, name: string): void {
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
 }
 
-function nonNegativeInteger(value: number, name: string): void {
-  nonNegative(value, name);
-  if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
-}
-
 interface RectBounds {
   left: number;
   right: number;
@@ -272,14 +265,6 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(enemy.breachDamage, `enemies.${kind}.breachDamage`);
   }
   positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
-  positiveInteger(encounter.initialFormation.count, 'encounter.initialFormation.count');
-  finite(encounter.initialFormation.originY, 'encounter.initialFormation.originY');
-  nonNegativeInteger(encounter.initialFormation.armored, 'encounter.initialFormation.armored');
-  nonNegativeInteger(encounter.initialFormation.shooters, 'encounter.initialFormation.shooters');
-  if (encounter.initialFormation.armored + encounter.initialFormation.shooters
-      > encounter.initialFormation.count) {
-    throw new RangeError('encounter initial special counts must fit the formation');
-  }
   finite(encounter.reinforcementOriginY, 'encounter.reinforcementOriginY');
   finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
   if (!(encounter.reinforcementOriginY < encounter.reinforcementReleaseY

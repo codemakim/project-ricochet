@@ -130,14 +130,15 @@ describe('procedural formation generation', () => {
   });
 
   it('creates the tuned non-grid initial formation', () => {
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'initialFormation')).toBe(false);
     for (let seed = 0; seed < 16; seed += 1) {
       const result = createInitialFormation(seed);
-      expect(result.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count);
+      expect(result.enemies).toHaveLength(26);
       expect(result.style).not.toBe('grid');
       expect(result.enemies.filter(({ kind }) => kind === 'armored'))
-        .toHaveLength(GAME_TUNING.encounter.initialFormation.armored);
+        .toHaveLength(3);
       expect(result.enemies.filter(({ kind }) => kind === 'shooter'))
-        .toHaveLength(GAME_TUNING.encounter.initialFormation.shooters);
+        .toHaveLength(3);
       expect(result.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
       expect(result.enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind])).toBe(true);
       expect(result.populationCost).toBe(
@@ -158,11 +159,19 @@ describe('procedural formation generation', () => {
   it('uses weighted styles without immediate repeats when another style exists', () => {
     const selectedRecipe = { ...recipe(), profile: {
       ...recipe().profile,
-      styleWeights: { cluster: 3, pockets: 1 },
+      styleWeights: { cluster: 5, pockets: 2, bands: 1 },
     } };
-    const styles = Array.from({ length: 27 }, (_, sequence) =>
+    const styles = Array.from({ length: 600 }, (_, sequence) =>
       createReinforcementFormation(selectedRecipe, sequence, 808).style);
+    const counts = styles.reduce<Record<string, number>>(
+      (result, style) => ({ ...result, [style]: (result[style] ?? 0) + 1 }),
+      {},
+    );
     expect(styles.every((style, index) => index === 0 || style !== styles[index - 1])).toBe(true);
+    expect(counts.cluster).toBeGreaterThan(counts.pockets!);
+    expect(counts.pockets).toBeGreaterThan(counts.bands!);
+    expect(styles).toEqual(Array.from({ length: 600 }, (_, sequence) =>
+      createReinforcementFormation(selectedRecipe, sequence, 808).style));
   });
 
   it('filters catalog kinds by stage and battlefield', () => {
