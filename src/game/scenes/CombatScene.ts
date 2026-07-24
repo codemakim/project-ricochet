@@ -51,6 +51,7 @@ import {
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { progressionHudState } from '../ui/progressionHud';
+import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
   bossKindAfterTransition,
   bossOrbModifiers,
@@ -61,7 +62,6 @@ import {
   rewardAddsPermanentOrb,
   rewardTierForBoss,
   schedulePlannedAftershock,
-  sectionAfterBossReward,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
 } from './combatSceneRules';
@@ -74,7 +74,13 @@ const PROGRESSION_SEED = 0x5249434f;
 const BOSS_REWARD_SEED = 0x424f5353;
 let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
 const XP_BAR_WIDTH = 220;
-const PAUSE_REASONS: readonly PauseReason[] = ['visibility', 'levelUp', 'bossReward', 'defeated'];
+const PAUSE_REASONS: readonly PauseReason[] = [
+  'visibility',
+  'levelUp',
+  'bossReward',
+  'runComplete',
+  'defeated',
+];
 
 export interface CombatDebugSnapshot {
   player: Vector;
@@ -99,6 +105,7 @@ export interface CombatDebugSnapshot {
   bossRewards: BossRewardId[];
   bossRewardChoices: BossRewardId[];
   bossRewardVisible: boolean;
+  runCompleteVisible: boolean;
   temporaryOrbs: number;
   temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
   scheduledEffects: ScheduledAreaEffect[];
@@ -142,6 +149,7 @@ export class CombatScene extends Phaser.Scene {
   private levelUpOverlay?: LevelUpOverlay;
   private bossBuild?: BossBuild;
   private bossRewardOverlay?: BossRewardOverlay;
+  private runCompleteOverlay?: RunCompleteOverlay;
   private bossWarning?: Phaser.GameObjects.Text;
   private bossRewardChoices: BossRewardId[] = [];
   private bossDefeatPending = false;
@@ -180,6 +188,7 @@ export class CombatScene extends Phaser.Scene {
     this.progression = new ProgressionManager(PROGRESSION_SEED, build);
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.bossRewardOverlay = new BossRewardOverlay(this);
+    this.runCompleteOverlay = new RunCompleteOverlay(this);
     this.createTextures();
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -393,6 +402,10 @@ export class CombatScene extends Phaser.Scene {
         runSeed: 0,
         lastFormationId: null,
         state: 'running',
+        stageIndex: 0,
+        stageId: 'default-1',
+        stageNumber: 1,
+        stageElapsedMs: 0,
         section: 0,
         sectionElapsedMs: 0,
         bossScore: 0,
@@ -425,6 +438,7 @@ export class CombatScene extends Phaser.Scene {
       bossRewards: this.bossBuild?.snapshot() ?? [],
       bossRewardChoices: [...this.bossRewardChoices],
       bossRewardVisible: this.bossRewardOverlay?.isVisible() ?? false,
+      runCompleteVisible: this.runCompleteOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
       temporaryOrbSnapshots: this.temporaryOrbManager?.getSnapshot().map((orb) => ({
         ...orb,
@@ -630,18 +644,37 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private chooseBossReward(id: BossRewardId): boolean {
-    if (this.defeated || !this.bossRewardOverlay?.isVisible() || !this.bossBuild) return false;
+    if (
+      this.defeated
+      || !this.bossRewardOverlay?.isVisible()
+      || !this.bossBuild
+      || !this.encounterDirector
+    ) return false;
     if (!this.bossRewardTier) return false;
     if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
     this.bossBuild.acquire(id);
     if (rewardAddsPermanentOrb(id)) this.orbManager?.addOrb();
-    const expectedSection = sectionAfterBossReward(this.bossRewardTier);
-    this.encounterDirector?.resumeAfterBossReward();
-    if (this.encounterDirector?.getSnapshot().section !== expectedSection) {
-      throw new Error(`boss reward did not resume section ${expectedSection}`);
+    const advance = this.encounterDirector.resumeAfterBossReward();
+    if (advance.type === 'stageStarted') {
+      const encounter = this.encounterDirector.getSnapshot();
+      if (
+        encounter.stageId !== advance.stageId
+        || encounter.stageNumber !== advance.stageNumber
+      ) {
+        throw new Error(`boss reward did not start stage ${advance.stageId}`);
+      }
     }
     this.applyLifecycle('rewardCompleted');
     this.pause.remove('bossReward');
+    if (advance.type === 'runCompleted') {
+      this.pause.add('runComplete');
+      this.syncPauseState();
+      this.runCompleteOverlay?.show(() => {
+        this.handleShutdown();
+        this.scene.restart();
+      });
+      return true;
+    }
     this.syncPauseState();
     return true;
   }
@@ -796,7 +829,9 @@ export class CombatScene extends Phaser.Scene {
 
   private syncPauseState(): void {
     this.playerInput?.setGameplayPointerEnabled(
-      !this.pause.has('levelUp') && !this.pause.has('bossReward'),
+      !this.pause.has('levelUp')
+        && !this.pause.has('bossReward')
+        && !this.pause.has('runComplete'),
     );
     if (this.pause.isPaused()) {
       this.physics.pause();
@@ -816,6 +851,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerInput?.destroy();
     this.levelUpOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
+    this.runCompleteOverlay?.destroy();
     this.bossDefeatPending = false;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;
@@ -824,6 +860,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerInput = undefined;
     this.levelUpOverlay = undefined;
     this.bossRewardOverlay = undefined;
+    this.runCompleteOverlay = undefined;
     this.progression = undefined;
     this.build = undefined;
     this.bossBuild = undefined;

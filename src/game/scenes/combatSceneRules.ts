@@ -47,10 +47,6 @@ export function createBossForKind<T>(
   return factories[kind]();
 }
 
-export function sectionAfterBossReward(tier: BossRewardTier): number {
-  return tier === 'first' ? 1 : 2;
-}
-
 export interface PlannedAreaEffect {
   kind: 'siege' | 'explosion';
   radius: number;

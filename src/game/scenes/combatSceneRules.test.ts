@@ -11,7 +11,6 @@ import {
   planDirectHitEffects,
   rewardAddsPermanentOrb,
   rewardTierForBoss,
-  sectionAfterBossReward,
   schedulePlannedAftershock,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
@@ -299,10 +298,8 @@ describe('boss scene selection', () => {
     expect(calls).toEqual(['hive']);
   });
 
-  it('selects the reward tier and resumed section from the defeated boss kind', () => {
+  it('selects the reward tier from the defeated boss kind', () => {
     expect(rewardTierForBoss('sentinel')).toBe('first');
     expect(rewardTierForBoss('hive')).toBe('second');
-    expect(sectionAfterBossReward('first')).toBe(1);
-    expect(sectionAfterBossReward('second')).toBe(2);
   });
 });

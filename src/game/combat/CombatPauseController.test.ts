@@ -52,4 +52,15 @@ describe('CombatPauseController', () => {
     expect(pause.consumeGameplayDelta(16)).toBe(0);
     expect(pause.consumeGameplayDelta(16)).toBe(16);
   });
+
+  it('keeps run completion permanently paused while other reasons change', () => {
+    const pause = new CombatPauseController();
+    pause.add('runComplete');
+    pause.add('visibility');
+    pause.remove('visibility');
+
+    expect(pause.has('runComplete')).toBe(true);
+    expect(pause.isPaused()).toBe(true);
+    expect(pause.consumeGameplayDelta(5_000)).toBe(0);
+  });
 });
