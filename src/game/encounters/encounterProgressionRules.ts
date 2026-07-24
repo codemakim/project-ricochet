@@ -1,14 +1,14 @@
-import {
-  GAME_TUNING,
-  type BossKind,
-  type BossScheduleTuning,
-} from '../config/gameTuning';
+import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
+import type { StageBossDefinition, StageId } from './stageDefinitions';
 
-export type EncounterState = 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused';
+export type EncounterState = 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused' | 'runComplete';
 export type EncounterTransition =
   | { type: 'bossWarningStarted'; bossKind: BossKind }
   | { type: 'bossStarted'; bossKind: BossKind };
+export type StageAdvance =
+  | { type: 'stageStarted'; stageId: StageId; stageNumber: number }
+  | { type: 'runCompleted' };
 
 export function bossProgressForKill(kind: EnemyKind): number {
   switch (kind) {
@@ -20,12 +20,8 @@ export function bossProgressForKill(kind: EnemyKind): number {
   }
 }
 
-export function bossEntryForSection(section: number): BossScheduleTuning | null {
-  return GAME_TUNING.encounter.bossSchedule.find((entry) => entry.section === section) ?? null;
-}
-
 export function bossEntryReady(
-  entry: BossScheduleTuning,
+  entry: StageBossDefinition,
   elapsedMs: number,
   score: number,
 ): boolean {

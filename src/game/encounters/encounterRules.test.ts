@@ -1,31 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_TUNING } from '../config/gameTuning';
-import { canSpawnReinforcement, threatConfigAt, threatPhaseForSection } from './encounterRules';
+import type { StageDefinition } from './stageDefinitions';
+import { STAGES } from './stageDefinitions';
+import { canSpawnReinforcement, phaseAt } from './encounterRules';
 
 describe('encounter rules', () => {
-  it.each([[0, 0], [59_999, 0], [60_000, 1], [120_000, 2], [180_000, 2]] as const)(
-    'maps %ims to its tuned threat config', (elapsedMs, phase) => {
-      const tuning = GAME_TUNING.encounter.phases[phase];
-      expect(threatConfigAt(elapsedMs)).toEqual({
-        phase,
-        activeCap: tuning.activeCap,
-        spawnIntervalMs: tuning.spawnIntervalMs,
-      });
-    },
-  );
+  it('selects arbitrary stage-local phases at exact boundaries', () => {
+    const stage: StageDefinition = {
+      ...STAGES[0],
+      phases: [
+        { ...STAGES[0].phases[0], startsAtMs: 0 },
+        { ...STAGES[0].phases[0], startsAtMs: 10 },
+        { ...STAGES[0].phases[0], startsAtMs: 20 },
+        { ...STAGES[0].phases[0], startsAtMs: 30 },
+      ],
+    };
 
-  it.each([
-    [0, 0, 0],
-    [0, 59_999, 0],
-    [0, 60_000, 1],
-    [0, 119_999, 1],
-    [0, 120_000, 2],
-    [1, 0, 2],
-    [1, 59_999, 2],
-    [1, 60_000, 3],
-    [2, 0, 3],
-  ] as const)('maps section %i at %ims to phase %i', (section, elapsedMs, phase) => {
-    expect(threatPhaseForSection(section, elapsedMs)).toBe(phase);
+    for (const [elapsedMs, index] of [
+      [0, 0], [9, 0], [10, 1], [19, 1], [20, 2], [29, 2], [30, 3], [999, 3],
+    ] as const) {
+      expect(phaseAt(stage, elapsedMs)).toEqual({
+        index,
+        definition: stage.phases[index],
+      });
+    }
   });
 
   it('requires interval, top clearance, and capacity together', () => {

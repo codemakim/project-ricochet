@@ -1,14 +1,24 @@
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
-import { canSpawnReinforcement, threatConfigAt, type ThreatPhase } from './encounterRules';
+import { canSpawnReinforcement, phaseAt } from './encounterRules';
 import {
-  bossEntryForSection,
   bossEntryReady,
   bossProgressForKill,
   type EncounterState,
   type EncounterTransition,
+  type StageAdvance,
 } from './encounterProgressionRules';
-import { createReinforcementFormation, type FormationResult } from './formationRules';
+import {
+  createReinforcementFormation,
+  type FormationRecipe,
+  type FormationResult,
+} from './formationRules';
+import {
+  FORMATION_PROFILES,
+  STAGES,
+  type StageDefinition,
+  type StagePhaseDefinition,
+} from './stageDefinitions';
 
 export interface EncounterEnemyState {
   activePopulation: number;
@@ -16,7 +26,7 @@ export interface EncounterEnemyState {
 }
 
 interface PendingFormation {
-  phase: ThreatPhase;
+  phaseIndex: number;
   sequence: number;
   result: FormationResult;
 }
@@ -30,9 +40,9 @@ const NO_UPDATE: EncounterUpdate = { formation: null, transition: null };
 
 export class EncounterDirector {
   private state: EncounterState = 'running';
-  private section = 0;
+  private stageIndex = 0;
   private elapsedMs = 0;
-  private sectionElapsedMs = 0;
+  private stageElapsedMs = 0;
   private elapsedSinceSpawnMs = 0;
   private bossScore = 0;
   private warningElapsedMs = 0;
@@ -67,42 +77,46 @@ export class EncounterDirector {
     }
     if (this.state !== 'running') return NO_UPDATE;
 
-    this.sectionElapsedMs += deltaMs;
+    const stage = this.activeStage();
+    this.stageElapsedMs += deltaMs;
     this.elapsedSinceSpawnMs += deltaMs;
-    const entry = bossEntryForSection(this.section);
-    if (entry && bossEntryReady(entry, this.sectionElapsedMs, this.bossScore)) {
+    if (bossEntryReady(stage.boss, this.stageElapsedMs, this.bossScore)) {
       this.state = 'bossWarning';
-      this.pendingBossKind = entry.kind;
-      this.pendingBossWarningMs = entry.warningMs;
+      this.pendingBossKind = stage.boss.kind;
+      this.pendingBossWarningMs = stage.boss.warningMs;
       this.warningElapsedMs = 0;
       this.pendingFormation = null;
       return {
         formation: null,
-        transition: { type: 'bossWarningStarted', bossKind: entry.kind },
+        transition: { type: 'bossWarningStarted', bossKind: stage.boss.kind },
       };
     }
 
-    const threat = threatConfigAt(this.sectionElapsedMs, this.section);
-    if (this.elapsedSinceSpawnMs < threat.spawnIntervalMs
+    const phase = phaseAt(stage, this.stageElapsedMs);
+    if (this.elapsedSinceSpawnMs < phase.definition.spawnIntervalMs
       || enemyState.topmostEnemyY < GAME_TUNING.encounter.reinforcementReleaseY) return NO_UPDATE;
 
-    if (this.pendingFormation?.phase !== threat.phase
+    if (this.pendingFormation?.phaseIndex !== phase.index
       || this.pendingFormation.sequence !== this.spawnSequence) {
       this.pendingFormation = {
-        phase: threat.phase,
+        phaseIndex: phase.index,
         sequence: this.spawnSequence,
-        result: createReinforcementFormation(threat.phase, this.spawnSequence, this.runSeed),
+        result: createReinforcementFormation(
+          formationRecipe(stage, phase.definition),
+          this.spawnSequence,
+          this.runSeed,
+        ),
       };
     }
     const formation = this.pendingFormation.result;
     if (!canSpawnReinforcement({
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      spawnIntervalMs: threat.spawnIntervalMs,
+      spawnIntervalMs: phase.definition.spawnIntervalMs,
       topmostEnemyY: enemyState.topmostEnemyY,
       requiredTopmostY: GAME_TUNING.encounter.reinforcementReleaseY,
       activeEnemies: enemyState.activePopulation,
       incomingEnemies: formation.populationCost,
-      activeCap: threat.activeCap,
+      activeCap: phase.definition.activeCap,
     })) return NO_UPDATE;
 
     this.elapsedSinceSpawnMs = 0;
@@ -113,9 +127,7 @@ export class EncounterDirector {
   }
 
   recordEnemyKill(kind: EnemyKind): void {
-    if (this.state === 'running' && bossEntryForSection(this.section)) {
-      this.bossScore += bossProgressForKill(kind);
-    }
+    if (this.state === 'running') this.bossScore += bossProgressForKill(kind);
   }
 
   markBossDefeated(): void {
@@ -126,23 +138,33 @@ export class EncounterDirector {
     this.bossesDefeated += 1;
   }
 
-  resumeAfterBossReward(): void {
+  resumeAfterBossReward(): StageAdvance {
     if (this.state !== 'bossRewardPaused') {
       throw new Error(`cannot resume after boss reward while encounter state is ${this.state}`);
     }
+    if (this.stageIndex + 1 >= STAGES.length) {
+      this.state = 'runComplete';
+      this.pendingBossKind = null;
+      this.pendingFormation = null;
+      return { type: 'runCompleted' };
+    }
+
     this.state = 'running';
-    this.section += 1;
-    this.sectionElapsedMs = 0;
+    this.stageIndex += 1;
+    this.stageElapsedMs = 0;
     this.elapsedSinceSpawnMs = 0;
     this.bossScore = 0;
     this.warningElapsedMs = 0;
     this.pendingBossKind = null;
     this.pendingBossWarningMs = 0;
     this.pendingFormation = null;
+    const stage = this.activeStage();
+    return { type: 'stageStarted', stageId: stage.id, stageNumber: stage.number };
   }
 
   getSnapshot() {
-    const phase = threatConfigAt(this.sectionElapsedMs, this.section).phase;
+    const stage = this.activeStage();
+    const phase = phaseAt(stage, this.stageElapsedMs).index;
     return {
       elapsedMs: this.elapsedMs,
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
@@ -151,12 +173,38 @@ export class EncounterDirector {
       runSeed: this.runSeed,
       lastFormationId: this.lastFormationId,
       state: this.state,
-      section: this.section,
-      sectionElapsedMs: this.sectionElapsedMs,
+      stageIndex: this.stageIndex,
+      stageId: stage.id,
+      stageNumber: stage.number,
+      stageElapsedMs: this.stageElapsedMs,
+      // Temporary debug compatibility; remove after E2E consumers use stage fields.
+      section: this.stageIndex,
+      sectionElapsedMs: this.stageElapsedMs,
       bossScore: this.bossScore,
       warningElapsedMs: this.warningElapsedMs,
       pendingBossKind: this.pendingBossKind,
       bossesDefeated: this.bossesDefeated,
     } as const;
   }
+
+  private activeStage(): StageDefinition {
+    return STAGES[this.stageIndex]!;
+  }
+}
+
+function formationRecipe(
+  stage: StageDefinition,
+  phase: StagePhaseDefinition,
+): FormationRecipe {
+  const profile = FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId);
+  if (!profile) throw new Error(`formation profile ${phase.formationProfileId} does not exist`);
+  return {
+    stageNumber: stage.number,
+    battlefield: stage.battlefield,
+    profile,
+    enemyWeightMultipliers: phase.enemyWeightMultipliers,
+    maxPerFormationOverrides: phase.maxPerFormationOverrides,
+    hpMultiplier: stage.hpMultiplier,
+    descentSpeedMultiplier: stage.descentSpeedMultiplier,
+  };
 }
