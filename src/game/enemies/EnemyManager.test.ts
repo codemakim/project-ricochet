@@ -8,6 +8,8 @@ import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { EnemyManager } from './EnemyManager';
 import type { EnemySpec } from './enemyRules';
 
+const INITIAL_FORMATION_SIZE = createInitialFormation(0).enemies.length;
+
 type Callback = (...args: FakeSprite[]) => void;
 type ProcessCallback = (...args: FakeSprite[]) => boolean;
 
@@ -297,9 +299,9 @@ describe('EnemyManager', () => {
     const snapshot = manager.getSnapshot();
     const expected = createInitialFormation(0).enemies;
 
-    expect(snapshot.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count);
+    expect(snapshot.enemies).toHaveLength(INITIAL_FORMATION_SIZE);
     expect(snapshot.enemies.map((enemy) => enemy.id))
-      .toEqual([...Array(GAME_TUNING.encounter.initialFormation.count).keys()]);
+      .toEqual([...Array(INITIAL_FORMATION_SIZE).keys()]);
     expect(snapshot.enemies.map(({ kind, hp, position, speed }) => ({ kind, hp, position, speed }))).toEqual(
       expected.map(({ kind, hp, x, y, speed }) => ({ kind, hp, position: { x, y }, speed })),
     );
@@ -321,10 +323,10 @@ describe('EnemyManager', () => {
     ]);
 
     const snapshot = manager.getSnapshot();
-    expect(snapshot.enemies).toHaveLength(GAME_TUNING.encounter.initialFormation.count + 2);
+    expect(snapshot.enemies).toHaveLength(INITIAL_FORMATION_SIZE + 2);
     expect(snapshot.enemies.slice(-2).map((enemy) => enemy.id)).toEqual([
-      GAME_TUNING.encounter.initialFormation.count,
-      GAME_TUNING.encounter.initialFormation.count + 1,
+      INITIAL_FORMATION_SIZE,
+      INITIAL_FORMATION_SIZE + 1,
     ]);
     expect(snapshot.topmostEnemyY).toBe(-28);
     expect(colliders).toHaveLength(colliderCount);
@@ -478,13 +480,13 @@ describe('EnemyManager', () => {
     const { manager } = createBoundary();
     manager.debugRemoveEnemies!([0, 3, 7, 11]);
     expect(manager.getSnapshot().enemies)
-      .toHaveLength(GAME_TUNING.encounter.initialFormation.count - 4);
+      .toHaveLength(INITIAL_FORMATION_SIZE - 4);
 
     manager.spawnFormation([
       { kind: 'basic', hp: 1, x: 90, y: -28, column: 1, speed: 22 },
     ]);
     expect(manager.getSnapshot().enemies.at(-1)?.id)
-      .toBe(GAME_TUNING.encounter.initialFormation.count);
+      .toBe(INITIAL_FORMATION_SIZE);
   });
 
   it('debug-sets exactly one active enemy with valid position and HP', () => {

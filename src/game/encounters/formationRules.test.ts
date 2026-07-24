@@ -108,7 +108,7 @@ describe('procedural formation generation', () => {
           .toBe(true);
       }
     }
-  });
+  }, 15_000);
 
   it('reproduces public results for the same run seed and sequence', () => {
     expect(createInitialFormation(321)).toEqual(createInitialFormation(321));

@@ -406,8 +406,6 @@ export class CombatScene extends Phaser.Scene {
         stageId: 'default-1',
         stageNumber: 1,
         stageElapsedMs: 0,
-        section: 0,
-        sectionElapsedMs: 0,
         bossScore: 0,
         warningElapsedMs: 0,
         pendingBossKind: null,

@@ -177,9 +177,6 @@ export class EncounterDirector {
       stageId: stage.id,
       stageNumber: stage.number,
       stageElapsedMs: this.stageElapsedMs,
-      // Temporary debug compatibility; remove after E2E consumers use stage fields.
-      section: this.stageIndex,
-      sectionElapsedMs: this.stageElapsedMs,
       bossScore: this.bossScore,
       warningElapsedMs: this.warningElapsedMs,
       pendingBossKind: this.pendingBossKind,
