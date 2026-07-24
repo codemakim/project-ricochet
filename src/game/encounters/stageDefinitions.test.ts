@@ -37,4 +37,26 @@ describe('stage content', () => {
     expect(ENEMY_CATALOG.every(({ weight, maxPerFormation }) =>
       weight > 0 && (maxPerFormation === undefined || maxPerFormation >= 0))).toBe(true);
   });
+
+  it('rejects style weights that cannot be arranged without repeats', () => {
+    const impossible = {
+      id: 'impossible',
+      styleWeights: { cluster: 5, pockets: 2, bands: 1 },
+      minimum: 1,
+      maximum: 1,
+    };
+    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, impossible]))
+      .toThrowError(new RangeError('impossible style weights cannot avoid repeats'));
+  });
+
+  it('rejects fractional style weights', () => {
+    const fractional = {
+      id: 'fractional',
+      styleWeights: { cluster: 1.5, pockets: 1 },
+      minimum: 1,
+      maximum: 1,
+    };
+    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, fractional]))
+      .toThrowError(new RangeError('fractional.cluster must be an integer'));
+  });
 });

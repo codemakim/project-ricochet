@@ -5,6 +5,7 @@ import {
   createReinforcementFormation,
   generateFormation,
   type FormationRecipe,
+  type FormationStyle,
 } from './formationRules';
 import { populationCostForEnemy } from '../enemies/splitterRules';
 import { ENEMY_CATALOG, FORMATION_PROFILES, STAGES } from './stageDefinitions';
@@ -159,18 +160,19 @@ describe('procedural formation generation', () => {
   it('uses weighted styles without immediate repeats when another style exists', () => {
     const selectedRecipe = { ...recipe(), profile: {
       ...recipe().profile,
-      styleWeights: { cluster: 5, pockets: 2, bands: 1 },
+      styleWeights: { cluster: 5, pockets: 3, bands: 2 },
     } };
-    const styles = Array.from({ length: 600 }, (_, sequence) =>
+    const styles = Array.from({ length: 30 }, (_, sequence) =>
       createReinforcementFormation(selectedRecipe, sequence, 808).style);
-    const counts = styles.reduce<Record<string, number>>(
-      (result, style) => ({ ...result, [style]: (result[style] ?? 0) + 1 }),
-      {},
-    );
     expect(styles.every((style, index) => index === 0 || style !== styles[index - 1])).toBe(true);
-    expect(counts.cluster).toBeGreaterThan(counts.pockets!);
-    expect(counts.pockets).toBeGreaterThan(counts.bands!);
-    expect(styles).toEqual(Array.from({ length: 600 }, (_, sequence) =>
+    for (let start = 0; start < styles.length; start += 10) {
+      const counts = styles.slice(start, start + 10).reduce<Partial<Record<FormationStyle, number>>>(
+        (result, style) => ({ ...result, [style]: (result[style] ?? 0) + 1 }),
+        {},
+      );
+      expect(counts).toEqual({ cluster: 5, pockets: 3, bands: 2 });
+    }
+    expect(styles).toEqual(Array.from({ length: 30 }, (_, sequence) =>
       createReinforcementFormation(selectedRecipe, sequence, 808).style));
   });
 

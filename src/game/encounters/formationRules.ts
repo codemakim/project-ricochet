@@ -383,20 +383,31 @@ function styleAt(
   sequence: number,
   styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
 ): FormationStyle {
-  const weighted = Object.entries(styleWeights) as [FormationStyle, number][];
-  if (weighted.length === 0) throw new RangeError('recipe profile needs a weighted style');
-  const random = createRandom(mix(runSeed, 0));
+  const bagTemplate = Object.entries(styleWeights).flatMap(([style, weight]) =>
+    Array.from({ length: weight! }, () => style as FormationStyle));
+  if (bagTemplate.length === 0) throw new RangeError('recipe profile needs a weighted style');
+  const cycle = Math.floor(sequence / bagTemplate.length);
   let previous: FormationStyle | undefined;
-  for (let index = 0; index <= sequence; index += 1) {
-    const candidates = weighted.length === 1
-      ? weighted
-      : weighted.filter(([style]) => style !== previous);
-    const total = candidates.reduce((sum, [, weight]) => sum + weight, 0);
-    let cursor = random() * total;
-    previous = candidates.find(([, weight]) => ((cursor -= weight) < 0))?.[0]
-      ?? candidates.at(-1)![0];
+  let bag: FormationStyle[] = [];
+  for (let index = 0; index <= cycle; index += 1) {
+    const random = createRandom(mix(runSeed, index));
+    const arrange = (remaining: FormationStyle[], result: FormationStyle[]): FormationStyle[] | null => {
+      if (remaining.length === 0) return result;
+      const last = result.at(-1) ?? previous;
+      for (const style of shuffled([...new Set(remaining)], random)) {
+        if (style === last) continue;
+        const next = [...remaining];
+        next.splice(remaining.indexOf(style), 1);
+        const arranged = arrange(next, [...result, style]);
+        if (arranged) return arranged;
+      }
+      return null;
+    };
+    bag = arrange([...bagTemplate], []) ?? [];
+    if (bag.length === 0) throw new RangeError('recipe profile style weights cannot avoid repeats');
+    previous = bag.at(-1);
   }
-  return previous!;
+  return bag[sequence % bagTemplate.length]!;
 }
 
 const INITIAL_FORMATION_CONTENT = {

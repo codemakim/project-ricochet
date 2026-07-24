@@ -121,6 +121,11 @@ function nonNegativeInteger(value: number, name: string): void {
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
 }
 
+function positiveInteger(value: number, name: string): void {
+  positive(value, name);
+  if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
+}
+
 export function validateStageContent(
   stages: readonly StageDefinition[] = STAGES,
   catalog: readonly EnemyCatalogEntry[] = ENEMY_CATALOG,
@@ -134,7 +139,13 @@ export function validateStageContent(
     nonNegativeInteger(profile.maximum, `${profile.id}.maximum`);
     if (profile.minimum < 1 || profile.maximum < profile.minimum) throw new RangeError(`${profile.id} range must be ordered and positive`);
     if (Object.keys(profile.styleWeights).length === 0) throw new RangeError(`${profile.id} needs a style`);
-    for (const [style, weight] of Object.entries(profile.styleWeights)) positive(weight!, `${profile.id}.${style}`);
+    const styleWeights = Object.entries(profile.styleWeights);
+    for (const [style, weight] of styleWeights) positiveInteger(weight!, `${profile.id}.${style}`);
+    const totalStyleWeight = styleWeights.reduce((sum, [, weight]) => sum + weight!, 0);
+    const maximumStyleWeight = Math.max(...styleWeights.map(([, weight]) => weight!));
+    if (maximumStyleWeight > totalStyleWeight - maximumStyleWeight + 1) {
+      throw new RangeError(`${profile.id} style weights cannot avoid repeats`);
+    }
   }
   const catalogKinds = new Set<EnemyKind>();
   for (const entry of catalog) {
