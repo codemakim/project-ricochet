@@ -588,8 +588,9 @@ export class BossManager implements BossEncounter {
 
   private beginSupportWarnings(startsAt: number, attackIndex: number): number {
     const dueAt = startsAt + GAME_TUNING.projectiles.bossSupport.warningMs;
+    const anchorX = clamp(this.options.player.x, 24, GAME_WIDTH - 24);
     for (const x of fallingOrigins(
-      this.options.player.x,
+      anchorX,
       24,
       GAME_WIDTH - 24,
       [0, attackIndex % 2 === 0 ? 90 : -90],

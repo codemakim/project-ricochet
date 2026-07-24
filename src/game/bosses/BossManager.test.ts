@@ -619,6 +619,30 @@ describe('BossManager', () => {
       .toEqual([225, 315]);
   });
 
+  it('clamps the left-edge support anchor before applying its positive offset', () => {
+    const boundary = createBoundary();
+    boundary.player.setPosition(18, boundary.player.y);
+
+    updateAt(boundary, 5600);
+
+    expect(boundary.groups[2]!.children
+      .filter((child) => child.active && child.texture === 'boss-drop-marker')
+      .map((child) => child.x)).toEqual([24, 114]);
+  });
+
+  it('clamps the right-edge support anchor before applying its negative offset', () => {
+    const boundary = createBoundary();
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
+    boundary.player.setPosition(432, boundary.player.y);
+
+    updateAt(boundary, 5700);
+
+    expect(boundary.groups[2]!.children
+      .filter((child) => child.active && child.texture === 'boss-drop-marker')
+      .map((child) => child.x)).toEqual([426, 336]);
+  });
+
   it('uses per-kind damage and consumes each hostile action', () => {
     const boundary = createBoundary();
     updateAt(boundary, 900);
