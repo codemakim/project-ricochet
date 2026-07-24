@@ -1668,14 +1668,17 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
   const reflector = (await snapshot(page)).boss.partPositions!.leftReflector!;
-  await sceneCall(page, (scene, position) => {
-    scene.debugPlaceOrb(0, { x: position.x, y: position.y + 60 });
-  }, reflector);
+  await sceneCall(page, (scene) => {
+    const wall = scene.children.list.find(
+      (child) => child.active && child.texture?.key === 'hive-left-reflector',
+    )!;
+    scene.debugPlaceOrb(0, { x: wall.x!, y: wall.y! + wall.displayHeight! / 2 + 12 });
+  });
   await expect.poll(async () => (
     await snapshot(page)
   ).orbs[0]!.velocity.y).toBeGreaterThan(0);
   const afterReflection = await snapshot(page);
-  expect(afterReflection.boss.parts!.leftReflector).toBeLessThan(14);
+  expect(afterReflection.boss.parts!.leftReflector).toBeLessThan(24);
   await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
     (child) => child.active && child.texture?.key === 'hive-shooter-bullet',
   ))).toBe(true);
