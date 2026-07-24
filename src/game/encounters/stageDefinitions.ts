@@ -50,12 +50,12 @@ export interface StageDefinition {
 
 const STYLE_WEIGHTS = { cluster: 2, pockets: 2, bands: 2, scatter: 2, grid: 1 } as const;
 
-export const ENEMY_CATALOG = [
-  { kind: 'basic', minStage: 1, battlefields: ['default'], tags: ['standard'], weight: 10 },
+export const ENEMY_CATALOG: readonly EnemyCatalogEntry[] = [
+  { kind: 'basic', minStage: 1, battlefields: ['default'], tags: ['standard'], weight: 1 },
   { kind: 'armored', minStage: 1, battlefields: ['default'], tags: ['armored'], weight: 1, maxPerFormation: 3 },
   { kind: 'shooter', minStage: 1, battlefields: ['default'], tags: ['shooter'], weight: 1, maxPerFormation: 3 },
   { kind: 'splitter', minStage: 2, battlefields: ['default'], tags: ['splitter'], weight: 1, maxPerFormation: 2 },
-] as const satisfies readonly EnemyCatalogEntry[];
+] as const;
 
 export const FORMATION_PROFILES = [
   { id: 'opening', styleWeights: STYLE_WEIGHTS, minimum: 13, maximum: 15 },
@@ -178,6 +178,7 @@ export function validateStageContent(
         && (stagePhase.maxPerFormationOverrides?.[entry.kind] ?? entry.maxPerFormation ?? Infinity) > 0);
       if (!eligible) throw new RangeError(`${stage.id} phase needs an eligible enemy`);
     }
+    if (!stage.boss?.kind) throw new RangeError(`${stage.id} must have a boss`);
     positive(stage.boss.minimumMs, `${stage.id}.boss.minimumMs`);
     positive(stage.boss.scoreTarget, `${stage.id}.boss.scoreTarget`);
     positive(stage.boss.hardMaximumMs, `${stage.id}.boss.hardMaximumMs`);

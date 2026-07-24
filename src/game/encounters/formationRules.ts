@@ -1,7 +1,8 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { populationCostForEnemy } from '../enemies/splitterRules';
-import type { ThreatPhase } from './encounterRules';
+import { ENEMY_CATALOG } from './stageDefinitions';
+import type { BattlefieldId, FormationProfile } from './stageDefinitions';
 
 export type FormationStyle = 'cluster' | 'pockets' | 'bands' | 'scatter' | 'grid';
 
@@ -12,17 +13,22 @@ export interface FormationResult {
   populationCost: number;
 }
 
+export interface FormationRecipe {
+  stageNumber: number;
+  battlefield: BattlefieldId;
+  profile: FormationProfile;
+  enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
+  maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
+  hpMultiplier: number;
+  descentSpeedMultiplier: number;
+}
+
 interface Cell {
   row: number;
   column: number;
 }
 
 const COLUMNS = 8;
-const BAG = [
-  'cluster', 'cluster', 'pockets', 'pockets',
-  'bands', 'bands', 'scatter', 'scatter', 'grid',
-] as const;
-const ORGANIC = ['cluster', 'pockets', 'bands', 'scatter'] as const;
 
 function validateSeed(seed: number, name = 'seed'): void {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
@@ -287,6 +293,37 @@ function assignKinds(
   });
 }
 
+function assignRecipeKinds(enemies: EnemySpec[], recipe: FormationRecipe, seed: number): EnemySpec[] {
+  const random = createRandom(seed);
+  const counts = new Map<EnemyKind, number>();
+  const candidates = ENEMY_CATALOG.filter((entry) => entry.minStage <= recipe.stageNumber
+    && entry.battlefields.includes(recipe.battlefield)
+    && entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0);
+  return enemies.map((enemy) => {
+    const available = candidates.filter((entry) => {
+      const cap = recipe.maxPerFormationOverrides && Object.hasOwn(recipe.maxPerFormationOverrides, entry.kind)
+        ? recipe.maxPerFormationOverrides[entry.kind]!
+        : entry.maxPerFormation;
+      return cap === undefined || (counts.get(entry.kind) ?? 0) < cap;
+    });
+    const totalWeight = available.reduce((sum, entry) =>
+      sum + entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1), 0);
+    if (totalWeight <= 0) throw new RangeError('recipe needs an eligible uncapped enemy');
+    let cursor = random() * totalWeight;
+    const selected = available.find((entry) => {
+      cursor -= entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1);
+      return cursor < 0;
+    }) ?? available.at(-1)!;
+    counts.set(selected.kind, (counts.get(selected.kind) ?? 0) + 1);
+    return {
+      ...enemy,
+      kind: selected.kind,
+      hp: GAME_TUNING.enemies.hp[selected.kind] * recipe.hpMultiplier,
+      speed: GAME_TUNING.enemies.descentSpeed * recipe.descentSpeedMultiplier,
+    };
+  });
+}
+
 function generateWithPressure(
   style: FormationStyle,
   count: number,
@@ -341,8 +378,22 @@ export function generateFormation(
   return generateWithPressure(style, count, seed, originY, 3, 3, 0, mix(seed, 0x4b494e44));
 }
 
-function createBag(runSeed: number, cycle: number, previous?: FormationStyle): FormationStyle[] {
+function styleBag(styleWeights: Readonly<Partial<Record<FormationStyle, number>>>): FormationStyle[] {
+  const bag = Object.entries(styleWeights).flatMap(([style, weight]) =>
+    Array.from({ length: Math.max(1, Math.round(weight!)) }, () => style as FormationStyle));
+  const counts = bag.reduce((result, style) => ({ ...result, [style]: (result[style] ?? 0) + 1 }), {} as Partial<Record<FormationStyle, number>>);
+  const largest = Math.max(...Object.values(counts));
+  return largest > bag.length - largest + 1 ? [...new Set(bag)] : bag;
+}
+
+function createBag(
+  runSeed: number,
+  cycle: number,
+  styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
+  previous?: FormationStyle,
+): FormationStyle[] {
   const random = createRandom(mix(runSeed, cycle));
+  const bag = styleBag(styleWeights);
   const solve = (remaining: FormationStyle[], result: FormationStyle[]): FormationStyle[] | null => {
     if (remaining.length === 0) return result;
     const last = result.at(-1) ?? previous;
@@ -356,30 +407,50 @@ function createBag(runSeed: number, cycle: number, previous?: FormationStyle): F
     }
     return null;
   };
-  const result = solve([...BAG], []);
+  const result = solve(bag, []);
   if (!result) throw new Error('unable to arrange formation bag');
   return result;
 }
 
-function styleAt(runSeed: number, sequence: number): FormationStyle {
-  const cycle = Math.floor(sequence / BAG.length);
+function styleAt(
+  runSeed: number,
+  sequence: number,
+  styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
+): FormationStyle {
+  const bagSize = styleBag(styleWeights).length;
+  if (bagSize === 0) throw new RangeError('recipe profile needs a weighted style');
+  const cycle = Math.floor(sequence / bagSize);
   let previous: FormationStyle | undefined;
   let bag: FormationStyle[] = [];
   for (let index = 0; index <= cycle; index += 1) {
-    bag = createBag(runSeed, index, previous);
+    bag = createBag(runSeed, index, styleWeights, previous);
     previous = bag[bag.length - 1];
   }
-  return bag[sequence % BAG.length]!;
+  return bag[sequence % bagSize]!;
 }
+
+const INITIAL_RECIPE: FormationRecipe = {
+  stageNumber: 1,
+  battlefield: 'default',
+  profile: {
+    id: 'initial',
+    styleWeights: { cluster: 1, pockets: 1, bands: 1, scatter: 1 },
+    minimum: GAME_TUNING.encounter.initialFormation.count,
+    maximum: GAME_TUNING.encounter.initialFormation.count,
+  },
+  hpMultiplier: 1,
+  descentSpeedMultiplier: 1,
+};
 
 export function createInitialFormation(runSeed: number): FormationResult {
   validateSeed(runSeed, 'runSeed');
-  const style = ORGANIC[mix(runSeed, 0x494e4954) % ORGANIC.length]!;
+  const initialStyles = Object.keys(INITIAL_RECIPE.profile.styleWeights) as FormationStyle[];
+  const style = initialStyles[mix(runSeed, 0x494e4954) % initialStyles.length]!;
   const layoutSeed = mix(runSeed, 0x4c41594f);
   const tuning = GAME_TUNING.encounter.initialFormation;
   const enemies = generateWithPressure(
     style,
-    tuning.count,
+    INITIAL_RECIPE.profile.minimum,
     layoutSeed,
     tuning.originY,
     tuning.armored,
@@ -396,7 +467,7 @@ export function createInitialFormation(runSeed: number): FormationResult {
 }
 
 export function createReinforcementFormation(
-  phase: ThreatPhase,
+  recipe: FormationRecipe,
   sequence: number,
   runSeed: number,
 ): FormationResult {
@@ -404,22 +475,22 @@ export function createReinforcementFormation(
     throw new RangeError('sequence must be a non-negative integer');
   }
   validateSeed(runSeed, 'runSeed');
-  const style = styleAt(runSeed, sequence);
-  const phaseTuning = GAME_TUNING.encounter.phases[phase];
-  const { minimum, maximum } = phaseTuning.formation;
+  const style = styleAt(runSeed, sequence, recipe.profile.styleWeights);
+  const { minimum, maximum } = recipe.profile;
   const countSeed = mix(runSeed, sequence ^ 0x53495a45);
   const count = minimum + countSeed % (maximum - minimum + 1);
   const layoutSeed = mix(runSeed, sequence ^ 0x4c41594f);
-  const enemies = generateWithPressure(
+  const layout = generateWithPressure(
     style,
     count,
     layoutSeed,
     GAME_TUNING.encounter.reinforcementOriginY,
-    phaseTuning.armored,
-    phaseTuning.shooters,
-    phaseTuning.splitters,
-    mix(runSeed, sequence ^ 0x4b494e44),
+    0,
+    0,
+    0,
+    0,
   );
+  const enemies = assignRecipeKinds(layout, recipe, mix(runSeed, sequence ^ 0x4b494e44));
   return {
     id: `${runSeed}:${sequence}:${style}:${layoutSeed}`,
     style,

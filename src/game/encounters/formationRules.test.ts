@@ -4,11 +4,26 @@ import {
   createInitialFormation,
   createReinforcementFormation,
   generateFormation,
-  type FormationStyle,
+  type FormationRecipe,
 } from './formationRules';
 import { populationCostForEnemy } from '../enemies/splitterRules';
+import { ENEMY_CATALOG, FORMATION_PROFILES, STAGES } from './stageDefinitions';
 
 const ORGANIC = ['cluster', 'pockets', 'bands', 'scatter'] as const;
+
+function recipe(stageIndex = 0, phaseIndex = 0): FormationRecipe {
+  const stage = STAGES[stageIndex]!;
+  const stagePhase = stage.phases[phaseIndex]!;
+  return {
+    stageNumber: stage.number,
+    battlefield: stage.battlefield,
+    profile: FORMATION_PROFILES.find(({ id }) => id === stagePhase.formationProfileId)!,
+    enemyWeightMultipliers: stagePhase.enemyWeightMultipliers,
+    maxPerFormationOverrides: stagePhase.maxPerFormationOverrides,
+    hpMultiplier: stage.hpMultiplier,
+    descentSpeedMultiplier: stage.descentSpeedMultiplier,
+  };
+}
 
 function hasAdjacentPair(enemies: ReturnType<typeof generateFormation>): boolean {
   return enemies.some((enemy, index) => enemies.slice(index + 1).some((other) =>
@@ -97,8 +112,8 @@ describe('procedural formation generation', () => {
   it('reproduces public results for the same run seed and sequence', () => {
     expect(createInitialFormation(321)).toEqual(createInitialFormation(321));
     for (let sequence = 0; sequence < 9; sequence += 1) {
-      expect(createReinforcementFormation(1, sequence, 321))
-        .toEqual(createReinforcementFormation(1, sequence, 321));
+      expect(createReinforcementFormation(recipe(0, 1), sequence, 321))
+        .toEqual(createReinforcementFormation(recipe(0, 1), sequence, 321));
     }
   });
 
@@ -106,7 +121,7 @@ describe('procedural formation generation', () => {
     const publicLayouts = (runSeed: number) => [
       createInitialFormation(runSeed),
       ...Array.from({ length: 9 }, (_, sequence) =>
-        createReinforcementFormation(1, sequence, runSeed)),
+        createReinforcementFormation(recipe(0, 1), sequence, runSeed)),
     ].map(({ style, enemies }) => ({
       style,
       coordinates: enemies.map(({ x, y }) => [x, y]),
@@ -131,56 +146,49 @@ describe('procedural formation generation', () => {
     }
   });
 
-  it('covers each tuned reinforcement size range', () => {
-    for (const phase of [0, 1, 2, 3] as const) {
+  it('keeps formation size within its selected profile range', () => {
+    for (const selectedRecipe of [recipe(0, 0), recipe(0, 1), recipe(0, 2), recipe(1, 1)]) {
       const counts = Array.from({ length: 64 }, (_, sequence) =>
-        createReinforcementFormation(phase, sequence, 808).enemies.length);
-      expect(Math.min(...counts)).toBe(GAME_TUNING.encounter.phases[phase].formation.minimum);
-      expect(Math.max(...counts)).toBe(GAME_TUNING.encounter.phases[phase].formation.maximum);
+        createReinforcementFormation(selectedRecipe, sequence, 808).enemies.length);
+      expect(Math.min(...counts)).toBe(selectedRecipe.profile.minimum);
+      expect(Math.max(...counts)).toBe(selectedRecipe.profile.maximum);
     }
   });
 
-  it('uses a 2/2/2/2/1 bag and never repeats adjacent styles', () => {
+  it('uses weighted styles without immediate repeats when another style exists', () => {
+    const selectedRecipe = { ...recipe(), profile: {
+      ...recipe().profile,
+      styleWeights: { cluster: 3, pockets: 1 },
+    } };
     const styles = Array.from({ length: 27 }, (_, sequence) =>
-      createReinforcementFormation((sequence % 3) as 0 | 1 | 2, sequence, 808).style);
-    for (let start = 0; start < styles.length; start += 9) {
-      const counts = styles.slice(start, start + 9).reduce<Record<FormationStyle, number>>(
-        (result, style) => ({ ...result, [style]: result[style] + 1 }),
-        { cluster: 0, pockets: 0, bands: 0, scatter: 0, grid: 0 },
-      );
-      expect(counts).toEqual({ cluster: 2, pockets: 2, bands: 2, scatter: 2, grid: 1 });
-    }
+      createReinforcementFormation(selectedRecipe, sequence, 808).style);
     expect(styles.every((style, index) => index === 0 || style !== styles[index - 1])).toBe(true);
   });
 
-  it.each([0, 1, 2] as const)(
-    'uses exact tuned phase-%i reinforcement pressure',
-    (phase) => {
-      const { armored, shooters } = GAME_TUNING.encounter.phases[phase];
-      for (const runSeed of [0, 55, 808]) {
-        for (const sequence of [0, 1, 8, 9, 17, 26]) {
-          const enemies = createReinforcementFormation(phase, sequence, runSeed).enemies;
-          expect(enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(armored);
-          expect(enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(shooters);
-          expect(enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind])).toBe(true);
-        }
-      }
-    },
-  );
+  it('filters catalog kinds by stage and battlefield', () => {
+    const result = createReinforcementFormation({
+      ...recipe(),
+      enemyWeightMultipliers: { basic: 1, armored: 0, shooter: 0, splitter: 100 },
+    }, 0, 808);
+    expect(result.enemies.every(({ kind }) => ENEMY_CATALOG.some((entry) =>
+      entry.kind === kind && entry.minStage <= 1 && entry.battlefields.includes('default')))).toBe(true);
+    expect(result.enemies.some(({ kind }) => kind === 'splitter' || kind === 'fragment')).toBe(false);
+  });
 
-  it('uses phase-three splitter pressure without generating fragments', () => {
-    for (const sequence of Array.from({ length: 64 }, (_, index) => index)) {
-      const result = createReinforcementFormation(3, sequence, 808);
-      expect(result.enemies.length).toBeGreaterThanOrEqual(21);
-      expect(result.enemies.length).toBeLessThanOrEqual(25);
-      expect(result.enemies.filter(({ kind }) => kind === 'splitter')).toHaveLength(2);
-      expect(result.enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(3);
-      expect(result.enemies.filter(({ kind }) => kind === 'shooter')).toHaveLength(3);
-      expect(result.enemies.some(({ kind }) => kind === 'fragment')).toBe(false);
-      expect(result.populationCost).toBe(
-        result.enemies.reduce((sum, enemy) => sum + populationCostForEnemy(enemy.kind), 0),
-      );
-    }
+  it('merges catalog caps with phase overrides, with phase caps winning', () => {
+    const result = Array.from({ length: 64 }, (_, sequence) =>
+      createReinforcementFormation({
+        ...recipe(),
+        enemyWeightMultipliers: { basic: 1, armored: 100, shooter: 0, splitter: 0 },
+        maxPerFormationOverrides: { armored: 1, shooter: 0, splitter: 0 },
+      }, sequence, 808));
+    expect(result.every(({ enemies }) => enemies.filter(({ kind }) => kind === 'armored').length <= 1)).toBe(true);
+  });
+
+  it('applies recipe HP and descent speed multipliers', () => {
+    const result = createReinforcementFormation({ ...recipe(), hpMultiplier: 2, descentSpeedMultiplier: 1.5 }, 0, 808);
+    expect(result.enemies.every(({ kind, hp }) => hp === GAME_TUNING.enemies.hp[kind] * 2)).toBe(true);
+    expect(result.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed * 1.5)).toBe(true);
   });
 
   it('rejects invalid counts, seeds, and sequences with clear RangeErrors', () => {
@@ -193,11 +201,11 @@ describe('procedural formation generation', () => {
         .toThrowError(new RangeError('seed must be an unsigned 32-bit integer'));
       expect(() => createInitialFormation(seed))
         .toThrowError(new RangeError('runSeed must be an unsigned 32-bit integer'));
-      expect(() => createReinforcementFormation(0, 0, seed))
+      expect(() => createReinforcementFormation(recipe(), 0, seed))
         .toThrowError(new RangeError('runSeed must be an unsigned 32-bit integer'));
     }
     for (const sequence of [-1, 1.5]) {
-      expect(() => createReinforcementFormation(0, sequence, 1))
+      expect(() => createReinforcementFormation(recipe(), sequence, 1))
         .toThrowError(new RangeError('sequence must be a non-negative integer'));
     }
   });
