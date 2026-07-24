@@ -471,7 +471,13 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().aimedBullets).toBe(0);
     boundary.gameplay.now = 3400;
     boundary.manager.update();
-    expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, aimedBullets: 3 });
+    const snapshot = boundary.manager.getSnapshot();
+    expect(snapshot).toMatchObject({ warnings: 0, aimedBullets: 3 });
+    const angles = snapshot.projectiles.map(({ velocity }) => (
+      Math.round(Math.atan2(velocity.x, velocity.y) * 180 / Math.PI)
+    ));
+    expect(angles[0]! - angles[1]!).toBe(12);
+    expect(angles[1]! - angles[2]!).toBe(12);
   });
 
   it('flashes at 750ms and fires one aimed basic bullet at 900ms', () => {
@@ -609,6 +615,8 @@ describe('BossManager', () => {
     boundary.gameplay.now = 6400;
     boundary.manager.update();
     expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, fallingHazards: 2 });
+    expect(boundary.groups[1]!.children.filter((child) => child.active).map((child) => child.x))
+      .toEqual([225, 315]);
   });
 
   it('uses per-kind damage and consumes each hostile action', () => {

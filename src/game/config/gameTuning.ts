@@ -76,7 +76,7 @@ export interface GameTuning {
     hostileCap: number;
     offscreenMargin: number;
     bossBasic: { intervalMs: number; warningMs: number; speed: number; damage: number; radius: number };
-    bossAimed: { warningMs: number; speed: number; damage: number; radius: number; fanDegrees: readonly [number, number, number] };
+    bossAimed: { warningMs: number; speed: number; damage: number; radius: number; count: number; spreadDegrees: number };
     bossSupport: { warningMs: number; speed: number; damage: number; width: number; height: number };
     hiveShooter: { intervalMs: number; offsetMs: number; warningMs: number; speed: number; damage: number; radius: number };
     hiveCore: { intervalMs: number; speed: number; damage: number; radius: number; fanDegrees: readonly [number, number, number, number, number] };
@@ -162,7 +162,7 @@ export const GAME_TUNING = {
     hostileCap: 12,
     offscreenMargin: 20,
     bossBasic: { intervalMs: 900, warningMs: 150, speed: 150, damage: 1, radius: 5 },
-    bossAimed: { warningMs: 600, speed: 220, damage: 1, radius: 5, fanDegrees: [-12, 0, 12] },
+    bossAimed: { warningMs: 600, speed: 220, damage: 1, radius: 5, count: 3, spreadDegrees: 24 },
     bossSupport: { warningMs: 800, speed: 240, damage: 2, width: 16, height: 24 },
     hiveShooter: { intervalMs: 1400, offsetMs: 700, warningMs: 300, speed: 170, damage: 1, radius: 5 },
     hiveCore: { intervalMs: 7000, speed: 140, damage: 1, radius: 5, fanDegrees: [-36, -18, 0, 18, 36] },
@@ -381,9 +381,8 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(projectiles.bossAimed.radius, 'projectiles.bossAimed.radius');
   positive(projectiles.bossSupport.width, 'projectiles.bossSupport.width');
   positive(projectiles.bossSupport.height, 'projectiles.bossSupport.height');
-  if (!projectiles.bossAimed.fanDegrees.every(Number.isFinite)) {
-    throw new RangeError('projectiles.bossAimed.fanDegrees must be finite');
-  }
+  positiveInteger(projectiles.bossAimed.count, 'projectiles.bossAimed.count');
+  finite(projectiles.bossAimed.spreadDegrees, 'projectiles.bossAimed.spreadDegrees');
   if (!projectiles.hiveCore.fanDegrees.every(Number.isFinite)) {
     throw new RangeError('projectiles.hiveCore.fanDegrees must be finite');
   }

@@ -13,6 +13,7 @@ import type {
   BossProjectileSnapshot as CommonBossProjectileSnapshot,
 } from './bossEncounter';
 import { BOSS_GEOMETRY } from './bossGeometry';
+import { aimedBurst, aimedShot, fallingOrigins } from './bossAttackPatterns';
 import { updateBossMotion, type BossMotion, type HorizontalInterval } from './bossMovementRules';
 import {
   bossPhase,
@@ -587,9 +588,12 @@ export class BossManager implements BossEncounter {
 
   private beginSupportWarnings(startsAt: number, attackIndex: number): number {
     const dueAt = startsAt + GAME_TUNING.projectiles.bossSupport.warningMs;
-    const playerX = clamp(this.options.player.x, 24, GAME_WIDTH - 24);
-    const secondX = clamp(playerX + (attackIndex % 2 === 0 ? 90 : -90), 24, GAME_WIDTH - 24);
-    for (const x of [playerX, secondX]) {
+    for (const x of fallingOrigins(
+      this.options.player.x,
+      24,
+      GAME_WIDTH - 24,
+      [0, attackIndex % 2 === 0 ? 90 : -90],
+    )) {
       const marker = this.warningGroup.create(x, GAME_HEIGHT - 16, 'boss-drop-marker') as BossSprite;
       marker.setDepth(BOSS_ACTION_DEPTH);
       this.warnings.push({ kind: 'supportDrop', dueAt, marker, x });
@@ -625,10 +629,7 @@ export class BossManager implements BossEncounter {
     if (this.options.getEnemyBulletCount() + this.getBulletCount()
       >= GAME_TUNING.projectiles.hostileCap) return;
     const origin = { x: this.motion.x, y: GAME_TUNING.boss.y };
-    const direction = normalize({
-      x: this.options.player.x - origin.x,
-      y: this.options.player.y - origin.y,
-    });
+    const shot = aimedShot(origin, this.options.player, tuning.speed, { x: 0, y: -1 });
     const bullet = this.aimedBulletGroup.create(
       origin.x,
       origin.y,
@@ -636,22 +637,24 @@ export class BossManager implements BossEncounter {
     ) as BossProjectileSprite;
     bullet.bossProjectileKind = 'basic';
     bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
-      direction.x * tuning.speed,
-      direction.y * tuning.speed,
+      shot.direction.x * shot.speed,
+      shot.direction.y * shot.speed,
     );
   }
 
   private fireAimedFan(target: Vector): void {
     const tuning = GAME_TUNING.projectiles.bossAimed;
     const origin = { x: this.motion.x, y: GAME_TUNING.boss.y };
-    const aimed = normalize({
-      x: target.x - origin.x,
-      y: target.y - origin.y,
-    });
-    for (const angle of tuning.fanDegrees) {
+    for (const shot of aimedBurst(
+      origin,
+      target,
+      tuning.speed,
+      tuning.count,
+      tuning.spreadDegrees,
+      { x: 0, y: -1 },
+    )) {
       if (this.options.getEnemyBulletCount() + this.getBulletCount()
         >= GAME_TUNING.projectiles.hostileCap) break;
-      const direction = this.rotate(aimed, angle);
       const bullet = this.aimedBulletGroup.create(
         origin.x,
         origin.y,
@@ -659,8 +662,8 @@ export class BossManager implements BossEncounter {
       ) as BossProjectileSprite;
       bullet.bossProjectileKind = 'aimed';
       bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
-        direction.x * tuning.speed,
-        direction.y * tuning.speed,
+        shot.direction.x * shot.speed,
+        shot.direction.y * shot.speed,
       );
     }
   }
@@ -769,13 +772,4 @@ export class BossManager implements BossEncounter {
     return this.partIds().indexOf(partId);
   }
 
-  private rotate(direction: Vector, degrees: number): Vector {
-    const radians = degrees * Math.PI / 180;
-    const cosine = Math.cos(radians);
-    const sine = Math.sin(radians);
-    return {
-      x: direction.x * cosine - direction.y * sine,
-      y: direction.x * sine + direction.y * cosine,
-    };
-  }
 }

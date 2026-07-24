@@ -68,6 +68,9 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.projectiles.hiveShooter).toEqual({
       intervalMs: 1400, offsetMs: 700, warningMs: 300, speed: 170, damage: 1, radius: 5,
     });
+    expect(GAME_TUNING.projectiles.bossAimed).toEqual({
+      warningMs: 600, speed: 220, damage: 1, radius: 5, count: 3, spreadDegrees: 24,
+    });
     expect(GAME_TUNING.projectiles.hiveCore).toEqual({
       intervalMs: 7000, speed: 140, damage: 1, radius: 5, fanDegrees: [-36, -18, 0, 18, 36],
     });
