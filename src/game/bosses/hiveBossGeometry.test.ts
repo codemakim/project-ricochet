@@ -17,8 +17,8 @@ describe('hive boss geometry', () => {
 
   it('defines two ordered reflector paths with the configured minimum corridor', () => {
     const { leftReflector, rightReflector } = HIVE_BOSS_GEOMETRY.reflectors;
-    expect(leftReflector.travel).toEqual({ minimum: 96, maximum: 168 });
-    expect(rightReflector.travel).toEqual({ minimum: 282, maximum: 354 });
+    expect(leftReflector.travel).toEqual({ minimum: 70, maximum: 130 });
+    expect(rightReflector.travel).toEqual({ minimum: 320, maximum: 380 });
     expect(reflectorCorridorWidth(
       leftReflector.travel.maximum,
       rightReflector.travel.minimum,
@@ -28,6 +28,12 @@ describe('hive boss geometry', () => {
   it('keeps every body throughout its path inside 450x800 and away from the core', () => {
     const bodies = [
       HIVE_BOSS_GEOMETRY.core,
+      ...Object.entries(HIVE_BOSS_GEOMETRY.recalled).map(([partId, position]) => ({
+        ...position,
+        ...(partId.includes('Shooter')
+          ? { width: HIVE_BOSS_GEOMETRY.shooters.leftShooter.width, height: HIVE_BOSS_GEOMETRY.shooters.leftShooter.height }
+          : { width: HIVE_BOSS_GEOMETRY.reflectors.leftReflector.width, height: HIVE_BOSS_GEOMETRY.reflectors.leftReflector.height }),
+      })),
       ...Object.values(HIVE_BOSS_GEOMETRY.shooters),
       ...Object.values(HIVE_BOSS_GEOMETRY.reflectors).flatMap((reflector) => [
         { ...reflector, x: reflector.travel.minimum },

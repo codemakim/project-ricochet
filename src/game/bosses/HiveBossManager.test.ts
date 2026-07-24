@@ -234,11 +234,11 @@ describe('HiveBossManager', () => {
       active: true,
       phase: 'shielded',
       parts: {
-        core: 72,
-        leftShooter: 12,
-        rightShooter: 12,
-        leftReflector: 14,
-        rightReflector: 14,
+        core: 120,
+        leftShooter: 20,
+        rightShooter: 20,
+        leftReflector: 24,
+        rightReflector: 24,
       },
       bullets: 0,
       warnings: 0,
@@ -251,20 +251,20 @@ describe('HiveBossManager', () => {
     const positions = () => boundary.manager.getSnapshot().partPositions;
     const recalled = {
       core: { x: 225, y: 140 },
-      leftShooter: { x: 180, y: 140 },
-      rightShooter: { x: 270, y: 140 },
-      leftReflector: { x: 188, y: 216 },
-      rightReflector: { x: 262, y: 216 },
+      leftShooter: { x: 135, y: 140 },
+      rightShooter: { x: 315, y: 140 },
+      leftReflector: { x: 151, y: 292 },
+      rightReflector: { x: 299, y: 292 },
     };
 
     expect(positions()).toEqual(recalled);
     expect(boundary.updateAt(4000).partPositions).toEqual(recalled);
     expect(boundary.updateAt(5500).partPositions).toEqual({
       core: { x: 225, y: 140 },
-      leftShooter: { x: 180, y: 98 },
-      rightShooter: { x: 270, y: 98 },
-      leftReflector: { x: 132, y: 280 },
-      rightReflector: { x: 318, y: 280 },
+      leftShooter: { x: 135, y: 56 },
+      rightShooter: { x: 315, y: 56 },
+      leftReflector: { x: 100, y: 280 },
+      rightReflector: { x: 350, y: 280 },
     });
     expect(boundary.updateAt(12_500).partPositions).toEqual(recalled);
   });
@@ -296,8 +296,8 @@ describe('HiveBossManager', () => {
     permanent.trigger(boundary.orb, permanent.second as FakeSprite);
 
     expect(boundary.manager.getSnapshot().parts).toMatchObject({
-      leftShooter: 6,
-      rightShooter: 11.5,
+      leftShooter: 14,
+      rightShooter: 19.5,
     });
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'hive',
@@ -329,12 +329,12 @@ describe('HiveBossManager', () => {
     expect(boundary.sprite('hive-core-warning').active).toBe(false);
     boundary.gameplay.now = 5501;
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(true);
-    expect(boundary.manager.getSnapshot().parts?.core).toBe(69);
+    expect(boundary.manager.getSnapshot().parts?.core).toBe(117);
 
     expect(boundary.updateAt(12_499).phase).toBe('exposed');
     expect(boundary.updateAt(12_500).phase).toBe('shielded');
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(true);
-    expect(boundary.manager.getSnapshot().parts?.core).toBe(69);
+    expect(boundary.manager.getSnapshot().parts?.core).toBe(117);
   });
 
   it('does not recover orbs or extend exposure based on their state', () => {
@@ -351,16 +351,16 @@ describe('HiveBossManager', () => {
   it('keeps destroyed modules gone across recall and permanently exposes after all four die', () => {
     const boundary = createBoundary();
     const ids = [
-      ['leftShooter', 'hive-left-shooter', 12],
-      ['rightShooter', 'hive-right-shooter', 12],
-      ['leftReflector', 'hive-left-reflector', 14],
-      ['rightReflector', 'hive-right-reflector', 14],
+      ['leftShooter', 'hive-left-shooter', 20],
+      ['rightShooter', 'hive-right-shooter', 20],
+      ['leftReflector', 'hive-left-reflector', 24],
+      ['rightReflector', 'hive-right-reflector', 24],
     ] as const;
 
     boundary.manager.applyAreaDamage(
       { x: boundary.sprite('hive-left-shooter').x, y: boundary.sprite('hive-left-shooter').y },
       1,
-      12,
+      20,
     );
     expect(boundary.sprite('hive-left-shooter')).toMatchObject({ visible: false });
     expect(boundary.sprite('hive-left-shooter').body.enable).toBe(false);
@@ -433,10 +433,10 @@ describe('HiveBossManager', () => {
     boundary.gameplay.now = 1000;
 
     for (const [texture, hp] of [
-      ['hive-left-shooter', 12],
-      ['hive-right-shooter', 12],
-      ['hive-left-reflector', 14],
-      ['hive-right-reflector', 14],
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
     ] as const) {
       const part = boundary.sprite(texture);
       boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp);
@@ -466,18 +466,18 @@ describe('HiveBossManager', () => {
     expect(boundary.temporaryOrb.body.velocity).toEqual(initialTemporaryVelocity);
     expect(boundary.handleEnemyHit).toHaveBeenCalledOnce();
     expect(boundary.handleTemporaryHit).toHaveBeenCalledOnce();
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(10.5);
+    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(20.5);
 
     boundary.updateAt(4000);
     expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(false);
     expect(boundary.orb.body.velocity).toEqual(initialPermanentVelocity);
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(7.5);
+    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(17.5);
 
     boundary.updateAt(5500);
     expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
     expect(boundary.orb.body.velocity.x).toBe(-initialPermanentVelocity.x);
     expect(boundary.synchronizeOrb).toHaveBeenCalledWith(boundary.orb);
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(4.5);
+    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(14.5);
     expect(boundary.colliders.some((collider) => collider.first === boundary.player)).toBe(false);
     expect(boundary.overlaps.every((overlap) => overlap.first === boundary.player)).toBe(true);
     expect(boundary.sprites.filter((sprite) => sprite.texture.includes('reflector'))).toHaveLength(0);
@@ -535,9 +535,9 @@ describe('HiveBossManager', () => {
 
     expect(boundary.manager.applyAreaDamage(center, 100, 2, 'leftShooter')).toBe('rightShooter');
     expect(boundary.manager.getSnapshot().parts).toMatchObject({
-      leftShooter: 12,
-      rightShooter: 10,
-      core: 72,
+      leftShooter: 20,
+      rightShooter: 18,
+      core: 120,
     });
   });
 
@@ -619,7 +619,7 @@ describe('HiveBossManager', () => {
     boundary.updateAt(6900);
     const left = boundary.sprite('hive-left-shooter');
 
-    expect(boundary.manager.applyAreaDamage({ x: left.x, y: left.y }, 1, 12))
+    expect(boundary.manager.applyAreaDamage({ x: left.x, y: left.y }, 1, 20))
       .toBe('leftShooter');
     expect(boundary.manager.getSnapshot().warnings).toBe(0);
 
@@ -657,7 +657,7 @@ describe('HiveBossManager', () => {
     const boundary = createBoundary();
     for (const texture of ['hive-left-shooter', 'hive-right-shooter']) {
       const shooter = boundary.sprite(texture);
-      boundary.manager.applyAreaDamage({ x: shooter.x, y: shooter.y }, 1, 12);
+      boundary.manager.applyAreaDamage({ x: shooter.x, y: shooter.y }, 1, 20);
     }
 
     boundary.updateAt(4000);
@@ -680,10 +680,10 @@ describe('HiveBossManager', () => {
     const boundary = createBoundary();
     boundary.gameplay.now = 1000;
     for (const [texture, hp] of [
-      ['hive-left-shooter', 12],
-      ['hive-right-shooter', 12],
-      ['hive-left-reflector', 14],
-      ['hive-right-reflector', 14],
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
     ] as const) {
       const part = boundary.sprite(texture);
       boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp);
@@ -720,7 +720,7 @@ describe('HiveBossManager', () => {
     const boundary = createBoundary();
     for (const texture of ['hive-left-shooter', 'hive-right-shooter']) {
       const shooter = boundary.sprite(texture);
-      boundary.manager.applyAreaDamage({ x: shooter.x, y: shooter.y }, 1, 12);
+      boundary.manager.applyAreaDamage({ x: shooter.x, y: shooter.y }, 1, 20);
     }
     boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap - 3);
 
@@ -786,10 +786,10 @@ describe('HiveBossManager', () => {
 
     boundary.gameplay.now = 2000;
     for (const [texture, hp] of [
-      ['hive-left-shooter', 12],
-      ['hive-right-shooter', 12],
-      ['hive-left-reflector', 14],
-      ['hive-right-reflector', 14],
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
     ] as const) {
       const part = boundary.sprite(texture);
       boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp);
@@ -799,7 +799,7 @@ describe('HiveBossManager', () => {
     boundary.manager.applyAreaDamage(
       { x: boundary.sprite('hive-core').x, y: boundary.sprite('hive-core').y },
       1,
-      72,
+      120,
     );
     expect(boundary.manager.getSnapshot()).toMatchObject({
       phase: 'defeated', warnings: 0, bullets: 0, projectiles: [],

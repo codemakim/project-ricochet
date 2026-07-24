@@ -53,12 +53,12 @@ describe('GAME_TUNING', () => {
       radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
     });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
-      core: { x: 225, y: 140, visualSize: 56, hitboxSize: 48, hp: 72 },
-      shooter: { width: 34, height: 28, hp: 12 },
+      core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
+      shooter: { width: 68, height: 56, hp: 20 },
       reflector: {
-        width: 18, height: 96, y: 280, hp: 14,
-        leftTravel: { minimum: 96, maximum: 168 },
-        rightTravel: { minimum: 282, maximum: 354 },
+        width: 36, height: 192, y: 280, hp: 24,
+        leftTravel: { minimum: 70, maximum: 130 },
+        rightTravel: { minimum: 320, maximum: 380 },
         speed: 30,
         hitCooldownMs: 80,
         minimumCorridorWidth: 96,
