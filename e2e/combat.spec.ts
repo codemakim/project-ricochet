@@ -42,7 +42,7 @@ interface CombatSnapshot {
   encounter: {
     elapsedMs: number;
     elapsedSinceSpawnMs: number;
-    phase: 0 | 1 | 2 | 3;
+    phase: number;
     spawnSequence: number;
     runSeed: number;
     lastFormationId: string | null;
@@ -102,6 +102,11 @@ interface CombatSnapshot {
   activePopulation: number;
   gameplayElapsedMs: number;
 }
+
+const FIFTH_PHASE_FIXTURE = { phase: 4 } satisfies Pick<
+  CombatSnapshot['encounter'],
+  'phase'
+>;
 
 type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
 
