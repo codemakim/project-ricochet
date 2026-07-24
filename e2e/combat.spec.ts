@@ -1667,11 +1667,13 @@ test('@desktop hive permanent exposure fires both enrage patterns and still rewa
     scene.debugDamageBossPart('rightShooter', 20);
     scene.debugDamageBossPart('leftReflector', 24);
     scene.debugDamageBossPart('rightReflector', 24);
-    scene.update(0, 2_800);
-    return { width: core?.displayWidth, height: core?.displayHeight };
+    scene.update(0, 40);
+    const pulse = { width: core?.displayWidth, height: core?.displayHeight };
+    scene.update(0, 2_760);
+    return pulse;
   });
-  expect(entered.width).toBeGreaterThanOrEqual(112);
-  expect(entered.height).toBeGreaterThanOrEqual(112);
+  expect(entered.width).toBeGreaterThan(116);
+  expect(entered.height).toBeGreaterThan(116);
   const warning = await snapshot(page);
   expect(warning.boss).toMatchObject({
     phase: 'permanentlyExposed',

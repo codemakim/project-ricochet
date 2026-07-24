@@ -779,6 +779,34 @@ describe('HiveBossManager', () => {
     expect(boundary.updateAt(5600).warningKinds).toContain('hiveEnrageFan');
   });
 
+  it('keeps enrage deadlines aligned after a late frame without catching up as a burst', () => {
+    const boundary = createBoundary();
+    for (const [texture, hp] of [
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
+    ] as const) {
+      const part = boundary.sprite(texture);
+      boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp * 2);
+    }
+
+    expect(boundary.updateAt(3000).warningKinds).toEqual([
+      'hiveEnrageFan',
+      'hiveEnrageAimedBurst',
+    ]);
+    expect(boundary.updateAt(3200).warningKinds).toEqual([
+      'hiveEnrageFan',
+      'hiveEnrageAimedBurst',
+    ]);
+    expect(boundary.updateAt(3350).projectiles).toHaveLength(12);
+
+    boundary.manager.clearHostileActions();
+    expect(boundary.updateAt(4799).warnings).toBe(0);
+    expect(boundary.updateAt(4800).warningKinds).toEqual(['hiveEnrageAimedBurst']);
+    expect(boundary.updateAt(5600).warningKinds).toEqual(['hiveEnrageFan']);
+  });
+
   it('checks the shared hostile cap before warning and again before firing', () => {
     const boundary = createBoundary();
     const tuning = GAME_TUNING.projectiles.hiveShooter;

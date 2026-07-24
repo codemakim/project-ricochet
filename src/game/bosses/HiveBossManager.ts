@@ -619,14 +619,24 @@ export class HiveBossManager implements BossEncounter {
   private scheduleEnrageAttacks(now: number): void {
     const { fan, aimedBurst: burst } = GAME_TUNING.projectiles.hiveEnrage;
     if (this.nextEnrageFanAt !== undefined && now >= this.nextEnrageFanAt) {
-      this.nextEnrageFanAt = now + fan.intervalMs;
+      this.nextEnrageFanAt = nextFutureDeadline(this.nextEnrageFanAt, fan.intervalMs, now);
       const offsetDegrees = (this.enrageFanCount % 2) * fan.alternatingOffsetDegrees;
       this.enrageFanCount += 1;
-      if (this.hasHostileCapacity()) this.createEnrageFanWarning(now, offsetDegrees);
+      if (
+        this.hasHostileCapacity()
+        && !this.warnings.some(({ kind }) => kind === 'hiveEnrageFan')
+      ) this.createEnrageFanWarning(now, offsetDegrees);
     }
     if (this.nextEnrageAimedBurstAt !== undefined && now >= this.nextEnrageAimedBurstAt) {
-      this.nextEnrageAimedBurstAt = now + burst.intervalMs;
-      if (this.hasHostileCapacity()) this.createEnrageAimedBurstWarning(now);
+      this.nextEnrageAimedBurstAt = nextFutureDeadline(
+        this.nextEnrageAimedBurstAt,
+        burst.intervalMs,
+        now,
+      );
+      if (
+        this.hasHostileCapacity()
+        && !this.warnings.some(({ kind }) => kind === 'hiveEnrageAimedBurst')
+      ) this.createEnrageAimedBurstWarning(now);
     }
   }
 
@@ -875,6 +885,10 @@ export class HiveBossManager implements BossEncounter {
 
 function midpoint(range: { minimum: number; maximum: number }): number {
   return (range.minimum + range.maximum) / 2;
+}
+
+function nextFutureDeadline(deadline: number, intervalMs: number, now: number): number {
+  return deadline + (Math.floor((now - deadline) / intervalMs) + 1) * intervalMs;
 }
 
 function isShooter(partId: HivePartId): partId is ShooterPartId {
