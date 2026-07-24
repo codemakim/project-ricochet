@@ -11,7 +11,7 @@ import type {
   BossEncounterSnapshot,
 } from './bossEncounter';
 import { HIVE_BOSS_GEOMETRY, type HiveReflectorGeometry } from './hiveBossGeometry';
-import { aimedShot, fanShots } from './bossAttackPatterns';
+import { aimedBurst, aimedShot, fanShots } from './bossAttackPatterns';
 import {
   advanceHiveCycle,
   createHiveBossState,
@@ -26,6 +26,7 @@ const PART_DEPTH = -2;
 const WARNING_DEPTH = 1;
 const SHIELDED_TINT = 0x5d72ff;
 const TELEGRAPH_TINT = 0xffd36a;
+const ENRAGE_TINT = 0xff4d5a;
 const PART_HIT_IDS: Record<HivePartId, number> = {
   core: -10,
   leftShooter: -11,
@@ -42,7 +43,7 @@ const PART_ORDER = [
 ] as const satisfies readonly HivePartId[];
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
-type HiveProjectileKind = 'hiveShooter' | 'hiveCore';
+type HiveProjectileKind = 'hiveShooter' | 'hiveCore' | 'hiveEnrageFan' | 'hiveEnrageAimedBurst';
 type HiveProjectileSprite = BossSprite & { hiveProjectileKind: HiveProjectileKind };
 type ShooterPartId = 'leftShooter' | 'rightShooter';
 type HiveWarning =
@@ -53,7 +54,9 @@ type HiveWarning =
     target: Vector;
     marker: BossSprite;
   }
-  | { kind: 'coreFan'; dueAt: number; marker: BossSprite };
+  | { kind: 'coreFan'; dueAt: number; marker: BossSprite }
+  | { kind: 'hiveEnrageFan'; dueAt: number; marker: BossSprite; offsetDegrees: number }
+  | { kind: 'hiveEnrageAimedBurst'; dueAt: number; marker: BossSprite; target: Vector };
 
 interface PendingHit {
   result: HitResult;
@@ -107,7 +110,9 @@ export class HiveBossManager implements BossEncounter {
   private defeatReported = false;
   private warnings: HiveWarning[] = [];
   private readonly nextShooterWarningAt: Record<ShooterPartId, number>;
-  private nextCoreFanAt?: number;
+  private nextEnrageFanAt?: number;
+  private nextEnrageAimedBurstAt?: number;
+  private enrageFanCount = 0;
   private readonly unsubscribeOrbAdded: () => void;
 
   constructor(
@@ -218,6 +223,7 @@ export class HiveBossManager implements BossEncounter {
       this.scheduleAttacks(now);
       this.resolveWarnings(now);
     }
+    this.synchronizeCoreVisual();
     this.cleanOffscreenBullets();
   }
 
@@ -247,6 +253,7 @@ export class HiveBossManager implements BossEncounter {
       parts: { ...this.state.parts },
       bullets: this.getBulletCount(),
       warnings: this.warnings.length,
+      warningKinds: this.warnings.map(({ kind }) => kind),
       projectiles: this.activeProjectiles(),
       partPositions: Object.fromEntries(PART_ORDER.map((partId) => [
         partId,
@@ -510,7 +517,12 @@ export class HiveBossManager implements BossEncounter {
   private synchronizeCoreVisual(): void {
     if (this.state.phase === 'shielded') this.parts.core.setTint(SHIELDED_TINT);
     else if (this.state.phase === 'telegraph') this.parts.core.setTint(TELEGRAPH_TINT);
+    else if (this.state.phase === 'permanentlyExposed') this.parts.core.setTint(ENRAGE_TINT);
     else this.parts.core.clearTint();
+    const scale = this.state.phase === 'permanentlyExposed'
+      ? 1 + Math.sin(this.state.phaseElapsedMs * Math.PI / 80) * 0.05
+      : 1;
+    this.parts.core.setScale(scale);
   }
 
   private onPhaseTransition(previousPhase: HivePhase): void {
@@ -520,7 +532,11 @@ export class HiveBossManager implements BossEncounter {
     );
     if (this.state.phase === 'permanentlyExposed') {
       this.cancelCoreWarnings();
-      this.nextCoreFanAt = now + GAME_TUNING.projectiles.hiveCore.intervalMs;
+      this.cancelAllShooterWarnings();
+      this.stopShooterSchedules();
+      this.nextEnrageFanAt = now + GAME_TUNING.projectiles.hiveEnrage.fan.intervalMs;
+      this.nextEnrageAimedBurstAt = now + GAME_TUNING.projectiles.hiveEnrage.aimedBurst.intervalMs;
+      this.enrageFanCount = 0;
     }
     if (this.state.phase === 'exposed') {
       this.deployModules();
@@ -580,6 +596,10 @@ export class HiveBossManager implements BossEncounter {
 
   private scheduleAttacks(now: number): void {
     if (this.state.phase !== 'exposed' && this.state.phase !== 'permanentlyExposed') return;
+    if (this.state.phase === 'permanentlyExposed') {
+      this.scheduleEnrageAttacks(now);
+      return;
+    }
     for (const moduleId of ['leftShooter', 'rightShooter'] as const) {
       if (now < this.nextShooterWarningAt[moduleId]) continue;
       this.nextShooterWarningAt[moduleId] = now
@@ -594,13 +614,19 @@ export class HiveBossManager implements BossEncounter {
         this.createShooterWarning(moduleId, now);
       }
     }
-    if (
-      this.state.phase === 'permanentlyExposed'
-      && this.nextCoreFanAt !== undefined
-      && now >= this.nextCoreFanAt
-    ) {
-      this.nextCoreFanAt = now + GAME_TUNING.projectiles.hiveCore.intervalMs;
-      this.createCoreWarning(now);
+  }
+
+  private scheduleEnrageAttacks(now: number): void {
+    const { fan, aimedBurst: burst } = GAME_TUNING.projectiles.hiveEnrage;
+    if (this.nextEnrageFanAt !== undefined && now >= this.nextEnrageFanAt) {
+      this.nextEnrageFanAt = now + fan.intervalMs;
+      const offsetDegrees = (this.enrageFanCount % 2) * fan.alternatingOffsetDegrees;
+      this.enrageFanCount += 1;
+      if (this.hasHostileCapacity()) this.createEnrageFanWarning(now, offsetDegrees);
+    }
+    if (this.nextEnrageAimedBurstAt !== undefined && now >= this.nextEnrageAimedBurstAt) {
+      this.nextEnrageAimedBurstAt = now + burst.intervalMs;
+      if (this.hasHostileCapacity()) this.createEnrageAimedBurstWarning(now);
     }
   }
 
@@ -630,6 +656,34 @@ export class HiveBossManager implements BossEncounter {
     this.warnings.push({ kind: 'coreFan', dueAt, marker });
   }
 
+  private createEnrageFanWarning(now: number, offsetDegrees: number): void {
+    const marker = (this.warningGroup.create(
+      HIVE_BOSS_GEOMETRY.core.x,
+      HIVE_BOSS_GEOMETRY.core.y,
+      'hive-core-warning',
+    ) as BossSprite).setDepth(WARNING_DEPTH);
+    this.warnings.push({
+      kind: 'hiveEnrageFan',
+      dueAt: now + GAME_TUNING.projectiles.hiveEnrage.fan.warningMs,
+      offsetDegrees,
+      marker,
+    });
+  }
+
+  private createEnrageAimedBurstWarning(now: number): void {
+    const marker = (this.warningGroup.create(
+      HIVE_BOSS_GEOMETRY.core.x,
+      HIVE_BOSS_GEOMETRY.core.y,
+      'hive-core-warning',
+    ) as BossSprite).setDepth(WARNING_DEPTH);
+    this.warnings.push({
+      kind: 'hiveEnrageAimedBurst',
+      dueAt: now + GAME_TUNING.projectiles.hiveEnrage.aimedBurst.warningMs,
+      target: { x: this.options.player.x, y: this.options.player.y },
+      marker,
+    });
+  }
+
   private resolveWarnings(now: number): void {
     const pending: HiveWarning[] = [];
     for (const warning of this.warnings) {
@@ -640,8 +694,14 @@ export class HiveBossManager implements BossEncounter {
       warning.marker.destroy();
       if (!this.hasHostileCapacity()) continue;
       if (warning.kind === 'coreFan') this.fireCoreFan();
+      else if (warning.kind === 'hiveEnrageFan' && this.state.phase === 'permanentlyExposed') {
+        this.fireEnrageFan(warning.offsetDegrees);
+      } else if (warning.kind === 'hiveEnrageAimedBurst' && this.state.phase === 'permanentlyExposed') {
+        this.fireEnrageAimedBurst(warning.target);
+      }
       else if (
-        (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed')
+        warning.kind === 'shooter'
+        && (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed')
         && this.state.parts[warning.moduleId] > 0
       ) {
         this.fireShooter(warning.moduleId, warning.target);
@@ -689,6 +749,47 @@ export class HiveBossManager implements BossEncounter {
     }
   }
 
+  private fireEnrageFan(offsetDegrees: number): void {
+    const tuning = GAME_TUNING.projectiles.hiveEnrage.fan;
+    for (const shot of fanShots({ x: 0, y: 1 }, tuning.speed, tuning.count, tuning.arcDegrees, offsetDegrees)) {
+      if (!this.hasHostileCapacity()) break;
+      this.createEnrageBullet('hiveEnrageFan', shot.direction, shot.speed, tuning.radius);
+    }
+  }
+
+  private fireEnrageAimedBurst(target: Vector): void {
+    const tuning = GAME_TUNING.projectiles.hiveEnrage.aimedBurst;
+    for (const shot of aimedBurst(
+      HIVE_BOSS_GEOMETRY.core,
+      target,
+      tuning.speed,
+      tuning.count,
+      tuning.spreadDegrees,
+      { x: 0, y: 1 },
+    )) {
+      if (!this.hasHostileCapacity()) break;
+      this.createEnrageBullet('hiveEnrageAimedBurst', shot.direction, shot.speed, tuning.radius);
+    }
+  }
+
+  private createEnrageBullet(
+    kind: Extract<HiveProjectileKind, 'hiveEnrageFan' | 'hiveEnrageAimedBurst'>,
+    direction: Vector,
+    speed: number,
+    radius: number,
+  ): void {
+    const bullet = this.bulletGroup.create(
+      HIVE_BOSS_GEOMETRY.core.x,
+      HIVE_BOSS_GEOMETRY.core.y,
+      'hive-core-bullet',
+    ) as HiveProjectileSprite;
+    bullet.hiveProjectileKind = kind;
+    bullet.setCircle(radius).setDepth(WARNING_DEPTH).setVelocity(
+      direction.x * speed,
+      direction.y * speed,
+    );
+  }
+
   private hasHostileCapacity(): boolean {
     return this.options.getEnemyBulletCount() + this.getBulletCount()
       < GAME_TUNING.projectiles.hostileCap;
@@ -698,7 +799,11 @@ export class HiveBossManager implements BossEncounter {
     if (!projectile.active) return;
     const damage = projectile.hiveProjectileKind === 'hiveShooter'
       ? GAME_TUNING.projectiles.hiveShooter.damage
-      : GAME_TUNING.projectiles.hiveCore.damage;
+      : projectile.hiveProjectileKind === 'hiveEnrageFan'
+        ? GAME_TUNING.projectiles.hiveEnrage.fan.damage
+        : projectile.hiveProjectileKind === 'hiveEnrageAimedBurst'
+          ? GAME_TUNING.projectiles.hiveEnrage.aimedBurst.damage
+          : GAME_TUNING.projectiles.hiveCore.damage;
     projectile.destroy();
     this.options.onPlayerHit(damage);
   }

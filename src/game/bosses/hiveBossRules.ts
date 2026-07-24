@@ -77,13 +77,7 @@ export function advanceHiveCycle(state: HiveBossState, deltaMs: number): HiveBos
 
   const elapsed = state.phaseElapsedMs + deltaMs;
   if (state.phase === 'permanentlyExposed') {
-    if (elapsed < GAME_TUNING.hiveBoss.timing.exposedMs) {
-      return copyState(state, { phaseElapsedMs: elapsed });
-    }
-    return copyState(state, {
-      phaseElapsedMs: 0,
-      deploymentIndex: state.deploymentIndex + 1,
-    });
+    return copyState(state, { phaseElapsedMs: elapsed });
   }
   if (state.phase === 'shielded' && elapsed >= GAME_TUNING.hiveBoss.timing.shieldedMs) {
     return copyState(state, { phase: 'telegraph', phaseElapsedMs: 0 });

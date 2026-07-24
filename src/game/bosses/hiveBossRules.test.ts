@@ -50,13 +50,21 @@ describe('hive boss rules', () => {
     state = damageHivePart(state, 'leftReflector', 100);
     state = damageHivePart(state, 'rightReflector', 100);
     expect(state.phase).toBe('permanentlyExposed');
+    expect(state.parts).toEqual({
+      core: GAME_TUNING.hiveBoss.core.hp,
+      leftShooter: 0,
+      rightShooter: 0,
+      leftReflector: 0,
+      rightReflector: 0,
+    });
     expect(aliveHiveModules(state)).toEqual([]);
     expect(exposedHiveParts(state)).toEqual(['core']);
     expect(advanceHiveCycle(state, 60_000)).toMatchObject({
       phase: 'permanentlyExposed',
-      phaseElapsedMs: 0,
-      deploymentIndex: 1,
+      phaseElapsedMs: 60_000,
+      deploymentIndex: 0,
     });
+    expect(advanceHiveCycle(state, 60_000).parts).toEqual(state.parts);
   });
 
   it('ignores shielded core damage, accepts exposed damage, and defeats at zero', () => {

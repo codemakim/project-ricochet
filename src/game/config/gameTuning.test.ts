@@ -57,6 +57,16 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.projectiles.hiveCore).toEqual({
       intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0,
     });
+    expect(GAME_TUNING.projectiles.hiveEnrage).toEqual({
+      fan: {
+        intervalMs: 2800, warningMs: 350, speed: 150, damage: 1, radius: 5,
+        count: 9, arcDegrees: 96, alternatingOffsetDegrees: 6,
+      },
+      aimedBurst: {
+        intervalMs: 1600, warningMs: 350, speed: 190, damage: 1, radius: 5,
+        count: 3, spreadDegrees: 18,
+      },
+    });
     expect(GAME_TUNING.relics.secondBoss).toEqual({
       auxiliaryOrbit: { orbLimit: 6 },
       recoverySalvo: { temporaryOrbCount: 2 },
@@ -137,6 +147,18 @@ describe('GAME_TUNING', () => {
     }],
     ['non-positive hive projectile value', (value: Mutable<GameTuning>) => {
       value.projectiles.hiveShooter.speed = 0;
+    }],
+    ['non-positive hive enrage timing', (value: Mutable<GameTuning>) => {
+      value.projectiles.hiveEnrage.fan.intervalMs = 0;
+    }],
+    ['non-finite hive enrage speed', (value: Mutable<GameTuning>) => {
+      value.projectiles.hiveEnrage.aimedBurst.speed = Number.NaN;
+    }],
+    ['fractional hive enrage count', (value: Mutable<GameTuning>) => {
+      value.projectiles.hiveEnrage.fan.count = 1.5;
+    }],
+    ['negative hive enrage angle', (value: Mutable<GameTuning>) => {
+      value.projectiles.hiveEnrage.fan.alternatingOffsetDegrees = -1;
     }],
     ['invalid temporary orb cap', (value: Mutable<GameTuning>) => {
       value.temporaryOrbs.cap = 0;

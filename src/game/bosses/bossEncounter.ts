@@ -27,6 +27,7 @@ export interface BossEncounterSnapshot {
   parts: Record<string, number> | null;
   bullets: number;
   warnings: number;
+  warningKinds?: string[];
   projectiles: BossProjectileSnapshot[];
 }
 

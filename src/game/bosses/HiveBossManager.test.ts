@@ -33,6 +33,7 @@ class FakeSprite {
   destroyed = false;
   visible = true;
   tint?: number;
+  scale = 1;
   depth = 0;
   readonly body: FakeBody;
 
@@ -56,6 +57,7 @@ class FakeSprite {
   }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
+  setScale(scale: number): this { this.scale = scale; return this; }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
   setVelocity(x: number, y: number): this {
     this.body.velocity = { x, y };
@@ -694,9 +696,8 @@ describe('HiveBossManager', () => {
     expect(core).toHaveLength(5);
   });
 
-  it('starts permanent core cadence at module destruction and fires at 6999/7000 boundary', () => {
+  it('turns permanent exposure into alternating fan and aimed-burst enrage without restoring parts', () => {
     const boundary = createBoundary();
-    boundary.gameplay.now = 1000;
     for (const [texture, hp] of [
       ['hive-left-shooter', 20],
       ['hive-right-shooter', 20],
@@ -707,10 +708,75 @@ describe('HiveBossManager', () => {
       boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp * 2);
     }
 
-    expect(boundary.updateAt(7999).projectiles).toHaveLength(0);
-    expect(boundary.updateAt(8000).projectiles).toHaveLength(5);
-    expect(boundary.updateAt(14_999).projectiles).toHaveLength(5);
-    expect(boundary.updateAt(15_000).projectiles).toHaveLength(10);
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      phase: 'permanentlyExposed',
+      parts: {
+        core: GAME_TUNING.hiveBoss.core.hp,
+        leftShooter: 0,
+        rightShooter: 0,
+        leftReflector: 0,
+        rightReflector: 0,
+      },
+    });
+    expect(boundary.sprite('hive-core').tint).toBeDefined();
+    boundary.updateAt(40);
+    expect(boundary.sprite('hive-core').scale).toBeGreaterThan(1);
+    expect(boundary.updateAt(1599).warnings).toBe(0);
+    expect(boundary.updateAt(1600).warningKinds).toEqual(['hiveEnrageAimedBurst']);
+
+    expect(boundary.updateAt(1950).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageAimedBurst',
+    )).toHaveLength(3);
+    expect(boundary.updateAt(2800).warningKinds).toEqual(['hiveEnrageFan']);
+    const firstFan = boundary.updateAt(3150).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageFan',
+    );
+    expect(firstFan).toHaveLength(9);
+    expect(firstFan.map(({ velocity }) => Math.round(
+      Math.atan2(velocity.x, velocity.y) * 180 / Math.PI,
+    ))).toEqual([-48, -36, -24, -12, 0, 12, 24, 36, 48]);
+
+    boundary.manager.clearHostileActions();
+    boundary.updateAt(5600);
+    const secondFan = boundary.updateAt(5950).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageFan',
+    );
+    expect(secondFan).toHaveLength(9);
+    expect(secondFan.map(({ velocity }) => Math.round(
+      Math.atan2(velocity.x, velocity.y) * 180 / Math.PI,
+    ))).toEqual([-42, -30, -18, -6, 6, 18, 30, 42, 54]);
+
+    boundary.manager.applyDirectDamage('core', 10);
+    expect(boundary.updateAt(100_000)).toMatchObject({
+      phase: 'permanentlyExposed',
+      parts: { core: GAME_TUNING.hiveBoss.core.hp - 10, leftShooter: 0, rightShooter: 0 },
+    });
+  });
+
+  it('truncates an enrage fan at the hostile cap without postponing its next cycle', () => {
+    const boundary = createBoundary();
+    for (const [texture, hp] of [
+      ['hive-left-shooter', 20],
+      ['hive-right-shooter', 20],
+      ['hive-left-reflector', 24],
+      ['hive-right-reflector', 24],
+    ] as const) {
+      const part = boundary.sprite(texture);
+      boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp * 2);
+    }
+    boundary.setEnemyBulletCount(GAME_TUNING.projectiles.hostileCap - 3);
+
+    expect(boundary.updateAt(2800).warningKinds).toEqual([
+      'hiveEnrageFan',
+      'hiveEnrageAimedBurst',
+    ]);
+    expect(boundary.updateAt(3150).projectiles.filter(
+      ({ kind }) => kind === 'hiveEnrageFan',
+    )).toHaveLength(3);
+
+    boundary.manager.clearHostileActions();
+    boundary.setEnemyBulletCount(0);
+    expect(boundary.updateAt(5600).warningKinds).toContain('hiveEnrageFan');
   });
 
   it('checks the shared hostile cap before warning and again before firing', () => {
@@ -795,14 +861,6 @@ describe('HiveBossManager', () => {
 
   it('clears hive attacks on explicit cleanup, defeat, and destroy', () => {
     const boundary = createBoundary();
-    boundary.updateAt(1400);
-    boundary.updateAt(1700);
-    boundary.manager.clearHostileActions();
-    expect(boundary.manager.getSnapshot()).toMatchObject({
-      warnings: 0, bullets: 0, projectiles: [],
-    });
-
-    boundary.gameplay.now = 2000;
     for (const [texture, hp] of [
       ['hive-left-shooter', 20],
       ['hive-right-shooter', 20],
@@ -812,8 +870,14 @@ describe('HiveBossManager', () => {
       const part = boundary.sprite(texture);
       boundary.manager.applyAreaDamage({ x: part.x, y: part.y }, 1, hp * 2);
     }
-    boundary.updateAt(9000);
-    expect(boundary.manager.getSnapshot().bullets).toBe(5);
+    boundary.updateAt(2800);
+    boundary.manager.clearHostileActions();
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      warnings: 0, bullets: 0, projectiles: [],
+    });
+
+    boundary.updateAt(5600);
+    expect(boundary.manager.getSnapshot().warnings).toBeGreaterThan(0);
     boundary.manager.applyAreaDamage(
       { x: boundary.sprite('hive-core').x, y: boundary.sprite('hive-core').y },
       1,
