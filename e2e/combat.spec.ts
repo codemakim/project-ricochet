@@ -79,6 +79,7 @@ interface CombatSnapshot {
     fallingHazards: number;
     bullets?: number;
     warnings: number;
+    warningKinds?: string[];
     projectiles: BossProjectileSnapshot[];
     partPositions?: Record<string, Vector>;
   };
@@ -1653,6 +1654,43 @@ test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure',
     shielded: 'shielded',
     permanent: 'permanentlyExposed',
   });
+});
+
+test('@desktop hive permanent exposure fires both enrage patterns and still rewards core death', async ({ page }) => {
+  await loadCanvas(page);
+  await enterHiveByScore(page);
+  const entered = await sceneCall(page, (scene) => {
+    const core = scene.children.list.find(
+      (child) => child.active && child.texture?.key === 'hive-core',
+    );
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+    scene.update(0, 2_800);
+    return { width: core?.displayWidth, height: core?.displayHeight };
+  });
+  expect(entered.width).toBeGreaterThanOrEqual(112);
+  expect(entered.height).toBeGreaterThanOrEqual(112);
+  const warning = await snapshot(page);
+  expect(warning.boss).toMatchObject({
+    phase: 'permanentlyExposed',
+    parts: { leftShooter: 0, rightShooter: 0, leftReflector: 0, rightReflector: 0 },
+  });
+  expect(warning.boss.warningKinds).toEqual([
+    'hiveEnrageFan',
+    'hiveEnrageAimedBurst',
+  ]);
+
+  await sceneCall(page, (scene) => scene.update(0, 350));
+  const fired = await snapshot(page);
+  expect(fired.boss.projectiles.map(({ kind }) => kind)).toEqual(expect.arrayContaining([
+    'hiveEnrageFan',
+    'hiveEnrageAimedBurst',
+  ]));
+
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('core', 120));
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
 });
 
 test('@desktop hive reflector changes a real orb trajectory without blocking player bullets', async ({ page }) => {
