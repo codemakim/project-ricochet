@@ -210,6 +210,11 @@ function nonNegative(value: number, name: string): void {
   }
 }
 
+function nonNegativeInteger(value: number, name: string): void {
+  nonNegative(value, name);
+  if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
+}
+
 function positiveInteger(value: number, name: string): void {
   positive(value, name);
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
