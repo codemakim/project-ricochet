@@ -383,7 +383,9 @@ function styleAt(
   sequence: number,
   styleWeights: Readonly<Partial<Record<FormationStyle, number>>>,
 ): FormationStyle {
-  const bagTemplate = Object.entries(styleWeights).flatMap(([style, weight]) =>
+  const entries = Object.entries(styleWeights);
+  if (entries.length === 1) return entries[0]![0] as FormationStyle;
+  const bagTemplate = entries.flatMap(([style, weight]) =>
     Array.from({ length: weight! }, () => style as FormationStyle));
   if (bagTemplate.length === 0) throw new RangeError('recipe profile needs a weighted style');
   const cycle = Math.floor(sequence / bagTemplate.length);

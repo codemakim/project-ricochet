@@ -157,7 +157,7 @@ describe('procedural formation generation', () => {
     }
   });
 
-  it('uses weighted styles without immediate repeats when another style exists', () => {
+  it('uses exact weighted bags without repeats across cycle boundaries', () => {
     const selectedRecipe = { ...recipe(), profile: {
       ...recipe().profile,
       styleWeights: { cluster: 5, pockets: 3, bands: 2 },
@@ -174,6 +174,16 @@ describe('procedural formation generation', () => {
     }
     expect(styles).toEqual(Array.from({ length: 30 }, (_, sequence) =>
       createReinforcementFormation(selectedRecipe, sequence, 808).style));
+  });
+
+  it('allows a single style across every sequence', () => {
+    const selectedRecipe = { ...recipe(), profile: {
+      ...recipe().profile,
+      styleWeights: { cluster: 1 },
+    } };
+    expect(Array.from({ length: 6 }, (_, sequence) =>
+      createReinforcementFormation(selectedRecipe, sequence, 808).style))
+      .toEqual(Array.from({ length: 6 }, () => 'cluster'));
   });
 
   it('filters catalog kinds by stage and battlefield', () => {

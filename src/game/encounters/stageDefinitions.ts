@@ -143,7 +143,7 @@ export function validateStageContent(
     for (const [style, weight] of styleWeights) positiveInteger(weight!, `${profile.id}.${style}`);
     const totalStyleWeight = styleWeights.reduce((sum, [, weight]) => sum + weight!, 0);
     const maximumStyleWeight = Math.max(...styleWeights.map(([, weight]) => weight!));
-    if (maximumStyleWeight > totalStyleWeight - maximumStyleWeight + 1) {
+    if (styleWeights.length > 1 && maximumStyleWeight > totalStyleWeight - maximumStyleWeight) {
       throw new RangeError(`${profile.id} style weights cannot avoid repeats`);
     }
   }

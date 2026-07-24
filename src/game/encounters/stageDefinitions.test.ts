@@ -41,7 +41,7 @@ describe('stage content', () => {
   it('rejects style weights that cannot be arranged without repeats', () => {
     const impossible = {
       id: 'impossible',
-      styleWeights: { cluster: 5, pockets: 2, bands: 1 },
+      styleWeights: { cluster: 2, pockets: 1 },
       minimum: 1,
       maximum: 1,
     };
