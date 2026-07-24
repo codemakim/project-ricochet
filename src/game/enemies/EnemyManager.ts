@@ -288,6 +288,12 @@ export class EnemyManager {
     this.activeShooters.clear();
   }
 
+  clearEnemies(): void {
+    if (this.destroyed) return;
+    this.clearHostileActions();
+    for (const enemy of [...this.enemies.values()]) this.destroyEnemy(enemy);
+  }
+
   applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
     return this.applyAreaDamageBatch([{ center, radius, damage, excludedEnemyId }]);
   }

@@ -43,3 +43,17 @@
 - Full: 41 files, 445 tests passed.
 - `npm run build` passed.
 - Self-review: default filters are empty, so existing formation output and seed determinism remain unchanged.
+
+## Combat fixes
+
+### Root causes
+
+1. `rewardCompleted` cleared hostile actions for every boss reward, but the final `runCompleted` branch left live `EnemyManager` sprites intact.
+2. `excludedBossTargetId` stopped at `schedulePlannedAftershock`; queued effects lost it, so aftershock could hit the original boss target.
+
+### Fixes and verification
+
+- Added reusable `EnemyManager.clearEnemies()` and call it only for `runCompleted`; ordinary stage advances retain enemies.
+- Preserved boss target exclusion from direct hit through scheduling, queue drain, and delayed settlement.
+- RED: missing manager/scheduler state; removed forwarding produced `excludedBossTargetId: undefined`; removed final cleanup made desktop E2E retain enemies.
+- GREEN: focused 61 tests; targeted desktop E2E; `npm test` 444 passed; `npm run build` passed.

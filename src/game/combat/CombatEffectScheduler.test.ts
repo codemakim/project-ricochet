@@ -17,6 +17,15 @@ describe('CombatEffectScheduler', () => {
     }]);
   });
 
+  it('preserves the excluded boss target through the delayed effect', () => {
+    const scheduler = new CombatEffectScheduler();
+    scheduler.scheduleAftershock(1_000, { x: 12, y: 34 }, 40, 0.5, 'core');
+
+    expect(scheduler.drainDue(1_350)).toEqual([expect.objectContaining({
+      excludedBossTargetId: 'core',
+    })]);
+  });
+
   it('advances only from passed gameplay time so a pause holds the effect', () => {
     const scheduler = new CombatEffectScheduler();
     scheduler.scheduleAftershock(500, { x: 1, y: 2 }, 8, 2);

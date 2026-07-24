@@ -142,6 +142,7 @@ export function schedulePlannedAftershock(
   scheduler: Pick<CombatEffectScheduler, 'scheduleAftershock'>,
   gameplayElapsedMs: number,
   position: Vector,
+  excludedBossTargetId?: BossTargetId,
 ): void {
   if (!plan.aftershock) return;
   scheduler.scheduleAftershock(
@@ -149,6 +150,7 @@ export function schedulePlannedAftershock(
     position,
     plan.aftershock.radius,
     plan.aftershock.damage,
+    excludedBossTargetId,
   );
 }
 

@@ -498,6 +498,7 @@ export class CombatScene extends Phaser.Scene {
       this.combatEffects,
       this.gameplayElapsedMs,
       event.position,
+      excludedBossTargetId,
     );
     if (plan.chargedSplitCount > 0) {
       this.temporaryOrbManager?.spawn(
@@ -530,7 +531,7 @@ export class CombatScene extends Phaser.Scene {
 
   private drainCombatEffects(): void {
     for (const effect of this.combatEffects.drainDue(this.gameplayElapsedMs)) {
-      this.applyAreaEffects(effect.position, [effect]);
+      this.applyAreaEffects(effect.position, [effect], -1, effect.excludedBossTargetId);
       this.drawExplosion(effect.position, effect.radius);
     }
   }
@@ -665,6 +666,7 @@ export class CombatScene extends Phaser.Scene {
     this.applyLifecycle('rewardCompleted');
     this.pause.remove('bossReward');
     if (advance.type === 'runCompleted') {
+      this.enemyManager?.clearEnemies();
       this.pause.add('runComplete');
       this.syncPauseState();
       this.runCompleteOverlay?.show(() => {

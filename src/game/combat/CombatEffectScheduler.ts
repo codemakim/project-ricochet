@@ -1,4 +1,5 @@
 import { GAME_TUNING } from '../config/gameTuning';
+import type { BossTargetId } from '../bosses/bossEncounter';
 import type { Vector } from '../math/vector';
 
 export interface ScheduledAreaEffect {
@@ -8,13 +9,20 @@ export interface ScheduledAreaEffect {
   radius: number;
   damage: number;
   kind: 'aftershock';
+  excludedBossTargetId?: BossTargetId;
 }
 
 export class CombatEffectScheduler {
   private readonly effects: ScheduledAreaEffect[] = [];
   private nextId = 0;
 
-  scheduleAftershock(nowMs: number, position: Vector, radius: number, damage: number): void {
+  scheduleAftershock(
+    nowMs: number,
+    position: Vector,
+    radius: number,
+    damage: number,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
     this.requireGameplayTime(nowMs);
     if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
       throw new RangeError('effect position must be finite');
@@ -30,6 +38,7 @@ export class CombatEffectScheduler {
       radius,
       damage,
       kind: 'aftershock',
+      excludedBossTargetId,
     });
     this.nextId += 1;
     this.effects.sort((left, right) => left.dueAt - right.dueAt || left.id - right.id);

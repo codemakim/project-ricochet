@@ -264,6 +264,23 @@ function createBoundary(
 }
 
 describe('EnemyManager', () => {
+  it('clears all live enemies without destroying the manager', () => {
+    const { manager } = createBoundary([
+      { kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 },
+      { kind: 'shooter', hp: 3, x: 200, y: 160, column: 1, speed: 0 },
+    ]);
+    manager.clearEnemies();
+
+    expect(manager.getSnapshot()).toMatchObject({
+      enemies: [],
+      activePopulation: 0,
+      activeShooters: 0,
+      bullets: 0,
+    });
+    manager.spawnFormation([{ kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 }]);
+    expect(manager.getSnapshot().activePopulation).toBe(1);
+  });
+
   it('registers one collider for each runtime permanent orb and unsubscribes on destroy', () => {
     const boundary = createBoundary([{ kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 }]);
     const initialPermanent = boundary.colliders.filter((collider) => collider.first === boundary.orb);

@@ -250,6 +250,8 @@ async function startStageTwo(page: Page): Promise<CombatSnapshot> {
   await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-2');
   const resumed = await snapshot(page);
   expect(resumed.bossRewards).toEqual([reward.bossRewardChoices[0]]);
+  expect(resumed.enemies).not.toEqual([]);
+  expect(resumed.activePopulation).toBeGreaterThan(0);
   return resumed;
 }
 
@@ -1857,6 +1859,10 @@ test('@desktop completes both stages, freezes the run, and restarts', async ({ p
   });
   expect(complete.pauseReasons).toContain('runComplete');
   expect(complete.boss.active).toBe(false);
+  expect(complete.enemies).toEqual([]);
+  expect(complete.activePopulation).toBe(0);
+  expect(complete.activeShooters).toBe(0);
+  expect(complete.bullets).toBe(0);
   expect(complete.bossRewards).toHaveLength(2);
   expect(await sceneCall(page, (scene) => scene.children.list.some(
     ({ text }) => text === 'RUN COMPLETE',
@@ -1867,6 +1873,7 @@ test('@desktop completes both stages, freezes the run, and restarts', async ({ p
   const restart = clientPoint(box, { x: 225, y: 442 });
   await page.mouse.click(restart.x, restart.y);
   await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(false);
+  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
   expect(await snapshot(page)).toMatchObject({
     encounter: {
       state: 'running',

@@ -95,6 +95,22 @@ describe('combat relic runtime decisions', () => {
     });
   });
 
+  it('carries a boss direct-hit exclusion into its aftershock', () => {
+    const scheduler = new CombatEffectScheduler();
+
+    schedulePlannedAftershock(
+      { aftershock: { radius: 38.4, damage: 0.25 } },
+      scheduler,
+      1_000,
+      { x: 225, y: 180 },
+      'core',
+    );
+
+    expect(scheduler.drainDue(1_350)).toEqual([expect.objectContaining({
+      excludedBossTargetId: 'core',
+    })]);
+  });
+
   it('batches enemies once while applying each area to the boss once with exclusions', () => {
     const applyEnemyBatch = vi.fn();
     const applyBossArea = vi.fn();
