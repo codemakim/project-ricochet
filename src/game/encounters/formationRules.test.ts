@@ -196,6 +196,16 @@ describe('procedural formation generation', () => {
     expect(result.enemies.some(({ kind }) => kind === 'splitter' || kind === 'fragment')).toBe(false);
   });
 
+  it('applies merged tag and exclusion filters to catalog selections', () => {
+    const result = createReinforcementFormation({
+      ...recipe(),
+      profile: { ...recipe().profile, minimum: 3, maximum: 3, allowedTags: ['armored'] },
+      excludedKinds: ['basic'],
+      maxPerFormationOverrides: { armored: 3, shooter: 0, splitter: 0 },
+    }, 0, 808);
+    expect(result.enemies.map(({ kind }) => kind)).toEqual(['armored', 'armored', 'armored']);
+  });
+
   it('merges catalog caps with phase overrides, with phase caps winning', () => {
     const result = Array.from({ length: 64 }, (_, sequence) =>
       createReinforcementFormation({

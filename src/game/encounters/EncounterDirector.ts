@@ -199,6 +199,12 @@ function formationRecipe(
     stageNumber: stage.number,
     battlefield: stage.battlefield,
     profile,
+    ...((stage.allowedTags?.length || phase.allowedTags?.length)
+      ? { allowedTags: [...(stage.allowedTags ?? []), ...(phase.allowedTags ?? [])] }
+      : {}),
+    ...((stage.excludedKinds?.length || phase.excludedKinds?.length)
+      ? { excludedKinds: [...(stage.excludedKinds ?? []), ...(phase.excludedKinds ?? [])] }
+      : {}),
     enemyWeightMultipliers: phase.enemyWeightMultipliers,
     maxPerFormationOverrides: phase.maxPerFormationOverrides,
     hpMultiplier: stage.hpMultiplier,

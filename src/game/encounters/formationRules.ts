@@ -2,7 +2,7 @@ import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { populationCostForEnemy } from '../enemies/splitterRules';
 import { ENEMY_CATALOG } from './stageDefinitions';
-import type { BattlefieldId, FormationProfile } from './stageDefinitions';
+import type { BattlefieldId, EnemyTag, FormationProfile } from './stageDefinitions';
 
 export type FormationStyle = 'cluster' | 'pockets' | 'bands' | 'scatter' | 'grid';
 
@@ -17,6 +17,8 @@ export interface FormationRecipe {
   stageNumber: number;
   battlefield: BattlefieldId;
   profile: FormationProfile;
+  allowedTags?: readonly EnemyTag[];
+  excludedKinds?: readonly EnemyKind[];
   enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
   maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
   hpMultiplier: number;
@@ -296,8 +298,12 @@ function assignKinds(
 function assignRecipeKinds(enemies: EnemySpec[], recipe: FormationRecipe, seed: number): EnemySpec[] {
   const random = createRandom(seed);
   const counts = new Map<EnemyKind, number>();
+  const allowedTags = [...recipe.profile.allowedTags, ...(recipe.allowedTags ?? [])];
+  const excludedKinds = new Set([...recipe.profile.excludedKinds ?? [], ...recipe.excludedKinds ?? []]);
   const candidates = ENEMY_CATALOG.filter((entry) => entry.minStage <= recipe.stageNumber
     && entry.battlefields.includes(recipe.battlefield)
+    && allowedTags.every((tag) => entry.tags.includes(tag))
+    && !excludedKinds.has(entry.kind)
     && entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0);
   return enemies.map((enemy) => {
     const available = candidates.filter((entry) => {
@@ -418,6 +424,7 @@ const INITIAL_FORMATION_CONTENT = {
     styleWeights: { cluster: 1, pockets: 1, bands: 1, scatter: 1 },
     minimum: 26,
     maximum: 26,
+    allowedTags: [],
   },
   originY: 80,
   exactKinds: { armored: 3, shooters: 3, splitters: 0 },

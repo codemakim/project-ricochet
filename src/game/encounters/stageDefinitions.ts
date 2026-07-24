@@ -1,15 +1,17 @@
 import type { BossKind } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
+import { populationCostForEnemy } from '../enemies/splitterRules';
 import type { FormationStyle } from './formationRules';
 
 export type BattlefieldId = 'default';
 export type StageId = 'default-1' | 'default-2';
+export type EnemyTag = 'standard' | 'armored' | 'shooter' | 'splitter';
 
 export interface EnemyCatalogEntry {
   kind: Exclude<EnemyKind, 'fragment'>;
   minStage: number;
   battlefields: readonly BattlefieldId[];
-  tags: readonly string[];
+  tags: readonly EnemyTag[];
   weight: number;
   maxPerFormation?: number;
 }
@@ -19,6 +21,8 @@ export interface FormationProfile {
   styleWeights: Readonly<Partial<Record<FormationStyle, number>>>;
   minimum: number;
   maximum: number;
+  allowedTags: readonly EnemyTag[];
+  excludedKinds?: readonly EnemyKind[];
 }
 
 export interface StagePhaseDefinition {
@@ -26,6 +30,8 @@ export interface StagePhaseDefinition {
   activeCap: number;
   spawnIntervalMs: number;
   formationProfileId: string;
+  allowedTags?: readonly EnemyTag[];
+  excludedKinds?: readonly EnemyKind[];
   enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
   maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
 }
@@ -44,6 +50,8 @@ export interface StageDefinition {
   battlefield: BattlefieldId;
   hpMultiplier: number;
   descentSpeedMultiplier: number;
+  allowedTags?: readonly EnemyTag[];
+  excludedKinds?: readonly EnemyKind[];
   phases: readonly StagePhaseDefinition[];
   boss: StageBossDefinition;
 }
@@ -58,10 +66,10 @@ export const ENEMY_CATALOG: readonly EnemyCatalogEntry[] = [
 ] as const;
 
 export const FORMATION_PROFILES = [
-  { id: 'opening', styleWeights: STYLE_WEIGHTS, minimum: 13, maximum: 15 },
-  { id: 'pressure', styleWeights: STYLE_WEIGHTS, minimum: 15, maximum: 18 },
-  { id: 'assault', styleWeights: STYLE_WEIGHTS, minimum: 18, maximum: 21 },
-  { id: 'onslaught', styleWeights: STYLE_WEIGHTS, minimum: 21, maximum: 25 },
+  { id: 'opening', styleWeights: STYLE_WEIGHTS, minimum: 13, maximum: 15, allowedTags: [] },
+  { id: 'pressure', styleWeights: STYLE_WEIGHTS, minimum: 15, maximum: 18, allowedTags: [] },
+  { id: 'assault', styleWeights: STYLE_WEIGHTS, minimum: 18, maximum: 21, allowedTags: [] },
+  { id: 'onslaught', styleWeights: STYLE_WEIGHTS, minimum: 21, maximum: 25, allowedTags: [] },
 ] as const satisfies readonly FormationProfile[];
 
 const phase = (
@@ -126,6 +134,26 @@ function positiveInteger(value: number, name: string): void {
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
 }
 
+function eligibleEnemies(
+  stage: StageDefinition,
+  profile: FormationProfile,
+  phase: StagePhaseDefinition,
+  catalog: readonly EnemyCatalogEntry[],
+): EnemyCatalogEntry[] {
+  const allowedTags = [...(stage.allowedTags ?? []), ...profile.allowedTags, ...(phase.allowedTags ?? [])];
+  const excludedKinds = new Set([...stage.excludedKinds ?? [], ...profile.excludedKinds ?? [], ...phase.excludedKinds ?? []]);
+  return catalog.filter((entry) => entry.minStage <= stage.number
+    && entry.battlefields.includes(stage.battlefield)
+    && allowedTags.every((tag) => entry.tags.includes(tag))
+    && !excludedKinds.has(entry.kind)
+    && entry.weight * (phase.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0
+    && (phase.maxPerFormationOverrides?.[entry.kind] ?? entry.maxPerFormation ?? Infinity) > 0);
+}
+
+function formationCapacity(entry: EnemyCatalogEntry, phase: StagePhaseDefinition, maximum: number): number {
+  return Math.min(phase.maxPerFormationOverrides?.[entry.kind] ?? entry.maxPerFormation ?? maximum, maximum);
+}
+
 export function validateStageContent(
   stages: readonly StageDefinition[] = STAGES,
   catalog: readonly EnemyCatalogEntry[] = ENEMY_CATALOG,
@@ -183,11 +211,20 @@ export function validateStageContent(
       for (const [kind, cap] of Object.entries(stagePhase.maxPerFormationOverrides ?? {})) {
         nonNegativeInteger(cap!, `${stage.id}.${kind}.cap`);
       }
-      const eligible = catalog.some((entry) => entry.minStage <= stage.number
-        && entry.battlefields.includes(stage.battlefield)
-        && entry.weight * (stagePhase.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0
-        && (stagePhase.maxPerFormationOverrides?.[entry.kind] ?? entry.maxPerFormation ?? Infinity) > 0);
-      if (!eligible) throw new RangeError(`${stage.id} phase needs an eligible enemy`);
+      const eligible = eligibleEnemies(stage, profile, stagePhase, catalog);
+      if (eligible.length === 0) throw new RangeError(`${stage.id} phase needs an eligible enemy`);
+      const capacities = eligible.map((entry) => formationCapacity(entry, stagePhase, profile.maximum));
+      if (capacities.reduce((sum, capacity) => sum + capacity, 0) < profile.maximum) {
+        throw new RangeError(`${stage.id} phase cannot fill its profile`);
+      }
+      const worstPopulation = eligible.flatMap((entry) =>
+        Array.from({ length: formationCapacity(entry, stagePhase, profile.maximum) }, () => populationCostForEnemy(entry.kind)))
+        .sort((left, right) => right - left)
+        .slice(0, profile.maximum)
+        .reduce((sum, population) => sum + population, 0);
+      if (stagePhase.activeCap < worstPopulation) {
+        throw new RangeError(`${stage.id} phase cap must fit worst population`);
+      }
     }
     if (!stage.boss?.kind) throw new RangeError(`${stage.id} must have a boss`);
     positive(stage.boss.minimumMs, `${stage.id}.boss.minimumMs`);

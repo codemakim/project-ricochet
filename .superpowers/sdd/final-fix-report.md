@@ -24,3 +24,22 @@
 
 - Changed only formation rules, encounter director, their unit tests, and SDD tracking files.
 - Did not change E2E tests, gameplay docs, or DEV seed injection.
+
+## Final-stage validation fixes
+
+## RED
+
+- `stageDefinitions.test.ts`: capped eligible pool could not fill a profile; worst splitter population exceeded `activeCap`; stage/profile/phase tag filters were ignored.
+- `formationRules.test.ts`: catalog selection ignored tag and exclusion filters.
+
+## GREEN
+
+- Validator now merges tag/exclusion filters, requires eligible caps to fill `profile.maximum`, and rejects worst-case splitter population above `activeCap` using `populationCostForEnemy()`.
+- Formation recipes apply merged filters; the director forwards stage/phase filters without adding empty fields.
+
+## Result
+
+- Focused: 38 tests passed.
+- Full: 41 files, 445 tests passed.
+- `npm run build` passed.
+- Self-review: default filters are empty, so existing formation output and seed determinism remain unchanged.

@@ -44,6 +44,7 @@ describe('stage content', () => {
       styleWeights: { cluster: 2, pockets: 1 },
       minimum: 1,
       maximum: 1,
+      allowedTags: [],
     };
     expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, impossible]))
       .toThrowError(new RangeError('impossible style weights cannot avoid repeats'));
@@ -55,8 +56,41 @@ describe('stage content', () => {
       styleWeights: { cluster: 1.5, pockets: 1 },
       minimum: 1,
       maximum: 1,
+      allowedTags: [],
     };
     expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, fractional]))
       .toThrowError(new RangeError('fractional.cluster must be an integer'));
+  });
+
+  it('rejects a filtered pool whose merged caps cannot fill a formation', () => {
+    const capped = {
+      ...FORMATION_PROFILES[0]!,
+      allowedTags: ['armored'] as const,
+      minimum: 3,
+      maximum: 3,
+    };
+    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [capped, ...FORMATION_PROFILES.slice(1)]))
+      .toThrowError(new RangeError('default-1 phase cannot fill its profile'));
+  });
+
+  it('rejects a phase whose worst eligible population exceeds its active cap', () => {
+    const stage = {
+      ...STAGES[1]!,
+      phases: [STAGES[1]!.phases[0]!, { ...STAGES[1]!.phases[1]!, activeCap: 26 }],
+    };
+    expect(() => validateStageContent([STAGES[0]!, stage]))
+      .toThrowError(new RangeError('default-2 phase cap must fit worst population'));
+  });
+
+  it('merges stage, profile, and phase tag filters when validating the pool', () => {
+    const taggedProfile = { ...FORMATION_PROFILES[0]!, allowedTags: ['armored'] as const };
+    const stage = {
+      ...STAGES[0]!,
+      allowedTags: ['standard'] as const,
+      phases: [{ ...STAGES[0]!.phases[0]!, allowedTags: ['shooter'] as const }, ...STAGES[0]!.phases.slice(1)],
+    };
+    expect(() => validateStageContent([stage, STAGES[1]!], ENEMY_CATALOG,
+      [taggedProfile, ...FORMATION_PROFILES.slice(1)]))
+      .toThrowError(new RangeError('default-1 phase needs an eligible enemy'));
   });
 });
