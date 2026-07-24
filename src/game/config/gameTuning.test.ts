@@ -72,7 +72,7 @@ describe('GAME_TUNING', () => {
       warningMs: 600, speed: 220, damage: 1, radius: 5, count: 3, spreadDegrees: 24,
     });
     expect(GAME_TUNING.projectiles.hiveCore).toEqual({
-      intervalMs: 7000, speed: 140, damage: 1, radius: 5, fanDegrees: [-36, -18, 0, 18, 36],
+      intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0,
     });
     expect(GAME_TUNING.relics.secondBoss).toEqual({
       auxiliaryOrbit: { orbLimit: 6 },

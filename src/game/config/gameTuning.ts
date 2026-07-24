@@ -79,7 +79,7 @@ export interface GameTuning {
     bossAimed: { warningMs: number; speed: number; damage: number; radius: number; count: number; spreadDegrees: number };
     bossSupport: { warningMs: number; speed: number; damage: number; width: number; height: number };
     hiveShooter: { intervalMs: number; offsetMs: number; warningMs: number; speed: number; damage: number; radius: number };
-    hiveCore: { intervalMs: number; speed: number; damage: number; radius: number; fanDegrees: readonly [number, number, number, number, number] };
+    hiveCore: { intervalMs: number; speed: number; damage: number; radius: number; count: number; arcDegrees: number; offsetDegrees: number };
   };
   temporaryOrbs: { radius: number; speed: number; cap: number; lifetimeMs: number; hitCooldownMs: number };
   hiveBoss: {
@@ -165,7 +165,7 @@ export const GAME_TUNING = {
     bossAimed: { warningMs: 600, speed: 220, damage: 1, radius: 5, count: 3, spreadDegrees: 24 },
     bossSupport: { warningMs: 800, speed: 240, damage: 2, width: 16, height: 24 },
     hiveShooter: { intervalMs: 1400, offsetMs: 700, warningMs: 300, speed: 170, damage: 1, radius: 5 },
-    hiveCore: { intervalMs: 7000, speed: 140, damage: 1, radius: 5, fanDegrees: [-36, -18, 0, 18, 36] },
+    hiveCore: { intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0 },
   },
   temporaryOrbs: { radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80 },
   hiveBoss: {
@@ -383,9 +383,9 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(projectiles.bossSupport.height, 'projectiles.bossSupport.height');
   positiveInteger(projectiles.bossAimed.count, 'projectiles.bossAimed.count');
   finite(projectiles.bossAimed.spreadDegrees, 'projectiles.bossAimed.spreadDegrees');
-  if (!projectiles.hiveCore.fanDegrees.every(Number.isFinite)) {
-    throw new RangeError('projectiles.hiveCore.fanDegrees must be finite');
-  }
+  positiveInteger(projectiles.hiveCore.count, 'projectiles.hiveCore.count');
+  finite(projectiles.hiveCore.arcDegrees, 'projectiles.hiveCore.arcDegrees');
+  finite(projectiles.hiveCore.offsetDegrees, 'projectiles.hiveCore.offsetDegrees');
   positive(temporaryOrbs.radius, 'temporaryOrbs.radius');
   positive(temporaryOrbs.speed, 'temporaryOrbs.speed');
   positiveInteger(temporaryOrbs.cap, 'temporaryOrbs.cap');

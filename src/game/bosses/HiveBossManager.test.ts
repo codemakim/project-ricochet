@@ -667,7 +667,7 @@ describe('HiveBossManager', () => {
     const firstDirections = core.map(({ velocity }) => (
       Math.round(Math.atan2(velocity.x, velocity.y) * 180 / Math.PI)
     ));
-    expect(firstDirections).toEqual([...GAME_TUNING.projectiles.hiveCore.fanDegrees]);
+    expect(firstDirections).toEqual([-36, -18, 0, 18, 36]);
 
     boundary.updateAt(12_500);
     boundary.updateAt(16_500);

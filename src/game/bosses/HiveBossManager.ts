@@ -11,6 +11,7 @@ import type {
   BossEncounterSnapshot,
 } from './bossEncounter';
 import { HIVE_BOSS_GEOMETRY, type HiveReflectorGeometry } from './hiveBossGeometry';
+import { aimedShot, fanShots } from './bossAttackPatterns';
 import {
   advanceHiveCycle,
   createHiveBossState,
@@ -645,7 +646,7 @@ export class HiveBossManager implements BossEncounter {
   private fireShooter(moduleId: ShooterPartId, target: Vector): void {
     const tuning = GAME_TUNING.projectiles.hiveShooter;
     const origin = this.parts[moduleId];
-    const direction = normalize({ x: target.x - origin.x, y: target.y - origin.y });
+    const shot = aimedShot(origin, target, tuning.speed, { x: 0, y: -1 });
     const bullet = this.bulletGroup.create(
       origin.x,
       origin.y,
@@ -653,16 +654,21 @@ export class HiveBossManager implements BossEncounter {
     ) as HiveProjectileSprite;
     bullet.hiveProjectileKind = 'hiveShooter';
     bullet.setCircle(tuning.radius).setDepth(WARNING_DEPTH).setVelocity(
-      direction.x * tuning.speed,
-      direction.y * tuning.speed,
+      shot.direction.x * shot.speed,
+      shot.direction.y * shot.speed,
     );
   }
 
   private fireCoreFan(): void {
     const tuning = GAME_TUNING.projectiles.hiveCore;
-    for (const degrees of tuning.fanDegrees) {
+    for (const shot of fanShots(
+      { x: 0, y: 1 },
+      tuning.speed,
+      tuning.count,
+      tuning.arcDegrees,
+      tuning.offsetDegrees,
+    )) {
       if (!this.hasHostileCapacity()) break;
-      const radians = degrees * Math.PI / 180;
       const bullet = this.bulletGroup.create(
         HIVE_BOSS_GEOMETRY.core.x,
         HIVE_BOSS_GEOMETRY.core.y,
@@ -670,8 +676,8 @@ export class HiveBossManager implements BossEncounter {
       ) as HiveProjectileSprite;
       bullet.hiveProjectileKind = 'hiveCore';
       bullet.setCircle(tuning.radius).setDepth(WARNING_DEPTH).setVelocity(
-        Math.sin(radians) * tuning.speed,
-        Math.cos(radians) * tuning.speed,
+        shot.direction.x * shot.speed,
+        shot.direction.y * shot.speed,
       );
     }
   }
