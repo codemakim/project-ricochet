@@ -52,6 +52,7 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.temporaryOrbs).toEqual({
       radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
     });
+    expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
       core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
       shooter: { width: 68, height: 56, hp: 20 },
@@ -165,6 +166,12 @@ describe('GAME_TUNING', () => {
     }],
     ['non-positive reflector hit cooldown', (value: Mutable<GameTuning>) => {
       value.hiveBoss.reflector.hitCooldownMs = 0;
+    }],
+    ['boss area damage scale above one', (value: Mutable<GameTuning>) => {
+      value.bossAreaDamage.secondaryDamageScale = 1.1;
+    }],
+    ['fractional boss area target count', (value: Mutable<GameTuning>) => {
+      value.bossAreaDamage.maxSecondaryTargets = 1.5;
     }],
     ['invalid permanent orb cap', (value: Mutable<GameTuning>) => {
       value.relics.secondBoss.auxiliaryOrbit.orbLimit = 2;

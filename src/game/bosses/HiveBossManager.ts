@@ -264,10 +264,10 @@ export class HiveBossManager implements BossEncounter {
     radius: number,
     damage: number,
     excludedTargetId?: string,
-  ): HivePartId | null {
-    if (this.destroyed || this.state.phase === 'defeated') return null;
+  ): HivePartId[] {
+    if (this.destroyed || this.state.phase === 'defeated') return [];
     const eligible = new Set(exposedHiveParts(this.state));
-    const target = PART_ORDER
+    const targets = PART_ORDER
       .filter((partId) => eligible.has(partId) && partId !== excludedTargetId)
       .map((partId) => ({
         partId,
@@ -277,13 +277,12 @@ export class HiveBossManager implements BossEncounter {
         ),
       }))
       .filter(({ distance }) => distance <= radius)
-      .sort((left, right) => (
-        left.distance - right.distance
-        || PART_ORDER.indexOf(left.partId) - PART_ORDER.indexOf(right.partId)
-      ))[0];
-    if (!target) return null;
-    this.damagePart(target.partId, damage);
-    return target.partId;
+      .sort((left, right) => left.distance - right.distance || left.partId.localeCompare(right.partId))
+      .slice(0, GAME_TUNING.bossAreaDamage.maxSecondaryTargets);
+    for (const { partId } of targets) {
+      this.damagePart(partId, damage * GAME_TUNING.bossAreaDamage.secondaryDamageScale);
+    }
+    return targets.map(({ partId }) => partId);
   }
 
   clearHostileActions(): void {

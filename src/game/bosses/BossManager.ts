@@ -253,9 +253,9 @@ export class BossManager implements BossEncounter {
     radius: number,
     damage: number,
     excludedTargetId?: string,
-  ): BossPartId | null {
-    if (this.destroyed || bossPhase(this.state) === 'defeated') return null;
-    const target = exposedBossParts(this.state)
+  ): BossPartId[] {
+    if (this.destroyed || bossPhase(this.state) === 'defeated') return [];
+    const targets = exposedBossParts(this.state)
       .filter((partId) => partId !== excludedTargetId)
       .map((partId) => ({
         partId,
@@ -265,10 +265,12 @@ export class BossManager implements BossEncounter {
         ),
       }))
       .filter(({ distance }) => distance <= radius)
-      .sort((left, right) => left.distance - right.distance || this.partOrder(left.partId) - this.partOrder(right.partId))[0];
-    if (!target) return null;
-    this.damagePart(target.partId, damage);
-    return target.partId;
+      .sort((left, right) => left.distance - right.distance || left.partId.localeCompare(right.partId))
+      .slice(0, GAME_TUNING.bossAreaDamage.maxSecondaryTargets);
+    for (const { partId } of targets) {
+      this.damagePart(partId, damage * GAME_TUNING.bossAreaDamage.secondaryDamageScale);
+    }
+    return targets.map(({ partId }) => partId);
   }
 
   clearHostileActions(): void {
@@ -767,10 +769,6 @@ export class BossManager implements BossEncounter {
 
   private partIds(): BossPartId[] {
     return ['leftWeakpoint', 'rightWeakpoint', 'core'];
-  }
-
-  private partOrder(partId: BossPartId): number {
-    return this.partIds().indexOf(partId);
   }
 
 }

@@ -82,6 +82,7 @@ export interface GameTuning {
     hiveCore: { intervalMs: number; speed: number; damage: number; radius: number; count: number; arcDegrees: number; offsetDegrees: number };
   };
   temporaryOrbs: { radius: number; speed: number; cap: number; lifetimeMs: number; hitCooldownMs: number };
+  bossAreaDamage: { secondaryDamageScale: number; maxSecondaryTargets: number };
   hiveBoss: {
     core: { x: number; y: number; visualSize: number; hitboxSize: number; hp: number };
     shooter: { width: number; height: number; hp: number };
@@ -168,6 +169,7 @@ export const GAME_TUNING = {
     hiveCore: { intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0 },
   },
   temporaryOrbs: { radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80 },
+  bossAreaDamage: { secondaryDamageScale: 0.5, maxSecondaryTargets: 1 },
   hiveBoss: {
     core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
     shooter: { width: 68, height: 56, hp: 20 },
@@ -264,7 +266,7 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 export function validateGameTuning(tuning: GameTuning): void {
   const {
     boss, enemies, encounter, projectiles, temporaryOrbs,
-    hiveBoss, relics, visual,
+    bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
   finite(boss.y, 'boss.y');
   positive(boss.body.width, 'boss.body.width');
@@ -391,6 +393,12 @@ export function validateGameTuning(tuning: GameTuning): void {
   positiveInteger(temporaryOrbs.cap, 'temporaryOrbs.cap');
   positive(temporaryOrbs.lifetimeMs, 'temporaryOrbs.lifetimeMs');
   positive(temporaryOrbs.hitCooldownMs, 'temporaryOrbs.hitCooldownMs');
+  if (!Number.isFinite(bossAreaDamage.secondaryDamageScale)
+    || bossAreaDamage.secondaryDamageScale < 0
+    || bossAreaDamage.secondaryDamageScale > 1) {
+    throw new RangeError('bossAreaDamage.secondaryDamageScale must be between zero and one');
+  }
+  nonNegativeInteger(bossAreaDamage.maxSecondaryTargets, 'bossAreaDamage.maxSecondaryTargets');
   positive(hiveBoss.core.visualSize, 'hiveBoss.core.visualSize');
   positive(hiveBoss.core.hitboxSize, 'hiveBoss.core.hitboxSize');
   positive(hiveBoss.core.hp, 'hiveBoss.core.hp');

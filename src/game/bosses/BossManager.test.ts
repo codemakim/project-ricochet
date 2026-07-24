@@ -415,8 +415,8 @@ describe('BossManager', () => {
     const core = boundary.colliderFor('boss-core');
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(false);
 
-    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 28);
 
     expect(boundary.manager.getSnapshot().phase).toBe('core');
     expect((core.second as FakeSprite).visible).toBe(true);
@@ -437,14 +437,19 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(13.5);
   });
 
-  it('damages only the nearest eligible exposed part and can exclude the direct part', () => {
+  it('excludes the direct sentinel part and halves the nearest secondary damage', () => {
     const { manager } = createBoundary();
 
-    expect(manager.applyAreaDamage({ x: 220, y: 120 }, 100, 4, 'leftWeakpoint')).toBe('rightWeakpoint');
-    expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 14, rightWeakpoint: 10 });
+    expect(manager.applyAreaDamage({ x: 220, y: 120 }, 100, 4, 'leftWeakpoint'))
+      .toEqual(['rightWeakpoint']);
+    expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 14, rightWeakpoint: 12 });
+  });
 
-    expect(manager.applyAreaDamage({ x: 225, y: 120 }, 200, 2)).toBe('leftWeakpoint');
-    expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 12, rightWeakpoint: 10 });
+  it('chooses one nearest sentinel secondary by target ID when distance ties', () => {
+    const { manager } = createBoundary();
+
+    expect(manager.applyAreaDamage({ x: 225, y: 120 }, 200, 4)).toEqual(['leftWeakpoint']);
+    expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 12, rightWeakpoint: 14 });
   });
 
   it('maps only vertically overlapping enemies to exact padded forbidden intervals', () => {
@@ -537,7 +542,7 @@ describe('BossManager', () => {
     const boundary = createBoundary();
 
     expect(updateAt(boundary, 5000)).toMatchObject({ aimedBullets: 3, basicBullets: 0 });
-    boundary.manager.applyAreaDamage(boundary.manager.getSnapshot().position!, 200, 14);
+    boundary.manager.applyAreaDamage(boundary.manager.getSnapshot().position!, 200, 28);
     expect(updateAt(boundary, 5016).basicBullets).toBe(0);
     expect(updateAt(boundary, 5749)).toMatchObject({ warnings: 0, basicBullets: 0 });
     expect(updateAt(boundary, 5750)).toMatchObject({ warnings: 1, basicBullets: 0 });
@@ -704,9 +709,9 @@ describe('BossManager', () => {
 
   it('defeats once when the exposed core reaches zero', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 36);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 72);
 
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
     expect(boundary.manager.getSnapshot()).toMatchObject({
@@ -723,9 +728,9 @@ describe('BossManager', () => {
 
   it('settles the killing direct-hit event before reporting defeat', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 14);
-    boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 33);
+    boundary.manager.applyAreaDamage({ x: 137, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: 313, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 66);
     boundary.gameplay.now = 1;
     const core = boundary.colliderFor('boss-core');
 

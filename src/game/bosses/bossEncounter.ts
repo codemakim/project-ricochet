@@ -39,7 +39,7 @@ export interface BossEncounter {
     radius: number,
     damage: number,
     excludedTargetId?: BossTargetId,
-  ): BossTargetId | null;
+  ): BossTargetId[];
   clearHostileActions(): void;
   destroy(): void;
 }
