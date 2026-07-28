@@ -1018,11 +1018,28 @@ test('@desktop stops XP and keeps level-up closed when all abilities reach their
     for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
     scene.debugUpgradeAbility('explosion');
     scene.debugUpgradeAbility('split');
+    for (const ability of [
+      'near-amplification',
+      'precision-hit',
+      'kinetic-conversion',
+      'wall-acceleration',
+    ] as const) {
+      for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility(ability);
+    }
     scene.debugGrantXp(100);
   });
 
   const completed = await snapshot(page);
-  expect(completed.buildRanks).toEqual({ firepower: 5, kinetic: 3, explosion: 1, split: 1 });
+  expect(completed.buildRanks).toEqual({
+    firepower: 5,
+    kinetic: 3,
+    explosion: 1,
+    split: 1,
+    'near-amplification': 3,
+    'precision-hit': 3,
+    'kinetic-conversion': 3,
+    'wall-acceleration': 3,
+  });
   expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
   expect(completed.levelUpVisible).toBe(false);
   expect(completed.pauseReasons).not.toContain('levelUp');
