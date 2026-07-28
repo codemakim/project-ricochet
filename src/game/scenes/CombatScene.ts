@@ -47,7 +47,11 @@ import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
-import type { AbilityId, AbilityRanks } from '../progression/progressionRules';
+import {
+  createEmptyAbilityRanks,
+  type AbilityId,
+  type AbilityRanks,
+} from '../progression/progressionRules';
 import {
   selectBossRewardOptions,
   type BossRewardId,
@@ -448,12 +452,7 @@ export class CombatScene extends Phaser.Scene {
         pendingChoices: 0,
         choices: [],
       },
-      buildRanks: this.build?.getRanks() ?? {
-        firepower: 0,
-        kinetic: 0,
-        explosion: 0,
-        split: 0,
-      },
+      buildRanks: this.build?.getRanks() ?? createEmptyAbilityRanks(),
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       loadoutVisible: this.orbLoadoutOverlay?.isVisible() ?? false,
@@ -735,7 +734,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = selectBossRewardOptions(
       this.bossRewardTier,
       owned,
-      this.build?.getRanks() ?? { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
+      this.build?.getRanks() ?? createEmptyAbilityRanks(),
       BOSS_REWARD_SEED,
     );
     this.applyLifecycle('rewardOpened');

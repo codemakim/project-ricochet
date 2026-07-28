@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ABILITY_MAX_RANKS,
+  canAcquireNewAbility,
+  prerequisitesMet,
   MAX_BUILD_LEVEL,
   selectAbilityOptions,
   xpForEnemy,
@@ -54,5 +56,16 @@ describe('progression rules', () => {
       21,
       9,
     )).toContain('explosion');
+  });
+
+  it('blocks new ability kinds at the run cap but keeps owned upgrades eligible', () => {
+    expect(canAcquireNewAbility(11)).toBe(true);
+    expect(canAcquireNewAbility(12)).toBe(false);
+    expect(canAcquireNewAbility(13)).toBe(false);
+  });
+
+  it('requires every related ability before an option becomes eligible', () => {
+    expect(prerequisitesMet(['split'], empty)).toBe(false);
+    expect(prerequisitesMet(['split'], { ...empty, split: 1 })).toBe(true);
   });
 });

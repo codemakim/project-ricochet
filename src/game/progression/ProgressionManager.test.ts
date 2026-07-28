@@ -22,10 +22,17 @@ describe('ProgressionManager', () => {
 
   it('stops gaining XP when all abilities reach their individual caps', () => {
     const build = new BuildState({
-      firepower: 5, kinetic: 3, explosion: 1, split: 1,
+      firepower: 5,
+      kinetic: 3,
+      explosion: 1,
+      split: 1,
+      'near-amplification': 3,
+      'precision-hit': 3,
+      'kinetic-conversion': 3,
+      'wall-acceleration': 3,
     });
     const manager = new ProgressionManager(7, build);
     manager.gainExperience(100);
-    expect(manager.getSnapshot()).toMatchObject({ level: 10, xp: 0, pendingChoices: 0 });
+    expect(manager.getSnapshot()).toMatchObject({ level: 22, xp: 0, pendingChoices: 0 });
   });
 });

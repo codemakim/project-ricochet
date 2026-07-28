@@ -23,7 +23,7 @@ const SECOND_EVOLUTION_BY_ABILITY = {
   kinetic: 'inertial-penetration',
   explosion: 'aftershock-explosion',
   split: 'chain-split',
-} as const satisfies Record<AbilityId, SecondBossRewardId>;
+} as const satisfies Partial<Record<AbilityId, SecondBossRewardId>>;
 
 export type FirstBossRewardId = typeof BOSS_REWARD_IDS[number];
 export type SecondBossRewardId = typeof SECOND_BOSS_REWARD_IDS[number];
@@ -47,12 +47,15 @@ function seededShuffle<T>(values: readonly T[], seed: number): T[] {
 
 function selectFirstBossRewardOptions(
   owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<AbilityRanks>,
+  ranks: Readonly<Partial<AbilityRanks>>,
   seed: number,
 ): BossRewardId[] {
   const eligible = BOSS_REWARD_IDS.filter((id) =>
     !owned.has(id)
-    && (id !== 'chain-warhead' || (ranks.split >= 1 && ranks.explosion >= 1)),
+    && (
+      id !== 'chain-warhead'
+      || ((ranks.split ?? 0) >= 1 && (ranks.explosion ?? 0) >= 1)
+    ),
   );
   if (eligible.length < 3) {
     throw new RangeError(`at least 3 eligible boss rewards are required; received ${eligible.length}`);
@@ -62,12 +65,12 @@ function selectFirstBossRewardOptions(
 
 function selectSecondBossRewardOptions(
   owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<AbilityRanks>,
+  ranks: Readonly<Partial<AbilityRanks>>,
   seed: number,
 ): BossRewardId[] {
   const universals = SECOND_UNIVERSAL_REWARD_IDS.filter((id) => !owned.has(id));
   const evolutions = Object.entries(SECOND_EVOLUTION_BY_ABILITY)
-    .filter(([ability, id]) => ranks[ability as AbilityId] >= 1 && !owned.has(id))
+    .filter(([ability, id]) => (ranks[ability as AbilityId] ?? 0) >= 1 && !owned.has(id))
     .map(([, id]) => id);
 
   const guaranteed = seededShuffle(evolutions, seed)[0];
@@ -90,25 +93,25 @@ function selectSecondBossRewardOptions(
 export function selectBossRewardOptions(
   tier: BossRewardTier,
   owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<AbilityRanks>,
+  ranks: Readonly<Partial<AbilityRanks>>,
   seed: number,
 ): BossRewardId[];
 /** @deprecated Use the tiered overload. */
 export function selectBossRewardOptions(
   owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<AbilityRanks>,
+  ranks: Readonly<Partial<AbilityRanks>>,
   seed: number,
 ): BossRewardId[];
 export function selectBossRewardOptions(
   tierOrOwned: BossRewardTier | ReadonlySet<BossRewardId>,
-  ownedOrRanks: ReadonlySet<BossRewardId> | Readonly<AbilityRanks>,
-  ranksOrSeed: Readonly<AbilityRanks> | number,
+  ownedOrRanks: ReadonlySet<BossRewardId> | Readonly<Partial<AbilityRanks>>,
+  ranksOrSeed: Readonly<Partial<AbilityRanks>> | number,
   maybeSeed?: number,
 ): BossRewardId[] {
   const legacy = typeof tierOrOwned !== 'string';
   const tier = legacy ? 'first' : tierOrOwned;
   const owned = (legacy ? tierOrOwned : ownedOrRanks) as ReadonlySet<BossRewardId>;
-  const ranks = (legacy ? ownedOrRanks : ranksOrSeed) as Readonly<AbilityRanks>;
+  const ranks = (legacy ? ownedOrRanks : ranksOrSeed) as Readonly<Partial<AbilityRanks>>;
   const seed = (legacy ? ranksOrSeed : maybeSeed) as number;
   return tier === 'first'
     ? selectFirstBossRewardOptions(owned, ranks, seed)

@@ -36,6 +36,7 @@ describe('BuildState', () => {
     });
     expect(() => build.upgrade('explosion')).toThrow('explosion is already rank 1');
     expect(() => build.upgrade('split')).toThrow('split is already rank 1');
+    expect(build.ownedAbilityKindCount()).toBe(2);
   });
 
   it('rejects a sixth rank', () => {

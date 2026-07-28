@@ -3,6 +3,7 @@ import { ORB_SPEED } from '../constants';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
+  createEmptyAbilityRanks,
   type AbilityId,
   type AbilityRanks,
 } from './progressionRules';
@@ -24,7 +25,7 @@ export class BuildState {
   private readonly ranks: AbilityRanks;
 
   constructor(initialRanks: Partial<AbilityRanks> = {}) {
-    this.ranks = Object.fromEntries(ABILITY_IDS.map((id) => [id, 0])) as AbilityRanks;
+    this.ranks = createEmptyAbilityRanks();
 
     for (const id of ABILITY_IDS) {
       const rank = initialRanks[id];
@@ -51,6 +52,10 @@ export class BuildState {
 
   getRanks(): AbilityRanks {
     return { ...this.ranks };
+  }
+
+  ownedAbilityKindCount(): number {
+    return ABILITY_IDS.filter((id) => this.ranks[id] > 0).length;
   }
 
   directDamageBonus(): number {
