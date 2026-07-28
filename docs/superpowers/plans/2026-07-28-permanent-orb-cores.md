@@ -1,6 +1,6 @@
 # 영구 구슬 4종 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 반향·부식·전도·관성 코어를 실제 전투에 구현하고, 런 시작 3개와 추가 영구 구슬의 종류를 플레이어가 선택하게 한다.
 
@@ -112,7 +112,7 @@ export function coreLaunchSpeedMultiplier(
 ): number;
 ```
 
-- [ ] **Step 1: 네 코어 상태의 failing test 작성**
+- [x] **Step 1: 네 코어 상태의 failing test 작성**
 
 ```ts
 it('spends five echo stacks on one hit', () => {
@@ -146,7 +146,7 @@ it('converts inertia only on proximity recovery', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run:
 
@@ -156,7 +156,7 @@ rtk npm test -- src/game/orbs/orbCoreRules.test.ts
 
 Expected: FAIL because `orbCoreRules.ts` does not exist.
 
-- [ ] **Step 3: 중앙 수치와 최소 상태 전이 구현**
+- [x] **Step 3: 중앙 수치와 최소 상태 전이 구현**
 
 `GAME_TUNING.orbCores`에 다음 구조를 추가한다.
 
@@ -193,7 +193,7 @@ orbCores: {
 
 `resolveCoreDirectHit()`는 타격 전 반향 보너스를 반환한 뒤 반향을 0으로 만든다. 전도는 네 번째 타격에 `conductionTriggered: true`와 카운터 0을 반환한다. 관성은 최대 3중첩을 쌓고, 활성화된 `inertiaLaunchStacks`는 첫 직접 타격 결과에서 0으로 만든다. `resolveCoreRecovery()`는 반향을 항상 지우며, 관성은 `proximity`에서만 현재 중첩을 발사 중첩으로 옮긴다.
 
-- [ ] **Step 4: 설정 검증과 focused tests 통과**
+- [x] **Step 4: 설정 검증과 focused tests 통과**
 
 `validateGameTuning()`에서 확률 `0..1`, 정수 상한, 양수 시간·거리, 친군/적군 색 조합 충돌을 검증한다.
 
@@ -205,7 +205,7 @@ rtk npm test -- src/game/orbs/orbCoreRules.test.ts src/game/config/gameTuning.te
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 rtk git add src/game/orbs/orbCoreRules.ts src/game/orbs/orbCoreRules.test.ts src/game/config/gameTuning.ts src/game/config/gameTuning.test.ts
@@ -259,7 +259,7 @@ coreType?: OrbCoreId;
 conductionTriggered?: boolean;
 ```
 
-- [ ] **Step 1: OrbStore failing tests 작성**
+- [x] **Step 1: OrbStore failing tests 작성**
 
 검증:
 
@@ -273,7 +273,7 @@ expect(store.addOrb('conduction')).toBe(true);
 
 활성화 전 한 번만 시작 구성을 바꿀 수 있고, 활성화 뒤 변경은 `false`여야 한다. `addOrb()`는 유효한 종류를 필수로 받는다.
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run:
 
@@ -283,11 +283,11 @@ rtk npm test -- src/game/orbs/OrbManager.test.ts
 
 Expected: FAIL on missing core fields and signatures.
 
-- [ ] **Step 3: 코어 상태를 OrbRecord에 통합**
+- [x] **Step 3: 코어 상태를 OrbRecord에 통합**
 
 `createRecord(id, coreType)`가 `createOrbCoreState()`를 저장한다. `onWorldBounds`는 바닥이면 기존 귀환, 나머지 경계면 `applyCoreWallBounce()`를 한 번 호출한다. `handleEnemyHit()`는 타격 직전 `resolveCoreDirectHit()`를 계산해 반향 보너스를 기존 `directHit()`의 직접 피해 보너스에 더하고 `PermanentHitResult`를 반환한다. 관성 발사 속도는 `speedTarget(record)`에서 `coreLaunchSpeedMultiplier()`를 곱한다. `arrive()`는 `resolveCoreRecovery()` 후 재발사 queue에 넣는다.
 
-- [ ] **Step 4: 일반 적·두 보스 event 계약 갱신**
+- [x] **Step 4: 일반 적·두 보스 event 계약 갱신**
 
 영구 구슬 결과일 때만 `coreType`과 `conductionTriggered`를 `onDirectHit`에 복사한다. 임시 구슬 event에는 두 필드가 없어야 한다. 반사 지연 경로의 pending result도 `PermanentHitResult | HitResult`를 보존한다.
 
@@ -299,7 +299,7 @@ rtk npm test -- src/game/orbs/OrbManager.test.ts src/game/enemies/EnemyManager.t
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 rtk git add src/game/orbs/OrbManager.ts src/game/orbs/OrbManager.test.ts src/game/enemies/EnemyManager.ts src/game/enemies/EnemyManager.test.ts src/game/bosses/bossEncounter.ts src/game/bosses/BossManager.ts src/game/bosses/BossManager.test.ts src/game/bosses/HiveBossManager.ts src/game/bosses/HiveBossManager.test.ts
@@ -351,7 +351,7 @@ EnemyManager.applyNearestSecondaryDamage(
 ): number[];
 ```
 
-- [ ] **Step 1: 부식 일정 failing tests 작성**
+- [x] **Step 1: 부식 일정 failing tests 작성**
 
 ```ts
 it('keeps the newest two fields per permanent orb', () => {
@@ -371,7 +371,7 @@ it('emits five ticks from gameplay time and then expires', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run:
 
@@ -381,11 +381,11 @@ rtk npm test -- src/game/combat/CorrosionFieldState.test.ts
 
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: 최소 장판 상태와 독립 부식 RNG 구현**
+- [x] **Step 3: 최소 장판 상태와 독립 부식 RNG 구현**
 
 `CorrosionFieldState`는 Phaser timer 대신 `gameplayElapsedMs`를 받아 pause 중 시간이 진행되지 않게 한다. `spawn()`은 같은 `orbId`의 가장 오래된 장판만 제거한다. `CombatProcState`의 `corrosion`은 별도 salt, 실패 횟수, 구슬별 cooldown을 사용한다.
 
-- [ ] **Step 4: CombatScene에 두 코어 효과 연결**
+- [x] **Step 4: CombatScene에 두 코어 효과 연결**
 
 영구 직접 타격에서만:
 
@@ -423,7 +423,7 @@ rtk npm test -- src/game/combat/CorrosionFieldState.test.ts src/game/combat/Comb
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 rtk git add src/game/combat/CorrosionFieldState.ts src/game/combat/CorrosionFieldState.test.ts src/game/combat/CombatProcState.ts src/game/combat/CombatProcState.test.ts src/game/enemies/EnemyManager.ts src/game/enemies/EnemyManager.test.ts src/game/scenes/combatSceneRules.ts src/game/scenes/combatSceneRules.test.ts src/game/scenes/CombatScene.ts
@@ -461,7 +461,7 @@ export class OrbLoadoutOverlay {
 }
 ```
 
-- [ ] **Step 1: 선택 모델 failing tests 작성**
+- [x] **Step 1: 선택 모델 failing tests 작성**
 
 Overlay 내부 선택 모델을 Phaser 객체 없이 export해 다음을 검증한다.
 
@@ -476,7 +476,7 @@ expect(selection.add('conduction')).toBe(false);
 
 `reset()`은 빈 배열로 돌아가며 3개 전 confirm은 `null`을 반환한다. 추가 선택 mode는 capacity 1이다.
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run:
 
@@ -486,15 +486,15 @@ rtk npm test -- src/game/ui/OrbLoadoutOverlay.test.ts
 
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: 시작 선택을 전투 시작에 연결**
+- [x] **Step 3: 시작 선택을 전투 시작에 연결**
 
 `PauseReason`에 `loadout`을 추가한다. `CombatScene.create()` 끝에서 pause를 추가하고 `showStarting()`을 연다. 확인 성공 시 `orbManager.configureStartingCores(types)`, overlay hide, `loadout` pause 제거를 수행한다. 조준 입력은 overlay가 닫힌 뒤에만 첫 발사를 활성화한다. 종류를 고르기 전 적·보스·gameplay time은 진행되지 않는다.
 
-- [ ] **Step 4: 추가 구슬 보상 선택을 같은 overlay로 연결**
+- [x] **Step 4: 추가 구슬 보상 선택을 같은 overlay로 연결**
 
 `chooseBossReward()`가 `rewardAddsPermanentOrb(id)`를 만나면 즉시 `addOrb()`하지 않고 `showAdditional()`을 연다. 종류 선택 성공 시 `orbManager.addOrb(type)`을 호출한 뒤 기존 `resumeAfterBossReward()` 흐름을 정확히 한 번 실행한다. 일반 보상은 기존처럼 바로 진행한다.
 
-- [ ] **Step 5: 코어별 texture와 snapshot 연결**
+- [x] **Step 5: 코어별 texture와 snapshot 연결**
 
 `combatTextureRules.ts`가 `orb-echo`, `orb-corrosion`, `orb-conduction`, `orb-inertia` descriptor를 `GAME_TUNING.orbCores` 색으로 만든다. `OrbManager.synchronizeSprites()`는 snapshot의 `coreType`에 맞춰 texture를 바꾼다. `CombatDebugSnapshot`에 `loadoutVisible`과 구슬별 `coreType`/`coreState`가 나타나야 한다.
 
@@ -506,7 +506,7 @@ rtk npm test -- src/game/ui/OrbLoadoutOverlay.test.ts src/game/combat/CombatPaus
 
 Expected: PASS.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 rtk git add src/game/ui/OrbLoadoutOverlay.ts src/game/ui/OrbLoadoutOverlay.test.ts src/game/combat/CombatPauseController.ts src/game/combat/CombatPauseController.test.ts src/game/scenes/CombatScene.ts src/game/scenes/combatTextureRules.ts src/game/scenes/combatTextureRules.test.ts src/game/orbs/OrbManager.ts src/game/orbs/OrbManager.test.ts
@@ -524,7 +524,7 @@ rtk git commit -m "feat: choose permanent orb cores"
 - Consumes: 시작 overlay, debug snapshot, 기존 보스 보상 debug 경로
 - Produces: 데스크톱·모바일 회귀 증거
 
-- [ ] **Step 1: focused E2E 작성**
+- [x] **Step 1: focused E2E 작성**
 
 한 테스트에서 다음만 검증한다.
 
@@ -535,7 +535,7 @@ rtk git commit -m "feat: choose permanent orb cores"
 5. debug enemy 배치로 반향 직접 피해와 관성 근접 회수 속도 증가 확인
 6. 영구 구슬 추가 유물 debug 흐름에서 부식 선택 후 네 번째 구슬 종류가 `corrosion`
 
-- [ ] **Step 2: production build**
+- [x] **Step 2: production build**
 
 Run:
 
@@ -545,17 +545,17 @@ rtk npm run build
 
 Expected: TypeScript and Vite build pass. 기존 chunk-size warning만 허용한다.
 
-- [ ] **Step 3: focused desktop Playwright 1회**
+- [x] **Step 3: focused desktop Playwright 1회**
 
 Run:
 
 ```bash
-rtk npx playwright test e2e/combat.spec.ts --project=desktop --grep "permanent orb cores"
+rtk npm run test:e2e -- --project=desktop-chromium --grep "permanent orb cores"
 ```
 
 Expected: PASS.
 
-- [ ] **Step 4: 전체 unit suite와 전체 E2E 최종 게이트**
+- [x] **Step 4: 전체 unit suite와 전체 E2E 최종 게이트**
 
 Run:
 
@@ -566,14 +566,14 @@ rtk npm run test:e2e
 
 Expected: 모든 unit과 desktop/mobile E2E PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 rtk git add e2e/combat.spec.ts
 rtk git commit -m "test: verify permanent orb core loop"
 ```
 
-- [ ] **Step 6: 작업 상태 확인**
+- [x] **Step 6: 작업 상태 확인**
 
 Run:
 

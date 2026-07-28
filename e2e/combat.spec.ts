@@ -7,6 +7,13 @@ interface Vector {
 
 interface OrbSnapshot {
   id: number;
+  coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia';
+  coreState: {
+    echoStacks: number;
+    conductionHits: number;
+    inertiaStacks: number;
+    inertiaLaunchStacks: number;
+  };
   state: string;
   charges: number;
   damageEnabled: boolean;
@@ -66,6 +73,7 @@ interface CombatSnapshot {
   buildRanks: Record<AbilityId, number>;
   pauseReasons: string[];
   levelUpVisible: boolean;
+  loadoutVisible: boolean;
   boss: {
     kind?: 'sentinel' | 'hive';
     active: boolean;
@@ -99,6 +107,11 @@ interface CombatSnapshot {
     velocity: Vector;
   }>;
   scheduledEffects: Array<{ dueAt: number }>;
+  corrosionFields: Array<{
+    fieldId: number;
+    orbId: number;
+    position: Vector;
+  }>;
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -210,14 +223,39 @@ async function bulletState(page: Page): Promise<Array<{ x: number; y: number; vx
   });
 }
 
+async function confirmCoreLoadout(
+  page: Page,
+  keys: readonly string[] = ['Digit1', 'Digit1', 'Digit1'],
+): Promise<void> {
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
+  for (const key of keys) await page.keyboard.press(key);
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+}
+
 async function loadCanvas(page: Page, search = '') {
   await page.goto(`/${search}`);
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
+  await confirmCoreLoadout(page);
   await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
   return { canvas, box: box! };
+}
+
+async function chooseBossReward(
+  page: Page,
+  choiceIndex = 0,
+  additionalCoreKey = 'Digit1',
+): Promise<void> {
+  await page.keyboard.press(`Digit${choiceIndex + 1}`);
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(false);
+  if ((await snapshot(page)).loadoutVisible) {
+    await page.keyboard.press(additionalCoreKey);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+  }
 }
 
 async function enterMidbossByScore(page: Page): Promise<CombatSnapshot> {
@@ -246,7 +284,7 @@ async function defeatMidboss(page: Page): Promise<CombatSnapshot> {
 async function startStageTwo(page: Page): Promise<CombatSnapshot> {
   await enterMidbossByScore(page);
   const reward = await defeatMidboss(page);
-  await page.keyboard.press('Digit1');
+  await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-2');
   const resumed = await snapshot(page);
   expect(resumed.bossRewards).toEqual([reward.bossRewardChoices[0]]);
@@ -382,6 +420,53 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
   expect(after.orbs).toHaveLength(3);
   expect(after.orbs.every((orb) => orb.state !== 'stored')).toBe(true);
   expect(box.height).toBeGreaterThan(box.width);
+});
+
+test('@desktop chooses permanent orb cores and a typed bonus orb', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('#game-root canvas');
+  await expect(canvas).toBeVisible();
+  const box = (await canvas.boundingBox())!;
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
+  for (const world of [
+    { x: 120, y: 285 },
+    { x: 120, y: 285 },
+    { x: 330, y: 410 },
+    { x: 225, y: 575 },
+  ]) {
+    const point = clientPoint(box, world);
+    await page.mouse.click(point.x, point.y);
+  }
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+
+  expect((await snapshot(page)).orbs.map((orb) => orb.coreType)).toEqual([
+    'echo',
+    'echo',
+    'inertia',
+  ]);
+  expect(await sceneCall(page, (scene) => scene.children.list
+    .map((child) => child.texture?.key)
+    .filter((key) => key?.startsWith('orb-'))))
+    .toEqual(expect.arrayContaining(['orb-echo', 'orb-inertia']));
+
+  await enterMidbossByScore(page);
+  const reward = await defeatMidboss(page);
+  const expandedIndex = reward.bossRewardChoices.indexOf('expanded-magazine');
+  expect(expandedIndex).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press(`Digit${expandedIndex + 1}`);
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
+  for (const world of [{ x: 330, y: 285 }, { x: 225, y: 575 }]) {
+    const point = clientPoint(box, world);
+    await page.mouse.click(point.x, point.y);
+  }
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+  await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-2');
+  expect((await snapshot(page)).orbs.map((orb) => orb.coreType)).toEqual([
+    'echo',
+    'echo',
+    'inertia',
+    'corrosion',
+  ]);
 });
 
 test('@mobile supports simultaneous touch movement and retained aim', async ({ page }) => {
@@ -985,6 +1070,11 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
     return (await snapshot(page)).defeated;
   }, { intervals: [16], timeout: 1_000 }).toBe(false);
   expect(await snapshot(page)).toMatchObject({
+    loadoutVisible: true,
+    pauseReasons: ['loadout'],
+  });
+  await confirmCoreLoadout(page);
+  expect(await snapshot(page)).toMatchObject({
     health: { current: 10 },
     progression: { level: 0, xp: 0, pendingChoices: 0 },
     buildRanks: { firepower: 0, kinetic: 0, explosion: 0, split: 0 },
@@ -1336,8 +1426,7 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
   expect((await snapshot(page)).gameplayElapsedMs).toBe(elapsedAtReward);
 
   const selected = reward.bossRewardChoices[0]!;
-  await page.keyboard.press('Digit1');
-  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(false);
+  await chooseBossReward(page);
   const resumed = await snapshot(page);
   expect(resumed.bossRewards).toEqual([selected]);
   expect(resumed.encounter).toMatchObject({
@@ -1478,7 +1567,7 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
   const { box } = await loadCanvas(page);
   await enterMidbossByScore(page);
   const reward = await defeatMidboss(page);
-  await page.keyboard.press('Digit1');
+  await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).bossRewards).toEqual([reward.bossRewardChoices[0]]);
   await sceneCall(page, (scene) => {
     scene.debugSetHealth(1);
@@ -1816,7 +1905,7 @@ test('@desktop acquires one second relic before completing the run', async ({ pa
   expect(reward.bossRewardChoices).toHaveLength(3);
   expect(new Set(reward.bossRewardChoices).size).toBe(3);
   const selected = reward.bossRewardChoices[0]!;
-  await page.keyboard.press('Digit1');
+  await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(true);
   const complete = await snapshot(page);
   expect(complete.bossRewards.filter((id) => id === selected)).toHaveLength(1);
@@ -1850,7 +1939,7 @@ test('@desktop completes both stages, freezes the run, and restarts', async ({ p
     bossesDefeated: 2,
   });
   expect(secondReward.bossRewardTier).toBe('second');
-  await page.keyboard.press('Digit1');
+  await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(true);
   const complete = await snapshot(page);
   expect(complete.encounter).toMatchObject({
@@ -1874,6 +1963,7 @@ test('@desktop completes both stages, freezes the run, and restarts', async ({ p
   const restart = clientPoint(box, { x: 225, y: 442 });
   await page.mouse.click(restart.x, restart.y);
   await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(false);
+  await confirmCoreLoadout(page);
   await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
   expect(await snapshot(page)).toMatchObject({
     encounter: {
