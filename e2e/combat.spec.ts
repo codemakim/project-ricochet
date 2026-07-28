@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { AbilityId } from '../src/game/progression/progressionRules';
 
 interface Vector {
   x: number;
@@ -120,8 +121,6 @@ const FIFTH_PHASE_FIXTURE = { phase: 4 } satisfies Pick<
   CombatSnapshot['encounter'],
   'phase'
 >;
-
-type AbilityId = 'firepower' | 'kinetic' | 'explosion' | 'split';
 
 interface DevelopmentScene {
   children: {
