@@ -221,6 +221,9 @@ export class CombatScene extends Phaser.Scene {
       hasFixedTerrainLineOfSight: () => true,
       getDirectDamageBonus: () => build.directDamageBonus(),
       getChargedSpeed: () => build.chargedSpeed(),
+      getConditionalDirectDamageBonus: (context) => (
+        build.conditionalDirectDamageBonus(context)
+      ),
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
@@ -416,6 +419,7 @@ export class CombatScene extends Phaser.Scene {
         position: { ...orb.position },
         velocity: { ...orb.velocity },
         lastRecoverySource: orb.lastRecoverySource,
+        wallHits: orb.wallHits,
       })),
       enemies: enemySnapshot.enemies.map((enemy) => ({
         id: enemy.id,

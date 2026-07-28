@@ -253,7 +253,9 @@ describe('BossManager', () => {
       (collider) => (collider.second as FakeSprite).texture === 'boss-left-weakpoint',
     )!;
     expect(weakpoint.trigger(runtimeOrb, weakpoint.second as FakeSprite)).toBe(true);
-    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(runtimeOrb, -1, 14, 0, false);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(
+      runtimeOrb, -1, 14, 0, false, expect.any(Number),
+    );
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'sentinel',
       targetId: 'leftWeakpoint',

@@ -358,6 +358,10 @@ export class BossManager implements BossEncounter {
       this.partHp(partId),
       this.options.getGameplayElapsedMs(),
       false,
+      Math.hypot(
+        this.partSprites[partId].x - this.options.player.x,
+        this.partSprites[partId].y - this.options.player.y,
+      ),
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);

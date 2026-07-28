@@ -376,6 +376,10 @@ export class HiveBossManager implements BossEncounter {
       this.state.parts[partId],
       this.options.getGameplayElapsedMs(),
       this.isRecalledReflector(partId),
+      Math.hypot(
+        this.parts[partId].x - this.options.player.x,
+        this.parts[partId].y - this.options.player.y,
+      ),
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);

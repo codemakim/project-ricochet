@@ -32,8 +32,17 @@ describe('GAME_TUNING', () => {
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
     expect(GAME_TUNING.build).toEqual({
+      conditionalDamageCap: 1.5,
       firepower: { damageBonusPerRank: 0.12 },
       kinetic: { speedBonusPerRank: 0.07 },
+      nearAmplification: { distance: 150, damageBonusPerRank: 0.15 },
+      precisionHit: { damageBonusPerRank: 0.2 },
+      kineticConversion: {
+        speedStep: 0.1,
+        damageBonusPerStepPerRank: 0.06,
+        maxDamageBonus: 0.36,
+      },
+      wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
       explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });

@@ -21,6 +21,12 @@ export interface SplitSpec {
   count: number;
 }
 
+export interface PermanentDirectHitContext {
+  distanceFromPlayer: number;
+  wallHits: number;
+  speed: number;
+}
+
 export class BuildState {
   private readonly ranks: AbilityRanks;
 
@@ -66,6 +72,29 @@ export class BuildState {
     return ORB_SPEED * (
       1 + this.ranks.kinetic * GAME_TUNING.build.kinetic.speedBonusPerRank
     );
+  }
+
+  conditionalDirectDamageBonus(context: PermanentDirectHitContext): number {
+    let bonus = 0;
+    if (context.distanceFromPlayer <= GAME_TUNING.build.nearAmplification.distance) {
+      bonus += this.ranks['near-amplification']
+        * GAME_TUNING.build.nearAmplification.damageBonusPerRank;
+    }
+    if (context.wallHits === 0) {
+      bonus += this.ranks['precision-hit']
+        * GAME_TUNING.build.precisionHit.damageBonusPerRank;
+    }
+    const speedSteps = Math.floor(
+      Math.max(0, context.speed / ORB_SPEED - 1 + Number.EPSILON)
+      / GAME_TUNING.build.kineticConversion.speedStep,
+    );
+    bonus += Math.min(
+      GAME_TUNING.build.kineticConversion.maxDamageBonus,
+      speedSteps
+        * this.ranks['kinetic-conversion']
+        * GAME_TUNING.build.kineticConversion.damageBonusPerStepPerRank,
+    );
+    return Math.min(GAME_TUNING.build.conditionalDamageCap, bonus);
   }
 
   explosion(): ExplosionSpec | null {

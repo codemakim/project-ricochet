@@ -47,6 +47,8 @@ export function directHit(
   directDamageBonus = 0,
   chargedDamageBonus = 0,
   chargedKillPierces = false,
+  conditionalDamageBonus = 0,
+  flatDamageBonus = 0,
 ): HitResult {
   if (!Number.isFinite(directDamageBonus) || directDamageBonus < 0) {
     throw new RangeError('direct damage bonus must be finite and non-negative');
@@ -54,10 +56,18 @@ export function directHit(
   if (!Number.isFinite(chargedDamageBonus) || chargedDamageBonus < 0) {
     throw new RangeError('charged damage bonus must be finite and non-negative');
   }
+  if (!Number.isFinite(conditionalDamageBonus) || conditionalDamageBonus < 0) {
+    throw new RangeError('conditional damage bonus must be finite and non-negative');
+  }
+  if (!Number.isFinite(flatDamageBonus) || flatDamageBonus < 0) {
+    throw new RangeError('flat damage bonus must be finite and non-negative');
+  }
   const charged = charges > 0;
   const damage = (charged ? 1.5 : 1)
-    + directDamageBonus
-    + (charged ? chargedDamageBonus : 0);
+    * (1 + directDamageBonus)
+    * (1 + conditionalDamageBonus)
+    + (charged ? chargedDamageBonus : 0)
+    + flatDamageBonus;
   const killed = enemyHp <= damage;
   const rewardPiercing = charged && killed && chargedKillPierces;
 

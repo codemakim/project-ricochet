@@ -208,7 +208,7 @@ describe('TemporaryOrbManager', () => {
     expect(manager.handleEnemyHit(orb as unknown as never, 4, 1, 100)).toEqual({
       charged: false,
       charges: 0,
-      damage: 0.65,
+      damage: 0.5,
       killed: false,
       reflect: true,
       preserveChargedKinetics: false,
@@ -224,7 +224,7 @@ describe('TemporaryOrbManager', () => {
       4,
       99,
       100 + GAME_TUNING.temporaryOrbs.hitCooldownMs,
-    )).toMatchObject({ damage: 0.65 });
+    )).toMatchObject({ damage: 0.5 });
   });
 
   it('uses the configured base damage without a firepower bonus', () => {

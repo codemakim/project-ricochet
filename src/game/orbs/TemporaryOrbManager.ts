@@ -131,7 +131,7 @@ export class TemporaryOrbManager {
     if (lastHitMs !== undefined && nowMs - lastHitMs < GAME_TUNING.temporaryOrbs.hitCooldownMs) return null;
     record.enemyHits.set(enemyId, nowMs);
     const damage = GAME_TUNING.temporaryOrbs.baseDamage
-      + this.options.getDirectDamageBonus();
+      * (1 + this.options.getDirectDamageBonus());
     return {
       charged: false,
       charges: 0,

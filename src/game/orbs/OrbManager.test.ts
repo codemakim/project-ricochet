@@ -158,7 +158,7 @@ describe('OrbStore', () => {
     for (let bounce = 0; bounce < 7; bounce += 1) store.handleWallBounce(0);
 
     expect(store.handleEnemyHit(0, 7, 99, 1_000, false)).toMatchObject({
-      damage: 1.9,
+      damage: expect.closeTo(2.1),
       coreType: 'echo',
       conductionTriggered: false,
     });
@@ -179,6 +179,38 @@ describe('OrbStore', () => {
     }
     expect(store.handleEnemyHit(0, 4, 99, 1_000, false))
       .toMatchObject({ coreType: 'conduction', conductionTriggered: true });
+  });
+
+  it('passes flight context into permanent direct-hit damage', () => {
+    let context = { distanceFromPlayer: 0, wallHits: 0, speed: 0 };
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => 0,
+      () => false,
+      () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      (next) => {
+        context = next;
+        return 0.2;
+      },
+    );
+    store.configureStartingCores(['conduction', 'echo', 'echo']);
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.synchronizeActive(0, { x: 100, y: 500 }, { x: 0, y: -480 });
+    store.handleWallBounce(0);
+
+    expect(store.handleEnemyHit(0, 7, 99, 1_000, false, 140)?.damage).toBeCloseTo(1.8);
+    expect(context).toEqual({
+      distanceFromPlayer: 140,
+      wallHits: 1,
+      speed: 480,
+    });
   });
 
   it('uses proximity-built inertia for one launch and clears it on the first hit', () => {
@@ -472,7 +504,7 @@ describe('OrbStore', () => {
     expect(onEnemyDamage).toHaveBeenCalledTimes(3);
   });
 
-  it('uses current damage and charged-speed providers, then drops to 400 after the last charge', () => {
+  it('uses current firepower and permanent-speed providers after the last charge', () => {
     const store = new OrbStore(
       { ...EXPERIMENT_DEFAULTS, passThroughOnKill: true },
       {},
@@ -491,9 +523,9 @@ describe('OrbStore', () => {
     store.handleEnemyHit(0, 2, 1, 1_000, false);
     const result = store.handleEnemyHit(0, 3, 2, 1_000, false);
 
-    expect(result).toMatchObject({ charged: true, damage: 1.75, charges: 0 });
+    expect(result).toMatchObject({ charged: true, damage: 1.875, charges: 0 });
     const after = store.getSnapshot()[0]!;
-    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(480);
     expect(store.handleEnemyHit(0, 4, 2, 1_000, false)).toMatchObject({
       charged: false,
       damage: 1.25,
@@ -523,7 +555,7 @@ describe('OrbStore', () => {
     expect(store.handleEnemyHit(0, 1, 2.5, 1_000, false)).toMatchObject({
       charged: true,
       charges: 0,
-      damage: 2.5,
+      damage: 2.625,
       killed: true,
       reflect: false,
       preserveChargedKinetics: true,
@@ -540,7 +572,7 @@ describe('OrbStore', () => {
     });
   });
 
-  it('drops to base speed when a non-reward pass-through consumes the final charge', () => {
+  it('keeps permanent speed when a non-reward pass-through consumes the final charge', () => {
     const store = new OrbStore(
       { ...EXPERIMENT_DEFAULTS, passThroughOnKill: true },
       {},
@@ -561,7 +593,7 @@ describe('OrbStore', () => {
     expect(Math.hypot(
       store.getSnapshot()[0]!.velocity.x,
       store.getSnapshot()[0]!.velocity.y,
-    )).toBeCloseTo(ORB_SPEED);
+    )).toBeCloseTo(480);
   });
 
   it('rejects an invalid charged bonus without consuming charge, cooldown, or damage callback', () => {
@@ -710,7 +742,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(480);
   });
 
-  it('normalizes the body to 400 when a pass-through hit consumes the last charge', () => {
+  it('keeps permanent build speed when a pass-through hit consumes the last charge', () => {
     const { manager, sprites } = createManager(true, () => false, null, () => 0.25, () => 480, true);
     manager.activateAim();
     manager.update(0, 0, player, { x: 3, y: 4 });
@@ -719,10 +751,10 @@ describe('OrbManager Phaser adapter', () => {
     manager.handleEnemyHit(0, 2, 1, 1_000, false);
     const result = manager.handleEnemyHit(0, 3, 1.5, 1_000, false);
 
-    expect(result).toMatchObject({ charged: true, damage: 1.75, charges: 0, reflect: false });
+    expect(result).toMatchObject({ charged: true, damage: 1.875, charges: 0, reflect: false });
     const after = manager.getSnapshot()[0]!;
-    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
-    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(480);
+    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(480);
   });
 
   it('keeps the pre-hit charged body velocity after inertial penetration spends its last charge', () => {
@@ -756,7 +788,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites[0]!.body.velocity.x / sprites[0]!.body.velocity.y).toBeCloseTo(3 / 4);
   });
 
-  it('normalizes a reflected body to 400 after the last charge', () => {
+  it('normalizes a reflected body to permanent build speed after the last charge', () => {
     const { manager, sprites } = createManager(true, () => false, null, () => 0, () => 480, true);
     manager.activateAim();
     manager.update(0, 0, player, up);
@@ -769,10 +801,10 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.synchronizeOrb(sprites[0] as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
 
     const after = manager.getSnapshot()[0]!;
-    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(480);
     expect(after.velocity.x).toBeLessThan(0);
     expect(after.velocity.y).toBeGreaterThan(0);
-    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(480);
   });
 
   it('refreshes active charged bodies to the current speed without changing direction', () => {

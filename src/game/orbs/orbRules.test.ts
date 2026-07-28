@@ -24,11 +24,11 @@ describe('orb rules', () => {
     });
   });
 
-  it('adds a finite non-negative direct damage bonus', () => {
+  it('multiplies a finite non-negative direct damage bonus', () => {
     expect(directHit(1, 3, { passThroughOnKill: false }, false, 0.25)).toMatchObject({
       charged: true,
       charges: 0,
-      damage: 1.75,
+      damage: 1.875,
     });
   });
 
@@ -36,13 +36,27 @@ describe('orb rules', () => {
     expect(directHit(1, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
       charged: true,
       charges: 0,
-      damage: 2.5,
+      damage: 2.625,
     });
     expect(directHit(0, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
       charged: false,
       charges: 0,
       damage: 1.25,
     });
+  });
+
+  it('multiplies base firepower and conditional direct-hit bonuses before flat rewards', () => {
+    expect(directHit(
+      1,
+      9,
+      { passThroughOnKill: false },
+      false,
+      0.25,
+      0.75,
+      false,
+      0.2,
+      1,
+    )).toMatchObject({ damage: 4 });
   });
 
   it('lets only a charged lethal reward hit pass through while consuming its charge', () => {

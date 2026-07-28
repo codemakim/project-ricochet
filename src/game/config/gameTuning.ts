@@ -70,8 +70,17 @@ export interface GameTuning {
     };
   };
   build: {
+    conditionalDamageCap: number;
     firepower: { damageBonusPerRank: number };
     kinetic: { speedBonusPerRank: number };
+    nearAmplification: { distance: number; damageBonusPerRank: number };
+    precisionHit: { damageBonusPerRank: number };
+    kineticConversion: {
+      speedStep: number;
+      damageBonusPerStepPerRank: number;
+      maxDamageBonus: number;
+    };
+    wallAcceleration: { speedBonusPerStack: number; maxStacks: number };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -205,8 +214,17 @@ export const GAME_TUNING = {
     },
   },
   build: {
+    conditionalDamageCap: 1.5,
     firepower: { damageBonusPerRank: 0.12 },
     kinetic: { speedBonusPerRank: 0.07 },
+    nearAmplification: { distance: 150, damageBonusPerRank: 0.15 },
+    precisionHit: { damageBonusPerRank: 0.2 },
+    kineticConversion: {
+      speedStep: 0.1,
+      damageBonusPerStepPerRank: 0.06,
+      maxDamageBonus: 0.36,
+    },
+    wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
   },
@@ -458,6 +476,27 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   nonNegative(build.firepower.damageBonusPerRank, 'build.firepower.damageBonusPerRank');
   nonNegative(build.kinetic.speedBonusPerRank, 'build.kinetic.speedBonusPerRank');
+  positive(build.conditionalDamageCap, 'build.conditionalDamageCap');
+  positive(build.nearAmplification.distance, 'build.nearAmplification.distance');
+  nonNegative(
+    build.nearAmplification.damageBonusPerRank,
+    'build.nearAmplification.damageBonusPerRank',
+  );
+  nonNegative(build.precisionHit.damageBonusPerRank, 'build.precisionHit.damageBonusPerRank');
+  positive(build.kineticConversion.speedStep, 'build.kineticConversion.speedStep');
+  nonNegative(
+    build.kineticConversion.damageBonusPerStepPerRank,
+    'build.kineticConversion.damageBonusPerStepPerRank',
+  );
+  nonNegative(
+    build.kineticConversion.maxDamageBonus,
+    'build.kineticConversion.maxDamageBonus',
+  );
+  nonNegative(
+    build.wallAcceleration.speedBonusPerStack,
+    'build.wallAcceleration.speedBonusPerStack',
+  );
+  positiveInteger(build.wallAcceleration.maxStacks, 'build.wallAcceleration.maxStacks');
   positive(build.explosion.radius, 'build.explosion.radius');
   nonNegative(build.explosion.damage, 'build.explosion.damage');
   positiveInteger(build.split.count, 'build.split.count');

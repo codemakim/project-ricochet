@@ -388,6 +388,7 @@ export class EnemyManager {
       enemy.hp,
       this.scene.time.now,
       false,
+      Math.hypot(enemy.x - this.options.player.x, enemy.y - this.options.player.y),
     );
     if (!result) return false;
     const direction = this.orbDirection(orb);

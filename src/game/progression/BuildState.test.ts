@@ -49,4 +49,23 @@ describe('BuildState', () => {
       'explosion rank must be an integer from 0 through 1',
     );
   });
+
+  it('combines near, precision, and excess-speed direct-hit bonuses', () => {
+    const build = new BuildState({
+      'near-amplification': 2,
+      'precision-hit': 1,
+      'kinetic-conversion': 1,
+    });
+
+    expect(build.conditionalDirectDamageBonus({
+      distanceFromPlayer: 150,
+      wallHits: 0,
+      speed: 480,
+    })).toBeCloseTo(0.62);
+    expect(build.conditionalDirectDamageBonus({
+      distanceFromPlayer: 151,
+      wallHits: 1,
+      speed: 400,
+    })).toBe(0);
+  });
 });

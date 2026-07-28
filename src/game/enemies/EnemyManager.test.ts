@@ -293,7 +293,9 @@ describe('EnemyManager', () => {
     boundary.handleEnemyHit.mockReturnValue({ damage: 1.5, charged: true, charges: 2, killed: false, reflect: true });
     const enemy = boundary.groups[0]!.children[0]!;
     expect(runtimeColliders[0]!.trigger(runtimeOrb, enemy)).toBe(true);
-    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(runtimeOrb, 0, 3, 0, false);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(
+      runtimeOrb, 0, 3, 0, false, expect.any(Number),
+    );
 
     boundary.manager.destroy();
     expect(boundary.orbAddedListeners.size).toBe(0);

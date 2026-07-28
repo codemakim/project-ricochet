@@ -9,6 +9,7 @@ import {
 } from '../constants';
 import { GAME_TUNING } from '../config/gameTuning';
 import { normalize, type Vector } from '../math/vector';
+import type { PermanentDirectHitContext } from '../progression/BuildState';
 import { LaunchQueue } from './launchQueue';
 import {
   directHit,
@@ -46,6 +47,7 @@ export interface OrbSnapshot {
   position: Vector;
   velocity: Vector;
   lastRecoverySource: RecoverySource | null;
+  wallHits: number;
 }
 
 export interface PermanentHitResult extends HitResult {
@@ -87,6 +89,9 @@ export class OrbStore {
     private readonly getOrbLimit: () => number = () => (
       GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit
     ),
+    private readonly getConditionalDirectDamageBonus: (
+      context: PermanentDirectHitContext,
+    ) => number = () => 0,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -127,6 +132,7 @@ export class OrbStore {
       position: { x: 0, y: 0 },
       velocity: { x: 0, y: 0 },
       lastRecoverySource: null,
+      wallHits: 0,
       activeSinceMs: null,
       attractionElapsedMs: 0,
       attractionStart: { x: 0, y: 0 },
@@ -166,6 +172,7 @@ export class OrbStore {
   handleWallBounce(id: number): boolean {
     const record = this.requireRecord(id);
     if (record.state !== 'active') return false;
+    record.wallHits += 1;
     record.coreState = applyCoreWallBounce(record.coreType, record.coreState);
     return true;
   }
@@ -191,6 +198,7 @@ export class OrbStore {
     enemyHp: number,
     nowMs: number,
     piercing: boolean,
+    distanceFromPlayer = Number.POSITIVE_INFINITY,
   ): PermanentHitResult | null {
     const record = this.requireRecord(id);
     if (record.state !== 'active' || !record.damageEnabled) return null;
@@ -206,14 +214,24 @@ export class OrbStore {
       }
     }
     const core = resolveCoreDirectHit(record.coreType, record.coreState);
+    const conditionalBonus = Math.min(
+      GAME_TUNING.build.conditionalDamageCap,
+      core.directDamageBonus + this.getConditionalDirectDamageBonus({
+        distanceFromPlayer,
+        wallHits: record.wallHits,
+        speed: Math.hypot(record.velocity.x, record.velocity.y),
+      }),
+    );
     const result = directHit(
       record.charges,
       enemyHp,
       this.settings,
       piercing,
-      this.getDirectDamageBonus() + openingBonus + core.directDamageBonus,
+      this.getDirectDamageBonus(),
       this.getChargedDamageBonus(),
       this.chargedKillPierces(),
+      conditionalBonus,
+      openingBonus,
     );
     record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
@@ -251,6 +269,7 @@ export class OrbStore {
       position: { ...record.position },
       velocity: { ...record.velocity },
       lastRecoverySource: record.lastRecoverySource,
+      wallHits: record.wallHits,
     }));
   }
 
@@ -355,6 +374,7 @@ export class OrbStore {
     record.damageEnabled = true;
     record.activeSinceMs = nowMs;
     record.enemyHits.clear();
+    record.wallHits = 0;
   }
 
   private requireRecord(id: number): OrbRecord {
@@ -370,8 +390,8 @@ export class OrbStore {
   }
 
   private speedTarget(record: OrbRecord): number {
-    const base = record.charges > 0 ? this.getChargedSpeed() : ORB_SPEED;
-    return base * coreLaunchSpeedMultiplier(record.coreType, record.coreState);
+    return this.getChargedSpeed()
+      * coreLaunchSpeedMultiplier(record.coreType, record.coreState);
   }
 
   private runtimeOrbLimit(): number {
@@ -400,6 +420,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getChargedDamageBonus?(): number;
   chargedKillPierces?(): boolean;
   getOrbLimit?(): number;
+  getConditionalDirectDamageBonus?(context: PermanentDirectHitContext): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -448,6 +469,7 @@ export class OrbManager {
       options.getChargedDamageBonus,
       options.chargedKillPierces,
       options.getOrbLimit,
+      options.getConditionalDirectDamageBonus,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);
@@ -540,11 +562,19 @@ export class OrbManager {
     enemyHp: number,
     nowMs: number,
     piercing: boolean,
+    distanceFromPlayer = Number.POSITIVE_INFINITY,
   ): PermanentHitResult | null {
     const owned = this.resolveOwnedOrb(orb);
     if (!owned) return null;
     this.synchronizeOwnedBody(owned.sprite, owned.id);
-    const result = this.store.handleEnemyHit(owned.id, enemyId, enemyHp, nowMs, piercing);
+    const result = this.store.handleEnemyHit(
+      owned.id,
+      enemyId,
+      enemyHp,
+      nowMs,
+      piercing,
+      distanceFromPlayer,
+    );
     if (result && !result.reflect) this.synchronizeSprites();
     return result;
   }
