@@ -770,6 +770,34 @@ describe('EnemyManager', () => {
     );
   });
 
+  it('applies conduction damage to only the nearest two eligible enemies', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 3, x: 100, y: 100, column: 0, speed: 0 },
+      { kind: 'basic', hp: 3, x: 110, y: 100, column: 1, speed: 0 },
+      { kind: 'basic', hp: 3, x: 120, y: 100, column: 2, speed: 0 },
+      { kind: 'basic', hp: 3, x: 130, y: 100, column: 3, speed: 0 },
+      { kind: 'basic', hp: 3, x: 300, y: 100, column: 4, speed: 0 },
+    ];
+    const { manager, onDirectHit } = createBoundary(formation);
+
+    expect(manager.applyNearestSecondaryDamage(
+      { x: 100, y: 100 },
+      0,
+      50,
+      2,
+      0.45,
+    )).toEqual([1, 2]);
+    expect(manager.getSnapshot().enemies.map(({ id, hp }) => ({ id, hp })))
+      .toEqual([
+        { id: 0, hp: 3 },
+        { id: 1, hp: 2.55 },
+        { id: 2, hp: 2.55 },
+        { id: 3, hp: 3 },
+        { id: 4, hp: 3 },
+      ]);
+    expect(onDirectHit).not.toHaveBeenCalled();
+  });
+
   it('clears warning state if a shooter dies before firing', () => {
     const { manager, handleEnemyHit, groups, colliders, time } = createBoundary();
     time.advance(1300);

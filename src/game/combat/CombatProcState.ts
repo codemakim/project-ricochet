@@ -1,4 +1,4 @@
-export type ProcId = 'explosion' | 'split';
+export type ProcId = 'explosion' | 'split' | 'corrosion';
 
 export interface ProcAttempt {
   triggered: boolean;
@@ -8,6 +8,7 @@ export interface ProcAttempt {
 const PROC_SALTS: Record<ProcId, number> = {
   explosion: 0x4558_504c,
   split: 0x5350_4c54,
+  corrosion: 0x434f_5252,
 };
 
 function nextState(state: number): number {
@@ -63,6 +64,11 @@ export class CombatProcState {
       },
       split: {
         random: (seed ^ PROC_SALTS.split) >>> 0,
+        failures: 0,
+        lastTriggeredByOrb: new Map(),
+      },
+      corrosion: {
+        random: (seed ^ PROC_SALTS.corrosion) >>> 0,
         failures: 0,
         lastTriggeredByOrb: new Map(),
       },

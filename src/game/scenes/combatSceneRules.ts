@@ -11,6 +11,7 @@ import type {
 import type { CombatEffectScheduler } from '../combat/CombatEffectScheduler';
 import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
 
 export function shouldFinalizeBossReward(
   bossDefeatPending: boolean,
@@ -63,6 +64,29 @@ export interface DirectHitEffectPlan {
 export interface ProcDecision {
   explosion: boolean;
   split: boolean;
+}
+
+export interface OrbCoreEffectPlan {
+  spawnCorrosion: boolean;
+  dischargeConduction: boolean;
+}
+
+export function planOrbCoreEffects(
+  event: {
+    source: 'permanent' | 'temporary';
+    coreType?: OrbCoreId;
+    conductionTriggered?: boolean;
+  },
+  corrosionTriggered: boolean,
+): OrbCoreEffectPlan {
+  if (event.source !== 'permanent') {
+    return { spawnCorrosion: false, dischargeConduction: false };
+  }
+  return {
+    spawnCorrosion: event.coreType === 'corrosion' && corrosionTriggered,
+    dischargeConduction: event.coreType === 'conduction'
+      && event.conductionTriggered === true,
+  };
 }
 
 export function planDirectHitEffects(

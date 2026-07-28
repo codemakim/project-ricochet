@@ -60,4 +60,20 @@ describe('CombatProcState', () => {
     expect(state.tryProc('explosion', 3, 219, 1, 120)).toBe(false);
     expect(state.tryProc('explosion', 3, 220, 1, 120)).toBe(true);
   });
+
+  it('keeps corrosion deterministic and independent from other proc streams', () => {
+    const baseline = new CombatProcState(9876);
+    const interleaved = new CombatProcState(9876);
+    const baselineCorrosion = [
+      baseline.tryProc('corrosion', 0, 0, 0.15, 120),
+      baseline.tryProc('corrosion', 1, 200, 0.15, 120),
+    ];
+
+    const first = interleaved.tryProc('corrosion', 0, 0, 0.15, 120);
+    interleaved.tryProc('explosion', 0, 0, 0.2, 120);
+    interleaved.tryProc('split', 0, 0, 0.25, 120);
+    const second = interleaved.tryProc('corrosion', 1, 200, 0.15, 120);
+
+    expect([first, second]).toEqual(baselineCorrosion);
+  });
 });

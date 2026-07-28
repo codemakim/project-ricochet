@@ -9,6 +9,7 @@ import {
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
+  planOrbCoreEffects,
   rewardAddsPermanentOrb,
   rewardTierForBoss,
   schedulePlannedAftershock,
@@ -29,6 +30,33 @@ describe('shouldFinalizeBossReward', () => {
 });
 
 describe('combat relic runtime decisions', () => {
+  it('plans core effects only from matching permanent direct hits', () => {
+    expect(planOrbCoreEffects({
+      source: 'permanent',
+      coreType: 'corrosion',
+      conductionTriggered: false,
+    }, true)).toEqual({
+      spawnCorrosion: true,
+      dischargeConduction: false,
+    });
+    expect(planOrbCoreEffects({
+      source: 'permanent',
+      coreType: 'conduction',
+      conductionTriggered: true,
+    }, false)).toEqual({
+      spawnCorrosion: false,
+      dischargeConduction: true,
+    });
+    expect(planOrbCoreEffects({
+      source: 'temporary',
+      coreType: 'conduction',
+      conductionTriggered: true,
+    }, true)).toEqual({
+      spawnCorrosion: false,
+      dischargeConduction: false,
+    });
+  });
+
   it('plans every direct-hit relic effect without making child or aftershock effects recursive', () => {
     const build = new BuildState({ explosion: 1, split: 1 });
     const bossBuild = new BossBuild();

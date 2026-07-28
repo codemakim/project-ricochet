@@ -325,6 +325,35 @@ export class EnemyManager {
     return lethal.map(({ event }) => event.enemyId);
   }
 
+  applyNearestSecondaryDamage(
+    origin: Vector,
+    excludedEnemyId: number,
+    radius: number,
+    maximumTargets: number,
+    damage: number,
+  ): number[] {
+    const targets = [...this.enemies.values()]
+      .filter((enemy) => (
+        enemy.active
+        && enemy.enemyId !== excludedEnemyId
+        && Math.hypot(enemy.x - origin.x, enemy.y - origin.y) <= radius
+      ))
+      .sort((left, right) => (
+        Math.hypot(left.x - origin.x, left.y - origin.y)
+        - Math.hypot(right.x - origin.x, right.y - origin.y)
+        || left.enemyId - right.enemyId
+      ))
+      .slice(0, maximumTargets);
+    const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
+    for (const enemy of targets) {
+      const event = this.createKillEvent(enemy);
+      enemy.hp -= damage;
+      if (enemy.hp <= 0) lethal.push({ enemy, event });
+    }
+    for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
+    return targets.map((enemy) => enemy.enemyId);
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

@@ -13,6 +13,10 @@ import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import { CombatEffectScheduler, type ScheduledAreaEffect } from '../combat/CombatEffectScheduler';
 import { CombatProcState } from '../combat/CombatProcState';
+import {
+  CorrosionFieldState,
+  type CorrosionFieldSnapshot,
+} from '../combat/CorrosionFieldState';
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import {
   applyDamage,
@@ -60,6 +64,7 @@ import {
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
+  planOrbCoreEffects,
   rewardAddsPermanentOrb,
   rewardTierForBoss,
   schedulePlannedAftershock,
@@ -110,6 +115,7 @@ export interface CombatDebugSnapshot {
   temporaryOrbs: number;
   temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
   scheduledEffects: ScheduledAreaEffect[];
+  corrosionFields: readonly CorrosionFieldSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -141,6 +147,7 @@ export class CombatScene extends Phaser.Scene {
   private activeBossKind?: BossKind;
   private bossRewardTier: BossRewardTier | null = null;
   private readonly combatEffects = new CombatEffectScheduler();
+  private readonly corrosionFields = new CorrosionFieldState();
   private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
@@ -181,6 +188,7 @@ export class CombatScene extends Phaser.Scene {
     this.activeBossKind = undefined;
     this.bossRewardTier = null;
     this.combatEffects.clear();
+    this.corrosionFields.clear();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
@@ -363,6 +371,7 @@ export class CombatScene extends Phaser.Scene {
     this.enemyManager.update();
     this.activeBoss?.update();
     this.drainCombatEffects();
+    this.drainCorrosionFields();
     this.advanceEncounter(gameplayDelta);
   }
 
@@ -450,6 +459,7 @@ export class CombatScene extends Phaser.Scene {
         velocity: { ...orb.velocity },
       })) ?? [],
       scheduledEffects: this.combatEffects.getSnapshot(),
+      corrosionFields: this.corrosionFields.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
     };
@@ -474,7 +484,13 @@ export class CombatScene extends Phaser.Scene {
   private handlePostDirectHit(
     event: Pick<
       DirectHitEvent,
-      'source' | 'sourceOrbId' | 'position' | 'charged' | 'direction'
+      | 'source'
+      | 'sourceOrbId'
+      | 'position'
+      | 'charged'
+      | 'direction'
+      | 'coreType'
+      | 'conductionTriggered'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -483,6 +499,19 @@ export class CombatScene extends Phaser.Scene {
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
+    const corrosion = GAME_TUNING.orbCores.corrosion;
+    const corrosionTriggered = Boolean(
+      permanent
+      && event.coreType === 'corrosion'
+      && this.combatProcs?.tryProc(
+        'corrosion',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        corrosion.chance,
+        corrosion.cooldownMs,
+      )
+    );
+    const corePlan = planOrbCoreEffects(event, corrosionTriggered);
     const decision = {
       explosion: Boolean(permanent && explosion && this.combatProcs?.tryProc(
         'explosion',
@@ -510,6 +539,32 @@ export class CombatScene extends Phaser.Scene {
         event.position,
         event.direction,
       );
+    }
+    if (corePlan.spawnCorrosion) {
+      this.corrosionFields.spawn(
+        event.sourceOrbId,
+        event.position,
+        this.gameplayElapsedMs,
+      );
+    }
+    if (corePlan.dischargeConduction) {
+      const conduction = GAME_TUNING.orbCores.conduction;
+      if (excludedBossTargetId === undefined) {
+        this.enemyManager?.applyNearestSecondaryDamage(
+          event.position,
+          excludedEnemyId,
+          conduction.radius,
+          conduction.targetCount,
+          conduction.damage,
+        );
+      } else {
+        this.activeBoss?.applyAreaDamage(
+          event.position,
+          conduction.radius,
+          conduction.damage,
+          excludedBossTargetId,
+        );
+      }
     }
     if (plan.immediateAreas.length > 0) {
       this.applyAreaEffects(
@@ -562,6 +617,12 @@ export class CombatScene extends Phaser.Scene {
     for (const effect of this.combatEffects.drainDue(this.gameplayElapsedMs)) {
       this.applyAreaEffects(effect.position, [effect], -1, effect.excludedBossTargetId);
       this.drawExplosion(effect.position, effect.radius);
+    }
+  }
+
+  private drainCorrosionFields(): void {
+    for (const tick of this.corrosionFields.drainDue(this.gameplayElapsedMs)) {
+      this.applyAreaEffects(tick.position, [tick]);
     }
   }
 
@@ -718,6 +779,7 @@ export class CombatScene extends Phaser.Scene {
   private applyLifecycle(
     reason: Parameters<typeof finalizeCombatLifecycle>[0],
   ): void {
+    this.corrosionFields.clear();
     const next = finalizeCombatLifecycle(reason, {
       activeBoss: this.activeBoss,
       activeBossKind: this.activeBossKind,
