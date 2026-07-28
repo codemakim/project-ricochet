@@ -500,11 +500,11 @@ export class CombatScene extends Phaser.Scene {
       event.position,
       excludedBossTargetId,
     );
-    if (plan.chargedSplitCount > 0) {
+    if (plan.splitCount > 0) {
       this.temporaryOrbManager?.spawn(
         event.position,
         event.direction,
-        plan.chargedSplitCount,
+        plan.splitCount,
       );
     }
   }

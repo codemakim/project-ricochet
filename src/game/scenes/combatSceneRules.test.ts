@@ -55,11 +55,11 @@ describe('combat relic runtime decisions', () => {
     expect(permanent).toMatchObject({
       immediateAreas: [
         { kind: 'siege', radius: 80, damage: 2 },
-        { kind: 'explosion', radius: 48, damage: 0.5 },
+        { kind: 'explosion', radius: 48, damage: 0.45 },
       ],
-      aftershock: { damage: 0.25 },
+      aftershock: { damage: 0.225 },
       spawnChildren: false,
-      chargedSplitCount: 1,
+      splitCount: 2,
     });
     expect(permanent.aftershock?.radius).toBeCloseTo(38.4);
     const scheduler = new CombatEffectScheduler();
@@ -73,7 +73,7 @@ describe('combat relic runtime decisions', () => {
       expect.objectContaining({
         dueAt: 1_350,
         position: { x: 225, y: 180 },
-        damage: 0.25,
+        damage: 0.225,
       }),
     ]);
     expect(bossOrbModifiers(bossBuild)).toEqual({
@@ -91,7 +91,7 @@ describe('combat relic runtime decisions', () => {
       immediateAreas: [],
       aftershock: null,
       spawnChildren: true,
-      chargedSplitCount: 0,
+      splitCount: 0,
     });
   });
 

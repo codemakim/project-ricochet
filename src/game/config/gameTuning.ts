@@ -69,7 +69,23 @@ export interface GameTuning {
       };
     };
   };
-  temporaryOrbs: { radius: number; speed: number; cap: number; lifetimeMs: number; hitCooldownMs: number };
+  build: {
+    explosion: {
+      chance: number;
+      cooldownMs: number;
+      radius: number;
+      damage: number;
+    };
+    split: { chance: number; cooldownMs: number; count: number };
+  };
+  temporaryOrbs: {
+    radius: number;
+    speed: number;
+    cap: number;
+    lifetimeMs: number;
+    hitCooldownMs: number;
+    baseDamage: number;
+  };
   bossAreaDamage: { secondaryDamageScale: number; maxSecondaryTargets: number };
   hiveBoss: {
     core: { x: number; y: number; visualSize: number; hitboxSize: number; hp: number };
@@ -153,7 +169,18 @@ export const GAME_TUNING = {
       },
     },
   },
-  temporaryOrbs: { radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80 },
+  build: {
+    explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
+    split: { chance: 0.25, cooldownMs: 120, count: 2 },
+  },
+  temporaryOrbs: {
+    radius: 6,
+    speed: 440,
+    cap: 30,
+    lifetimeMs: 1500,
+    hitCooldownMs: 80,
+    baseDamage: 0.4,
+  },
   bossAreaDamage: { secondaryDamageScale: 0.5, maxSecondaryTargets: 1 },
   hiveBoss: {
     core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
@@ -250,7 +277,7 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 
 export function validateGameTuning(tuning: GameTuning): void {
   const {
-    boss, enemies, encounter, projectiles, temporaryOrbs,
+    boss, enemies, encounter, projectiles, build, temporaryOrbs,
     bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
   finite(boss.y, 'boss.y');
@@ -350,11 +377,21 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(projectiles.hiveEnrage.aimedBurst.radius, 'projectiles.hiveEnrage.aimedBurst.radius');
   positiveInteger(projectiles.hiveEnrage.aimedBurst.count, 'projectiles.hiveEnrage.aimedBurst.count');
   nonNegative(projectiles.hiveEnrage.aimedBurst.spreadDegrees, 'projectiles.hiveEnrage.aimedBurst.spreadDegrees');
+  for (const [id, effect] of Object.entries(build)) {
+    if (!Number.isFinite(effect.chance) || effect.chance < 0 || effect.chance > 1) {
+      throw new RangeError(`build.${id}.chance must be between zero and one`);
+    }
+    positive(effect.cooldownMs, `build.${id}.cooldownMs`);
+  }
+  positive(build.explosion.radius, 'build.explosion.radius');
+  nonNegative(build.explosion.damage, 'build.explosion.damage');
+  positiveInteger(build.split.count, 'build.split.count');
   positive(temporaryOrbs.radius, 'temporaryOrbs.radius');
   positive(temporaryOrbs.speed, 'temporaryOrbs.speed');
   positiveInteger(temporaryOrbs.cap, 'temporaryOrbs.cap');
   positive(temporaryOrbs.lifetimeMs, 'temporaryOrbs.lifetimeMs');
   positive(temporaryOrbs.hitCooldownMs, 'temporaryOrbs.hitCooldownMs');
+  positive(temporaryOrbs.baseDamage, 'temporaryOrbs.baseDamage');
   if (!Number.isFinite(bossAreaDamage.secondaryDamageScale)
     || bossAreaDamage.secondaryDamageScale < 0
     || bossAreaDamage.secondaryDamageScale > 1) {

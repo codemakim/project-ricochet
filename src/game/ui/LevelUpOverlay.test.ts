@@ -110,9 +110,9 @@ describe('LevelUpOverlay', () => {
       expect.stringContaining('화력 증폭'),
       expect.stringContaining('직접 피해 +0.25'),
       expect.stringContaining('폭발'),
-      expect.stringContaining('반경 48px · 피해 0.5'),
+      expect.stringContaining('발동 20% · 반경 48px · 피해 0.45'),
       expect.stringContaining('분열'),
-      expect.stringContaining('임시 구슬 1개'),
+      expect.stringContaining('발동 25% · 임시 구슬 2개'),
     ]));
 
     cards[1]!.emit('pointerup');

@@ -5,6 +5,16 @@ export const ABILITY_IDS = ['firepower', 'kinetic', 'explosion', 'split'] as con
 export type AbilityId = typeof ABILITY_IDS[number];
 export type AbilityRanks = Record<AbilityId, number>;
 
+export const ABILITY_MAX_RANKS = {
+  firepower: 5,
+  kinetic: 3,
+  explosion: 1,
+  split: 1,
+} as const satisfies Record<AbilityId, number>;
+
+export const MAX_BUILD_LEVEL = Object.values(ABILITY_MAX_RANKS)
+  .reduce((total, rank) => total + rank, 0);
+
 export function xpForEnemy(kind: EnemyKind): number {
   switch (kind) {
     case 'armored': return 3;
@@ -32,7 +42,7 @@ export function selectAbilityOptions(
   level: number,
   seed: number,
 ): AbilityId[] {
-  const eligible = ABILITY_IDS.filter((id) => ranks[id] < 5);
+  const eligible = ABILITY_IDS.filter((id) => ranks[id] < ABILITY_MAX_RANKS[id]);
   let state = (seed ^ Math.imul(level + 1, 2654435761)) >>> 0;
   const shuffled = [...eligible];
 

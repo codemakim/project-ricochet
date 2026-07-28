@@ -20,12 +20,12 @@ describe('ProgressionManager', () => {
     expect(manager.choose(choice)).toBe(false);
   });
 
-  it('stops gaining XP when all abilities reach rank five', () => {
+  it('stops gaining XP when all abilities reach their individual caps', () => {
     const build = new BuildState({
-      firepower: 5, kinetic: 5, explosion: 5, split: 5,
+      firepower: 5, kinetic: 3, explosion: 1, split: 1,
     });
     const manager = new ProgressionManager(7, build);
     manager.gainExperience(100);
-    expect(manager.getSnapshot()).toMatchObject({ level: 20, xp: 0, pendingChoices: 0 });
+    expect(manager.getSnapshot()).toMatchObject({ level: 10, xp: 0, pendingChoices: 0 });
   });
 });

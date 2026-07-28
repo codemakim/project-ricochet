@@ -57,12 +57,12 @@ export interface DirectHitEffectPlan {
   immediateAreas: PlannedAreaEffect[];
   aftershock: { radius: number; damage: number } | null;
   spawnChildren: boolean;
-  chargedSplitCount: number;
+  splitCount: number;
 }
 
 export function planDirectHitEffects(
   event: { source: 'permanent' | 'temporary'; charged: boolean },
-  build: Pick<BuildState, 'explosion' | 'splitCount'>,
+  build: Pick<BuildState, 'explosion' | 'split'>,
   bossBuild: Pick<
     BossBuild,
     | 'recordPermanentDirectHit'
@@ -84,7 +84,11 @@ export function planDirectHitEffects(
   const explosionEnabled = event.source === 'permanent'
     || bossBuild.temporaryExplosionEnabled();
   if (explosion && explosionEnabled) {
-    immediateAreas.push({ kind: 'explosion', ...explosion });
+    immediateAreas.push({
+      kind: 'explosion',
+      radius: explosion.radius,
+      damage: explosion.damage,
+    });
   }
   const aftershock = event.source === 'permanent' && explosion
     ? bossBuild.aftershock()
@@ -98,8 +102,8 @@ export function planDirectHitEffects(
       }
       : null,
     spawnChildren: event.source === 'temporary' && bossBuild.chainSplitEnabled(),
-    chargedSplitCount: event.source === 'permanent' && event.charged
-      ? build.splitCount()
+    splitCount: event.source === 'permanent' && event.charged
+      ? build.split()?.count ?? 0
       : 0,
   };
 }

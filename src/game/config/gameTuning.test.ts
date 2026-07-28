@@ -31,8 +31,13 @@ describe('GAME_TUNING', () => {
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
+    expect(GAME_TUNING.build).toEqual({
+      explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
+      split: { chance: 0.25, cooldownMs: 120, count: 2 },
+    });
     expect(GAME_TUNING.temporaryOrbs).toEqual({
-      radius: 6, speed: 440, cap: 12, lifetimeMs: 1500, hitCooldownMs: 80,
+      radius: 6, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
+      baseDamage: 0.4,
     });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
@@ -165,6 +170,18 @@ describe('GAME_TUNING', () => {
     }],
     ['invalid temporary orb lifetime', (value: Mutable<GameTuning>) => {
       value.temporaryOrbs.lifetimeMs = -1;
+    }],
+    ['build explosion chance above one', (value: Mutable<GameTuning>) => {
+      value.build.explosion.chance = 1.1;
+    }],
+    ['non-finite build explosion chance', (value: Mutable<GameTuning>) => {
+      value.build.explosion.chance = Number.NaN;
+    }],
+    ['fractional build split count', (value: Mutable<GameTuning>) => {
+      value.build.split.count = 1.5;
+    }],
+    ['non-positive temporary orb base damage', (value: Mutable<GameTuning>) => {
+      value.temporaryOrbs.baseDamage = 0;
     }],
     ['non-finite relic value', (value: Mutable<GameTuning>) => {
       value.relics.secondBoss.aftershockExplosion.radiusScale = Number.NaN;

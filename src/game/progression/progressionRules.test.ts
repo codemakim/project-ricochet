@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ABILITY_MAX_RANKS,
+  MAX_BUILD_LEVEL,
   selectAbilityOptions,
   xpForEnemy,
   xpRequiredForLevel,
@@ -9,6 +11,16 @@ import {
 const empty: AbilityRanks = { firepower: 0, kinetic: 0, explosion: 0, split: 0 };
 
 describe('progression rules', () => {
+  it('defines the approved rank caps and resulting maximum build level', () => {
+    expect(ABILITY_MAX_RANKS).toEqual({
+      firepower: 5,
+      kinetic: 3,
+      explosion: 1,
+      split: 1,
+    });
+    expect(MAX_BUILD_LEVEL).toBe(10);
+  });
+
   it('maps enemy kinds to XP and levels to exact costs', () => {
     expect((['basic', 'shooter', 'armored', 'splitter', 'fragment'] as const).map(xpForEnemy))
       .toEqual([1, 2, 3, 1, 1]);
@@ -23,10 +35,10 @@ describe('progression rules', () => {
     expect(selectAbilityOptions(empty, 0, 1234)).toEqual(first);
   });
 
-  it('excludes rank-five abilities and returns only remaining options', () => {
+  it('excludes abilities at their individual rank caps', () => {
     expect(selectAbilityOptions(
-      { firepower: 5, kinetic: 5, explosion: 4, split: 5 },
-      19,
+      { firepower: 5, kinetic: 3, explosion: 0, split: 1 },
+      9,
       9,
     )).toEqual(['explosion']);
   });

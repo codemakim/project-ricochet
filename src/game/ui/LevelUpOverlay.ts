@@ -102,10 +102,12 @@ export class LevelUpOverlay {
         return `충전 속도 ${next.chargedSpeed()}px/s`;
       case 'explosion': {
         const effect = next.explosion()!;
-        return `반경 ${effect.radius}px · 피해 ${effect.damage}`;
+        return `발동 ${effect.chance * 100}% · 반경 ${effect.radius}px · 피해 ${effect.damage}`;
       }
-      case 'split':
-        return `임시 구슬 ${next.splitCount()}개`;
+      case 'split': {
+        const effect = next.split()!;
+        return `발동 ${effect.chance * 100}% · 임시 구슬 ${effect.count}개`;
+      }
     }
   }
 
