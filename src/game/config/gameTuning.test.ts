@@ -180,6 +180,9 @@ describe('GAME_TUNING', () => {
     ['fractional build split count', (value: Mutable<GameTuning>) => {
       value.build.split.count = 1.5;
     }],
+    ['corrosion tick longer than its field', (value: Mutable<GameTuning>) => {
+      value.orbCores.corrosion.durationMs = value.orbCores.corrosion.tickMs - 1;
+    }],
     ['non-positive temporary orb base damage', (value: Mutable<GameTuning>) => {
       value.temporaryOrbs.baseDamage = 0;
     }],

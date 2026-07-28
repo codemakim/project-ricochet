@@ -78,6 +78,39 @@ export interface GameTuning {
     };
     split: { chance: number; cooldownMs: number; count: number };
   };
+  orbCores: {
+    echo: {
+      maxStacks: number;
+      damageBonusPerStack: number;
+      fill: number;
+      accent: number;
+    };
+    corrosion: {
+      chance: number;
+      cooldownMs: number;
+      radius: number;
+      durationMs: number;
+      tickMs: number;
+      damagePerTick: number;
+      fieldLimitPerOrb: number;
+      fill: number;
+      accent: number;
+    };
+    conduction: {
+      hitsRequired: number;
+      targetCount: number;
+      radius: number;
+      damage: number;
+      fill: number;
+      accent: number;
+    };
+    inertia: {
+      maxStacks: number;
+      speedBonusPerStack: number;
+      fill: number;
+      accent: number;
+    };
+  };
   temporaryOrbs: {
     radius: number;
     speed: number;
@@ -172,6 +205,39 @@ export const GAME_TUNING = {
   build: {
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
+  },
+  orbCores: {
+    echo: {
+      maxStacks: 5,
+      damageBonusPerStack: 0.08,
+      fill: 0x74c8ff,
+      accent: 0xeaf8ff,
+    },
+    corrosion: {
+      chance: 0.15,
+      cooldownMs: 120,
+      radius: 42,
+      durationMs: 2500,
+      tickMs: 500,
+      damagePerTick: 0.2,
+      fieldLimitPerOrb: 2,
+      fill: 0x9be564,
+      accent: 0xe8ffc8,
+    },
+    conduction: {
+      hitsRequired: 4,
+      targetCount: 2,
+      radius: 150,
+      damage: 0.45,
+      fill: 0xc58cff,
+      accent: 0xf3e8ff,
+    },
+    inertia: {
+      maxStacks: 3,
+      speedBonusPerStack: 0.1,
+      fill: 0xffbd59,
+      accent: 0xfff0c2,
+    },
   },
   temporaryOrbs: {
     radius: 6,
@@ -277,7 +343,7 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 
 export function validateGameTuning(tuning: GameTuning): void {
   const {
-    boss, enemies, encounter, projectiles, build, temporaryOrbs,
+    boss, enemies, encounter, projectiles, build, orbCores, temporaryOrbs,
     bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
   finite(boss.y, 'boss.y');
@@ -386,6 +452,38 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(build.explosion.radius, 'build.explosion.radius');
   nonNegative(build.explosion.damage, 'build.explosion.damage');
   positiveInteger(build.split.count, 'build.split.count');
+  positiveInteger(orbCores.echo.maxStacks, 'orbCores.echo.maxStacks');
+  positive(orbCores.echo.damageBonusPerStack, 'orbCores.echo.damageBonusPerStack');
+  if (
+    !Number.isFinite(orbCores.corrosion.chance)
+    || orbCores.corrosion.chance < 0
+    || orbCores.corrosion.chance > 1
+  ) {
+    throw new RangeError('orbCores.corrosion.chance must be between zero and one');
+  }
+  positive(orbCores.corrosion.cooldownMs, 'orbCores.corrosion.cooldownMs');
+  positive(orbCores.corrosion.radius, 'orbCores.corrosion.radius');
+  positive(orbCores.corrosion.durationMs, 'orbCores.corrosion.durationMs');
+  positive(orbCores.corrosion.tickMs, 'orbCores.corrosion.tickMs');
+  if (orbCores.corrosion.tickMs > orbCores.corrosion.durationMs) {
+    throw new RangeError('orbCores.corrosion.tickMs must fit its duration');
+  }
+  positive(orbCores.corrosion.damagePerTick, 'orbCores.corrosion.damagePerTick');
+  positiveInteger(orbCores.corrosion.fieldLimitPerOrb, 'orbCores.corrosion.fieldLimitPerOrb');
+  positiveInteger(orbCores.conduction.hitsRequired, 'orbCores.conduction.hitsRequired');
+  positiveInteger(orbCores.conduction.targetCount, 'orbCores.conduction.targetCount');
+  positive(orbCores.conduction.radius, 'orbCores.conduction.radius');
+  positive(orbCores.conduction.damage, 'orbCores.conduction.damage');
+  positiveInteger(orbCores.inertia.maxStacks, 'orbCores.inertia.maxStacks');
+  positive(orbCores.inertia.speedBonusPerStack, 'orbCores.inertia.speedBonusPerStack');
+  const corePalettes = Object.values(orbCores).map(({ fill, accent }) => {
+    finite(fill, 'orbCores.fill');
+    finite(accent, 'orbCores.accent');
+    return `${fill}:${accent}`;
+  });
+  if (new Set(corePalettes).size !== corePalettes.length) {
+    throw new RangeError('orb core palettes must be distinct');
+  }
   positive(temporaryOrbs.radius, 'temporaryOrbs.radius');
   positive(temporaryOrbs.speed, 'temporaryOrbs.speed');
   positiveInteger(temporaryOrbs.cap, 'temporaryOrbs.cap');
@@ -591,7 +689,10 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(friendly.width, `visual.friendly.${name}.width`);
     positive(friendly.height, `visual.friendly.${name}.height`);
   }
-  const friendlyPairs = Object.values(visual.friendly).map(({ fill, accent }) => `${fill}:${accent}`);
+  const friendlyPairs = [
+    ...Object.values(visual.friendly).map(({ fill, accent }) => `${fill}:${accent}`),
+    ...corePalettes,
+  ];
   for (const [name, hostile] of Object.entries(visual.hostile)) {
     finite(hostile.fill, `visual.hostile.${name}.fill`);
     finite(hostile.accent, `visual.hostile.${name}.accent`);
