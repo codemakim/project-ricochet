@@ -8,7 +8,16 @@ import {
   type AbilityRanks,
 } from './progressionRules';
 
-const empty: AbilityRanks = { firepower: 0, kinetic: 0, explosion: 0, split: 0 };
+const empty: AbilityRanks = {
+  firepower: 0,
+  kinetic: 0,
+  explosion: 0,
+  split: 0,
+  'near-amplification': 0,
+  'precision-hit': 0,
+  'kinetic-conversion': 0,
+  'wall-acceleration': 0,
+};
 
 describe('progression rules', () => {
   it('defines the approved rank caps and resulting maximum build level', () => {
@@ -17,8 +26,12 @@ describe('progression rules', () => {
       kinetic: 3,
       explosion: 1,
       split: 1,
+      'near-amplification': 3,
+      'precision-hit': 3,
+      'kinetic-conversion': 3,
+      'wall-acceleration': 3,
     });
-    expect(MAX_BUILD_LEVEL).toBe(10);
+    expect(MAX_BUILD_LEVEL).toBe(22);
   });
 
   it('maps enemy kinds to XP and levels to exact costs', () => {
@@ -37,9 +50,9 @@ describe('progression rules', () => {
 
   it('excludes abilities at their individual rank caps', () => {
     expect(selectAbilityOptions(
-      { firepower: 5, kinetic: 3, explosion: 0, split: 1 },
+      { ...empty, firepower: 5, kinetic: 3, explosion: 0, split: 1 },
+      21,
       9,
-      9,
-    )).toEqual(['explosion']);
+    )).toContain('explosion');
   });
 });

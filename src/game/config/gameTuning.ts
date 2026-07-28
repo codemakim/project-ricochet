@@ -70,6 +70,8 @@ export interface GameTuning {
     };
   };
   build: {
+    firepower: { damageBonusPerRank: number };
+    kinetic: { speedBonusPerRank: number };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -203,6 +205,8 @@ export const GAME_TUNING = {
     },
   },
   build: {
+    firepower: { damageBonusPerRank: 0.12 },
+    kinetic: { speedBonusPerRank: 0.07 },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
   },
@@ -443,12 +447,17 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(projectiles.hiveEnrage.aimedBurst.radius, 'projectiles.hiveEnrage.aimedBurst.radius');
   positiveInteger(projectiles.hiveEnrage.aimedBurst.count, 'projectiles.hiveEnrage.aimedBurst.count');
   nonNegative(projectiles.hiveEnrage.aimedBurst.spreadDegrees, 'projectiles.hiveEnrage.aimedBurst.spreadDegrees');
-  for (const [id, effect] of Object.entries(build)) {
+  for (const [id, effect] of Object.entries({
+    explosion: build.explosion,
+    split: build.split,
+  })) {
     if (!Number.isFinite(effect.chance) || effect.chance < 0 || effect.chance > 1) {
       throw new RangeError(`build.${id}.chance must be between zero and one`);
     }
     positive(effect.cooldownMs, `build.${id}.cooldownMs`);
   }
+  nonNegative(build.firepower.damageBonusPerRank, 'build.firepower.damageBonusPerRank');
+  nonNegative(build.kinetic.speedBonusPerRank, 'build.kinetic.speedBonusPerRank');
   positive(build.explosion.radius, 'build.explosion.radius');
   nonNegative(build.explosion.damage, 'build.explosion.damage');
   positiveInteger(build.split.count, 'build.split.count');

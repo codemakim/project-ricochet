@@ -1,4 +1,5 @@
 import { GAME_TUNING } from '../config/gameTuning';
+import { ORB_SPEED } from '../constants';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
@@ -23,7 +24,7 @@ export class BuildState {
   private readonly ranks: AbilityRanks;
 
   constructor(initialRanks: Partial<AbilityRanks> = {}) {
-    this.ranks = { firepower: 0, kinetic: 0, explosion: 0, split: 0 };
+    this.ranks = Object.fromEntries(ABILITY_IDS.map((id) => [id, 0])) as AbilityRanks;
 
     for (const id of ABILITY_IDS) {
       const rank = initialRanks[id];
@@ -53,11 +54,13 @@ export class BuildState {
   }
 
   directDamageBonus(): number {
-    return this.ranks.firepower * 0.25;
+    return this.ranks.firepower * GAME_TUNING.build.firepower.damageBonusPerRank;
   }
 
   chargedSpeed(): number {
-    return 400 + this.ranks.kinetic * 40;
+    return ORB_SPEED * (
+      1 + this.ranks.kinetic * GAME_TUNING.build.kinetic.speedBonusPerRank
+    );
   }
 
   explosion(): ExplosionSpec | null {

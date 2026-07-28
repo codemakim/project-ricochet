@@ -6,11 +6,11 @@ describe('BuildState', () => {
     const build = new BuildState();
     for (let rank = 1; rank <= 5; rank += 1) {
       build.upgrade('firepower');
-      expect(build.directDamageBonus()).toBe(rank * 0.25);
+      expect(build.directDamageBonus()).toBeCloseTo(rank * 0.12);
     }
     for (let rank = 1; rank <= 3; rank += 1) {
       build.upgrade('kinetic');
-      expect(build.chargedSpeed()).toBe(400 + rank * 40);
+      expect(build.chargedSpeed()).toBeCloseTo(400 * (1 + rank * 0.07));
     }
     expect(() => build.upgrade('kinetic')).toThrow('kinetic is already rank 3');
   });

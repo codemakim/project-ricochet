@@ -1,14 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { BuildState } from '../progression/BuildState';
-import type { AbilityId } from '../progression/progressionRules';
-
-const LABELS: Record<AbilityId, string> = {
-  firepower: '화력 증폭',
-  kinetic: '운동 에너지',
-  explosion: '폭발',
-  split: '분열',
-};
+import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
 
 const CARD_Y = [270, 400, 530] as const;
 const KEY_CODES = [
@@ -52,7 +45,7 @@ export class LevelUpOverlay {
         .setInteractive({ useHandCursor: true })
         .on('pointerup', select);
       const rank = build.rank(id);
-      const label = `${index + 1}. ${LABELS[id]}  ${rank} → ${rank + 1}\n${this.nextEffect(id, build)}`;
+      const label = `${index + 1}. ${ABILITY_DEFINITIONS[id].label}  ${rank} → ${rank + 1}\n${this.nextEffect(id, build)}`;
       const text = this.scene.add.text(GAME_WIDTH / 2, CARD_Y[index]!, label, {
         align: 'center',
         color: '#dff7ff',
@@ -108,6 +101,8 @@ export class LevelUpOverlay {
         const effect = next.split()!;
         return `발동 ${effect.chance * 100}% · 임시 구슬 ${effect.count}개`;
       }
+      default:
+        return ABILITY_DEFINITIONS[id].summary;
     }
   }
 

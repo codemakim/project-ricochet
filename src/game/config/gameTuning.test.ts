@@ -32,6 +32,8 @@ describe('GAME_TUNING', () => {
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
     expect(GAME_TUNING.build).toEqual({
+      firepower: { damageBonusPerRank: 0.12 },
+      kinetic: { speedBonusPerRank: 0.07 },
       explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });
