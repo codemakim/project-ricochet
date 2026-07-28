@@ -12,6 +12,7 @@ import type { BossPartId } from '../bosses/bossRules';
 import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import { CombatEffectScheduler, type ScheduledAreaEffect } from '../combat/CombatEffectScheduler';
+import { CombatProcState } from '../combat/CombatProcState';
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import {
   applyDamage,
@@ -140,6 +141,7 @@ export class CombatScene extends Phaser.Scene {
   private activeBossKind?: BossKind;
   private bossRewardTier: BossRewardTier | null = null;
   private readonly combatEffects = new CombatEffectScheduler();
+  private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
   private progressionText!: Phaser.GameObjects.Text;
@@ -182,6 +184,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
+    this.combatProcs = new CombatProcState(runSeed);
     const build = new BuildState();
     this.build = build;
     this.bossBuild = new BossBuild();
@@ -212,7 +215,10 @@ export class CombatScene extends Phaser.Scene {
         this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
       ),
       getOrbLimit: () => this.bossBuild?.orbLimit() ?? 3,
-      onRecovery: (source) => this.handleOrbRecovery(source),
+      onRecovery: (orbId, source) => {
+        this.combatProcs?.resetOrbFlight(orbId);
+        this.handleOrbRecovery(source);
+      },
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
@@ -474,7 +480,30 @@ export class CombatScene extends Phaser.Scene {
     excludedBossTargetId?: BossTargetId,
   ): void {
     if (!this.build || !this.bossBuild) return;
-    const plan = planDirectHitEffects(event, this.build, this.bossBuild);
+    const explosion = this.build.explosion();
+    const split = this.build.split();
+    const permanent = event.source === 'permanent';
+    const decision = {
+      explosion: Boolean(permanent && explosion && this.combatProcs?.tryProc(
+        'explosion',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        explosion.chance,
+        explosion.cooldownMs,
+      )),
+      split: Boolean(permanent && split && this.combatProcs?.trySplit(
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        split.chance,
+        split.cooldownMs,
+      )),
+    };
+    const plan = planDirectHitEffects(
+      event,
+      this.build,
+      this.bossBuild,
+      decision,
+    );
     if (plan.spawnChildren) {
       this.temporaryOrbManager?.spawnChildren(
         event.sourceOrbId,
@@ -864,6 +893,7 @@ export class CombatScene extends Phaser.Scene {
     this.progression = undefined;
     this.build = undefined;
     this.bossBuild = undefined;
+    this.combatProcs = undefined;
     this.debugAdvanceEncounter = undefined;
     this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;

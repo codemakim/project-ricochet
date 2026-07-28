@@ -44,14 +44,15 @@ describe('combat relic runtime decisions', () => {
       expect(planDirectHitEffects({
         source: 'permanent',
         charged: false,
-      }, build, bossBuild).immediateAreas.map(({ kind }) => kind))
+      }, build, bossBuild, { explosion: true, split: false })
+        .immediateAreas.map(({ kind }) => kind))
         .toEqual(['explosion']);
     }
 
     const permanent = planDirectHitEffects({
       source: 'permanent',
       charged: true,
-    }, build, bossBuild);
+    }, build, bossBuild, { explosion: true, split: true });
     expect(permanent).toMatchObject({
       immediateAreas: [
         { kind: 'siege', radius: 80, damage: 2 },
@@ -86,11 +87,46 @@ describe('combat relic runtime decisions', () => {
     const rootTemporary = planDirectHitEffects({
       source: 'temporary',
       charged: false,
-    }, build, bossBuild);
+    }, build, bossBuild, { explosion: true, split: true });
     expect(rootTemporary).toMatchObject({
       immediateAreas: [],
       aftershock: null,
       spawnChildren: true,
+      splitCount: 0,
+    });
+  });
+
+  it('uses explicit permanent proc decisions and keeps temporary defaults inert', () => {
+    const build = new BuildState({ explosion: 1, split: 1 });
+    const bossBuild = new BossBuild();
+
+    expect(planDirectHitEffects(
+      { source: 'permanent', charged: true },
+      build,
+      bossBuild,
+      { explosion: false, split: false },
+    )).toMatchObject({
+      immediateAreas: [],
+      splitCount: 0,
+    });
+
+    expect(planDirectHitEffects(
+      { source: 'permanent', charged: false },
+      build,
+      bossBuild,
+      { explosion: true, split: true },
+    )).toMatchObject({
+      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
+      splitCount: 2,
+    });
+
+    expect(planDirectHitEffects(
+      { source: 'temporary', charged: false },
+      build,
+      bossBuild,
+      { explosion: true, split: true },
+    )).toMatchObject({
+      immediateAreas: [],
       splitCount: 0,
     });
   });

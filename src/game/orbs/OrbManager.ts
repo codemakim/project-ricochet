@@ -39,7 +39,7 @@ export interface OrbSnapshot {
 
 export interface OrbCallbacks {
   onEnemyDamage?: (enemyId: number, damage: number, reflect: boolean) => void;
-  onRecovery?: (source: RecoverySource) => void;
+  onRecovery?: (orbId: number, source: RecoverySource) => void;
 }
 
 export type FixedTerrainLineOfSight = (orbPosition: Vector, playerPosition: Vector) => boolean;
@@ -281,7 +281,7 @@ export class OrbStore {
     record.charges = restoredCharges;
     record.firstHitPending = source === 'proximity';
     record.velocity = { x: 0, y: 0 };
-    this.callbacks.onRecovery?.(source!);
+    this.callbacks.onRecovery?.(record.id, source!);
     this.enqueue(record);
   }
 

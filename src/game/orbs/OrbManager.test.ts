@@ -237,7 +237,7 @@ describe('OrbStore', () => {
     store.update(300, 50, player, { x: 1, y: 0 });
 
     expect(onRecovery).toHaveBeenCalledOnce();
-    expect(onRecovery).toHaveBeenCalledWith('proximity');
+    expect(onRecovery).toHaveBeenCalledWith(0, 'proximity');
     expect(store.getSnapshot()[0]).toMatchObject({
       state: 'active',
       charges: 3,
@@ -517,7 +517,7 @@ describe('OrbStore', () => {
     const reports: number[] = [];
     const create = (autoReturnAfterMs: number | null = null) => new OrbStore(
       { ...EXPERIMENT_DEFAULTS, autoReturnAfterMs },
-      { onRecovery: (source) => reports.push(source === 'proximity' ? 2 : 0) },
+      { onRecovery: (_orbId, source) => reports.push(source === 'proximity' ? 2 : 0) },
     );
     const proximity = create();
     proximity.activateAim();

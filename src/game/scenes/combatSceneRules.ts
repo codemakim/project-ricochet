@@ -60,6 +60,11 @@ export interface DirectHitEffectPlan {
   splitCount: number;
 }
 
+export interface ProcDecision {
+  explosion: boolean;
+  split: boolean;
+}
+
 export function planDirectHitEffects(
   event: { source: 'permanent' | 'temporary'; charged: boolean },
   build: Pick<BuildState, 'explosion' | 'split'>,
@@ -70,6 +75,7 @@ export function planDirectHitEffects(
     | 'aftershock'
     | 'chainSplitEnabled'
   >,
+  decision: ProcDecision,
 ): DirectHitEffectPlan {
   const immediateAreas: PlannedAreaEffect[] = [];
   if (event.source === 'permanent' && bossBuild.recordPermanentDirectHit()) {
@@ -81,16 +87,20 @@ export function planDirectHitEffects(
     });
   }
   const explosion = build.explosion();
-  const explosionEnabled = event.source === 'permanent'
-    || bossBuild.temporaryExplosionEnabled();
-  if (explosion && explosionEnabled) {
+  const permanentExplosion = event.source === 'permanent' && decision.explosion;
+  const temporaryExplosion = event.source === 'temporary'
+    && bossBuild.temporaryExplosionEnabled();
+  const explosionTriggered = Boolean(
+    explosion && (permanentExplosion || temporaryExplosion),
+  );
+  if (explosion && explosionTriggered) {
     immediateAreas.push({
       kind: 'explosion',
       radius: explosion.radius,
       damage: explosion.damage,
     });
   }
-  const aftershock = event.source === 'permanent' && explosion
+  const aftershock = event.source === 'permanent' && explosionTriggered
     ? bossBuild.aftershock()
     : null;
   return {
@@ -102,7 +112,7 @@ export function planDirectHitEffects(
       }
       : null,
     spawnChildren: event.source === 'temporary' && bossBuild.chainSplitEnabled(),
-    splitCount: event.source === 'permanent' && event.charged
+    splitCount: event.source === 'permanent' && decision.split
       ? build.split()?.count ?? 0
       : 0,
   };
