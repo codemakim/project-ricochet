@@ -536,170 +536,113 @@ for (const passThroughOnKill of [false, true]) {
   });
 }
 
-test('@desktop applies explosion damage once around the direct-hit enemy', async ({ page }) => {
+test('@desktop bounds permanent explosion and split procs per flight', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const enemyIds = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.debugUpgradeAbility('explosion');
-    const [targetId, nearId, killedId, outsideId] = scene.getDebugSnapshot().enemies
+    const [anchorId, splashId] = scene.getDebugSnapshot().enemies
       .filter((enemy) => enemy.kind === 'basic')
-      .slice(0, 4)
+      .slice(0, 2)
       .map((enemy) => enemy.id);
-    const keep = new Set([targetId, nearId, killedId, outsideId]);
+    const keep = new Set([anchorId, splashId]);
     scene.debugRemoveEnemies(
       scene.getDebugSnapshot().enemies
         .filter((enemy) => !keep.has(enemy.id))
         .map((enemy) => enemy.id),
     );
-    scene.debugSetEnemy(targetId!, { x: 225, y: 300 }, 2);
-    scene.debugSetEnemy(nearId!, { x: 273, y: 300 }, 1);
-    scene.debugSetEnemy(killedId!, { x: 225, y: 252 }, 0.5);
-    scene.debugSetEnemy(outsideId!, { x: 225, y: 204 }, 1);
-    return { targetId: targetId!, nearId: nearId!, killedId: killedId!, outsideId: outsideId! };
+    scene.debugSetEnemy(anchorId!, { x: 100, y: 300 }, 99);
+    scene.debugSetEnemy(splashId!, { x: 140, y: 300 }, 99);
+    return { anchorId: anchorId!, splashId: splashId! };
   });
-  const before = await snapshot(page);
-  const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
+  const initial = await snapshot(page);
+  const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
-    timeout: 90,
-  }).toEqual({ active: 1, queued: 2 });
-
-  await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
-    if (!scene.debugPlaceOrb(active.id, { x: 225, y: 324 })) {
-      throw new Error('active orb required');
-    }
-  });
-
-  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === enemyIds.nearId)?.hp, {
-    intervals: [5],
-    timeout: 90,
-  }).toBe(0.5);
-  const after = await snapshot(page);
-  expect(after.enemies.find((enemy) => enemy.id === enemyIds.targetId)?.hp).toBe(0.5);
-  expect(after.enemies.some((enemy) => enemy.id === enemyIds.killedId)).toBe(false);
-  expect(after.enemies.find((enemy) => enemy.id === enemyIds.outsideId)?.hp).toBe(1);
-  expect(after.progression.xp).toBe(before.progression.xp + 1);
-});
-
-test('@desktop temporary split orbs stay capped, do not recursively split, pause lifetime, and clear on defeat', async ({ page }) => {
-  const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
-    for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility('split');
-    scene.debugUpgradeAbility('explosion');
-    const keep = new Set([0, 1, 2]);
-    scene.debugRemoveEnemies(
-      scene.getDebugSnapshot().enemies.filter((enemy) => !keep.has(enemy.id)).map((enemy) => enemy.id),
-    );
-    scene.debugSetEnemy(0, { x: 100, y: 300 }, 99);
-    scene.debugSetEnemy(1, { x: 100, y: 200 }, 99);
-    scene.debugSetEnemy(2, { x: 140, y: 200 }, 2);
-  });
-  const before = await snapshot(page);
-  const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
-  await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 90,
-  }).toEqual({ active: 1, queued: 2 });
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 240,
+    timeout: 300,
   }).toEqual({ active: 3, queued: 0 });
+  const orbId = (await snapshot(page)).orbs.find((orb) => orb.state === 'active')!.id;
 
-  const beforeSpawn = await snapshot(page);
-  await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
-    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('active orb required');
-  });
-  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
-    intervals: [5],
-    timeout: 100,
-  }).toBe(3);
-  const spawned = await snapshot(page);
-  await expect.poll(async () => (await snapshot(page)).enemies.find((enemy) => enemy.id === 2)?.hp, {
-    intervals: [10],
-    timeout: 400,
-  }).toBe(1.5);
-  expect((await snapshot(page)).temporaryOrbs).toBe(3);
-
-  await sceneCall(page, (scene) => scene.debugGrantXp(12));
-  const paused = await snapshot(page);
-  const minimumRemainingMs = 1500 - (paused.gameplayElapsedMs - beforeSpawn.gameplayElapsedMs);
-  const maximumRemainingMs = 1500 - (paused.gameplayElapsedMs - spawned.gameplayElapsedMs);
-  expect(paused.pauseReasons).toContain('levelUp');
-  await page.waitForTimeout(1600);
-  const afterLongPause = await snapshot(page);
-  expect(afterLongPause.temporaryOrbs).toBe(3);
-  expect(afterLongPause.gameplayElapsedMs).toBe(paused.gameplayElapsedMs);
-
-  await sceneCall(page, (scene) => {
-    const choice = scene.getDebugSnapshot().progression.choices[0]!;
-    scene.debugChooseAbility(choice);
-  });
-  await page.waitForTimeout(50);
-  expect((await snapshot(page)).temporaryOrbs).toBe(3);
-  await expect.poll(async () => {
-    const current = await snapshot(page);
-    return current.gameplayElapsedMs - paused.gameplayElapsedMs >= minimumRemainingMs - 50
-      ? current.temporaryOrbs
-      : -1;
-  }, { intervals: [5], timeout: maximumRemainingMs + 200 }).toBe(3);
-  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
-    intervals: [5],
-    timeout: 100,
-  }).toBe(0);
-  const expired = await snapshot(page);
-  const resumedLifetimeMs = expired.gameplayElapsedMs - paused.gameplayElapsedMs;
-  expect(resumedLifetimeMs).toBeGreaterThanOrEqual(minimumRemainingMs - 20);
-  expect(resumedLifetimeMs).toBeLessThan(maximumRemainingMs + 50);
-
-  await sceneCall(page, (scene) => {
-    scene.debugSetEnemy(1, { x: 30, y: 80 }, 99);
-    scene.debugSetEnemy(2, { x: 420, y: 80 }, 2);
-  });
-  for (const expectedCount of [3, 6, 9, 12]) {
+  const placeEligibleHit = async () => {
+    const before = await snapshot(page);
+    const anchorHp = before.enemies.find((enemy) => enemy.id === enemyIds.anchorId)!.hp;
     await page.waitForTimeout(85);
-    await sceneCall(page, (scene) => {
-      const active = scene.getDebugSnapshot().orbs.find(
-        (orb) => orb.state === 'active' && orb.charges > 0,
-      )!;
+    await sceneCall(page, (scene, target) => {
+      const current = scene.getDebugSnapshot();
+      for (const orb of current.orbs) {
+        if (orb.id !== target.orbId && orb.state === 'active') {
+          scene.debugPlaceOrb(orb.id, { x: 420, y: 80 + orb.id * 20 });
+        }
+      }
+      for (const orb of current.temporaryOrbSnapshots) {
+        scene.debugPlaceTemporaryOrb(orb.id, { x: 420, y: 160 + orb.id % 10 * 20 });
+      }
+      const anchor = current.enemies.find((enemy) => enemy.id === target.anchorId)!;
+      const active = current.orbs.find((orb) => orb.id === target.orbId);
+      if (active?.state !== 'active') throw new Error('selected permanent orb must be active');
       const speed = Math.hypot(active.velocity.x, active.velocity.y);
-      const position = {
-        x: 100 - active.velocity.x / speed * 24,
-        y: 300 - active.velocity.y / speed * 24,
-      };
-      if (!scene.debugPlaceOrb(active.id, position)) throw new Error('charged orb required');
-    });
-    await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
+      if (!scene.debugPlaceOrb(target.orbId, {
+        x: anchor.position.x - active.velocity.x / speed * 24,
+        y: anchor.position.y - active.velocity.y / speed * 24,
+      })) throw new Error('active orb required');
+    }, { orbId, anchorId: enemyIds.anchorId });
+    await expect.poll(async () => (
+      await snapshot(page)
+    ).enemies.find((enemy) => enemy.id === enemyIds.anchorId)!.hp, {
       intervals: [5],
-      timeout: 100,
-    }).toBe(expectedCount);
-  }
-  await page.waitForTimeout(85);
-  await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find(
-      (orb) => orb.state === 'active' && orb.charges > 0,
-    )!;
-    const speed = Math.hypot(active.velocity.x, active.velocity.y);
-    const position = {
-      x: 100 - active.velocity.x / speed * 24,
-      y: 300 - active.velocity.y / speed * 24,
-    };
-    if (!scene.debugPlaceOrb(active.id, position)) throw new Error('charged orb required');
-  });
-  await page.waitForTimeout(50);
-  expect((await snapshot(page)).temporaryOrbs).toBe(12);
+      timeout: 250,
+    }).toBeLessThanOrEqual(anchorHp - 1);
+  };
 
-  await sceneCall(page, (scene) => {
-    scene.debugSetHealth(1);
-    scene.debugDamage(1);
+  let explosionObserved = false;
+  for (let attempt = 0; attempt < 10 && !explosionObserved; attempt += 1) {
+    const splashHp = (await snapshot(page)).enemies.find(
+      (enemy) => enemy.id === enemyIds.splashId,
+    )!.hp;
+    await placeEligibleHit();
+    explosionObserved = (await snapshot(page)).enemies.find(
+      (enemy) => enemy.id === enemyIds.splashId,
+    )!.hp < splashHp;
+  }
+  expect(explosionObserved).toBe(true);
+
+  await sceneCall(page, (scene) => scene.debugUpgradeAbility('split'));
+  let firstSplitCount = 0;
+  for (let attempt = 0; attempt < 8 && firstSplitCount === 0; attempt += 1) {
+    await placeEligibleHit();
+    firstSplitCount = (await snapshot(page)).temporaryOrbs;
+  }
+  expect(firstSplitCount).toBe(2);
+
+  for (let attempt = 0; attempt < 8; attempt += 1) await placeEligibleHit();
+  expect((await snapshot(page)).temporaryOrbs).toBe(firstSplitCount);
+
+  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, {
+    intervals: [20],
+    timeout: 2_000,
+  }).toBe(0);
+  await sceneCall(page, (scene, id) => {
+    const current = scene.getDebugSnapshot();
+    if (!scene.debugPlaceOrb(id, {
+      x: current.player.x + 5,
+      y: current.player.y,
+    })) throw new Error('active orb required for recovery');
+  }, orbId);
+  await expect.poll(async () => {
+    const orb = (await snapshot(page)).orbs.find((candidate) => candidate.id === orbId)!;
+    return { state: orb.state, source: orb.lastRecoverySource };
+  }, { intervals: [10], timeout: 800 }).toEqual({
+    state: 'active',
+    source: 'proximity',
   });
-  const defeated = await snapshot(page);
-  expect(defeated.defeated).toBe(true);
-  expect(defeated.temporaryOrbs).toBe(0);
+
+  let nextFlightSplitCount = 0;
+  for (let attempt = 0; attempt < 8 && nextFlightSplitCount === 0; attempt += 1) {
+    await placeEligibleHit();
+    nextFlightSplitCount = (await snapshot(page)).temporaryOrbs;
+  }
+  expect(nextFlightSplitCount).toBe(2);
 });
 
 test('@desktop caps simultaneous shooters and bullets under accelerated clock', async ({ page }) => {
@@ -983,17 +926,18 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
   expect(selected.pauseReasons).not.toContain('levelUp');
 });
 
-test('@desktop stops XP and keeps level-up closed when all abilities are rank five', async ({ page }) => {
+test('@desktop stops XP and keeps level-up closed when all abilities reach their caps', async ({ page }) => {
   await loadCanvas(page);
   await sceneCall(page, (scene) => {
-    for (const ability of ['firepower', 'kinetic', 'explosion', 'split'] as const) {
-      for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility(ability);
-    }
+    for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility('firepower');
+    for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
+    scene.debugUpgradeAbility('explosion');
+    scene.debugUpgradeAbility('split');
     scene.debugGrantXp(100);
   });
 
   const completed = await snapshot(page);
-  expect(completed.buildRanks).toEqual({ firepower: 5, kinetic: 5, explosion: 5, split: 5 });
+  expect(completed.buildRanks).toEqual({ firepower: 5, kinetic: 3, explosion: 1, split: 1 });
   expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
   expect(completed.levelUpVisible).toBe(false);
   expect(completed.pauseReasons).not.toContain('levelUp');
@@ -1013,30 +957,11 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   await sceneCall(page, (scene) => scene.debugDamage(1));
   expect((await snapshot(page)).health.current).toBe(1);
   await page.waitForTimeout(370);
-  await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
-    scene.debugUpgradeAbility('split');
-    const enemies = scene.getDebugSnapshot().enemies;
-    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
-    scene.debugSetEnemy(enemies[0]!.id, { x: 225, y: 300 }, 99);
-  });
-  const beforeLaunch = await snapshot(page);
-  const aim = clientPoint(box, { x: beforeLaunch.player.x, y: beforeLaunch.player.y - 100 });
-  await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 90,
-  }).toEqual({ active: 1, queued: 2 });
-  await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
-    if (!scene.debugPlaceOrb(active.id, { x: 225, y: 324 })) throw new Error('active orb required');
-  });
-  await expect.poll(async () => (await snapshot(page)).temporaryOrbs).toBe(1);
   await sceneCall(page, (scene) => scene.debugGrantXp(13));
   const dirty = await snapshot(page);
   expect(dirty.progression).toMatchObject({ level: 1, xp: 1, pendingChoices: 1 });
-  expect(dirty.buildRanks.split).toBe(1);
-  expect(dirty.temporaryOrbs).toBe(1);
+  expect(dirty.buildRanks.split).toBe(0);
+  expect(dirty.temporaryOrbs).toBe(0);
   expect(dirty.levelUpVisible).toBe(true);
   await sceneCall(page, (scene) => scene.debugDamage(1));
 
@@ -1307,9 +1232,8 @@ test('@desktop midboss basic shots aim, damage once, pause for major warning, an
   expect(majorCycle.atReset.boss.basicBullets).toBe(majorCycle.resolved.boss.basicBullets + 1);
 });
 
-test('@desktop midboss real orb collisions reflect body, respect locked core, and split on forgiving weakpoints', async ({ page }) => {
+test('@desktop midboss real orb collisions reflect body, respect locked core, and damage forgiving weakpoints', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugUpgradeAbility('split'));
   await enterMidbossByScore(page);
   await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
@@ -1357,11 +1281,8 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
   });
   await expect.poll(async () => {
     const current = await snapshot(page);
-    return {
-      weakpointDamaged: (current.boss.parts?.leftWeakpoint ?? 14) < 14,
-      temporaryOrbs: current.temporaryOrbs,
-    };
-  }, { timeout: 600 }).toEqual({ weakpointDamaged: true, temporaryOrbs: 1 });
+    return (current.boss.parts?.leftWeakpoint ?? 14) < 14;
+  }, { timeout: 600 }).toBe(true);
   const weakpointHit = await snapshot(page);
   expect(weakpointHit.boss.parts!.leftWeakpoint).toBeLessThan(14);
   expect(weakpointHit.orbs.find((candidate) => candidate.id === orb.id)?.charges).toBe(initialCharges - 1);
@@ -1431,7 +1352,7 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
 
 test('@desktop chain warhead enables temporary-orb explosions only after reward acquisition', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => {
+  const beforeRewardIds = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.debugUpgradeAbility('split');
     scene.debugUpgradeAbility('explosion');
@@ -1440,24 +1361,91 @@ test('@desktop chain warhead enables temporary-orb explosions only after reward 
     scene.debugSetEnemy(enemies[0]!.id, { x: 100, y: 300 }, 99);
     scene.debugSetEnemy(enemies[1]!.id, { x: 137, y: 220 }, 2);
     scene.debugSetEnemy(enemies[2]!.id, { x: 175, y: 220 }, 2);
+    return {
+      anchorId: enemies[0]!.id,
+      directId: enemies[1]!.id,
+      splashId: enemies[2]!.id,
+    };
   });
   const initial = await snapshot(page);
-  const [, directBeforeId, splashBeforeId] = initial.enemies.map((enemy) => enemy.id);
   const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
-    timeout: 100,
-  }).toEqual({ active: 1, queued: 2 });
-  await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
-    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('active orb required');
-  });
-  await expect.poll(async () => (
-    await snapshot(page)
-  ).enemies.find((enemy) => enemy.id === directBeforeId)?.hp, { timeout: 600 }).toBe(1.5);
-  expect((await snapshot(page)).enemies.find((enemy) => enemy.id === splashBeforeId)?.hp).toBe(2);
+    timeout: 300,
+  }).toEqual({ active: 3, queued: 0 });
+  const orbId = (await snapshot(page)).orbs.find((orb) => orb.state === 'active')!.id;
+
+  const spawnTemporaryOrb = async (anchorId: number) => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const anchorHp = (await snapshot(page)).enemies.find(
+        (enemy) => enemy.id === anchorId,
+      )!.hp;
+      await page.waitForTimeout(85);
+      await sceneCall(page, (scene, target) => {
+        const current = scene.getDebugSnapshot();
+        const anchor = current.enemies.find((enemy) => enemy.id === target.anchorId)!;
+        const orb = current.orbs.find((candidate) => candidate.id === target.orbId)!;
+        const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
+        if (!scene.debugPlaceOrb(target.orbId, {
+          x: anchor.position.x - orb.velocity.x / speed * 24,
+          y: anchor.position.y - orb.velocity.y / speed * 24,
+        })) throw new Error('active orb required');
+      }, { orbId, anchorId });
+      await expect.poll(async () => (
+        await snapshot(page)
+      ).enemies.find((enemy) => enemy.id === anchorId)!.hp, {
+        intervals: [5],
+        timeout: 250,
+      }).toBeLessThanOrEqual(anchorHp - 1);
+      if ((await snapshot(page)).temporaryOrbs > 0) return;
+    }
+    expect((await snapshot(page)).temporaryOrbs).toBeGreaterThan(0);
+  };
+
+  const hitWithTemporaryOrb = async (directId: number) => {
+    const beforeHp = (await snapshot(page)).enemies.find(
+      (enemy) => enemy.id === directId,
+    )!.hp;
+    await sceneCall(page, (scene, targetId) => {
+      const current = scene.getDebugSnapshot();
+      const target = current.enemies.find((enemy) => enemy.id === targetId)!;
+      const orb = current.temporaryOrbSnapshots[0]!;
+      const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
+      if (!scene.debugPlaceTemporaryOrb(orb.id, {
+        x: target.position.x - orb.velocity.x / speed * 24,
+        y: target.position.y - orb.velocity.y / speed * 24,
+      })) throw new Error('temporary orb required');
+    }, directId);
+    await expect.poll(async () => (
+      await snapshot(page)
+    ).enemies.find((enemy) => enemy.id === directId)!.hp, {
+      intervals: [5],
+      timeout: 500,
+    }).toBeLessThan(beforeHp);
+  };
+
+  await spawnTemporaryOrb(beforeRewardIds.anchorId);
+  await hitWithTemporaryOrb(beforeRewardIds.directId);
+  expect((await snapshot(page)).enemies.find(
+    (enemy) => enemy.id === beforeRewardIds.directId,
+  )!.hp).toBeCloseTo(1.6);
+  expect((await snapshot(page)).enemies.find(
+    (enemy) => enemy.id === beforeRewardIds.splashId,
+  )!.hp).toBe(2);
   await expect.poll(async () => (await snapshot(page)).temporaryOrbs, { timeout: 2_000 }).toBe(0);
+
+  await sceneCall(page, (scene, id) => {
+    const current = scene.getDebugSnapshot();
+    if (!scene.debugPlaceOrb(id, {
+      x: current.player.x + 5,
+      y: current.player.y,
+    })) throw new Error('active orb required for recovery');
+  }, orbId);
+  await expect.poll(async () => {
+    const orb = (await snapshot(page)).orbs.find((candidate) => candidate.id === orbId)!;
+    return { state: orb.state, source: orb.lastRecoverySource };
+  }, { timeout: 800 }).toEqual({ state: 'active', source: 'proximity' });
 
   await enterMidbossByScore(page);
   const reward = await defeatMidboss(page);
@@ -1466,19 +1454,24 @@ test('@desktop chain warhead enables temporary-orb explosions only after reward 
   await page.keyboard.press(`Digit${chainIndex + 1}`);
   await expect.poll(async () => (await snapshot(page)).bossRewards).toContain('chain-warhead');
 
-  await sceneCall(page, (scene) => {
+  const afterRewardIds = await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
     const enemies = scene.getDebugSnapshot().enemies;
     const [anchor, direct, splash] = enemies;
+    scene.debugRemoveEnemies(enemies.slice(3).map((enemy) => enemy.id));
     scene.debugSetEnemy(anchor!.id, { x: 100, y: 300 }, 99);
     scene.debugSetEnemy(direct!.id, { x: 63, y: 220 }, 2);
     scene.debugSetEnemy(splash!.id, { x: 25, y: 220 }, 2);
-    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active' && orb.charges > 0)!;
-    if (!scene.debugPlaceOrb(active.id, { x: 100, y: 324 })) throw new Error('charged orb required');
+    return { anchorId: anchor!.id, directId: direct!.id, splashId: splash!.id };
   });
-  await expect.poll(async () => (
-    await snapshot(page)
-  ).enemies.find((enemy) => enemy.id === directBeforeId)?.hp, { timeout: 600 }).toBe(1.5);
-  expect((await snapshot(page)).enemies.find((enemy) => enemy.id === splashBeforeId)?.hp).toBe(1.5);
+  await spawnTemporaryOrb(afterRewardIds.anchorId);
+  await hitWithTemporaryOrb(afterRewardIds.directId);
+  expect((await snapshot(page)).enemies.find(
+    (enemy) => enemy.id === afterRewardIds.directId,
+  )!.hp).toBeCloseTo(1.6);
+  expect((await snapshot(page)).enemies.find(
+    (enemy) => enemy.id === afterRewardIds.splashId,
+  )!.hp).toBeCloseTo(1.55);
 });
 
 test('@desktop midboss rewards and encounter state reset on restart', async ({ page }) => {

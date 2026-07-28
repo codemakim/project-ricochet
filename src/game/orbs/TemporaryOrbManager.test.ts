@@ -149,19 +149,21 @@ describe('TemporaryOrbManager', () => {
   it('caps at its tuning without evicting active records and keeps IDs monotonic', () => {
     const { manager } = createManager();
 
-    for (let index = 0; index < 4; index += 1) expect(manager.spawn({ x: index, y: 0 }, { x: 0, y: -1 }, 3)).toBe(3);
+    for (let index = 0; index < 10; index += 1) {
+      expect(manager.spawn({ x: index, y: 0 }, { x: 0, y: -1 }, 3)).toBe(3);
+    }
     const before = manager.getSnapshot();
     expect(manager.spawn({ x: 99, y: 99 }, { x: 0, y: -1 }, 3)).toBe(0);
     expect(manager.getSnapshot()).toEqual(before);
 
     manager.update(GAME_TUNING.temporaryOrbs.lifetimeMs);
     expect(manager.spawn({ x: 1, y: 2 }, { x: 0, y: -1 }, 1)).toBe(1);
-    expect(manager.getSnapshot()[0]!.id).toBe(12);
+    expect(manager.getSnapshot()[0]!.id).toBe(30);
   });
 
   it('advances the rank-one angle trigger when a full cap blocks spawning', () => {
     const { manager, group } = createManager();
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       manager.spawn({ x: index, y: 0 }, { x: 1, y: 0 }, 3);
     }
 
@@ -199,15 +201,15 @@ describe('TemporaryOrbManager', () => {
   });
 
   it('applies temporary damage and rejects a repeated enemy hit before its configured cooldown', () => {
-    const { manager, group } = createManager(() => 1.25);
+    const { manager, group } = createManager(() => 0.25);
     manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);
     const orb = group.children[0]!;
 
-    expect(manager.handleEnemyHit(orb as unknown as never, 4, 1.5, 100)).toEqual({
+    expect(manager.handleEnemyHit(orb as unknown as never, 4, 1, 100)).toEqual({
       charged: false,
       charges: 0,
-      damage: 1.75,
-      killed: true,
+      damage: 0.65,
+      killed: false,
       reflect: true,
       preserveChargedKinetics: false,
     });
@@ -222,7 +224,19 @@ describe('TemporaryOrbManager', () => {
       4,
       99,
       100 + GAME_TUNING.temporaryOrbs.hitCooldownMs,
-    )).toMatchObject({ damage: 1.75 });
+    )).toMatchObject({ damage: 0.65 });
+  });
+
+  it('uses the configured base damage without a firepower bonus', () => {
+    const { manager, group } = createManager();
+    manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);
+    const orb = group.children[0]!;
+
+    expect(manager.handleEnemyHit(orb as unknown as never, 7, 1, 100)).toMatchObject({
+      charged: false,
+      damage: 0.4,
+      reflect: true,
+    });
   });
 
   it('synchronizes reflected velocity and destroys owned group and records', () => {
@@ -283,12 +297,12 @@ describe('TemporaryOrbManager', () => {
     const { manager, group } = createManager(() => 0, () => gameplayElapsedMs);
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
     const rootId = manager.getSnapshot()[0]!.id;
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 9; index += 1) {
       manager.spawn({ x: index, y: 0 }, { x: 1, y: 0 }, 3);
     }
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
 
-    expect(manager.getSnapshot()).toHaveLength(11);
+    expect(manager.getSnapshot()).toHaveLength(29);
     expect(manager.spawnChildren(rootId, { x: 5, y: 6 }, { x: 1, y: 0 })).toBe(1);
     expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
     expect(manager.getSnapshot().at(-1)).toMatchObject({
