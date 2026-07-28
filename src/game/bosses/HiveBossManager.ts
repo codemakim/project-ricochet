@@ -2,7 +2,11 @@ import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { normalize, type Vector } from '../math/vector';
-import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
+import type {
+  OrbManager,
+  OrbSprite,
+  PermanentHitResult,
+} from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import type {
@@ -59,7 +63,7 @@ type HiveWarning =
   | { kind: 'hiveEnrageAimedBurst'; dueAt: number; marker: BossSprite; target: Vector };
 
 interface PendingHit {
-  result: HitResult;
+  result: HitResult | PermanentHitResult;
   partId: HivePartId;
   source: BossDirectHitEvent['source'];
   sourceOrbId: number;
@@ -443,7 +447,7 @@ export class HiveBossManager implements BossEncounter {
   }
 
   private createPending(
-    result: HitResult,
+    result: HitResult | PermanentHitResult,
     partId: HivePartId,
     source: BossDirectHitEvent['source'],
     sourceOrbId: number,
@@ -462,6 +466,9 @@ export class HiveBossManager implements BossEncounter {
     if (!exposedHiveParts(this.state).includes(pending.partId)) return;
     const part = this.parts[pending.partId];
     this.damagePart(pending.partId, pending.result.damage);
+    const core = pending.source === 'permanent'
+      ? pending.result as PermanentHitResult
+      : null;
     this.options.onDirectHit({
       bossKind: 'hive',
       targetId: pending.partId,
@@ -470,6 +477,10 @@ export class HiveBossManager implements BossEncounter {
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,
+      ...(core ? {
+        coreType: core.coreType,
+        conductionTriggered: core.conductionTriggered,
+      } : {}),
     });
   }
 

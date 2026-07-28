@@ -105,13 +105,32 @@ function createManager(
 }
 
 describe('OrbStore', () => {
+  it('configures three duplicate-friendly starting core types exactly once before aim', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+
+    expect(store.configureStartingCores(['inertia', 'inertia', 'echo'])).toBe(true);
+    expect(store.getSnapshot().map((orb) => orb.coreType)).toEqual([
+      'inertia',
+      'inertia',
+      'echo',
+    ]);
+    expect(store.configureStartingCores(['echo', 'corrosion', 'conduction'])).toBe(false);
+
+    store.activateAim();
+    expect(store.configureStartingCores(['echo', 'echo', 'echo'])).toBe(false);
+  });
+
   it('adds and queues one permanent orb at runtime, capped globally at six', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.activateAim();
     store.update(0, 0, player, up);
 
-    expect(store.addOrb()).toBe(true);
-    expect(store.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
+    expect(store.addOrb('conduction')).toBe(true);
+    expect(store.getSnapshot()[3]).toMatchObject({
+      id: 3,
+      state: 'queued',
+      coreType: 'conduction',
+    });
     store.update(100, 100, player, up);
     store.update(200, 100, player, up);
     store.update(300, 100, player, up);
@@ -123,6 +142,62 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()).toHaveLength(
       GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
     );
+  });
+
+  it('spends echo wall resonance as direct damage on the next hit', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.configureStartingCores(['echo', 'corrosion', 'conduction']);
+    store.activateAim();
+    store.update(0, 0, player, up);
+    for (let bounce = 0; bounce < 7; bounce += 1) store.handleWallBounce(0);
+
+    expect(store.handleEnemyHit(0, 7, 99, 1_000, false)).toMatchObject({
+      damage: 1.9,
+      coreType: 'echo',
+      conductionTriggered: false,
+    });
+    expect(store.getSnapshot()[0]).toMatchObject({
+      coreState: { echoStacks: 0 },
+    });
+  });
+
+  it('reports every fourth conduction hit', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.configureStartingCores(['conduction', 'echo', 'echo']);
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    for (let hit = 0; hit < 3; hit += 1) {
+      expect(store.handleEnemyHit(0, hit, 99, 1_000, false))
+        .toMatchObject({ conductionTriggered: false });
+    }
+    expect(store.handleEnemyHit(0, 4, 99, 1_000, false))
+      .toMatchObject({ coreType: 'conduction', conductionTriggered: true });
+  });
+
+  it('uses proximity-built inertia for one launch and clears it on the first hit', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.configureStartingCores(['inertia', 'echo', 'echo']);
+    store.activateAim();
+    store.update(0, 0, player, up);
+    for (let hit = 0; hit < 3; hit += 1) {
+      store.handleEnemyHit(0, hit, 99, 1_000, false);
+    }
+    store.beginProximityRecovery(0);
+    store.update(100, 100, player, up);
+    store.update(200, 100, player, up);
+    store.update(300, 100, player, up);
+
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED * 1.3);
+
+    store.handleEnemyHit(0, 9, 99, 2_000, false);
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED);
   });
 
   it('honors a runtime build orb-limit provider up to the central cap', () => {

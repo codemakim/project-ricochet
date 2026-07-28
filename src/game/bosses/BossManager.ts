@@ -3,7 +3,11 @@ import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import { clamp, normalize, type Vector } from '../math/vector';
-import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
+import type {
+  OrbManager,
+  OrbSprite,
+  PermanentHitResult,
+} from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import type {
@@ -45,7 +49,7 @@ type Warning =
   | { kind: 'supportDrop'; dueAt: number; marker: BossSprite; x: number };
 
 interface PendingHit {
-  result: HitResult;
+  result: HitResult | PermanentHitResult;
   partId: BossPartId;
   source: BossDirectHitEvent['source'];
   sourceOrbId: number;
@@ -466,7 +470,7 @@ export class BossManager implements BossEncounter {
   }
 
   private createPending(
-    result: HitResult,
+    result: HitResult | PermanentHitResult,
     partId: BossPartId,
     source: BossDirectHitEvent['source'],
     sourceOrbId: number,
@@ -480,6 +484,9 @@ export class BossManager implements BossEncounter {
     if (!exposedBossParts(this.state).includes(pending.partId)) return;
     const part = this.partSprites[pending.partId];
     const defeated = this.damagePart(pending.partId, pending.result.damage, false);
+    const core = pending.source === 'permanent'
+      ? pending.result as PermanentHitResult
+      : null;
     this.options.onDirectHit({
       bossKind: 'sentinel',
       targetId: pending.partId,
@@ -488,6 +495,10 @@ export class BossManager implements BossEncounter {
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,
+      ...(core ? {
+        coreType: core.coreType,
+        conductionTriggered: core.conductionTriggered,
+      } : {}),
     });
     if (defeated) this.reportDefeat();
   }

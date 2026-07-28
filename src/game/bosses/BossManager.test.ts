@@ -2,8 +2,7 @@ import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
-import type { OrbManager } from '../orbs/OrbManager';
-import type { HitResult } from '../orbs/orbRules';
+import type { OrbManager, PermanentHitResult } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { BossManager } from './BossManager';
 import type { BossEncounter } from './bossEncounter';
@@ -118,7 +117,7 @@ class FakeCollider {
   destroy(): void { this.destroyed = true; }
 }
 
-function hitResult(damage = 3, charged = true): HitResult {
+function hitResult(damage = 3, charged = true): PermanentHitResult {
   return {
     damage,
     charged,
@@ -126,6 +125,8 @@ function hitResult(damage = 3, charged = true): HitResult {
     killed: false,
     reflect: true,
     preserveChargedKinetics: false,
+    coreType: 'conduction',
+    conductionTriggered: true,
   };
 }
 
@@ -406,6 +407,7 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 11, rightWeakpoint: 14 });
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'sentinel', targetId: 'leftWeakpoint', source: 'permanent', charged: true,
+      coreType: 'conduction', conductionTriggered: true,
       direction: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
     }));
   });

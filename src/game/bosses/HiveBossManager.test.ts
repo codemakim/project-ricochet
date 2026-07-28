@@ -1,8 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
-import type { OrbManager } from '../orbs/OrbManager';
-import type { HitResult } from '../orbs/orbRules';
+import type { OrbManager, PermanentHitResult } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import type { BossEncounter } from './bossEncounter';
 import { HiveBossManager } from './HiveBossManager';
@@ -115,7 +114,7 @@ class FakeCollider {
   destroy(): void { this.destroyed = true; }
 }
 
-function result(damage = 3, reflect = true): HitResult {
+function result(damage = 3, reflect = true): PermanentHitResult {
   return {
     damage,
     charged: true,
@@ -123,6 +122,8 @@ function result(damage = 3, reflect = true): HitResult {
     killed: false,
     reflect,
     preserveChargedKinetics: false,
+    coreType: 'conduction',
+    conductionTriggered: true,
   };
 }
 
@@ -306,6 +307,8 @@ describe('HiveBossManager', () => {
       targetId: 'leftShooter',
       source: 'permanent',
       sourceOrbId: 0,
+      coreType: 'conduction',
+      conductionTriggered: true,
     }));
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       targetId: 'rightShooter',

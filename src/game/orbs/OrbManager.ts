@@ -17,6 +17,15 @@ import {
   type OrbState,
   type RecoverySource,
 } from './orbRules';
+import {
+  applyCoreWallBounce,
+  coreLaunchSpeedMultiplier,
+  createOrbCoreState,
+  resolveCoreDirectHit,
+  resolveCoreRecovery,
+  type OrbCoreId,
+  type OrbCoreState,
+} from './orbCoreRules';
 
 export const ORB_RADIUS = 8;
 
@@ -28,6 +37,8 @@ const DEFAULT_RESTORED_CHARGES = 3;
 
 export interface OrbSnapshot {
   id: number;
+  coreType: OrbCoreId;
+  coreState: OrbCoreState;
   state: OrbState;
   charges: number;
   damageEnabled: boolean;
@@ -35,6 +46,11 @@ export interface OrbSnapshot {
   position: Vector;
   velocity: Vector;
   lastRecoverySource: RecoverySource | null;
+}
+
+export interface PermanentHitResult extends HitResult {
+  coreType: OrbCoreId;
+  conductionTriggered: boolean;
 }
 
 export interface OrbCallbacks {
@@ -56,6 +72,7 @@ export class OrbStore {
   private readonly records: OrbRecord[];
   private readonly launchQueue = new LaunchQueue(LAUNCH_INTERVAL_MS);
   private aimActivated = false;
+  private startingCoresConfigured = false;
 
   constructor(
     private readonly settings: ExperimentSettings,
@@ -71,20 +88,38 @@ export class OrbStore {
       GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit
     ),
   ) {
-    this.records = Array.from({ length: STARTING_ORB_COUNT }, (_, id) => this.createRecord(id));
+    this.records = Array.from(
+      { length: STARTING_ORB_COUNT },
+      (_, id) => this.createRecord(id, 'echo'),
+    );
   }
 
-  addOrb(): boolean {
+  configureStartingCores(
+    types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
+  ): boolean {
+    if (this.aimActivated || this.startingCoresConfigured) return false;
+    this.startingCoresConfigured = true;
+    for (let index = 0; index < STARTING_ORB_COUNT; index += 1) {
+      const record = this.records[index]!;
+      record.coreType = types[index]!;
+      record.coreState = createOrbCoreState();
+    }
+    return true;
+  }
+
+  addOrb(coreType: OrbCoreId = 'echo'): boolean {
     if (this.records.length >= this.runtimeOrbLimit()) return false;
-    const record = this.createRecord(this.records.length);
+    const record = this.createRecord(this.records.length, coreType);
     this.records.push(record);
     if (this.aimActivated) this.enqueue(record);
     return true;
   }
 
-  private createRecord(id: number): OrbRecord {
+  private createRecord(id: number, coreType: OrbCoreId): OrbRecord {
     return {
       id,
+      coreType,
+      coreState: createOrbCoreState(),
       state: 'stored',
       charges: DEFAULT_RESTORED_CHARGES,
       damageEnabled: false,
@@ -128,6 +163,13 @@ export class OrbStore {
     record.velocity = { ...velocity };
   }
 
+  handleWallBounce(id: number): boolean {
+    const record = this.requireRecord(id);
+    if (record.state !== 'active') return false;
+    record.coreState = applyCoreWallBounce(record.coreType, record.coreState);
+    return true;
+  }
+
   beginProximityRecovery(id: number): boolean {
     const record = this.requireRecord(id);
     if (record.state !== 'active') return false;
@@ -149,7 +191,7 @@ export class OrbStore {
     enemyHp: number,
     nowMs: number,
     piercing: boolean,
-  ): HitResult | null {
+  ): PermanentHitResult | null {
     const record = this.requireRecord(id);
     if (record.state !== 'active' || !record.damageEnabled) return null;
     const lastHitMs = record.enemyHits.get(enemyId);
@@ -163,21 +205,27 @@ export class OrbStore {
         throw new RangeError('opening hit bonus must be exactly 0 or 1');
       }
     }
+    const core = resolveCoreDirectHit(record.coreType, record.coreState);
     const result = directHit(
       record.charges,
       enemyHp,
       this.settings,
       piercing,
-      this.getDirectDamageBonus() + openingBonus,
+      this.getDirectDamageBonus() + openingBonus + core.directDamageBonus,
       this.getChargedDamageBonus(),
       this.chargedKillPierces(),
     );
     record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
     record.charges = result.charges;
+    record.coreState = core.next;
     if (!result.preserveChargedKinetics) this.normalizeActiveSpeed(record);
     this.callbacks.onEnemyDamage?.(enemyId, result.damage, result.reflect);
-    return result;
+    return {
+      ...result,
+      coreType: record.coreType,
+      conductionTriggered: core.conductionTriggered,
+    };
   }
 
   refreshCombatModifiers(id?: number): void {
@@ -194,6 +242,8 @@ export class OrbStore {
   getSnapshot(): OrbSnapshot[] {
     return this.records.map((record) => ({
       id: record.id,
+      coreType: record.coreType,
+      coreState: { ...record.coreState },
       state: record.state,
       charges: record.charges,
       damageEnabled: record.damageEnabled,
@@ -280,6 +330,7 @@ export class OrbStore {
     record.state = transitionOrb(record.state, 'stored');
     record.charges = restoredCharges;
     record.firstHitPending = source === 'proximity';
+    record.coreState = resolveCoreRecovery(record.coreType, record.coreState, source!);
     record.velocity = { x: 0, y: 0 };
     this.callbacks.onRecovery?.(record.id, source!);
     this.enqueue(record);
@@ -319,7 +370,8 @@ export class OrbStore {
   }
 
   private speedTarget(record: OrbRecord): number {
-    return record.charges > 0 ? this.getChargedSpeed() : ORB_SPEED;
+    const base = record.charges > 0 ? this.getChargedSpeed() : ORB_SPEED;
+    return base * coreLaunchSpeedMultiplier(record.coreType, record.coreState);
   }
 
   private runtimeOrbLimit(): number {
@@ -348,6 +400,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getChargedDamageBonus?(): number;
   chargedKillPierces?(): boolean;
   getOrbLimit?(): number;
+  startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
 
@@ -364,16 +417,21 @@ export class OrbManager {
   private destroyed = false;
   private readonly onWorldBounds = (
     body: Phaser.Physics.Arcade.Body,
-    _up: boolean,
+    up: boolean,
     down: boolean,
+    left: boolean,
+    right: boolean,
   ): void => {
-    if (!down) return;
     const sprite = body?.gameObject as OrbSprite | undefined;
     if (!sprite || sprite.body !== body) return;
     const id = this.spriteIds.get(sprite);
     if (id === undefined) return;
     this.store.synchronizeActive(id, body.center, body.velocity);
-    if (this.store.beginFloorRecall(id)) this.synchronizeSprites();
+    if (down && this.store.beginFloorRecall(id)) {
+      this.synchronizeSprites();
+      return;
+    }
+    if (up || down || left || right) this.store.handleWallBounce(id);
   };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
@@ -391,6 +449,9 @@ export class OrbManager {
       options.chargedKillPierces,
       options.getOrbLimit,
     );
+    if (options.startingCoreTypes) {
+      this.store.configureStartingCores(options.startingCoreTypes);
+    }
     this.world = scene.physics.world;
     this.sprites = this.store.getSnapshot().map(({ id }) => this.createSprite(id));
     this.world.on('worldbounds', this.onWorldBounds);
@@ -415,9 +476,16 @@ export class OrbManager {
     this.store.activateAim();
   }
 
-  addOrb(): boolean {
+  configureStartingCores(
+    types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
+  ): boolean {
     if (this.destroyed) return false;
-    if (!this.store.addOrb()) return false;
+    return this.store.configureStartingCores(types);
+  }
+
+  addOrb(coreType: OrbCoreId = 'echo'): boolean {
+    if (this.destroyed) return false;
+    if (!this.store.addOrb(coreType)) return false;
     const id = this.sprites.length;
     const sprite = this.createSprite(id);
     this.sprites.push(sprite);

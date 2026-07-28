@@ -2,7 +2,12 @@ import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import { clamp, normalize, type Vector } from '../math/vector';
-import type { OrbManager, OrbSprite } from '../orbs/OrbManager';
+import type {
+  OrbManager,
+  OrbSprite,
+  PermanentHitResult,
+} from '../orbs/OrbManager';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
 import type { HitResult } from '../orbs/orbRules';
 import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import { createInitialFormation } from '../encounters/formationRules';
@@ -48,6 +53,8 @@ export interface DirectHitEvent {
   position: Vector;
   charged: boolean;
   direction: Vector;
+  coreType?: OrbCoreId;
+  conductionTriggered?: boolean;
 }
 
 export interface EnemyKilledEvent {
@@ -90,7 +97,7 @@ export class EnemyManager {
   private readonly activeShooters = new Set<number>();
   private readonly warningTimers = new Map<number, Phaser.Time.TimerEvent>();
   private readonly pendingReflections = new Map<string, {
-    result: HitResult;
+    result: HitResult | PermanentHitResult;
     direction: Vector;
     source: DirectHitEvent['source'];
     sourceOrbId: number;
@@ -409,7 +416,7 @@ export class EnemyManager {
 
   private applyHit(
     enemy: EnemySprite,
-    result: HitResult,
+    result: HitResult | PermanentHitResult,
     source: DirectHitEvent['source'],
     sourceOrbId: number,
     direction: Vector,
@@ -417,6 +424,9 @@ export class EnemyManager {
     if (!enemy.active) return;
     const killEvent = this.createKillEvent(enemy);
     enemy.hp -= result.damage;
+    const core = source === 'permanent'
+      ? result as PermanentHitResult
+      : null;
     this.options.onDirectHit?.({
       source,
       sourceOrbId,
@@ -424,6 +434,10 @@ export class EnemyManager {
       position: { ...killEvent.position },
       charged: result.charged,
       direction,
+      ...(core ? {
+        coreType: core.coreType,
+        conductionTriggered: core.conductionTriggered,
+      } : {}),
     });
     if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);
   }

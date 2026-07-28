@@ -1,5 +1,6 @@
 import type { BossKind } from '../config/gameTuning';
 import type { Vector } from '../math/vector';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
 
 export type BossTargetId = string;
 
@@ -11,6 +12,8 @@ export interface BossDirectHitEvent {
   position: Vector;
   charged: boolean;
   direction: Vector;
+  coreType?: OrbCoreId;
+  conductionTriggered?: boolean;
 }
 
 export interface BossProjectileSnapshot {

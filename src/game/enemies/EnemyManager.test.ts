@@ -670,6 +670,8 @@ describe('EnemyManager', () => {
       charges: 0,
       damage: GAME_TUNING.enemies.hp.basic,
       reflect: false,
+      coreType: 'conduction',
+      conductionTriggered: true,
     });
 
     colliders[0]!.trigger(orb, enemy);
@@ -680,6 +682,8 @@ describe('EnemyManager', () => {
       sourceOrbId: 0,
       enemyId: target.id,
       charged: true,
+      coreType: 'conduction',
+      conductionTriggered: true,
       position: target.position,
       direction: { x: 0, y: -1 },
     }));
