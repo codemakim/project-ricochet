@@ -1,4 +1,10 @@
-export type PauseReason = 'visibility' | 'levelUp' | 'bossReward' | 'runComplete' | 'defeated';
+export type PauseReason =
+  | 'visibility'
+  | 'loadout'
+  | 'levelUp'
+  | 'bossReward'
+  | 'runComplete'
+  | 'defeated';
 
 export class CombatPauseController {
   private readonly reasons = new Set<PauseReason>();

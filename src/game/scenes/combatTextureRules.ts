@@ -16,8 +16,21 @@ export type CombatTextureDescriptor = ProjectileVisualTuning & { shape: TextureS
 
 export function combatProjectileTextureDescriptors(): Record<string, CombatTextureDescriptor> {
   const { friendly, hostile } = GAME_TUNING.visual;
+  const coreTexture = (
+    core: keyof typeof GAME_TUNING.orbCores,
+  ): CombatTextureDescriptor => ({
+    fill: GAME_TUNING.orbCores[core].fill,
+    accent: GAME_TUNING.orbCores[core].accent,
+    width: friendly.permanentOrb.width,
+    height: friendly.permanentOrb.height,
+    shape: 'outlinedCircle',
+  });
   return {
     'orb-charged': { ...friendly.permanentOrb, shape: 'outlinedCircle' },
+    'orb-echo': coreTexture('echo'),
+    'orb-corrosion': coreTexture('corrosion'),
+    'orb-conduction': coreTexture('conduction'),
+    'orb-inertia': coreTexture('inertia'),
     'orb-temporary': { ...friendly.temporaryOrb, shape: 'outlinedCircle' },
     'enemy-bullet': { ...hostile.enemyBullet, shape: 'centeredCircle' },
     'boss-basic-bullet': { ...hostile.bossBasic, shape: 'centeredCircle' },

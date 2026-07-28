@@ -480,7 +480,9 @@ export class OrbManager {
     types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
   ): boolean {
     if (this.destroyed) return false;
-    return this.store.configureStartingCores(types);
+    const changed = this.store.configureStartingCores(types);
+    if (changed) this.synchronizeSprites();
+    return changed;
   }
 
   addOrb(coreType: OrbCoreId = 'echo'): boolean {
@@ -538,7 +540,7 @@ export class OrbManager {
     enemyHp: number,
     nowMs: number,
     piercing: boolean,
-  ): HitResult | null {
+  ): PermanentHitResult | null {
     const owned = this.resolveOwnedOrb(orb);
     if (!owned) return null;
     this.synchronizeOwnedBody(owned.sprite, owned.id);
@@ -591,6 +593,7 @@ export class OrbManager {
       if (!sprite) continue;
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
+      sprite.setTexture(`orb-${state.coreType}`);
       const activeBodyOwnsPosition = state.state === 'active' && body.enable;
       sprite.setVisible(visible);
       if (!activeBodyOwnsPosition) sprite.setPosition(state.position.x, state.position.y);

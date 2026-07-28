@@ -54,7 +54,12 @@ class FakeSprite {
   visible = true;
   destroyed = false;
   setPositionCalls = 0;
+  textureKey: string;
   readonly body = new FakeBody(this);
+
+  constructor(textureKey = '') {
+    this.textureKey = textureKey;
+  }
 
   setCircle(): this { return this; }
   setBounce(): this { return this; }
@@ -66,6 +71,7 @@ class FakeSprite {
     this.y = y;
     return this;
   }
+  setTexture(textureKey: string): this { this.textureKey = textureKey; return this; }
   destroy(): void { this.destroyed = true; }
 }
 
@@ -85,8 +91,8 @@ function createManager(
     physics: {
       world,
       add: {
-        sprite: () => {
-          const sprite = new FakeSprite();
+        sprite: (_x: number, _y: number, textureKey: string) => {
+          const sprite = new FakeSprite(textureKey);
           sprites.push(sprite);
           return sprite;
         },
@@ -630,15 +636,27 @@ describe('OrbStore', () => {
 });
 
 describe('OrbManager Phaser adapter', () => {
+  it('switches each permanent orb sprite to its configured core texture', () => {
+    const { manager, sprites } = createManager();
+
+    expect(manager.configureStartingCores(['echo', 'corrosion', 'inertia'])).toBe(true);
+    expect(sprites.map((sprite) => sprite.textureKey)).toEqual([
+      'orb-echo',
+      'orb-corrosion',
+      'orb-inertia',
+    ]);
+  });
+
   it('creates a runtime sprite for a newly added queued orb', () => {
     const { manager, sprites } = createManager();
     manager.activateAim();
     manager.update(0, 0, player, up);
 
-    expect(manager.addOrb()).toBe(true);
+    expect(manager.addOrb('conduction')).toBe(true);
     expect(sprites).toHaveLength(4);
     expect(manager.getSprites()).toHaveLength(4);
     expect(manager.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
+    expect(sprites[3]?.textureKey).toBe('orb-conduction');
   });
 
   it('notifies subscribers once per runtime sprite and supports unsubscribe', () => {

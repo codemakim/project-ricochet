@@ -18,6 +18,24 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   expect(textures['boss-muzzle-flash']).toMatchObject({ shape: 'flash' });
 });
 
+it('defines four visually distinct permanent orb core textures', () => {
+  const textures = combatProjectileTextureDescriptors();
+  const cores = [
+    textures['orb-echo'],
+    textures['orb-corrosion'],
+    textures['orb-conduction'],
+    textures['orb-inertia'],
+  ];
+
+  expect(cores).toEqual([
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0x74c8ff }),
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0x9be564 }),
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0xc58cff }),
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0xffbd59 }),
+  ]);
+  expect(new Set(cores.map((core) => `${core?.fill}:${core?.accent}`)).size).toBe(4);
+});
+
 it('defines distinct prototype textures for a splitter and complementary fragments', () => {
   const textures = combatProjectileTextureDescriptors();
 

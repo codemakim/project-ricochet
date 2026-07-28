@@ -55,6 +55,7 @@ import {
 } from '../progression/bossRewardRules';
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
+import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
@@ -82,6 +83,7 @@ let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
 const XP_BAR_WIDTH = 220;
 const PAUSE_REASONS: readonly PauseReason[] = [
   'visibility',
+  'loadout',
   'levelUp',
   'bossReward',
   'runComplete',
@@ -103,6 +105,7 @@ export interface CombatDebugSnapshot {
   buildRanks: AbilityRanks;
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
+  loadoutVisible: boolean;
   boss: BossEncounterSnapshot & Partial<Pick<
     BossManagerSnapshot,
     'basicBullets' | 'aimedBullets' | 'fallingHazards'
@@ -156,6 +159,7 @@ export class CombatScene extends Phaser.Scene {
   private build?: BuildState;
   private progression?: ProgressionManager;
   private levelUpOverlay?: LevelUpOverlay;
+  private orbLoadoutOverlay?: OrbLoadoutOverlay;
   private bossBuild?: BossBuild;
   private bossRewardOverlay?: BossRewardOverlay;
   private runCompleteOverlay?: RunCompleteOverlay;
@@ -198,6 +202,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossBuild = new BossBuild();
     this.progression = new ProgressionManager(PROGRESSION_SEED, build);
     this.levelUpOverlay = new LevelUpOverlay(this);
+    this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
     this.bossRewardOverlay = new BossRewardOverlay(this);
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     this.createTextures();
@@ -335,6 +340,14 @@ export class CombatScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
     this.handleVisibilityChange();
+    this.pause.add('loadout');
+    this.syncPauseState();
+    this.orbLoadoutOverlay.showStarting((types) => {
+      if (!this.orbManager?.configureStartingCores(types)) return false;
+      this.pause.remove('loadout');
+      this.syncPauseState();
+      return true;
+    });
   }
 
   update(_time: number, delta: number): void {
@@ -390,6 +403,8 @@ export class CombatScene extends Phaser.Scene {
       defeated: this.defeated,
       orbs: (this.orbManager?.getSnapshot() ?? []).map((orb) => ({
         id: orb.id,
+        coreType: orb.coreType,
+        coreState: { ...orb.coreState },
         state: orb.state,
         charges: orb.charges,
         damageEnabled: orb.damageEnabled,
@@ -441,6 +456,7 @@ export class CombatScene extends Phaser.Scene {
       },
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
+      loadoutVisible: this.orbLoadoutOverlay?.isVisible() ?? false,
       boss: this.activeBoss?.getSnapshot() ?? {
         ...inactiveBossSnapshot(this.activeBossKind ?? null),
         basicBullets: 0,
@@ -742,7 +758,18 @@ export class CombatScene extends Phaser.Scene {
     if (!this.bossRewardTier) return false;
     if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
     this.bossBuild.acquire(id);
-    if (rewardAddsPermanentOrb(id)) this.orbManager?.addOrb();
+    if (rewardAddsPermanentOrb(id)) {
+      this.orbLoadoutOverlay?.showAdditional((type) => {
+        if (!this.orbManager?.addOrb(type)) return false;
+        return this.completeBossReward();
+      });
+      return true;
+    }
+    return this.completeBossReward();
+  }
+
+  private completeBossReward(): boolean {
+    if (!this.encounterDirector) return false;
     const advance = this.encounterDirector.resumeAfterBossReward();
     if (advance.type === 'stageStarted') {
       const encounter = this.encounterDirector.getSnapshot();
@@ -921,6 +948,7 @@ export class CombatScene extends Phaser.Scene {
   private syncPauseState(): void {
     this.playerInput?.setGameplayPointerEnabled(
       !this.pause.has('levelUp')
+        && !this.pause.has('loadout')
         && !this.pause.has('bossReward')
         && !this.pause.has('runComplete'),
     );
@@ -941,6 +969,7 @@ export class CombatScene extends Phaser.Scene {
     this.orbManager?.destroy();
     this.playerInput?.destroy();
     this.levelUpOverlay?.destroy();
+    this.orbLoadoutOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
     this.runCompleteOverlay?.destroy();
     this.bossDefeatPending = false;
@@ -950,6 +979,7 @@ export class CombatScene extends Phaser.Scene {
     this.temporaryOrbManager = undefined;
     this.playerInput = undefined;
     this.levelUpOverlay = undefined;
+    this.orbLoadoutOverlay = undefined;
     this.bossRewardOverlay = undefined;
     this.runCompleteOverlay = undefined;
     this.progression = undefined;
