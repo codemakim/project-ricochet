@@ -68,4 +68,11 @@ describe('BuildState', () => {
       speed: 400,
     })).toBe(0);
   });
+
+  it('caps wall acceleration at five stacks', () => {
+    const build = new BuildState({ 'wall-acceleration': 2 });
+
+    expect(build.wallSpeedMultiplier(1)).toBeCloseTo(1.08);
+    expect(build.wallSpeedMultiplier(7)).toBeCloseTo(1.4);
+  });
 });

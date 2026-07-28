@@ -97,6 +97,16 @@ export class BuildState {
     return Math.min(GAME_TUNING.build.conditionalDamageCap, bonus);
   }
 
+  wallSpeedMultiplier(wallHits: number): number {
+    const stacks = Math.min(
+      GAME_TUNING.build.wallAcceleration.maxStacks,
+      Math.max(0, Math.trunc(wallHits)),
+    );
+    return 1 + stacks
+      * this.ranks['wall-acceleration']
+      * GAME_TUNING.build.wallAcceleration.speedBonusPerStack;
+  }
+
   explosion(): ExplosionSpec | null {
     return this.ranks.explosion === 0 ? null : { ...GAME_TUNING.build.explosion };
   }

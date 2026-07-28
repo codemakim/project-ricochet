@@ -224,6 +224,7 @@ export class CombatScene extends Phaser.Scene {
       getConditionalDirectDamageBonus: (context) => (
         build.conditionalDirectDamageBonus(context)
       ),
+      getWallSpeedMultiplier: (wallHits) => build.wallSpeedMultiplier(wallHits),
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0

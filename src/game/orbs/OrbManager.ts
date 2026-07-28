@@ -92,6 +92,7 @@ export class OrbStore {
     private readonly getConditionalDirectDamageBonus: (
       context: PermanentDirectHitContext,
     ) => number = () => 0,
+    private readonly getWallSpeedMultiplier: (wallHits: number) => number = () => 1,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -172,8 +173,12 @@ export class OrbStore {
   handleWallBounce(id: number): boolean {
     const record = this.requireRecord(id);
     if (record.state !== 'active') return false;
-    record.wallHits += 1;
+    record.wallHits = Math.min(
+      GAME_TUNING.build.wallAcceleration.maxStacks,
+      record.wallHits + 1,
+    );
     record.coreState = applyCoreWallBounce(record.coreType, record.coreState);
+    this.normalizeActiveSpeed(record);
     return true;
   }
 
@@ -364,6 +369,7 @@ export class OrbStore {
   private launch(record: OrbRecord, nowMs: number, playerPosition: Vector, aim: Vector): void {
     const direction = normalize(aim);
     record.state = transitionOrb(record.state, 'active');
+    record.wallHits = 0;
     record.position = {
       x: playerPosition.x + direction.x * SPAWN_CLEARANCE,
       y: playerPosition.y + direction.y * SPAWN_CLEARANCE,
@@ -374,7 +380,6 @@ export class OrbStore {
     record.damageEnabled = true;
     record.activeSinceMs = nowMs;
     record.enemyHits.clear();
-    record.wallHits = 0;
   }
 
   private requireRecord(id: number): OrbRecord {
@@ -391,7 +396,8 @@ export class OrbStore {
 
   private speedTarget(record: OrbRecord): number {
     return this.getChargedSpeed()
-      * coreLaunchSpeedMultiplier(record.coreType, record.coreState);
+      * coreLaunchSpeedMultiplier(record.coreType, record.coreState)
+      * this.getWallSpeedMultiplier(record.wallHits);
   }
 
   private runtimeOrbLimit(): number {
@@ -421,6 +427,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
   chargedKillPierces?(): boolean;
   getOrbLimit?(): number;
   getConditionalDirectDamageBonus?(context: PermanentDirectHitContext): number;
+  getWallSpeedMultiplier?(wallHits: number): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -453,6 +460,7 @@ export class OrbManager {
       return;
     }
     if (up || down || left || right) this.store.handleWallBounce(id);
+    this.synchronizeSprites();
   };
 
   constructor(scene: Phaser.Scene, options: OrbManagerOptions) {
@@ -470,6 +478,7 @@ export class OrbManager {
       options.chargedKillPierces,
       options.getOrbLimit,
       options.getConditionalDirectDamageBonus,
+      options.getWallSpeedMultiplier,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);

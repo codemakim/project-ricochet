@@ -188,7 +188,7 @@ describe('OrbStore', () => {
       {},
       () => false,
       () => 0,
-      () => ORB_SPEED,
+      () => 480,
       () => 3,
       () => 0,
       () => 0,
@@ -211,6 +211,42 @@ describe('OrbStore', () => {
       wallHits: 1,
       speed: 480,
     });
+  });
+
+  it('accelerates immediately for five wall stacks and resets on the next flight', () => {
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => 0,
+      () => false,
+      () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      () => 0,
+      (wallHits) => 1 + wallHits * 0.04,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+    for (let bounce = 0; bounce < 7; bounce += 1) store.handleWallBounce(0);
+
+    expect(store.getSnapshot()[0]).toMatchObject({ wallHits: 5 });
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED * 1.2);
+
+    store.beginProximityRecovery(0);
+    store.update(100, 100, player, up);
+    store.update(200, 100, player, up);
+    store.update(300, 100, player, up);
+    expect(store.getSnapshot()[0]).toMatchObject({ wallHits: 0 });
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED);
   });
 
   it('uses proximity-built inertia for one launch and clears it on the first hit', () => {
