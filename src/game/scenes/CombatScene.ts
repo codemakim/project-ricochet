@@ -65,6 +65,11 @@ import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
+  createRunResult,
+  type RunConfig,
+  type RunResult,
+} from '../run/runContract';
+import {
   bossKindAfterTransition,
   bossOrbModifiers,
   createBossForKind,
@@ -94,6 +99,7 @@ const PAUSE_REASONS: readonly PauseReason[] = [
   'runComplete',
   'defeated',
 ];
+export const RUN_ENDED_EVENT = 'ricochet:run-ended';
 
 export interface CombatDebugSnapshot {
   player: Vector;
@@ -184,14 +190,25 @@ export class CombatScene extends Phaser.Scene {
   private defeated = false;
   private pause = new CombatPauseController();
   private gameplayElapsedMs = 0;
+  private runConfig?: RunConfig;
+  private runResultEmitted = false;
+  private defeatedBossIds: BossKind[] = [];
 
   constructor() {
     super('combat');
   }
 
+  setRunConfig(config: RunConfig): this {
+    this.runConfig = {
+      identity: { ...config.identity },
+      loadout: [...config.loadout],
+    };
+    return this;
+  }
+
   create(): void {
-    const runSeed = formationRunSeed;
-    formationRunSeed = (formationRunSeed + 1) >>> 0;
+    const runSeed = this.runConfig?.identity.seed ?? formationRunSeed;
+    if (!this.runConfig) formationRunSeed = (formationRunSeed + 1) >>> 0;
     this.health = createHealth();
     this.experiment = parseExperimentSettings(window.location.search);
     this.aim = { x: 0, y: -1 };
@@ -207,6 +224,8 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
+    this.runResultEmitted = false;
+    this.defeatedBossIds = [];
     this.combatProcs = new CombatProcState(runSeed);
     const build = new BuildState();
     this.build = build;
@@ -381,14 +400,20 @@ export class CombatScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
     this.handleVisibilityChange();
-    this.pause.add('loadout');
-    this.syncPauseState();
-    this.orbLoadoutOverlay.showStarting((types) => {
-      if (!this.orbManager?.configureStartingCores(types)) return false;
-      this.pause.remove('loadout');
+    if (this.runConfig) {
+      if (!this.orbManager.configureStartingCores(this.runConfig.loadout)) {
+        throw new Error('run configuration contains an invalid core loadout');
+      }
+    } else {
+      this.pause.add('loadout');
       this.syncPauseState();
-      return true;
-    });
+      this.orbLoadoutOverlay.showStarting((types) => {
+        if (!this.orbManager?.configureStartingCores(types)) return false;
+        this.pause.remove('loadout');
+        this.syncPauseState();
+        return true;
+      });
+    }
   }
 
   update(_time: number, delta: number): void {
@@ -1175,6 +1200,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossDefeatPending = false;
     const defeatedBossKind = this.activeBossKind;
     if (!defeatedBossKind) throw new Error('boss defeat has no active boss kind');
+    this.defeatedBossIds.push(defeatedBossKind);
     const advance = this.encounterDirector?.markBossDefeated();
     if (advance?.type === 'runCompleted') {
       this.applyLifecycle('rewardCompleted');
@@ -1243,6 +1269,7 @@ export class CombatScene extends Phaser.Scene {
     this.enemyManager?.clearEnemies();
     this.pause.add('runComplete');
     this.syncPauseState();
+    if (this.emitRunResult(true)) return;
     this.runCompleteOverlay?.show(() => {
       this.handleShutdown();
       this.scene.restart();
@@ -1367,6 +1394,7 @@ export class CombatScene extends Phaser.Scene {
     this.pause.add('defeated');
     this.syncPauseState();
     this.temporaryOrbManager?.destroy();
+    if (this.emitRunResult(false)) return;
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 330, 160, 0x091225, 0.94)
       .setDepth(20)
       .setInteractive();
@@ -1385,6 +1413,20 @@ export class CombatScene extends Phaser.Scene {
         this.handleShutdown();
         this.scene.restart();
       });
+  }
+
+  private emitRunResult(success: boolean): RunResult | null {
+    if (!this.runConfig || this.runResultEmitted) return null;
+    this.runResultEmitted = true;
+    const result = createRunResult(
+      this.runConfig,
+      success,
+      this.gameplayElapsedMs,
+      this.defeatedBossIds,
+      this.build?.getRanks() ?? createEmptyAbilityRanks(),
+    );
+    this.game.events.emit(RUN_ENDED_EVENT, result);
+    return result;
   }
 
   private drawAimGuide(): void {
