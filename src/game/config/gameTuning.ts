@@ -81,6 +81,24 @@ export interface GameTuning {
       maxDamageBonus: number;
     };
     wallAcceleration: { speedBonusPerStack: number; maxStacks: number };
+    cutter: {
+      chance: number;
+      cooldownMs: number;
+      thickness: number;
+      damage: number;
+    };
+    destructionReaction: {
+      chance: number;
+      cooldownMs: number;
+      radius: number;
+      damage: number;
+    };
+    microMissile: { hitsRequired: number; travelMs: number; damage: number };
+    recoveryShockwave: {
+      recoveriesRequired: number;
+      radius: number;
+      damageByRank: readonly [number, number];
+    };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -231,6 +249,19 @@ export const GAME_TUNING = {
       maxDamageBonus: 0.36,
     },
     wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
+    cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 0.7 },
+    destructionReaction: {
+      chance: 0.25,
+      cooldownMs: 120,
+      radius: 56,
+      damage: 0.8,
+    },
+    microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.2 },
+    recoveryShockwave: {
+      recoveriesRequired: 4,
+      radius: 72,
+      damageByRank: [0.75, 1.25],
+    },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
   },
@@ -509,6 +540,29 @@ export function validateGameTuning(tuning: GameTuning): void {
     'build.wallAcceleration.speedBonusPerStack',
   );
   positiveInteger(build.wallAcceleration.maxStacks, 'build.wallAcceleration.maxStacks');
+  for (const [id, effect] of Object.entries({
+    cutter: build.cutter,
+    destructionReaction: build.destructionReaction,
+  })) {
+    if (!Number.isFinite(effect.chance) || effect.chance < 0 || effect.chance > 1) {
+      throw new RangeError(`build.${id}.chance must be between zero and one`);
+    }
+    positive(effect.cooldownMs, `build.${id}.cooldownMs`);
+    nonNegative(effect.damage, `build.${id}.damage`);
+  }
+  positive(build.cutter.thickness, 'build.cutter.thickness');
+  positive(build.destructionReaction.radius, 'build.destructionReaction.radius');
+  positiveInteger(build.microMissile.hitsRequired, 'build.microMissile.hitsRequired');
+  positive(build.microMissile.travelMs, 'build.microMissile.travelMs');
+  nonNegative(build.microMissile.damage, 'build.microMissile.damage');
+  positiveInteger(
+    build.recoveryShockwave.recoveriesRequired,
+    'build.recoveryShockwave.recoveriesRequired',
+  );
+  positive(build.recoveryShockwave.radius, 'build.recoveryShockwave.radius');
+  build.recoveryShockwave.damageByRank.forEach((damage, index) => {
+    nonNegative(damage, `build.recoveryShockwave.damageByRank.${index}`);
+  });
   positive(build.explosion.radius, 'build.explosion.radius');
   nonNegative(build.explosion.damage, 'build.explosion.damage');
   positiveInteger(build.split.count, 'build.split.count');

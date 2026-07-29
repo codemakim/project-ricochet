@@ -43,6 +43,14 @@ describe('GAME_TUNING', () => {
         maxDamageBonus: 0.36,
       },
       wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
+      cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 0.7 },
+      destructionReaction: {
+        chance: 0.25, cooldownMs: 120, radius: 56, damage: 0.8,
+      },
+      microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.2 },
+      recoveryShockwave: {
+        recoveriesRequired: 4, radius: 72, damageByRank: [0.75, 1.25],
+      },
       explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });

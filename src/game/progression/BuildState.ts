@@ -107,6 +107,34 @@ export class BuildState {
       * GAME_TUNING.build.wallAcceleration.speedBonusPerStack;
   }
 
+  horizontalCutter() {
+    return this.ranks['horizontal-cutter'] > 0 ? { ...GAME_TUNING.build.cutter } : null;
+  }
+
+  verticalCutter() {
+    return this.ranks['vertical-cutter'] > 0 ? { ...GAME_TUNING.build.cutter } : null;
+  }
+
+  destructionReaction() {
+    return this.ranks['destruction-reaction'] > 0
+      ? { ...GAME_TUNING.build.destructionReaction }
+      : null;
+  }
+
+  microMissile() {
+    return this.ranks['micro-missile'] > 0 ? { ...GAME_TUNING.build.microMissile } : null;
+  }
+
+  recoveryShockwave() {
+    const rank = this.ranks['recovery-shockwave'];
+    if (rank === 0) return null;
+    return {
+      recoveriesRequired: GAME_TUNING.build.recoveryShockwave.recoveriesRequired,
+      radius: GAME_TUNING.build.recoveryShockwave.radius,
+      damage: GAME_TUNING.build.recoveryShockwave.damageByRank[rank - 1]!,
+    };
+  }
+
   explosion(): ExplosionSpec | null {
     return this.ranks.explosion === 0 ? null : { ...GAME_TUNING.build.explosion };
   }

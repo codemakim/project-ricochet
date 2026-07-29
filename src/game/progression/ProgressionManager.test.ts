@@ -30,9 +30,13 @@ describe('ProgressionManager', () => {
       'precision-hit': 3,
       'kinetic-conversion': 3,
       'wall-acceleration': 3,
+      'horizontal-cutter': 1,
+      'vertical-cutter': 1,
+      'destruction-reaction': 1,
+      'recovery-shockwave': 2,
     });
     const manager = new ProgressionManager(7, build);
     manager.gainExperience(100);
-    expect(manager.getSnapshot()).toMatchObject({ level: 22, xp: 0, pendingChoices: 0 });
+    expect(manager.getSnapshot()).toMatchObject({ level: 27, xp: 0, pendingChoices: 0 });
   });
 });

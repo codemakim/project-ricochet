@@ -75,4 +75,20 @@ describe('BuildState', () => {
     expect(build.wallSpeedMultiplier(1)).toBeCloseTo(1.08);
     expect(build.wallSpeedMultiplier(7)).toBeCloseTo(1.4);
   });
+
+  it('unlocks trigger weapons and ranks recovery shockwave damage twice', () => {
+    const build = new BuildState({
+      'horizontal-cutter': 1,
+      'vertical-cutter': 1,
+      'destruction-reaction': 1,
+      'micro-missile': 1,
+      'recovery-shockwave': 2,
+    });
+
+    expect(build.horizontalCutter()).toMatchObject({ chance: 0.15, damage: 0.7 });
+    expect(build.verticalCutter()).toMatchObject({ chance: 0.15, damage: 0.7 });
+    expect(build.destructionReaction()).toMatchObject({ chance: 0.25, radius: 56, damage: 0.8 });
+    expect(build.microMissile()).toMatchObject({ hitsRequired: 6, damage: 1.2 });
+    expect(build.recoveryShockwave()).toMatchObject({ recoveriesRequired: 4, radius: 72, damage: 1.25 });
+  });
 });

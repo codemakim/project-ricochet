@@ -1,4 +1,10 @@
-export type ProcId = 'explosion' | 'split' | 'corrosion';
+export type ProcId =
+  | 'explosion'
+  | 'split'
+  | 'corrosion'
+  | 'horizontal-cutter'
+  | 'vertical-cutter'
+  | 'destruction-reaction';
 
 export interface ProcAttempt {
   triggered: boolean;
@@ -9,6 +15,9 @@ const PROC_SALTS: Record<ProcId, number> = {
   explosion: 0x4558_504c,
   split: 0x5350_4c54,
   corrosion: 0x434f_5252,
+  'horizontal-cutter': 0x484f_5249,
+  'vertical-cutter': 0x5645_5254,
+  'destruction-reaction': 0x4445_5354,
 };
 
 function nextState(state: number): number {
@@ -51,6 +60,8 @@ export class CombatProcState {
     lastTriggeredByOrb: Map<number, number>;
   }>;
   private readonly splitConsumed = new Set<number>();
+  private microMissileHits = 0;
+  private proximityRecoveries = 0;
 
   constructor(seed: number) {
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
@@ -69,6 +80,21 @@ export class CombatProcState {
       },
       corrosion: {
         random: (seed ^ PROC_SALTS.corrosion) >>> 0,
+        failures: 0,
+        lastTriggeredByOrb: new Map(),
+      },
+      'horizontal-cutter': {
+        random: (seed ^ PROC_SALTS['horizontal-cutter']) >>> 0,
+        failures: 0,
+        lastTriggeredByOrb: new Map(),
+      },
+      'vertical-cutter': {
+        random: (seed ^ PROC_SALTS['vertical-cutter']) >>> 0,
+        failures: 0,
+        lastTriggeredByOrb: new Map(),
+      },
+      'destruction-reaction': {
+        random: (seed ^ PROC_SALTS['destruction-reaction']) >>> 0,
         failures: 0,
         lastTriggeredByOrb: new Map(),
       },
@@ -129,5 +155,26 @@ export class CombatProcState {
     for (const state of Object.values(this.states)) {
       state.lastTriggeredByOrb.delete(orbId);
     }
+  }
+
+  recordMicroMissileHit(hitsRequired: number): boolean {
+    this.microMissileHits += 1;
+    if (this.microMissileHits < this.requirePositiveInteger(hitsRequired)) return false;
+    this.microMissileHits = 0;
+    return true;
+  }
+
+  recordProximityRecovery(recoveriesRequired: number): boolean {
+    this.proximityRecoveries += 1;
+    if (this.proximityRecoveries < this.requirePositiveInteger(recoveriesRequired)) return false;
+    this.proximityRecoveries = 0;
+    return true;
+  }
+
+  private requirePositiveInteger(value: number): number {
+    if (!Number.isInteger(value) || value < 1) {
+      throw new RangeError('required count must be a positive integer');
+    }
+    return value;
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ABILITY_MAX_RANKS,
   canAcquireNewAbility,
+  eligibleAbilityIds,
   prerequisitesMet,
   MAX_BUILD_LEVEL,
   selectAbilityOptions,
@@ -19,6 +20,11 @@ const empty: AbilityRanks = {
   'precision-hit': 0,
   'kinetic-conversion': 0,
   'wall-acceleration': 0,
+  'horizontal-cutter': 0,
+  'vertical-cutter': 0,
+  'destruction-reaction': 0,
+  'micro-missile': 0,
+  'recovery-shockwave': 0,
 };
 
 describe('progression rules', () => {
@@ -32,8 +38,13 @@ describe('progression rules', () => {
       'precision-hit': 3,
       'kinetic-conversion': 3,
       'wall-acceleration': 3,
+      'horizontal-cutter': 1,
+      'vertical-cutter': 1,
+      'destruction-reaction': 1,
+      'micro-missile': 1,
+      'recovery-shockwave': 2,
     });
-    expect(MAX_BUILD_LEVEL).toBe(22);
+    expect(MAX_BUILD_LEVEL).toBe(28);
   });
 
   it('maps enemy kinds to XP and levels to exact costs', () => {
@@ -51,10 +62,8 @@ describe('progression rules', () => {
   });
 
   it('excludes abilities at their individual rank caps', () => {
-    expect(selectAbilityOptions(
+    expect(eligibleAbilityIds(
       { ...empty, firepower: 5, kinetic: 3, explosion: 0, split: 1 },
-      21,
-      9,
     )).toContain('explosion');
   });
 
@@ -62,6 +71,24 @@ describe('progression rules', () => {
     expect(canAcquireNewAbility(11)).toBe(true);
     expect(canAcquireNewAbility(12)).toBe(false);
     expect(canAcquireNewAbility(13)).toBe(false);
+
+    const cappedKinds = {
+      ...empty,
+      firepower: 1,
+      kinetic: 1,
+      explosion: 1,
+      split: 1,
+      'near-amplification': 1,
+      'precision-hit': 1,
+      'kinetic-conversion': 1,
+      'wall-acceleration': 1,
+      'horizontal-cutter': 1,
+      'vertical-cutter': 1,
+      'destruction-reaction': 1,
+      'recovery-shockwave': 1,
+    };
+    expect(selectAbilityOptions(cappedKinds, 12, 44)).not.toContain('micro-missile');
+    expect(selectAbilityOptions(cappedKinds, 12, 44)).toContain('firepower');
   });
 
   it('requires every related ability before an option becomes eligible', () => {

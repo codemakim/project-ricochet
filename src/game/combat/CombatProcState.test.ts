@@ -76,4 +76,24 @@ describe('CombatProcState', () => {
 
     expect([first, second]).toEqual(baselineCorrosion);
   });
+
+  it('keeps both cutter and destruction streams independent', () => {
+    const baseline = new CombatProcState(55);
+    const interleaved = new CombatProcState(55);
+    const expected = baseline.tryProc('horizontal-cutter', 0, 0, 0.15, 120);
+
+    interleaved.tryProc('vertical-cutter', 0, 0, 0.15, 120);
+    interleaved.tryProc('destruction-reaction', 0, 0, 0.25, 120);
+
+    expect(interleaved.tryProc('horizontal-cutter', 0, 0, 0.15, 120)).toBe(expected);
+  });
+
+  it('triggers missiles every six permanent hits and shockwaves every four recoveries', () => {
+    const state = new CombatProcState(0);
+
+    expect(Array.from({ length: 6 }, () => state.recordMicroMissileHit(6)))
+      .toEqual([false, false, false, false, false, true]);
+    expect(Array.from({ length: 4 }, () => state.recordProximityRecovery(4)))
+      .toEqual([false, false, false, true]);
+  });
 });

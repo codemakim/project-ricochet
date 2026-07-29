@@ -10,6 +10,11 @@ export const ABILITY_DEFINITIONS = {
   'precision-hit': { label: '정밀 직격', summary: '벽 충돌 전 직접 피해 증가', maxRank: 3, requires: [] },
   'kinetic-conversion': { label: '운동 변환', summary: '속도 초과분을 직접 피해로 변환', maxRank: 3, requires: [] },
   'wall-acceleration': { label: '벽 가속', summary: '벽 충돌마다 현재 비행 속도 증가', maxRank: 3, requires: [] },
+  'horizontal-cutter': { label: '수평 절단선', summary: '직격 시 확률로 수평 레이저 발사', maxRank: 1, requires: [] },
+  'vertical-cutter': { label: '수직 절단선', summary: '직격 시 확률로 수직 레이저 발사', maxRank: 1, requires: [] },
+  'destruction-reaction': { label: '파괴 반응', summary: '직접 처치 시 확률 폭발', maxRank: 1, requires: [] },
+  'micro-missile': { label: '미세 유도탄', summary: '직격 6회마다 유도탄 발사', maxRank: 1, requires: [] },
+  'recovery-shockwave': { label: '회수 충격파', summary: '근접 회수 4회마다 충격파', maxRank: 2, requires: [] },
 } as const;
 
 export type AbilityId = keyof typeof ABILITY_DEFINITIONS;

@@ -2,7 +2,6 @@ import type { EnemyKind } from '../enemies/enemyRules';
 import {
   ABILITY_IDS,
   eligibleAbilityIds,
-  MAX_BUILD_LEVEL,
   selectAbilityOptions,
   xpForEnemy,
   xpRequiredForLevel,
@@ -93,7 +92,7 @@ export class ProgressionManager {
   private normalizeCompletedBuild(): boolean {
     if (!this.isBuildComplete()) return false;
 
-    this.level = MAX_BUILD_LEVEL;
+    this.level = ABILITY_IDS.reduce((total, id) => total + this.build.rank(id), 0);
     this.xp = 0;
     this.pendingChoices = 0;
     this.choices = [];
