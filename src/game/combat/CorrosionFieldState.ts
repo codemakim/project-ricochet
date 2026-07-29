@@ -7,6 +7,8 @@ export interface CorrosionFieldSnapshot {
   position: Vector;
   expiresAtMs: number;
   nextTickAtMs: number;
+  radius: number;
+  damage: number;
 }
 
 export interface CorrosionTick {
@@ -24,7 +26,13 @@ export class CorrosionFieldState {
   private readonly fields: CorrosionFieldSnapshot[] = [];
   private nextFieldId = 0;
 
-  spawn(orbId: number, position: Vector, nowMs: number): void {
+  spawn(
+    orbId: number,
+    position: Vector,
+    nowMs: number,
+    modifiers: Partial<Pick<CorrosionTick, 'radius' | 'damage'>>
+      & { durationMs?: number } = {},
+  ): void {
     const tuning = GAME_TUNING.orbCores.corrosion;
     const owned = this.fields.filter((field) => field.orbId === orbId);
     if (owned.length >= tuning.fieldLimitPerOrb) {
@@ -37,8 +45,10 @@ export class CorrosionFieldState {
       fieldId: this.nextFieldId,
       orbId,
       position: { ...position },
-      expiresAtMs: nowMs + tuning.durationMs,
+      expiresAtMs: nowMs + (modifiers.durationMs ?? tuning.durationMs),
       nextTickAtMs: nowMs + tuning.tickMs,
+      radius: modifiers.radius ?? tuning.radius,
+      damage: modifiers.damage ?? tuning.damagePerTick,
     });
     this.nextFieldId += 1;
   }
@@ -54,8 +64,8 @@ export class CorrosionFieldState {
         due.push({
           fieldId: field.fieldId,
           position: { ...field.position },
-          radius: tuning.radius,
-          damage: tuning.damagePerTick,
+          radius: field.radius,
+          damage: field.damage,
           dueAtMs: field.nextTickAtMs,
         });
         field.nextTickAtMs += tuning.tickMs;

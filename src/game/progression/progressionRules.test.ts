@@ -41,8 +41,17 @@ describe('progression rules', () => {
       'collision-acceleration': 2,
       'tracking-magnet': 2,
       'high-speed-impact': 1,
+      'proc-optimization': 2,
+      'effect-output': 3,
+      'area-expansion': 3,
+      'duration-module': 2,
+      'focusing-lens': 2,
+      'fragment-expansion': 2,
+      'fragment-output': 3,
+      'fragment-stabilization': 2,
+      'conduction-expansion': 2,
     });
-    expect(MAX_BUILD_LEVEL).toBe(55);
+    expect(MAX_BUILD_LEVEL).toBe(76);
   });
 
   it('maps enemy kinds to XP and levels to exact costs', () => {
@@ -92,5 +101,10 @@ describe('progression rules', () => {
   it('requires every related ability before an option becomes eligible', () => {
     expect(prerequisitesMet(['split'], empty)).toBe(false);
     expect(prerequisitesMet(['split'], { ...empty, split: 1 })).toBe(true);
+    expect(eligibleAbilityIds(empty)).not.toContain('effect-output');
+    expect(eligibleAbilityIds({ ...empty, explosion: 1 })).toContain('effect-output');
+    expect(eligibleAbilityIds(empty)).not.toContain('conduction-expansion');
+    expect(eligibleAbilityIds(empty, { coreTypes: ['conduction'] }))
+      .toContain('conduction-expansion');
   });
 });

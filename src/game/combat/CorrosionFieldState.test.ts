@@ -38,6 +38,18 @@ describe('CorrosionFieldState', () => {
     expect(fields.drainDue(1_500)).toHaveLength(1);
   });
 
+  it('keeps per-field modified duration, radius, and damage', () => {
+    const fields = new CorrosionFieldState();
+    fields.spawn(0, { x: 10, y: 10 }, 0, {
+      durationMs: 3_250,
+      radius: 54.6,
+      damage: 0.29,
+    });
+
+    expect(fields.getSnapshot()[0]).toMatchObject({ expiresAtMs: 3_250, radius: 54.6, damage: 0.29 });
+    expect(fields.drainDue(500)[0]).toMatchObject({ radius: 54.6, damage: 0.29 });
+  });
+
   it('clears every pending field', () => {
     const fields = new CorrosionFieldState();
     fields.spawn(0, { x: 10, y: 10 }, 0);

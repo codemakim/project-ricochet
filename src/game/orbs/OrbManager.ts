@@ -107,6 +107,7 @@ export class OrbStore {
       collisionAccelerationActive: boolean,
     ) => number = () => 1,
     private readonly getTrackingRadiusBonus: (active: boolean) => number = () => 0,
+    private readonly getTimedDurationMs: (baseMs: number) => number = (baseMs) => baseMs,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -272,13 +273,16 @@ export class OrbStore {
     record.hasDirectHit = true;
     record.directHitsSinceWall += 1;
     record.collisionAccelerationUntilMs = nowMs
-      + GAME_TUNING.build.directHitFlight.collisionAccelerationDurationMs;
+      + this.getTimedDurationMs(
+        GAME_TUNING.build.directHitFlight.collisionAccelerationDurationMs,
+      );
     if (firstDirectHit) {
-      record.trackingUntilMs = nowMs + GAME_TUNING.build.directHitFlight.trackingDurationMs;
+      record.trackingUntilMs = nowMs
+        + this.getTimedDurationMs(GAME_TUNING.build.directHitFlight.trackingDurationMs);
     }
     if (result.killed) {
       record.killOverclockUntilMs = nowMs
-        + GAME_TUNING.build.directHitFlight.killOverclockDurationMs;
+        + this.getTimedDurationMs(GAME_TUNING.build.directHitFlight.killOverclockDurationMs);
     }
     record.charges = result.charges;
     record.coreState = core.next;
@@ -504,6 +508,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
     collisionAccelerationActive: boolean,
   ): number;
   getTrackingRadiusBonus?(active: boolean): number;
+  getTimedDurationMs?(baseMs: number): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -559,6 +564,7 @@ export class OrbManager {
       options.getRecoveryRadius,
       options.getFlightSpeedMultiplier,
       options.getTrackingRadiusBonus,
+      options.getTimedDurationMs,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);

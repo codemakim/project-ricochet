@@ -122,6 +122,17 @@ export interface GameTuning {
         damage: number;
       };
     };
+    effectModifiers: {
+      procChancePerRank: number;
+      secondaryDamagePerRank: number;
+      circularRadiusPerRank: number;
+      durationPerRank: number;
+      cutterThicknessPerRank: number;
+      fragmentCountPerRank: number;
+      fragmentDamagePerRank: number;
+      fragmentLifetimeMsPerRank: number;
+      conductionTargetsPerRank: number;
+    };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -315,6 +326,17 @@ export const GAME_TUNING = {
         radius: 44,
         damage: 0.65,
       },
+    },
+    effectModifiers: {
+      procChancePerRank: 0.04,
+      secondaryDamagePerRank: 0.15,
+      circularRadiusPerRank: 0.1,
+      durationPerRank: 0.15,
+      cutterThicknessPerRank: 0.2,
+      fragmentCountPerRank: 1,
+      fragmentDamagePerRank: 0.15,
+      fragmentLifetimeMsPerRank: 350,
+      conductionTargetsPerRank: 1,
     },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
@@ -625,6 +647,30 @@ export function validateGameTuning(tuning: GameTuning): void {
   build.recoveryShockwave.damageByRank.forEach((damage, index) => {
     nonNegative(damage, `build.recoveryShockwave.damageByRank.${index}`);
   });
+  positiveInteger(build.basicGrowth.maximumOrbs, 'build.basicGrowth.maximumOrbs');
+  for (const [id, value] of Object.entries({
+    ...build.basicGrowth,
+    ...build.effectModifiers,
+    reloadDamageBonusPerRank: build.directHitFlight.reloadDamageBonusPerRank,
+    consecutiveDamageBonus: build.directHitFlight.consecutiveDamageBonus,
+    killOverclockBonusPerRank: build.directHitFlight.killOverclockBonusPerRank,
+    collisionAccelerationSpeedPerRank:
+      build.directHitFlight.collisionAccelerationSpeedPerRank,
+    trackingRadiusPerRank: build.directHitFlight.trackingRadiusPerRank,
+  })) nonNegative(value, `build.${id}`);
+  positive(build.directHitFlight.killOverclockDurationMs, 'build.directHitFlight.killOverclockDurationMs');
+  positive(
+    build.directHitFlight.collisionAccelerationDurationMs,
+    'build.directHitFlight.collisionAccelerationDurationMs',
+  );
+  positive(build.directHitFlight.trackingDurationMs, 'build.directHitFlight.trackingDurationMs');
+  positive(build.directHitFlight.highSpeedImpact.speedRatio, 'build.directHitFlight.highSpeedImpact.speedRatio');
+  positiveInteger(
+    build.directHitFlight.highSpeedImpact.hitsRequired,
+    'build.directHitFlight.highSpeedImpact.hitsRequired',
+  );
+  positive(build.directHitFlight.highSpeedImpact.radius, 'build.directHitFlight.highSpeedImpact.radius');
+  nonNegative(build.directHitFlight.highSpeedImpact.damage, 'build.directHitFlight.highSpeedImpact.damage');
   positive(build.explosion.radius, 'build.explosion.radius');
   nonNegative(build.explosion.damage, 'build.explosion.damage');
   positiveInteger(build.split.count, 'build.split.count');

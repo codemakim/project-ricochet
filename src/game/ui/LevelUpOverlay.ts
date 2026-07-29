@@ -102,8 +102,75 @@ export class LevelUpOverlay {
         const effect = next.split()!;
         return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 임시 구슬 ${effect.count}개`;
       }
+      case 'additional-core':
+        return `영구 구슬 상한 ${next.orbLimit(3)}개`;
+      case 'core-expansion':
+        return `구슬 반경 ${formatDisplayNumber(next.orbRadius())}px`;
+      case 'recovery-field':
+        return `근접 회수 반경 ${formatDisplayNumber(next.recoveryRadius())}px`;
+      case 'mobility-motor':
+        return `이동 속도 ${formatDisplayNumber(next.playerSpeed(), 0)}px/s`;
+      case 'armor-reinforcement':
+        return `최대 체력 ${next.maximumHealth()} · 즉시 1 회복`;
+      case 'near-amplification':
+        return `150px 이내 직접 피해 +${next.rank(id) * 15}%`;
+      case 'precision-hit':
+        return `첫 벽 충돌 전 직접 피해 +${next.rank(id) * 20}%`;
+      case 'kinetic-conversion':
+        return `기준 속도 초과 10%당 직접 피해 +${next.rank(id) * 6}% · 최대 +36%`;
+      case 'wall-acceleration':
+        return `벽 충돌 중첩당 속도 +${next.rank(id) * 4}% · 최대 5중첩`;
+      case 'reload-overcharge':
+        return `근접 회수 첫타 피해 +${next.rank(id) * 20}%`;
+      case 'consecutive-impact':
+        return `연속 직격 최대 ${next.rank(id)}중첩 · 중첩당 +10%`;
+      case 'kill-overclock':
+        return `직접 처치 후 피해·속도 +${next.rank(id) * 8}%`;
+      case 'collision-acceleration':
+        return `직격 후 속도 +${next.rank(id) * 8}%`;
+      case 'tracking-magnet':
+        return `첫 직격 후 흡수 반경 +${next.trackingRadiusBonus(true)}px`;
+      case 'high-speed-impact': {
+        const effect = next.highSpeedImpact()!;
+        return `고속 ${effect.hitsRequired}타 · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
+      }
+      case 'horizontal-cutter':
+      case 'vertical-cutter': {
+        const effect = id === 'horizontal-cutter'
+          ? next.horizontalCutter()!
+          : next.verticalCutter()!;
+        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 두께 ${formatDisplayNumber(effect.thickness)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
+      }
+      case 'destruction-reaction': {
+        const effect = next.destructionReaction()!;
+        return `처치 발동 ${formatDisplayNumber(effect.chance * 100)}% · 반경 ${formatDisplayNumber(effect.radius)}px`;
+      }
+      case 'micro-missile':
+        return `직격 ${next.microMissile()!.hitsRequired}회마다 피해 ${formatDisplayNumber(next.microMissile()!.damage)}`;
+      case 'recovery-shockwave': {
+        const effect = next.recoveryShockwave()!;
+        return `근접 회수 ${effect.recoveriesRequired}회 · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
+      }
+      case 'proc-optimization':
+        return `확률형 기본 발동률 +${next.rank(id) * 4}%p`;
+      case 'effect-output':
+        return `보조 효과 피해 +${next.rank(id) * 15}%`;
+      case 'area-expansion':
+        return `원형 효과 반경 +${next.rank(id) * 10}%`;
+      case 'duration-module':
+        return `가스·시간제 효과 지속 +${next.rank(id) * 15}%`;
+      case 'focusing-lens':
+        return `레이저 두께 +${next.rank(id) * 20}%`;
+      case 'fragment-expansion':
+        return `분열 임시 구슬 +${next.rank(id)}개`;
+      case 'fragment-output':
+        return `임시 구슬 피해 +${next.rank(id) * 15}%`;
+      case 'fragment-stabilization':
+        return `임시 구슬 수명 +${formatDisplayNumber(next.rank(id) * 0.35)}초`;
+      case 'conduction-expansion':
+        return `전도 추가 대상 +${next.rank(id)}개`;
       default:
-        return ABILITY_DEFINITIONS[id].summary;
+        return '';
     }
   }
 

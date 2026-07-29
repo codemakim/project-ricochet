@@ -25,6 +25,8 @@ interface TemporaryOrbRecord extends TemporaryOrbSnapshot {
 export interface TemporaryOrbManagerOptions {
   getDirectDamageBonus(): number;
   getGameplayElapsedMs(): number;
+  getDamageMultiplier?(): number;
+  getLifetimeMs?(): number;
   textureKey?: string;
 }
 
@@ -131,7 +133,8 @@ export class TemporaryOrbManager {
     if (lastHitMs !== undefined && nowMs - lastHitMs < GAME_TUNING.temporaryOrbs.hitCooldownMs) return null;
     record.enemyHits.set(enemyId, nowMs);
     const damage = GAME_TUNING.temporaryOrbs.baseDamage
-      * (1 + this.options.getDirectDamageBonus());
+      * (1 + this.options.getDirectDamageBonus())
+      * (this.options.getDamageMultiplier?.() ?? 1);
     return {
       charged: false,
       charges: 0,
@@ -188,11 +191,13 @@ export class TemporaryOrbManager {
     }
     if (count === 2) return [-25, 25];
     if (count === 3) return [-30, 0, 30];
-    throw new RangeError('temporary orb count must be from 1 through 3');
+    if (count === 4) return [-36, -12, 12, 36];
+    throw new RangeError('temporary orb count must be from 1 through 4');
   }
 
   private createOrb(position: Vector, direction: Vector, generation: 0 | 1): void {
-    const expiresAt = this.options.getGameplayElapsedMs() + GAME_TUNING.temporaryOrbs.lifetimeMs;
+    const expiresAt = this.options.getGameplayElapsedMs()
+      + (this.options.getLifetimeMs?.() ?? GAME_TUNING.temporaryOrbs.lifetimeMs);
     const velocity = {
       x: direction.x * GAME_TUNING.temporaryOrbs.speed,
       y: direction.y * GAME_TUNING.temporaryOrbs.speed,

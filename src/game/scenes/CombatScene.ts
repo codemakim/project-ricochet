@@ -211,7 +211,11 @@ export class CombatScene extends Phaser.Scene {
     const build = new BuildState();
     this.build = build;
     this.bossBuild = new BossBuild();
-    this.progression = new ProgressionManager(PROGRESSION_SEED, build);
+    this.progression = new ProgressionManager(
+      PROGRESSION_SEED,
+      build,
+      () => this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
+    );
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
     this.bossRewardOverlay = new BossRewardOverlay(this);
@@ -238,6 +242,7 @@ export class CombatScene extends Phaser.Scene {
         build.flightSpeedMultiplier(killActive, collisionActive)
       ),
       getTrackingRadiusBonus: (active) => build.trackingRadiusBonus(active),
+      getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
@@ -257,6 +262,8 @@ export class CombatScene extends Phaser.Scene {
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
+      getDamageMultiplier: () => build.temporaryDamageMultiplier(),
+      getLifetimeMs: () => build.temporaryLifetimeMs(GAME_TUNING.temporaryOrbs.lifetimeMs),
     });
     this.encounterDirector = new EncounterDirector(runSeed);
     const initialFormation = createInitialFormation(runSeed).enemies;
@@ -547,7 +554,9 @@ export class CombatScene extends Phaser.Scene {
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
-    const cutter = GAME_TUNING.build.cutter;
+    const horizontalCutter = this.build.horizontalCutter();
+    const verticalCutter = this.build.verticalCutter();
+    const destructionReaction = this.build.destructionReaction();
     const corrosion = GAME_TUNING.orbCores.corrosion;
     const corrosionTriggered = Boolean(
       permanent
@@ -556,7 +565,7 @@ export class CombatScene extends Phaser.Scene {
         'corrosion',
         event.sourceOrbId,
         this.gameplayElapsedMs,
-        corrosion.chance,
+        this.build.procChance(corrosion.chance),
         corrosion.cooldownMs,
       )
     );
@@ -575,32 +584,32 @@ export class CombatScene extends Phaser.Scene {
         split.chance,
         split.cooldownMs,
       )),
-      horizontalCutter: Boolean(permanent && this.build.horizontalCutter()
+      horizontalCutter: Boolean(permanent && horizontalCutter
         && this.combatProcs?.tryProc(
           'horizontal-cutter',
           event.sourceOrbId,
           this.gameplayElapsedMs,
-          cutter.chance,
-          cutter.cooldownMs,
+          horizontalCutter.chance,
+          horizontalCutter.cooldownMs,
         )),
-      verticalCutter: Boolean(permanent && this.build.verticalCutter()
+      verticalCutter: Boolean(permanent && verticalCutter
         && this.combatProcs?.tryProc(
           'vertical-cutter',
           event.sourceOrbId,
           this.gameplayElapsedMs,
-          cutter.chance,
-          cutter.cooldownMs,
+          verticalCutter.chance,
+          verticalCutter.cooldownMs,
         )),
       destructionReaction: Boolean(
         permanent
         && event.killed
-        && this.build.destructionReaction()
+        && destructionReaction
         && this.combatProcs?.tryProc(
           'destruction-reaction',
           event.sourceOrbId,
           this.gameplayElapsedMs,
-          GAME_TUNING.build.destructionReaction.chance,
-          GAME_TUNING.build.destructionReaction.cooldownMs,
+          destructionReaction.chance,
+          destructionReaction.cooldownMs,
         ),
       ),
     };
@@ -622,31 +631,39 @@ export class CombatScene extends Phaser.Scene {
         event.sourceOrbId,
         event.position,
         this.gameplayElapsedMs,
+        {
+          durationMs: this.build.durationMs(corrosion.durationMs),
+          radius: this.build.circularRadius(corrosion.radius),
+          damage: this.build.secondaryDamage(corrosion.damagePerTick),
+        },
       );
       this.syncCorrosionVisuals();
     }
     if (corePlan.dischargeConduction) {
       const conduction = GAME_TUNING.orbCores.conduction;
+      const radius = this.build.circularRadius(conduction.radius);
+      const targetCount = this.build.conductionTargetCount(conduction.targetCount);
+      const damage = this.build.secondaryDamage(conduction.damage);
       let targetPositions: Vector[] = [];
       if (excludedBossTargetId === undefined) {
         targetPositions = this.enemyManager?.nearestSecondaryTargets(
           event.position,
           excludedEnemyId,
-          conduction.radius,
-          conduction.targetCount,
+          radius,
+          targetCount,
         ).map(({ position }) => position) ?? [];
         this.enemyManager?.applyNearestSecondaryDamage(
           event.position,
           excludedEnemyId,
-          conduction.radius,
-          conduction.targetCount,
-          conduction.damage,
+          radius,
+          targetCount,
+          damage,
         );
       } else {
         const targetIds = this.activeBoss?.applyAreaDamage(
           event.position,
-          conduction.radius,
-          conduction.damage,
+          radius,
+          damage,
           excludedBossTargetId,
         ) ?? [];
         targetPositions = targetIds
@@ -656,13 +673,25 @@ export class CombatScene extends Phaser.Scene {
       this.drawConductionFeedback(event.position, targetPositions);
     }
     if (decision.horizontalCutter) {
-      this.applyCutter('horizontal', event.position.y, excludedEnemyId, excludedBossTargetId);
+      this.applyCutter(
+        'horizontal',
+        event.position.y,
+        horizontalCutter!,
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
     }
     if (decision.verticalCutter) {
-      this.applyCutter('vertical', event.position.x, excludedEnemyId, excludedBossTargetId);
+      this.applyCutter(
+        'vertical',
+        event.position.x,
+        verticalCutter!,
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
     }
     if (decision.destructionReaction) {
-      const reaction = GAME_TUNING.build.destructionReaction;
+      const reaction = destructionReaction!;
       this.applyAreaEffects(
         event.position,
         [{ radius: reaction.radius, damage: reaction.damage }],
@@ -734,10 +763,11 @@ export class CombatScene extends Phaser.Scene {
   private applyCutter(
     axis: 'horizontal' | 'vertical',
     coordinate: number,
+    cutter: NonNullable<ReturnType<BuildState['horizontalCutter']>>,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
   ): void {
-    const { thickness, damage } = GAME_TUNING.build.cutter;
+    const { thickness, damage } = cutter;
     this.enemyManager?.applyLineDamage(axis, coordinate, thickness, damage, excludedEnemyId);
     this.activeBoss?.applyLineDamage(
       axis,
@@ -812,9 +842,9 @@ export class CombatScene extends Phaser.Scene {
       const feedback = GAME_TUNING.visual.coreFeedback;
       const visual = this.add.graphics()
         .fillStyle(tuning.fill, feedback.corrosionFieldAlpha)
-        .fillCircle(field.position.x, field.position.y, tuning.radius)
+        .fillCircle(field.position.x, field.position.y, field.radius)
         .lineStyle(2, tuning.accent, feedback.corrosionLineAlpha)
-        .strokeCircle(field.position.x, field.position.y, tuning.radius)
+        .strokeCircle(field.position.x, field.position.y, field.radius)
         .setDepth(3)
         .setName('core-feedback-corrosion');
       this.corrosionVisuals.set(field.fieldId, visual);

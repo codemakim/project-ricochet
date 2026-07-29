@@ -1,4 +1,5 @@
 import type { EnemyKind } from '../enemies/enemyRules';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
 import {
   ABILITY_IDS,
   eligibleAbilityIds,
@@ -26,6 +27,7 @@ export class ProgressionManager {
   constructor(
     private readonly seed: number,
     private readonly build: BuildState = new BuildState(),
+    private readonly getCoreTypes: () => readonly OrbCoreId[] = () => [],
   ) {
     this.level = ABILITY_IDS.reduce((total, id) => total + build.rank(id), 0);
     this.normalizeCompletedBuild();
@@ -82,11 +84,19 @@ export class ProgressionManager {
     if (this.pendingChoices === 0 || this.choices.length > 0) return;
 
     const choiceLevel = this.level - this.pendingChoices;
-    this.choices = selectAbilityOptions(this.build.getRanks(), choiceLevel, this.seed);
+    this.choices = selectAbilityOptions(
+      this.build.getRanks(),
+      choiceLevel,
+      this.seed,
+      { coreTypes: this.getCoreTypes() },
+    );
   }
 
   private isBuildComplete(): boolean {
-    return eligibleAbilityIds(this.build.getRanks()).length === 0;
+    return eligibleAbilityIds(
+      this.build.getRanks(),
+      { coreTypes: this.getCoreTypes() },
+    ).length === 0;
   }
 
   private normalizeCompletedBuild(): boolean {

@@ -163,4 +163,22 @@ describe('LevelUpOverlay', () => {
     expect(objects.find((object) => object.text?.includes('운동 에너지'))?.text)
       .toContain('456px/s');
   });
+
+  it('shows exact next-rank values for growth, flight, and effect modifiers', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+
+    overlay.show(
+      ['additional-core', 'reload-overcharge', 'effect-output'],
+      new BuildState(),
+      vi.fn(),
+    );
+
+    const labels = objects.flatMap(({ text }) => text ?? []);
+    expect(labels).toEqual(expect.arrayContaining([
+      expect.stringContaining('영구 구슬 상한 4개'),
+      expect.stringContaining('근접 회수 첫타 피해 +20%'),
+      expect.stringContaining('보조 효과 피해 +15%'),
+    ]));
+  });
 });

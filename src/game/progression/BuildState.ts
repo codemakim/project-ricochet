@@ -178,27 +178,95 @@ export class BuildState {
   }
 
   highSpeedImpact() {
-    return this.ranks['high-speed-impact'] > 0
-      ? { ...GAME_TUNING.build.directHitFlight.highSpeedImpact }
-      : null;
+    if (this.ranks['high-speed-impact'] === 0) return null;
+    const effect = GAME_TUNING.build.directHitFlight.highSpeedImpact;
+    return {
+      ...effect,
+      radius: this.circularRadius(effect.radius),
+      damage: this.secondaryDamage(effect.damage),
+    };
+  }
+
+  procChance(base: number): number {
+    return Math.min(
+      1,
+      base + this.ranks['proc-optimization']
+        * GAME_TUNING.build.effectModifiers.procChancePerRank,
+    );
+  }
+
+  secondaryDamage(base: number): number {
+    return base * (
+      1 + this.ranks['effect-output']
+      * GAME_TUNING.build.effectModifiers.secondaryDamagePerRank
+    );
+  }
+
+  circularRadius(base: number): number {
+    return base * (
+      1 + this.ranks['area-expansion']
+      * GAME_TUNING.build.effectModifiers.circularRadiusPerRank
+    );
+  }
+
+  durationMs(base: number): number {
+    return Math.round(base * (
+      1 + this.ranks['duration-module']
+      * GAME_TUNING.build.effectModifiers.durationPerRank
+    ));
+  }
+
+  cutterThickness(base: number): number {
+    return base * (
+      1 + this.ranks['focusing-lens']
+      * GAME_TUNING.build.effectModifiers.cutterThicknessPerRank
+    );
+  }
+
+  splitCount(base: number): number {
+    return base + this.ranks['fragment-expansion']
+      * GAME_TUNING.build.effectModifiers.fragmentCountPerRank;
+  }
+
+  temporaryDamageMultiplier(): number {
+    return 1 + this.ranks['fragment-output']
+      * GAME_TUNING.build.effectModifiers.fragmentDamagePerRank;
+  }
+
+  temporaryLifetimeMs(base: number): number {
+    return base + this.ranks['fragment-stabilization']
+      * GAME_TUNING.build.effectModifiers.fragmentLifetimeMsPerRank;
+  }
+
+  conductionTargetCount(base: number): number {
+    return base + this.ranks['conduction-expansion']
+      * GAME_TUNING.build.effectModifiers.conductionTargetsPerRank;
   }
 
   horizontalCutter() {
-    return this.ranks['horizontal-cutter'] > 0 ? { ...GAME_TUNING.build.cutter } : null;
+    return this.ranks['horizontal-cutter'] > 0 ? this.cutter() : null;
   }
 
   verticalCutter() {
-    return this.ranks['vertical-cutter'] > 0 ? { ...GAME_TUNING.build.cutter } : null;
+    return this.ranks['vertical-cutter'] > 0 ? this.cutter() : null;
   }
 
   destructionReaction() {
     return this.ranks['destruction-reaction'] > 0
-      ? { ...GAME_TUNING.build.destructionReaction }
+      ? {
+        ...GAME_TUNING.build.destructionReaction,
+        chance: this.procChance(GAME_TUNING.build.destructionReaction.chance),
+        radius: this.circularRadius(GAME_TUNING.build.destructionReaction.radius),
+        damage: this.secondaryDamage(GAME_TUNING.build.destructionReaction.damage),
+      }
       : null;
   }
 
   microMissile() {
-    return this.ranks['micro-missile'] > 0 ? { ...GAME_TUNING.build.microMissile } : null;
+    return this.ranks['micro-missile'] > 0 ? {
+      ...GAME_TUNING.build.microMissile,
+      damage: this.secondaryDamage(GAME_TUNING.build.microMissile.damage),
+    } : null;
   }
 
   recoveryShockwave() {
@@ -206,16 +274,36 @@ export class BuildState {
     if (rank === 0) return null;
     return {
       recoveriesRequired: GAME_TUNING.build.recoveryShockwave.recoveriesRequired,
-      radius: GAME_TUNING.build.recoveryShockwave.radius,
-      damage: GAME_TUNING.build.recoveryShockwave.damageByRank[rank - 1]!,
+      radius: this.circularRadius(GAME_TUNING.build.recoveryShockwave.radius),
+      damage: this.secondaryDamage(GAME_TUNING.build.recoveryShockwave.damageByRank[rank - 1]!),
     };
   }
 
   explosion(): ExplosionSpec | null {
-    return this.ranks.explosion === 0 ? null : { ...GAME_TUNING.build.explosion };
+    if (this.ranks.explosion === 0) return null;
+    return {
+      ...GAME_TUNING.build.explosion,
+      chance: this.procChance(GAME_TUNING.build.explosion.chance),
+      radius: this.circularRadius(GAME_TUNING.build.explosion.radius),
+      damage: this.secondaryDamage(GAME_TUNING.build.explosion.damage),
+    };
   }
 
   split(): SplitSpec | null {
-    return this.ranks.split === 0 ? null : { ...GAME_TUNING.build.split };
+    if (this.ranks.split === 0) return null;
+    return {
+      ...GAME_TUNING.build.split,
+      chance: this.procChance(GAME_TUNING.build.split.chance),
+      count: this.splitCount(GAME_TUNING.build.split.count),
+    };
+  }
+
+  private cutter() {
+    return {
+      ...GAME_TUNING.build.cutter,
+      chance: this.procChance(GAME_TUNING.build.cutter.chance),
+      thickness: this.cutterThickness(GAME_TUNING.build.cutter.thickness),
+      damage: this.secondaryDamage(GAME_TUNING.build.cutter.damage),
+    };
   }
 }

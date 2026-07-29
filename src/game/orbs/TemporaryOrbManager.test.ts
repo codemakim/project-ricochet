@@ -70,6 +70,8 @@ class FakeGroup {
 function createManager(
   getDirectDamageBonus = () => 0,
   getGameplayElapsedMs?: () => number,
+  getDamageMultiplier: () => number = () => 1,
+  getLifetimeMs: () => number = () => GAME_TUNING.temporaryOrbs.lifetimeMs,
 ) {
   const group = new FakeGroup();
   const scene = {
@@ -80,6 +82,8 @@ function createManager(
     manager: new TemporaryOrbManager(scene, {
       getDirectDamageBonus,
       getGameplayElapsedMs: getGameplayElapsedMs ?? (() => 0),
+      getDamageMultiplier,
+      getLifetimeMs,
     }),
     group,
     scene,
@@ -127,6 +131,8 @@ describe('TemporaryOrbManager', () => {
     expect(group.children.slice(2, 4).map(angleDegrees)).toEqual([-25, 25]);
     expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 3)).toBe(3);
     expect(group.children.slice(4, 7).map(angleDegrees)).toEqual([-30, 0, 30]);
+    expect(manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 4)).toBe(4);
+    expect(group.children.slice(7, 11).map(angleDegrees)).toEqual([-36, -12, 12, 36]);
 
     expect(group.children.every((sprite) => Math.hypot(
       sprite.body.velocity.x,
@@ -237,6 +243,20 @@ describe('TemporaryOrbManager', () => {
       damage: 0.4,
       reflect: true,
     });
+  });
+
+  it('applies fragment damage and lifetime modifiers once', () => {
+    const { manager, group } = createManager(
+      () => 0.25,
+      () => 100,
+      () => 1.45,
+      () => 2_200,
+    );
+    manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);
+
+    expect(manager.getSnapshot()[0]?.expiresAt).toBe(2_300);
+    expect(manager.handleEnemyHit(group.children[0] as unknown as never, 1, 9, 100)?.damage)
+      .toBeCloseTo(0.725);
   });
 
   it('synchronizes reflected velocity and destroys owned group and records', () => {

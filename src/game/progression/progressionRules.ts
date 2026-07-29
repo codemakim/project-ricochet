@@ -1,5 +1,6 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
 
 export const ABILITY_DEFINITIONS = {
   firepower: { label: '화력 증폭', summary: '영구·임시 직접 피해 증가', maxRank: 5, requires: [] },
@@ -26,12 +27,57 @@ export const ABILITY_DEFINITIONS = {
   'collision-acceleration': { label: '충돌 가속', summary: '직접 타격 뒤 잠시 속도 증가', maxRank: 2, requires: [] },
   'tracking-magnet': { label: '추적 자석', summary: '첫 직접 타격 뒤 흡수 반경 증가', maxRank: 2, requires: [] },
   'high-speed-impact': { label: '고속 충격', summary: '고속 직접 타격 누적으로 충격파', maxRank: 1, requires: [] },
+  'proc-optimization': { label: '발동 최적화', summary: '확률형 효과 발동률 증가', maxRank: 2, requires: [] },
+  'effect-output': { label: '효과 출력', summary: '보조 효과 피해 증가', maxRank: 3, requires: [] },
+  'area-expansion': { label: '영향권 확장', summary: '원형 보조 효과 반경 증가', maxRank: 3, requires: [] },
+  'duration-module': { label: '잔류 장치', summary: '가스와 시간제 효과 지속시간 증가', maxRank: 2, requires: [] },
+  'focusing-lens': { label: '집속 렌즈', summary: '수평·수직 레이저 두께 증가', maxRank: 2, requires: [] },
+  'fragment-expansion': { label: '파편 증설', summary: '분열 임시 구슬 수 증가', maxRank: 2, requires: ['split'] },
+  'fragment-output': { label: '파편 출력', summary: '임시 구슬 직접 피해 증가', maxRank: 3, requires: ['split'] },
+  'fragment-stabilization': { label: '파편 안정화', summary: '임시 구슬 수명 증가', maxRank: 2, requires: ['split'] },
+  'conduction-expansion': { label: '전도 확장', summary: '전도 연쇄 대상 수 증가', maxRank: 2, requires: [] },
 } as const;
 
 export type AbilityId = keyof typeof ABILITY_DEFINITIONS;
 export const ABILITY_IDS = Object.keys(ABILITY_DEFINITIONS) as AbilityId[];
 export type AbilityRanks = Record<AbilityId, number>;
 export const MAX_ABILITY_KINDS = 12;
+
+export interface AbilityEligibilityContext {
+  coreTypes?: readonly OrbCoreId[];
+}
+
+const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
+  anyAbility?: readonly AbilityId[];
+  anyCore?: readonly OrbCoreId[];
+}>> = {
+  'proc-optimization': {
+    anyAbility: ['explosion', 'split', 'horizontal-cutter', 'vertical-cutter', 'destruction-reaction'],
+    anyCore: ['corrosion'],
+  },
+  'effect-output': {
+    anyAbility: [
+      'explosion',
+      'horizontal-cutter',
+      'vertical-cutter',
+      'destruction-reaction',
+      'micro-missile',
+      'recovery-shockwave',
+      'high-speed-impact',
+    ],
+    anyCore: ['corrosion', 'conduction'],
+  },
+  'area-expansion': {
+    anyAbility: ['explosion', 'destruction-reaction', 'recovery-shockwave', 'high-speed-impact'],
+    anyCore: ['corrosion', 'conduction'],
+  },
+  'duration-module': {
+    anyAbility: ['kill-overclock', 'collision-acceleration', 'tracking-magnet'],
+    anyCore: ['corrosion'],
+  },
+  'focusing-lens': { anyAbility: ['horizontal-cutter', 'vertical-cutter'] },
+  'conduction-expansion': { anyCore: ['conduction'] },
+};
 
 export const ABILITY_MAX_RANKS = Object.fromEntries(
   ABILITY_IDS.map((id) => [id, ABILITY_DEFINITIONS[id].maxRank]),
@@ -55,13 +101,30 @@ export function prerequisitesMet(
   return required.every((id) => ranks[id] > 0);
 }
 
-export function eligibleAbilityIds(ranks: Readonly<AbilityRanks>): AbilityId[] {
+export function eligibleAbilityIds(
+  ranks: Readonly<AbilityRanks>,
+  context: AbilityEligibilityContext = {},
+): AbilityId[] {
   const ownedKindCount = ABILITY_IDS.filter((id) => ranks[id] > 0).length;
   return ABILITY_IDS.filter((id) => (
     ranks[id] < ABILITY_MAX_RANKS[id]
     && (ranks[id] > 0 || canAcquireNewAbility(ownedKindCount))
     && prerequisitesMet(ABILITY_DEFINITIONS[id].requires, ranks)
+    && relevanceMet(id, ranks, context)
   ));
+}
+
+function relevanceMet(
+  id: AbilityId,
+  ranks: Readonly<AbilityRanks>,
+  context: AbilityEligibilityContext,
+): boolean {
+  const relevance = ABILITY_RELEVANCE[id];
+  if (!relevance || ranks[id] > 0) return true;
+  return Boolean(
+    relevance.anyAbility?.some((required) => ranks[required] > 0)
+    || relevance.anyCore?.some((required) => context.coreTypes?.includes(required)),
+  );
 }
 
 export function xpForEnemy(kind: EnemyKind): number {
@@ -90,8 +153,9 @@ export function selectAbilityOptions(
   ranks: Readonly<AbilityRanks>,
   level: number,
   seed: number,
+  context: AbilityEligibilityContext = {},
 ): AbilityId[] {
-  const eligible = eligibleAbilityIds(ranks);
+  const eligible = eligibleAbilityIds(ranks, context);
   let state = (seed ^ Math.imul(level + 1, 2654435761)) >>> 0;
   const shuffled = [...eligible];
 

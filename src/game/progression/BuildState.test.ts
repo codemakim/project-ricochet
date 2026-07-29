@@ -137,4 +137,28 @@ describe('BuildState', () => {
       damage: 0.65,
     });
   });
+
+  it('applies every effect modifier through one derived API', () => {
+    const build = new BuildState({
+      'proc-optimization': 2,
+      'effect-output': 3,
+      'area-expansion': 3,
+      'duration-module': 2,
+      'focusing-lens': 2,
+      'fragment-expansion': 2,
+      'fragment-output': 3,
+      'fragment-stabilization': 2,
+      'conduction-expansion': 2,
+    });
+
+    expect(build.procChance(0.2)).toBeCloseTo(0.28);
+    expect(build.secondaryDamage(1)).toBeCloseTo(1.45);
+    expect(build.circularRadius(100)).toBeCloseTo(130);
+    expect(build.durationMs(1000)).toBe(1300);
+    expect(build.cutterThickness(10)).toBeCloseTo(14);
+    expect(build.splitCount(2)).toBe(4);
+    expect(build.temporaryDamageMultiplier()).toBeCloseTo(1.45);
+    expect(build.temporaryLifetimeMs(1500)).toBe(2200);
+    expect(build.conductionTargetCount(2)).toBe(4);
+  });
 });
