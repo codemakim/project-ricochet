@@ -8,24 +8,11 @@ import {
   selectAbilityOptions,
   xpForEnemy,
   xpRequiredForLevel,
+  createEmptyAbilityRanks,
   type AbilityRanks,
 } from './progressionRules';
 
-const empty: AbilityRanks = {
-  firepower: 0,
-  kinetic: 0,
-  explosion: 0,
-  split: 0,
-  'near-amplification': 0,
-  'precision-hit': 0,
-  'kinetic-conversion': 0,
-  'wall-acceleration': 0,
-  'horizontal-cutter': 0,
-  'vertical-cutter': 0,
-  'destruction-reaction': 0,
-  'micro-missile': 0,
-  'recovery-shockwave': 0,
-};
+const empty: AbilityRanks = createEmptyAbilityRanks();
 
 describe('progression rules', () => {
   it('defines the approved rank caps and resulting maximum build level', () => {
@@ -43,8 +30,13 @@ describe('progression rules', () => {
       'destruction-reaction': 1,
       'micro-missile': 1,
       'recovery-shockwave': 2,
+      'additional-core': 3,
+      'core-expansion': 2,
+      'recovery-field': 3,
+      'mobility-motor': 2,
+      'armor-reinforcement': 3,
     });
-    expect(MAX_BUILD_LEVEL).toBe(28);
+    expect(MAX_BUILD_LEVEL).toBe(41);
   });
 
   it('maps enemy kinds to XP and levels to exact costs', () => {

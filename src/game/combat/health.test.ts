@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyDamage, breachDamage, canTakeDamage, createHealth } from './health';
+import {
+  applyDamage,
+  breachDamage,
+  canTakeDamage,
+  createHealth,
+  raiseMaximumHealth,
+} from './health';
 
 describe('player health', () => {
   it('starts at ten health with no shield', () => {
@@ -13,6 +19,13 @@ describe('player health', () => {
 
   it('marks zero health as defeated', () => {
     expect(applyDamage(createHealth(), 10).defeated).toBe(true);
+  });
+
+  it('heals exactly the newly added maximum health', () => {
+    expect(raiseMaximumHealth(
+      { current: 7, maximum: 10, shield: 0, defeated: false },
+      12,
+    )).toEqual({ current: 9, maximum: 12, shield: 0, defeated: false });
   });
 
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid damage %s', (amount) => {

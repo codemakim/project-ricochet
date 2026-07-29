@@ -20,6 +20,17 @@ export function applyDamage(state: HealthState, amount: number): HealthState {
   return { ...state, shield, current, defeated: current === 0 };
 }
 
+export function raiseMaximumHealth(state: HealthState, maximum: number): HealthState {
+  if (!Number.isInteger(maximum) || maximum < state.maximum) {
+    throw new RangeError('maximum health must be an integer at least as large as current maximum');
+  }
+  return {
+    ...state,
+    current: state.current + maximum - state.maximum,
+    maximum,
+  };
+}
+
 export function canTakeDamage(now: number, invulnerableUntil: number): boolean {
   return now >= invulnerableUntil;
 }

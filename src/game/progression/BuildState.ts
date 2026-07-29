@@ -1,5 +1,10 @@
 import { GAME_TUNING } from '../config/gameTuning';
-import { ORB_SPEED } from '../constants';
+import {
+  ORB_PICKUP_RADIUS,
+  ORB_RADIUS,
+  ORB_SPEED,
+  PLAYER_SPEED,
+} from '../constants';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
@@ -105,6 +110,37 @@ export class BuildState {
     return 1 + stacks
       * this.ranks['wall-acceleration']
       * GAME_TUNING.build.wallAcceleration.speedBonusPerStack;
+  }
+
+  orbLimit(baseLimit: number): number {
+    return Math.min(
+      GAME_TUNING.build.basicGrowth.maximumOrbs,
+      baseLimit + this.ranks['additional-core'],
+    );
+  }
+
+  orbRadius(): number {
+    return ORB_RADIUS * (
+      1 + this.ranks['core-expansion']
+      * GAME_TUNING.build.basicGrowth.orbRadiusBonusPerRank
+    );
+  }
+
+  recoveryRadius(): number {
+    return ORB_PICKUP_RADIUS + this.ranks['recovery-field']
+      * GAME_TUNING.build.basicGrowth.recoveryRadiusPerRank;
+  }
+
+  playerSpeed(): number {
+    return PLAYER_SPEED * (
+      1 + this.ranks['mobility-motor']
+      * GAME_TUNING.build.basicGrowth.playerSpeedBonusPerRank
+    );
+  }
+
+  maximumHealth(): number {
+    return 10 + this.ranks['armor-reinforcement']
+      * GAME_TUNING.build.basicGrowth.healthPerRank;
   }
 
   horizontalCutter() {

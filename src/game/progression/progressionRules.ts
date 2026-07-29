@@ -15,6 +15,11 @@ export const ABILITY_DEFINITIONS = {
   'destruction-reaction': { label: '파괴 반응', summary: '직접 처치 시 확률 폭발', maxRank: 1, requires: [] },
   'micro-missile': { label: '미세 유도탄', summary: '직격 6회마다 유도탄 발사', maxRank: 1, requires: [] },
   'recovery-shockwave': { label: '회수 충격파', summary: '근접 회수 4회마다 충격파', maxRank: 2, requires: [] },
+  'additional-core': { label: '추가 코어', summary: '영구 구슬 1개 추가', maxRank: 3, requires: [] },
+  'core-expansion': { label: '코어 팽창', summary: '영구 구슬 크기 증가', maxRank: 2, requires: [] },
+  'recovery-field': { label: '흡수장 확장', summary: '근접 회수 반경 증가', maxRank: 3, requires: [] },
+  'mobility-motor': { label: '기동 모터', summary: '플레이어 이동 속도 증가', maxRank: 2, requires: [] },
+  'armor-reinforcement': { label: '장갑 보강', summary: '최대 체력과 현재 체력 증가', maxRank: 3, requires: [] },
 } as const;
 
 export type AbilityId = keyof typeof ABILITY_DEFINITIONS;

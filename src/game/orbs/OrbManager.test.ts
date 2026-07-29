@@ -54,6 +54,7 @@ class FakeSprite {
   visible = true;
   destroyed = false;
   setPositionCalls = 0;
+  circle = 0;
   textureKey: string;
   readonly body = new FakeBody(this);
 
@@ -61,7 +62,7 @@ class FakeSprite {
     this.textureKey = textureKey;
   }
 
-  setCircle(): this { return this; }
+  setCircle(radius: number): this { this.circle = radius; return this; }
   setBounce(): this { return this; }
   setCollideWorldBounds(): this { return this; }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
@@ -84,6 +85,8 @@ function createManager(
   passThroughOnKill = false,
   chargedKillPierces: () => boolean = () => false,
   getOrbLimit: () => number = () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+  getOrbRadius: () => number = () => 8,
+  getRecoveryRadius: () => number = () => ORB_PICKUP_RADIUS,
 ) {
   const world = new FakeWorld();
   const sprites: FakeSprite[] = [];
@@ -106,6 +109,8 @@ function createManager(
     getChargedSpeed,
     chargedKillPierces,
     getOrbLimit,
+    getOrbRadius,
+    getRecoveryRadius,
   });
   return { manager, sprites, world };
 }
@@ -326,6 +331,43 @@ describe('OrbStore', () => {
     expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'queued', 'queued']);
     store.update(100, 1, player, up);
     expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'active', 'queued']);
+  });
+
+  it('uses build-provided orb and recovery radii', () => {
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      undefined,
+      () => true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => 74,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.synchronizeActive(0, { x: player.x + 70, y: player.y }, { x: 0, y: -400 });
+    store.update(1, 1, player, up);
+    expect(store.getSnapshot()[0]?.state).toBe('attracting');
+
+    const { sprites } = createManager(
+      true,
+      () => false,
+      null,
+      () => 0,
+      () => ORB_SPEED,
+      false,
+      () => false,
+      () => 6,
+      () => 9.28,
+    );
+    expect(sprites.every(({ circle }) => circle === 9.28)).toBe(true);
   });
 
   it('disables collision and damage when proximity recovery begins', () => {

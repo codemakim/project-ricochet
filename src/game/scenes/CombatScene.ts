@@ -23,6 +23,7 @@ import {
   breachDamage,
   canTakeDamage,
   createHealth,
+  raiseMaximumHealth,
   type HealthState,
 } from '../combat/health';
 import {
@@ -231,6 +232,8 @@ export class CombatScene extends Phaser.Scene {
         build.conditionalDirectDamageBonus(context)
       ),
       getWallSpeedMultiplier: (wallHits) => build.wallSpeedMultiplier(wallHits),
+      getOrbRadius: () => build.orbRadius(),
+      getRecoveryRadius: () => build.recoveryRadius(),
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
@@ -241,7 +244,7 @@ export class CombatScene extends Phaser.Scene {
       chargedKillPierces: () => (
         this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
       ),
-      getOrbLimit: () => this.bossBuild?.orbLimit() ?? 3,
+      getOrbLimit: () => build.orbLimit(this.bossBuild?.orbLimit() ?? 3),
       onRecovery: (orbId, source) => {
         this.combatProcs?.resetOrbFlight(orbId);
         this.handleOrbRecovery(source);
@@ -393,7 +396,12 @@ export class CombatScene extends Phaser.Scene {
 
     const gameplayDelta = this.pause.consumeGameplayDelta(delta);
     this.gameplayElapsedMs += gameplayDelta;
-    const next = movePlayer(this.player, this.playerInput.movement, gameplayDelta);
+    const next = movePlayer(
+      this.player,
+      this.playerInput.movement,
+      gameplayDelta,
+      this.build?.playerSpeed(),
+    );
     this.player.setPosition(next.x, next.y);
     this.aim = resolveAim(this.aim, this.playerInput.aimCandidate);
     if (!this.aimQueueActivated && this.playerInput.aimActivated) {
@@ -1117,11 +1125,26 @@ export class CombatScene extends Phaser.Scene {
     if (!this.progression.choose(id)) return false;
 
     this.refreshCombatModifiers();
+    if (id === 'additional-core') {
+      this.levelUpOverlay?.hide();
+      this.orbLoadoutOverlay?.showAdditional((type) => {
+        if (!this.orbManager?.addOrb(type)) return false;
+        this.completeAbilityChoice();
+        return true;
+      });
+      return true;
+    }
+    this.completeAbilityChoice();
+    return true;
+  }
+
+  private completeAbilityChoice(): void {
+    if (!this.progression) return;
     this.updateProgressionText();
     if (this.progression.getSnapshot().pendingChoices > 0) {
       this.openNextLevelUp();
     } else {
-      this.levelUpOverlay.hide();
+      this.levelUpOverlay?.hide();
       this.pause.remove('levelUp');
       if (shouldFinalizeBossReward(this.bossDefeatPending, this.defeated, false)) {
         this.finalizeBossDefeat();
@@ -1129,11 +1152,15 @@ export class CombatScene extends Phaser.Scene {
         this.syncPauseState();
       }
     }
-    return true;
   }
 
   private refreshCombatModifiers(): void {
     this.orbManager?.refreshCombatModifiers();
+    const maximum = this.build?.maximumHealth() ?? this.health.maximum;
+    if (maximum > this.health.maximum) {
+      this.health = raiseMaximumHealth(this.health, maximum);
+      this.updateHealthText();
+    }
   }
 
   private damagePlayer(amount: number): void {

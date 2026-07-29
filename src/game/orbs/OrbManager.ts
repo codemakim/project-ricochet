@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import {
   LAUNCH_INTERVAL_MS,
   ORB_PICKUP_RADIUS,
+  ORB_RADIUS,
   ORB_SPEED,
   PLAYER_RADIUS,
   STARTING_ORB_COUNT,
@@ -28,9 +29,7 @@ import {
   type OrbCoreState,
 } from './orbCoreRules';
 
-export const ORB_RADIUS = 8;
-
-const SPAWN_CLEARANCE = Math.max(PLAYER_RADIUS + ORB_RADIUS + 4, ORB_PICKUP_RADIUS + 1);
+export { ORB_RADIUS } from '../constants';
 const ATTRACTION_DURATION_MS = 100;
 const RECALL_SPEED = ORB_SPEED;
 const HIT_COOLDOWN_MS = 80;
@@ -93,6 +92,8 @@ export class OrbStore {
       context: PermanentDirectHitContext,
     ) => number = () => 0,
     private readonly getWallSpeedMultiplier: (wallHits: number) => number = () => 1,
+    private readonly getOrbRadius: () => number = () => ORB_RADIUS,
+    private readonly getRecoveryRadius: () => number = () => ORB_PICKUP_RADIUS,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -278,6 +279,10 @@ export class OrbStore {
     }));
   }
 
+  orbRadius(): number {
+    return this.getOrbRadius();
+  }
+
   destroy(): void {
     this.launchQueue.clear();
   }
@@ -293,7 +298,10 @@ export class OrbStore {
     }
 
     const distance = Math.hypot(record.position.x - playerPosition.x, record.position.y - playerPosition.y);
-    if (distance <= ORB_PICKUP_RADIUS && this.hasFixedTerrainLineOfSight(record.position, playerPosition)) {
+    if (
+      distance <= this.getRecoveryRadius()
+      && this.hasFixedTerrainLineOfSight(record.position, playerPosition)
+    ) {
       this.beginProximityRecovery(record.id);
     }
   }
@@ -370,9 +378,13 @@ export class OrbStore {
     const direction = normalize(aim);
     record.state = transitionOrb(record.state, 'active');
     record.wallHits = 0;
+    const clearance = Math.max(
+      PLAYER_RADIUS + this.getOrbRadius() + 4,
+      this.getRecoveryRadius() + 1,
+    );
     record.position = {
-      x: playerPosition.x + direction.x * SPAWN_CLEARANCE,
-      y: playerPosition.y + direction.y * SPAWN_CLEARANCE,
+      x: playerPosition.x + direction.x * clearance,
+      y: playerPosition.y + direction.y * clearance,
     };
     const speed = this.speedTarget(record);
     record.velocity = { x: direction.x * speed, y: direction.y * speed };
@@ -428,6 +440,8 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getOrbLimit?(): number;
   getConditionalDirectDamageBonus?(context: PermanentDirectHitContext): number;
   getWallSpeedMultiplier?(wallHits: number): number;
+  getOrbRadius?(): number;
+  getRecoveryRadius?(): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -479,6 +493,8 @@ export class OrbManager {
       options.getOrbLimit,
       options.getConditionalDirectDamageBonus,
       options.getWallSpeedMultiplier,
+      options.getOrbRadius,
+      options.getRecoveryRadius,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);
@@ -632,6 +648,7 @@ export class OrbManager {
       if (!sprite) continue;
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
+      sprite.setCircle(this.currentOrbRadius());
       sprite.setTexture(`orb-${state.coreType}`);
       const activeBodyOwnsPosition = state.state === 'active' && body.enable;
       sprite.setVisible(visible);
@@ -645,7 +662,10 @@ export class OrbManager {
   private createSprite(id: number): OrbSprite {
     const sprite = this.scene.physics.add.sprite(0, 0, this.textureKey) as OrbSprite;
     sprite.orbId = id;
-    sprite.setCircle(ORB_RADIUS).setBounce(1, 1).setCollideWorldBounds(true).setVisible(false);
+    sprite.setCircle(this.currentOrbRadius())
+      .setBounce(1, 1)
+      .setCollideWorldBounds(true)
+      .setVisible(false);
     (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
     this.spriteIds.set(sprite, id);
     return sprite;
@@ -670,5 +690,9 @@ export class OrbManager {
     }
     const id = this.spriteIds.get(orb);
     return id === undefined ? null : { id, sprite: orb };
+  }
+
+  private currentOrbRadius(): number {
+    return this.store.orbRadius();
   }
 }

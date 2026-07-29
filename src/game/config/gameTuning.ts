@@ -99,6 +99,13 @@ export interface GameTuning {
       radius: number;
       damageByRank: readonly [number, number];
     };
+    basicGrowth: {
+      maximumOrbs: number;
+      orbRadiusBonusPerRank: number;
+      recoveryRadiusPerRank: number;
+      playerSpeedBonusPerRank: number;
+      healthPerRank: number;
+    };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -269,6 +276,13 @@ export const GAME_TUNING = {
       recoveriesRequired: 4,
       radius: 72,
       damageByRank: [0.75, 1.25],
+    },
+    basicGrowth: {
+      maximumOrbs: 6,
+      orbRadiusBonusPerRank: 0.08,
+      recoveryRadiusPerRank: 8,
+      playerSpeedBonusPerRank: 0.08,
+      healthPerRank: 1,
     },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
