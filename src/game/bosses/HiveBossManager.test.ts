@@ -564,6 +564,20 @@ describe('HiveBossManager', () => {
     });
   });
 
+  it('damages exposed hive parts inside a laser strip', () => {
+    const boundary = createBoundary();
+    const left = boundary.sprite('hive-left-shooter');
+
+    expect(boundary.manager.applyLineDamage('horizontal', left.y, 12, 1))
+      .toEqual(['leftShooter', 'rightShooter']);
+    expect(boundary.manager.getSnapshot().parts).toMatchObject({
+      leftShooter: 19,
+      rightShooter: 19,
+    });
+    expect(boundary.manager.getTargetPosition('leftShooter'))
+      .toEqual({ x: left.x, y: left.y });
+  });
+
   it('registers future permanent orbs and one temporary collider per target, then fully cleans up', () => {
     const boundary = createBoundary();
     expect(boundary.colliders.filter((item) => item.first === boundary.temporaryGroup)).toHaveLength(5);

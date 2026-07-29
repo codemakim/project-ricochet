@@ -739,6 +739,7 @@ describe('EnemyManager', () => {
       position: target.position,
       charged: false,
       direction: { x: 0.6, y: -0.8 },
+      killed: false,
     });
     expect((manager as unknown as { pendingReflections: Map<string, unknown> }).pendingReflections.size).toBe(0);
   });
@@ -798,6 +799,33 @@ describe('EnemyManager', () => {
         { id: 4, hp: 3 },
       ]);
     expect(onDirectHit).not.toHaveBeenCalled();
+    expect(manager.nearestSecondaryTargets({ x: 100, y: 100 }, 0, 50, 2))
+      .toEqual([
+        expect.objectContaining({ id: 1, position: { x: 110, y: 100 } }),
+        expect.objectContaining({ id: 2, position: { x: 120, y: 100 } }),
+      ]);
+  });
+
+  it('damages only enemies inside horizontal and vertical laser strips', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 3, x: 100, y: 100, column: 0, speed: 0 },
+      { kind: 'basic', hp: 3, x: 130, y: 105, column: 1, speed: 0 },
+      { kind: 'basic', hp: 3, x: 104, y: 150, column: 2, speed: 0 },
+      { kind: 'basic', hp: 3, x: 150, y: 150, column: 3, speed: 0 },
+    ];
+    const { manager } = createBoundary(formation);
+
+    expect(manager.applyLineDamage('horizontal', 100, 12, 1, 0)).toEqual([1]);
+    expect(manager.applyLineDamage('vertical', 100, 12, 1, 0)).toEqual([2]);
+    expect(manager.applyDirectDamage(3, 0.5)).toBe(true);
+    expect(manager.applyDirectDamage(99, 0.5)).toBe(false);
+    expect(manager.getSnapshot().enemies.map(({ id, hp }) => ({ id, hp })))
+      .toEqual([
+        { id: 0, hp: 3 },
+        { id: 1, hp: 2 },
+        { id: 2, hp: 2 },
+        { id: 3, hp: 2.5 },
+      ]);
   });
 
   it('clears warning state if a shooter dies before firing', () => {

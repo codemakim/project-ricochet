@@ -14,6 +14,7 @@ export interface BossDirectHitEvent {
   direction: Vector;
   coreType?: OrbCoreId;
   conductionTriggered?: boolean;
+  killed: boolean;
 }
 
 export interface BossProjectileSnapshot {
@@ -44,7 +45,15 @@ export interface BossEncounter {
     damage: number,
     excludedTargetId?: BossTargetId,
   ): BossTargetId[];
+  applyLineDamage(
+    axis: 'horizontal' | 'vertical',
+    coordinate: number,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: BossTargetId,
+  ): BossTargetId[];
   applyDirectDamage(targetId: BossTargetId, damage: number): boolean;
+  getTargetPosition(targetId: BossTargetId): Vector | null;
   clearHostileActions(): void;
   destroy(): void;
 }

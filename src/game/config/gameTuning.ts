@@ -181,7 +181,15 @@ export interface GameTuning {
       corrosionFieldAlpha: number;
       corrosionLineAlpha: number;
       corrosionTickDurationMs: number;
+      corrosionDamageNumberDurationMs: number;
       conductionDurationMs: number;
+    };
+    triggerFeedback: {
+      durationMs: number;
+      laserColor: number;
+      destructionColor: number;
+      missileColor: number;
+      shockwaveColor: number;
     };
     hostile: {
       enemyBullet: ProjectileVisualTuning;
@@ -342,7 +350,15 @@ export const GAME_TUNING = {
       corrosionFieldAlpha: 0.16,
       corrosionLineAlpha: 0.7,
       corrosionTickDurationMs: 160,
+      corrosionDamageNumberDurationMs: 260,
       conductionDurationMs: 180,
+    },
+    triggerFeedback: {
+      durationMs: 180,
+      laserColor: 0x65f6ff,
+      destructionColor: 0xff8e55,
+      missileColor: 0xffd45c,
+      shockwaveColor: 0x8cf7ff,
     },
     hostile: {
       enemyBullet: { fill: 0xff4d5a, accent: 0x4a0710, width: 10, height: 10 },

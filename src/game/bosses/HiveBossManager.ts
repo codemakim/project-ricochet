@@ -304,6 +304,31 @@ export class HiveBossManager implements BossEncounter {
     return true;
   }
 
+  applyLineDamage(
+    axis: 'horizontal' | 'vertical',
+    coordinate: number,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: string,
+  ): HivePartId[] {
+    const eligible = new Set(exposedHiveParts(this.state));
+    const targets = PART_ORDER.filter((partId) => (
+      eligible.has(partId)
+      && partId !== excludedTargetId
+      && Math.abs(
+        (axis === 'horizontal' ? this.parts[partId].y : this.parts[partId].x) - coordinate,
+      ) <= thickness / 2
+    ));
+    for (const partId of targets) this.damagePart(partId, damage);
+    return targets;
+  }
+
+  getTargetPosition(targetId: string): Vector | null {
+    const partId = exposedHiveParts(this.state).find((candidate) => candidate === targetId);
+    const sprite = partId && this.parts[partId];
+    return sprite ? { x: sprite.x, y: sprite.y } : null;
+  }
+
   clearHostileActions(): void {
     if (this.destroyed) return;
     this.warningGroup.clear(true, true);
@@ -469,6 +494,7 @@ export class HiveBossManager implements BossEncounter {
   private applyPendingHit(pending: PendingHit): void {
     if (!exposedHiveParts(this.state).includes(pending.partId)) return;
     const part = this.parts[pending.partId];
+    const previousHp = this.state.parts[pending.partId];
     this.damagePart(pending.partId, pending.result.damage);
     const core = pending.source === 'permanent'
       ? pending.result as PermanentHitResult
@@ -481,6 +507,7 @@ export class HiveBossManager implements BossEncounter {
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,
+      killed: previousHp > 0 && this.state.parts[pending.partId] === 0,
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,

@@ -337,7 +337,7 @@ export class CombatScene extends Phaser.Scene {
           this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
           this.syncCorrosionVisuals();
         } else {
-          this.drawConductionFeedback(position);
+          this.drawConductionFeedback(position, []);
         }
       };
     }
@@ -525,6 +525,7 @@ export class CombatScene extends Phaser.Scene {
       | 'direction'
       | 'coreType'
       | 'conductionTriggered'
+      | 'killed'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -533,6 +534,7 @@ export class CombatScene extends Phaser.Scene {
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
+    const cutter = GAME_TUNING.build.cutter;
     const corrosion = GAME_TUNING.orbCores.corrosion;
     const corrosionTriggered = Boolean(
       permanent
@@ -560,6 +562,34 @@ export class CombatScene extends Phaser.Scene {
         split.chance,
         split.cooldownMs,
       )),
+      horizontalCutter: Boolean(permanent && this.build.horizontalCutter()
+        && this.combatProcs?.tryProc(
+          'horizontal-cutter',
+          event.sourceOrbId,
+          this.gameplayElapsedMs,
+          cutter.chance,
+          cutter.cooldownMs,
+        )),
+      verticalCutter: Boolean(permanent && this.build.verticalCutter()
+        && this.combatProcs?.tryProc(
+          'vertical-cutter',
+          event.sourceOrbId,
+          this.gameplayElapsedMs,
+          cutter.chance,
+          cutter.cooldownMs,
+        )),
+      destructionReaction: Boolean(
+        permanent
+        && event.killed
+        && this.build.destructionReaction()
+        && this.combatProcs?.tryProc(
+          'destruction-reaction',
+          event.sourceOrbId,
+          this.gameplayElapsedMs,
+          GAME_TUNING.build.destructionReaction.chance,
+          GAME_TUNING.build.destructionReaction.cooldownMs,
+        ),
+      ),
     };
     const plan = planDirectHitEffects(
       event,
@@ -584,7 +614,14 @@ export class CombatScene extends Phaser.Scene {
     }
     if (corePlan.dischargeConduction) {
       const conduction = GAME_TUNING.orbCores.conduction;
+      let targetPositions: Vector[] = [];
       if (excludedBossTargetId === undefined) {
+        targetPositions = this.enemyManager?.nearestSecondaryTargets(
+          event.position,
+          excludedEnemyId,
+          conduction.radius,
+          conduction.targetCount,
+        ).map(({ position }) => position) ?? [];
         this.enemyManager?.applyNearestSecondaryDamage(
           event.position,
           excludedEnemyId,
@@ -593,14 +630,38 @@ export class CombatScene extends Phaser.Scene {
           conduction.damage,
         );
       } else {
-        this.activeBoss?.applyAreaDamage(
+        const targetIds = this.activeBoss?.applyAreaDamage(
           event.position,
           conduction.radius,
           conduction.damage,
           excludedBossTargetId,
-        );
+        ) ?? [];
+        targetPositions = targetIds
+          .map((targetId) => this.activeBoss?.getTargetPosition(targetId))
+          .filter((position): position is Vector => position !== null && position !== undefined);
       }
-      this.drawConductionFeedback(event.position);
+      this.drawConductionFeedback(event.position, targetPositions);
+    }
+    if (decision.horizontalCutter) {
+      this.applyCutter('horizontal', event.position.y, excludedEnemyId, excludedBossTargetId);
+    }
+    if (decision.verticalCutter) {
+      this.applyCutter('vertical', event.position.x, excludedEnemyId, excludedBossTargetId);
+    }
+    if (decision.destructionReaction) {
+      const reaction = GAME_TUNING.build.destructionReaction;
+      this.applyAreaEffects(
+        event.position,
+        [{ radius: reaction.radius, damage: reaction.damage }],
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
+      this.drawEffectRing(
+        event.position,
+        reaction.radius,
+        GAME_TUNING.visual.triggerFeedback.destructionColor,
+        'trigger-feedback-destruction',
+      );
     }
     if (plan.immediateAreas.length > 0) {
       this.applyAreaEffects(
@@ -627,6 +688,39 @@ export class CombatScene extends Phaser.Scene {
         plan.splitCount,
       );
     }
+    const missile = this.build.microMissile();
+    if (
+      permanent
+      && missile
+      && this.combatProcs?.recordMicroMissileHit(missile.hitsRequired)
+    ) {
+      this.launchMicroMissile(event.position, excludedEnemyId, excludedBossTargetId, missile);
+    }
+  }
+
+  private applyCutter(
+    axis: 'horizontal' | 'vertical',
+    coordinate: number,
+    excludedEnemyId: number,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
+    const { thickness, damage } = GAME_TUNING.build.cutter;
+    this.enemyManager?.applyLineDamage(axis, coordinate, thickness, damage, excludedEnemyId);
+    this.activeBoss?.applyLineDamage(
+      axis,
+      coordinate,
+      thickness,
+      damage,
+      excludedBossTargetId,
+    );
+    const feedback = GAME_TUNING.visual.triggerFeedback;
+    const line = this.add.graphics()
+      .lineStyle(thickness, feedback.laserColor, 0.75)
+      .setDepth(4)
+      .setName(`trigger-feedback-${axis}-cutter`);
+    if (axis === 'horizontal') line.lineBetween(0, coordinate, GAME_WIDTH, coordinate);
+    else line.lineBetween(coordinate, 0, coordinate, GAME_HEIGHT);
+    this.time.delayedCall(feedback.durationMs, () => line.destroy());
   }
 
   private applyAreaEffects(
@@ -658,8 +752,15 @@ export class CombatScene extends Phaser.Scene {
 
   private drainCorrosionFields(): void {
     for (const tick of this.corrosionFields.drainDue(this.gameplayElapsedMs)) {
+      const targets = this.enemyManager?.nearestSecondaryTargets(
+        tick.position,
+        -1,
+        tick.radius,
+        Number.MAX_SAFE_INTEGER,
+      ) ?? [];
       this.applyAreaEffects(tick.position, [tick]);
       this.drawCorrosionTick(tick.position, tick.radius);
+      for (const target of targets) this.drawCorrosionDamage(target.position, tick.damage);
     }
     this.syncCorrosionVisuals();
   }
@@ -699,18 +800,40 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
-  private drawConductionFeedback(position: Vector): void {
+  private drawConductionFeedback(position: Vector, targets: readonly Vector[]): void {
     const { conduction } = GAME_TUNING.orbCores;
     const pulse = this.add.graphics()
       .lineStyle(3, conduction.accent, 0.95)
-      .strokeCircle(position.x, position.y, conduction.radius * 0.35)
-      .lineStyle(2, conduction.fill, 0.8)
-      .strokeCircle(position.x, position.y, conduction.radius * 0.62)
+      .strokeCircle(position.x, position.y, 8)
       .setDepth(4)
       .setName('core-feedback-conduction');
+    for (const target of targets) {
+      const middle = {
+        x: (position.x + target.x) / 2 + (target.y - position.y) * 0.08,
+        y: (position.y + target.y) / 2 - (target.x - position.x) * 0.08,
+      };
+      pulse.beginPath()
+        .moveTo(position.x, position.y)
+        .lineTo(middle.x, middle.y)
+        .lineTo(target.x, target.y)
+        .strokePath();
+      pulse.strokeCircle(target.x, target.y, 5);
+    }
     this.time.delayedCall(
       GAME_TUNING.visual.coreFeedback.conductionDurationMs,
       () => pulse.destroy(),
+    );
+  }
+
+  private drawCorrosionDamage(position: Vector, damage: number): void {
+    const label = this.add.text(position.x, position.y - 14, `-${damage.toFixed(2)}`, {
+      color: '#7dff91',
+      fontSize: '12px',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(5).setName('core-feedback-corrosion-damage');
+    this.time.delayedCall(
+      GAME_TUNING.visual.coreFeedback.corrosionDamageNumberDurationMs,
+      () => label.destroy(),
     );
   }
 
@@ -723,6 +846,84 @@ export class CombatScene extends Phaser.Scene {
         count,
       );
     }
+    const shockwave = this.build?.recoveryShockwave();
+    if (
+      source === 'proximity'
+      && shockwave
+      && this.combatProcs?.recordProximityRecovery(shockwave.recoveriesRequired)
+      && this.player
+    ) {
+      const position = { x: this.player.x, y: this.player.y };
+      this.applyAreaEffects(position, [shockwave]);
+      this.drawEffectRing(
+        position,
+        shockwave.radius,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+        'trigger-feedback-recovery-shockwave',
+      );
+    }
+  }
+
+  private launchMicroMissile(
+    origin: Vector,
+    excludedEnemyId: number,
+    excludedBossTargetId: BossTargetId | undefined,
+    missile: NonNullable<ReturnType<BuildState['microMissile']>>,
+  ): void {
+    const enemy = this.enemyManager?.nearestSecondaryTargets(
+      origin,
+      excludedEnemyId,
+      Number.POSITIVE_INFINITY,
+      1,
+    )[0];
+    const bossTargets = Object.entries(this.activeBoss?.getSnapshot().parts ?? {})
+      .filter(([targetId, hp]) => hp > 0 && targetId !== excludedBossTargetId)
+      .map(([targetId]) => ({
+        targetId,
+        position: this.activeBoss?.getTargetPosition(targetId),
+      }))
+      .filter((target): target is { targetId: string; position: Vector } => Boolean(target.position));
+    const targets = [
+      ...(enemy ? [{ kind: 'enemy' as const, id: enemy.id, position: enemy.position }] : []),
+      ...bossTargets.map(({ targetId, position }) => ({
+        kind: 'boss' as const,
+        id: targetId,
+        position,
+      })),
+    ].sort((left, right) => (
+      Math.hypot(left.position.x - origin.x, left.position.y - origin.y)
+      - Math.hypot(right.position.x - origin.x, right.position.y - origin.y)
+    ));
+    const target = targets[0];
+    if (!target) return;
+    const trail = this.add.graphics()
+      .lineStyle(3, GAME_TUNING.visual.triggerFeedback.missileColor, 0.9)
+      .lineBetween(origin.x, origin.y, target.position.x, target.position.y)
+      .setDepth(4)
+      .setName('trigger-feedback-micro-missile');
+    this.time.delayedCall(missile.travelMs, () => {
+      trail.destroy();
+      if (target.kind === 'enemy') this.enemyManager?.applyDirectDamage(target.id, missile.damage);
+      else this.activeBoss?.applyDirectDamage(target.id, missile.damage);
+      this.drawEffectRing(
+        target.position,
+        12,
+        GAME_TUNING.visual.triggerFeedback.missileColor,
+        'trigger-feedback-micro-missile-impact',
+      );
+    });
+  }
+
+  private drawEffectRing(position: Vector, radius: number, color: number, name: string): void {
+    const ring = this.add.graphics()
+      .lineStyle(3, color, 0.9)
+      .strokeCircle(position.x, position.y, radius)
+      .setDepth(4)
+      .setName(name);
+    this.time.delayedCall(
+      GAME_TUNING.visual.triggerFeedback.durationMs,
+      () => ring.destroy(),
+    );
   }
 
   private drawExplosion(position: Vector, radius: number): void {

@@ -55,6 +55,7 @@ export interface DirectHitEvent {
   direction: Vector;
   coreType?: OrbCoreId;
   conductionTriggered?: boolean;
+  killed: boolean;
 }
 
 export interface EnemyKilledEvent {
@@ -332,7 +333,28 @@ export class EnemyManager {
     maximumTargets: number,
     damage: number,
   ): number[] {
-    const targets = [...this.enemies.values()]
+    const targetIds = new Set(
+      this.nearestSecondaryTargets(origin, excludedEnemyId, radius, maximumTargets)
+        .map(({ id }) => id),
+    );
+    const targets = [...this.enemies.values()].filter((enemy) => targetIds.has(enemy.enemyId));
+    const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
+    for (const enemy of targets) {
+      const event = this.createKillEvent(enemy);
+      enemy.hp -= damage;
+      if (enemy.hp <= 0) lethal.push({ enemy, event });
+    }
+    for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
+    return targets.map((enemy) => enemy.enemyId);
+  }
+
+  nearestSecondaryTargets(
+    origin: Vector,
+    excludedEnemyId: number,
+    radius: number,
+    maximumTargets: number,
+  ): EnemySnapshot[] {
+    return [...this.enemies.values()]
       .filter((enemy) => (
         enemy.active
         && enemy.enemyId !== excludedEnemyId
@@ -343,7 +365,29 @@ export class EnemyManager {
         - Math.hypot(right.x - origin.x, right.y - origin.y)
         || left.enemyId - right.enemyId
       ))
-      .slice(0, maximumTargets);
+      .slice(0, maximumTargets)
+      .map((enemy) => ({
+        id: enemy.enemyId,
+        kind: enemy.kind,
+        hp: enemy.hp,
+        position: { x: enemy.x, y: enemy.y },
+        warning: this.activeShooters.has(enemy.enemyId),
+        speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
+      }));
+  }
+
+  applyLineDamage(
+    axis: 'horizontal' | 'vertical',
+    coordinate: number,
+    thickness: number,
+    damage: number,
+    excludedEnemyId = -1,
+  ): number[] {
+    const targets = [...this.enemies.values()].filter((enemy) => (
+      enemy.active
+      && enemy.enemyId !== excludedEnemyId
+      && Math.abs((axis === 'horizontal' ? enemy.y : enemy.x) - coordinate) <= thickness / 2
+    ));
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
@@ -352,6 +396,15 @@ export class EnemyManager {
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
     return targets.map((enemy) => enemy.enemyId);
+  }
+
+  applyDirectDamage(enemyId: number, damage: number): boolean {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy?.active) return false;
+    const event = this.createKillEvent(enemy);
+    enemy.hp -= damage;
+    if (enemy.hp <= 0) this.killEnemy(enemy, event);
+    return true;
   }
 
   destroy(): void {
@@ -464,6 +517,7 @@ export class EnemyManager {
       position: { ...killEvent.position },
       charged: result.charged,
       direction,
+      killed: enemy.hp <= 0,
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,

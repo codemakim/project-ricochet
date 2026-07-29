@@ -1048,6 +1048,13 @@ test('@desktop stops XP and keeps level-up closed when all abilities reach their
     ] as const) {
       for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility(ability);
     }
+    for (const ability of [
+      'horizontal-cutter',
+      'vertical-cutter',
+      'destruction-reaction',
+      'micro-missile',
+    ] as const) scene.debugUpgradeAbility(ability);
+    for (let rank = 0; rank < 2; rank += 1) scene.debugUpgradeAbility('recovery-shockwave');
     scene.debugGrantXp(100);
   });
 
@@ -1061,6 +1068,11 @@ test('@desktop stops XP and keeps level-up closed when all abilities reach their
     'precision-hit': 3,
     'kinetic-conversion': 3,
     'wall-acceleration': 3,
+    'horizontal-cutter': 1,
+    'vertical-cutter': 1,
+    'destruction-reaction': 1,
+    'micro-missile': 1,
+    'recovery-shockwave': 2,
   });
   expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
   expect(completed.levelUpVisible).toBe(false);

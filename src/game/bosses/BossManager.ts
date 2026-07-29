@@ -285,6 +285,30 @@ export class BossManager implements BossEncounter {
     return true;
   }
 
+  applyLineDamage(
+    axis: 'horizontal' | 'vertical',
+    coordinate: number,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: string,
+  ): BossPartId[] {
+    const targets = exposedBossParts(this.state).filter((partId) => (
+      partId !== excludedTargetId
+      && Math.abs(
+        (axis === 'horizontal' ? this.partSprites[partId].y : this.partSprites[partId].x)
+        - coordinate,
+      ) <= thickness / 2
+    ));
+    for (const partId of targets) this.damagePart(partId, damage);
+    return targets;
+  }
+
+  getTargetPosition(targetId: string): Vector | null {
+    const partId = exposedBossParts(this.state).find((candidate) => candidate === targetId);
+    const sprite = partId && this.partSprites[partId];
+    return sprite ? { x: sprite.x, y: sprite.y } : null;
+  }
+
   clearHostileActions(): void {
     if (this.destroyed) return;
     this.clearGroup(this.aimedBulletGroup);
@@ -487,6 +511,7 @@ export class BossManager implements BossEncounter {
   private applyPendingHit(pending: PendingHit): void {
     if (!exposedBossParts(this.state).includes(pending.partId)) return;
     const part = this.partSprites[pending.partId];
+    const previousHp = this.partHp(pending.partId);
     const defeated = this.damagePart(pending.partId, pending.result.damage, false);
     const core = pending.source === 'permanent'
       ? pending.result as PermanentHitResult
@@ -499,6 +524,7 @@ export class BossManager implements BossEncounter {
       position: { x: part.x, y: part.y },
       charged: pending.result.charged,
       direction: pending.direction,
+      killed: previousHp > 0 && this.partHp(pending.partId) === 0,
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,

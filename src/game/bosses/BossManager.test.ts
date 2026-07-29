@@ -463,6 +463,20 @@ describe('BossManager', () => {
     expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 12, rightWeakpoint: 14 });
   });
 
+  it('damages exposed sentinel parts inside a laser strip', () => {
+    const { manager } = createBoundary();
+
+    expect(manager.applyLineDamage('horizontal', 120, 12, 1)).toEqual([
+      'leftWeakpoint',
+      'rightWeakpoint',
+    ]);
+    expect(manager.getSnapshot().parts).toMatchObject({
+      leftWeakpoint: 13,
+      rightWeakpoint: 13,
+    });
+    expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: 137, y: 120 });
+  });
+
   it('maps only vertically overlapping enemies to exact padded forbidden intervals', () => {
     const boundary = createBoundary();
     boundary.enemies.push(
