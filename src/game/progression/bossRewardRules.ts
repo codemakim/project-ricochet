@@ -107,8 +107,12 @@ export function selectBossRewardOptions(
   const abilityRanks: BossRewardChoice[] = ABILITY_IDS
     .filter((id) => context.ranks[id] > 0 && context.ranks[id] < ABILITY_MAX_RANKS[id])
     .map((id) => ({ kind: 'ability-rank', id }));
+  const newAbilities: BossRewardChoice[] = ABILITY_IDS
+    .filter((id) => context.ranks[id] === 0)
+    .map((id) => ({ kind: 'ability-rank', id }));
   const choices = seededShuffle(relics, seed)
     .concat(seededShuffle(abilityRanks, seed ^ 0x9e3779b9))
+    .concat(seededShuffle(newAbilities, seed ^ 0x85ebca6b))
     .slice(0, 3);
   if (choices.length !== 3) {
     throw new RangeError(

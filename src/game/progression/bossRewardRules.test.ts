@@ -88,8 +88,10 @@ describe('bossRewardRules', () => {
     ]));
   });
 
-  it('throws when fewer than three total choices exist', () => {
-    expect(() => selectBossRewardOptions(context({ firepower: 1 }, []), 1))
-      .toThrow('boss reward selection requires exactly 3 distinct choices; received 1');
+  it('still presents three level-up cards for an early low-build boss kill', () => {
+    const choices = selectBossRewardOptions(context({ firepower: 1 }, []), 1);
+    expect(choices).toHaveLength(3);
+    expect(choices[0]).toEqual({ kind: 'ability-rank', id: 'firepower' });
+    expect(new Set(choices.map(({ id }) => id)).size).toBe(3);
   });
 });
