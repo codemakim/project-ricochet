@@ -106,6 +106,22 @@ export interface GameTuning {
       playerSpeedBonusPerRank: number;
       healthPerRank: number;
     };
+    directHitFlight: {
+      reloadDamageBonusPerRank: number;
+      consecutiveDamageBonus: number;
+      killOverclockDurationMs: number;
+      killOverclockBonusPerRank: number;
+      collisionAccelerationDurationMs: number;
+      collisionAccelerationSpeedPerRank: number;
+      trackingDurationMs: number;
+      trackingRadiusPerRank: number;
+      highSpeedImpact: {
+        speedRatio: number;
+        hitsRequired: number;
+        radius: number;
+        damage: number;
+      };
+    };
     explosion: {
       chance: number;
       cooldownMs: number;
@@ -283,6 +299,22 @@ export const GAME_TUNING = {
       recoveryRadiusPerRank: 8,
       playerSpeedBonusPerRank: 0.08,
       healthPerRank: 1,
+    },
+    directHitFlight: {
+      reloadDamageBonusPerRank: 0.2,
+      consecutiveDamageBonus: 0.1,
+      killOverclockDurationMs: 2_000,
+      killOverclockBonusPerRank: 0.08,
+      collisionAccelerationDurationMs: 800,
+      collisionAccelerationSpeedPerRank: 0.08,
+      trackingDurationMs: 1_200,
+      trackingRadiusPerRank: 16,
+      highSpeedImpact: {
+        speedRatio: 1.3,
+        hitsRequired: 5,
+        radius: 44,
+        damage: 0.65,
+      },
     },
     explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },

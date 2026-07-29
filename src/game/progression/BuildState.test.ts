@@ -108,4 +108,33 @@ describe('BuildState', () => {
     expect(build.playerSpeed()).toBeCloseTo(420 * 1.16);
     expect(build.maximumHealth()).toBe(13);
   });
+
+  it('derives direct-hit flight bonuses without affecting inactive states', () => {
+    const build = new BuildState({
+      'reload-overcharge': 2,
+      'consecutive-impact': 3,
+      'kill-overclock': 2,
+      'collision-acceleration': 2,
+      'tracking-magnet': 2,
+      'high-speed-impact': 1,
+    });
+
+    expect(build.conditionalDirectDamageBonus({
+      distanceFromPlayer: 999,
+      wallHits: 1,
+      speed: 400,
+      firstHitAfterProximity: true,
+      consecutiveHits: 3,
+      killOverclockActive: true,
+    })).toBeCloseTo(0.86);
+    expect(build.flightSpeedMultiplier(true, true)).toBeCloseTo(1.32);
+    expect(build.trackingRadiusBonus(true)).toBe(32);
+    expect(build.trackingRadiusBonus(false)).toBe(0);
+    expect(build.highSpeedImpact()).toEqual({
+      speedRatio: 1.3,
+      hitsRequired: 5,
+      radius: 44,
+      damage: 0.65,
+    });
+  });
 });

@@ -528,6 +528,7 @@ export class BossManager implements BossEncounter {
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,
+        speedRatio: core.speedRatio,
       } : {}),
     });
     if (defeated) this.reportDefeat();

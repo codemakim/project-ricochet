@@ -127,6 +127,7 @@ function hitResult(damage = 3, charged = true): PermanentHitResult {
     preserveChargedKinetics: false,
     coreType: 'conduction',
     conductionTriggered: true,
+    speedRatio: 1.35,
   };
 }
 

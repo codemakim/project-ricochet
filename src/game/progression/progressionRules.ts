@@ -20,6 +20,12 @@ export const ABILITY_DEFINITIONS = {
   'recovery-field': { label: '흡수장 확장', summary: '근접 회수 반경 증가', maxRank: 3, requires: [] },
   'mobility-motor': { label: '기동 모터', summary: '플레이어 이동 속도 증가', maxRank: 2, requires: [] },
   'armor-reinforcement': { label: '장갑 보강', summary: '최대 체력과 현재 체력 증가', maxRank: 3, requires: [] },
+  'reload-overcharge': { label: '재장전 과충전', summary: '근접 회수 뒤 첫 직접 피해 증가', maxRank: 3, requires: [] },
+  'consecutive-impact': { label: '연속 충돌', summary: '벽 없이 이어진 직접 타격 강화', maxRank: 3, requires: [] },
+  'kill-overclock': { label: '처치 오버클럭', summary: '직접 처치 뒤 잠시 피해와 속도 증가', maxRank: 3, requires: [] },
+  'collision-acceleration': { label: '충돌 가속', summary: '직접 타격 뒤 잠시 속도 증가', maxRank: 2, requires: [] },
+  'tracking-magnet': { label: '추적 자석', summary: '첫 직접 타격 뒤 흡수 반경 증가', maxRank: 2, requires: [] },
+  'high-speed-impact': { label: '고속 충격', summary: '고속 직접 타격 누적으로 충격파', maxRank: 1, requires: [] },
 } as const;
 
 export type AbilityId = keyof typeof ABILITY_DEFINITIONS;

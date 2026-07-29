@@ -511,6 +511,7 @@ export class HiveBossManager implements BossEncounter {
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,
+        speedRatio: core.speedRatio,
       } : {}),
     });
   }

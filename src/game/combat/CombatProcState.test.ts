@@ -96,4 +96,10 @@ describe('CombatProcState', () => {
     expect(Array.from({ length: 4 }, () => state.recordProximityRecovery(4)))
       .toEqual([false, false, false, true]);
   });
+
+  it('triggers one high-speed impact every five eligible hits', () => {
+    const state = new CombatProcState(0);
+    expect(Array.from({ length: 6 }, () => state.recordHighSpeedHit(5)))
+      .toEqual([false, false, false, false, true, false]);
+  });
 });

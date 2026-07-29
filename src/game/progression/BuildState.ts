@@ -30,6 +30,9 @@ export interface PermanentDirectHitContext {
   distanceFromPlayer: number;
   wallHits: number;
   speed: number;
+  firstHitAfterProximity?: boolean;
+  consecutiveHits?: number;
+  killOverclockActive?: boolean;
 }
 
 export class BuildState {
@@ -99,6 +102,18 @@ export class BuildState {
         * this.ranks['kinetic-conversion']
         * GAME_TUNING.build.kineticConversion.damageBonusPerStepPerRank,
     );
+    if (context.firstHitAfterProximity) {
+      bonus += this.ranks['reload-overcharge']
+        * GAME_TUNING.build.directHitFlight.reloadDamageBonusPerRank;
+    }
+    bonus += Math.min(
+      this.ranks['consecutive-impact'],
+      Math.max(0, Math.trunc(context.consecutiveHits ?? 0)),
+    ) * GAME_TUNING.build.directHitFlight.consecutiveDamageBonus;
+    if (context.killOverclockActive) {
+      bonus += this.ranks['kill-overclock']
+        * GAME_TUNING.build.directHitFlight.killOverclockBonusPerRank;
+    }
     return Math.min(GAME_TUNING.build.conditionalDamageCap, bonus);
   }
 
@@ -141,6 +156,31 @@ export class BuildState {
   maximumHealth(): number {
     return 10 + this.ranks['armor-reinforcement']
       * GAME_TUNING.build.basicGrowth.healthPerRank;
+  }
+
+  flightSpeedMultiplier(killOverclockActive: boolean, collisionAccelerationActive: boolean): number {
+    return 1
+      + (killOverclockActive
+        ? this.ranks['kill-overclock']
+          * GAME_TUNING.build.directHitFlight.killOverclockBonusPerRank
+        : 0)
+      + (collisionAccelerationActive
+        ? this.ranks['collision-acceleration']
+          * GAME_TUNING.build.directHitFlight.collisionAccelerationSpeedPerRank
+        : 0);
+  }
+
+  trackingRadiusBonus(active: boolean): number {
+    return active
+      ? this.ranks['tracking-magnet']
+        * GAME_TUNING.build.directHitFlight.trackingRadiusPerRank
+      : 0;
+  }
+
+  highSpeedImpact() {
+    return this.ranks['high-speed-impact'] > 0
+      ? { ...GAME_TUNING.build.directHitFlight.highSpeedImpact }
+      : null;
   }
 
   horizontalCutter() {

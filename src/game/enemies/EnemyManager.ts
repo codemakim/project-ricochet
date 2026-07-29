@@ -55,6 +55,7 @@ export interface DirectHitEvent {
   direction: Vector;
   coreType?: OrbCoreId;
   conductionTriggered?: boolean;
+  speedRatio?: number;
   killed: boolean;
 }
 
@@ -521,6 +522,7 @@ export class EnemyManager {
       ...(core ? {
         coreType: core.coreType,
         conductionTriggered: core.conductionTriggered,
+        speedRatio: core.speedRatio,
       } : {}),
     });
     if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);

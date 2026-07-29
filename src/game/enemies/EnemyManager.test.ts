@@ -674,6 +674,7 @@ describe('EnemyManager', () => {
       reflect: false,
       coreType: 'conduction',
       conductionTriggered: true,
+      speedRatio: 1.35,
     });
 
     colliders[0]!.trigger(orb, enemy);
@@ -686,6 +687,7 @@ describe('EnemyManager', () => {
       charged: true,
       coreType: 'conduction',
       conductionTriggered: true,
+      speedRatio: 1.35,
       position: target.position,
       direction: { x: 0, y: -1 },
     }));

@@ -215,6 +215,9 @@ describe('OrbStore', () => {
       distanceFromPlayer: 140,
       wallHits: 1,
       speed: 480,
+      firstHitAfterProximity: false,
+      consecutiveHits: 0,
+      killOverclockActive: false,
     });
   });
 
@@ -609,6 +612,52 @@ describe('OrbStore', () => {
       damage: 1.25,
       charges: 0,
     });
+  });
+
+  it('tracks direct-hit streak, timed speed, and first-hit recovery radius per orb', () => {
+    const contexts: Array<{
+      consecutiveHits?: number;
+      killOverclockActive?: boolean;
+    }> = [];
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => true,
+      () => 0,
+      () => ORB_SPEED,
+      () => 3,
+      () => 0,
+      () => 0,
+      () => false,
+      () => 6,
+      (context) => {
+        contexts.push(context);
+        return (context.consecutiveHits ?? 0) * 0.1
+          + (context.killOverclockActive ? 0.2 : 0);
+      },
+      () => 1,
+      () => 8,
+      () => 50,
+      (killActive, collisionActive) => 1 + Number(killActive) * 0.1
+        + Number(collisionActive) * 0.1,
+      (active) => Number(active) * 20,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+
+    expect(store.handleEnemyHit(0, 1, 1, 100, false)?.speedRatio).toBe(1);
+    expect(Math.hypot(...Object.values(store.getSnapshot()[0]!.velocity) as [number, number]))
+      .toBeCloseTo(480);
+    expect(store.handleEnemyHit(0, 2, 99, 200, false)?.damage).toBeCloseTo(1.95);
+    expect(contexts.at(-1)).toMatchObject({ consecutiveHits: 1, killOverclockActive: true });
+
+    store.handleWallBounce(0);
+    store.handleEnemyHit(0, 3, 99, 300, false);
+    expect(contexts.at(-1)).toMatchObject({ consecutiveHits: 0 });
+
+    store.synchronizeActive(0, { x: player.x + 65, y: player.y }, { x: 0, y: -400 });
+    store.update(301, 1, player, up);
+    expect(store.getSnapshot()[0]?.state).toBe('attracting');
   });
 
   it.each([440, 480, 520])(

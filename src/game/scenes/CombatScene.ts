@@ -234,6 +234,10 @@ export class CombatScene extends Phaser.Scene {
       getWallSpeedMultiplier: (wallHits) => build.wallSpeedMultiplier(wallHits),
       getOrbRadius: () => build.orbRadius(),
       getRecoveryRadius: () => build.recoveryRadius(),
+      getFlightSpeedMultiplier: (killActive, collisionActive) => (
+        build.flightSpeedMultiplier(killActive, collisionActive)
+      ),
+      getTrackingRadiusBonus: (active) => build.trackingRadiusBonus(active),
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
@@ -534,6 +538,7 @@ export class CombatScene extends Phaser.Scene {
       | 'coreType'
       | 'conductionTriggered'
       | 'killed'
+      | 'speedRatio'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -703,6 +708,26 @@ export class CombatScene extends Phaser.Scene {
       && this.combatProcs?.recordMicroMissileHit(missile.hitsRequired)
     ) {
       this.launchMicroMissile(event.position, excludedEnemyId, excludedBossTargetId, missile);
+    }
+    const highSpeedImpact = this.build.highSpeedImpact();
+    if (
+      permanent
+      && highSpeedImpact
+      && (event.speedRatio ?? 0) >= highSpeedImpact.speedRatio
+      && this.combatProcs?.recordHighSpeedHit(highSpeedImpact.hitsRequired)
+    ) {
+      this.applyAreaEffects(
+        event.position,
+        [{ radius: highSpeedImpact.radius, damage: highSpeedImpact.damage }],
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
+      this.drawEffectRing(
+        event.position,
+        highSpeedImpact.radius,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+        'trigger-feedback-high-speed-impact',
+      );
     }
   }
 

@@ -52,6 +52,7 @@ export interface OrbSnapshot {
 export interface PermanentHitResult extends HitResult {
   coreType: OrbCoreId;
   conductionTriggered: boolean;
+  speedRatio: number;
 }
 
 export interface OrbCallbacks {
@@ -67,6 +68,13 @@ interface OrbRecord extends OrbSnapshot {
   attractionStart: Vector;
   enemyHits: Map<number, number>;
   firstHitPending: boolean;
+  directHitsSinceWall: number;
+  hasDirectHit: boolean;
+  killOverclockUntilMs: number;
+  collisionAccelerationUntilMs: number;
+  trackingUntilMs: number;
+  lastNowMs: number;
+  appliedFlightSpeedMultiplier: number;
 }
 
 export class OrbStore {
@@ -94,6 +102,11 @@ export class OrbStore {
     private readonly getWallSpeedMultiplier: (wallHits: number) => number = () => 1,
     private readonly getOrbRadius: () => number = () => ORB_RADIUS,
     private readonly getRecoveryRadius: () => number = () => ORB_PICKUP_RADIUS,
+    private readonly getFlightSpeedMultiplier: (
+      killOverclockActive: boolean,
+      collisionAccelerationActive: boolean,
+    ) => number = () => 1,
+    private readonly getTrackingRadiusBonus: (active: boolean) => number = () => 0,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -140,6 +153,13 @@ export class OrbStore {
       attractionStart: { x: 0, y: 0 },
       enemyHits: new Map(),
       firstHitPending: false,
+      directHitsSinceWall: 0,
+      hasDirectHit: false,
+      killOverclockUntilMs: 0,
+      collisionAccelerationUntilMs: 0,
+      trackingUntilMs: 0,
+      lastNowMs: 0,
+      appliedFlightSpeedMultiplier: 1,
     };
   }
 
@@ -151,6 +171,7 @@ export class OrbStore {
 
   update(nowMs: number, deltaMs: number, playerPosition: Vector, aim: Vector): void {
     for (const record of this.records) {
+      record.lastNowMs = nowMs;
       if (record.state === 'active') this.updateActive(record, nowMs, playerPosition);
       else if (record.state === 'attracting') this.updateAttraction(record, deltaMs, playerPosition);
       else if (record.state === 'floor-returning' || record.state === 'timeout-returning') {
@@ -178,6 +199,7 @@ export class OrbStore {
       GAME_TUNING.build.wallAcceleration.maxStacks,
       record.wallHits + 1,
     );
+    record.directHitsSinceWall = 0;
     record.coreState = applyCoreWallBounce(record.coreType, record.coreState);
     this.normalizeActiveSpeed(record);
     return true;
@@ -208,6 +230,7 @@ export class OrbStore {
   ): PermanentHitResult | null {
     const record = this.requireRecord(id);
     if (record.state !== 'active' || !record.damageEnabled) return null;
+    record.lastNowMs = nowMs;
     const lastHitMs = record.enemyHits.get(enemyId);
     if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
 
@@ -220,12 +243,16 @@ export class OrbStore {
       }
     }
     const core = resolveCoreDirectHit(record.coreType, record.coreState);
+    const speed = Math.hypot(record.velocity.x, record.velocity.y);
     const conditionalBonus = Math.min(
       GAME_TUNING.build.conditionalDamageCap,
       core.directDamageBonus + this.getConditionalDirectDamageBonus({
         distanceFromPlayer,
         wallHits: record.wallHits,
-        speed: Math.hypot(record.velocity.x, record.velocity.y),
+        speed,
+        firstHitAfterProximity: source === 'proximity' && record.firstHitPending,
+        consecutiveHits: record.directHitsSinceWall,
+        killOverclockActive: nowMs < record.killOverclockUntilMs,
       }),
     );
     const result = directHit(
@@ -241,6 +268,18 @@ export class OrbStore {
     );
     record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
+    const firstDirectHit = !record.hasDirectHit;
+    record.hasDirectHit = true;
+    record.directHitsSinceWall += 1;
+    record.collisionAccelerationUntilMs = nowMs
+      + GAME_TUNING.build.directHitFlight.collisionAccelerationDurationMs;
+    if (firstDirectHit) {
+      record.trackingUntilMs = nowMs + GAME_TUNING.build.directHitFlight.trackingDurationMs;
+    }
+    if (result.killed) {
+      record.killOverclockUntilMs = nowMs
+        + GAME_TUNING.build.directHitFlight.killOverclockDurationMs;
+    }
     record.charges = result.charges;
     record.coreState = core.next;
     if (!result.preserveChargedKinetics) this.normalizeActiveSpeed(record);
@@ -249,6 +288,7 @@ export class OrbStore {
       ...result,
       coreType: record.coreType,
       conductionTriggered: core.conductionTriggered,
+      speedRatio: speed / ORB_SPEED,
     };
   }
 
@@ -288,6 +328,9 @@ export class OrbStore {
   }
 
   private updateActive(record: OrbRecord, nowMs: number, playerPosition: Vector): void {
+    if (this.flightSpeedMultiplier(record) !== record.appliedFlightSpeedMultiplier) {
+      this.normalizeActiveSpeed(record);
+    }
     if (
       this.settings.autoReturnAfterMs !== null
       && record.activeSinceMs !== null
@@ -298,8 +341,10 @@ export class OrbStore {
     }
 
     const distance = Math.hypot(record.position.x - playerPosition.x, record.position.y - playerPosition.y);
+    const recoveryRadius = this.getRecoveryRadius()
+      + this.getTrackingRadiusBonus(nowMs < record.trackingUntilMs);
     if (
-      distance <= this.getRecoveryRadius()
+      distance <= recoveryRadius
       && this.hasFixedTerrainLineOfSight(record.position, playerPosition)
     ) {
       this.beginProximityRecovery(record.id);
@@ -378,6 +423,8 @@ export class OrbStore {
     const direction = normalize(aim);
     record.state = transitionOrb(record.state, 'active');
     record.wallHits = 0;
+    record.directHitsSinceWall = 0;
+    record.hasDirectHit = false;
     const clearance = Math.max(
       PLAYER_RADIUS + this.getOrbRadius() + 4,
       this.getRecoveryRadius() + 1,
@@ -387,6 +434,7 @@ export class OrbStore {
       y: playerPosition.y + direction.y * clearance,
     };
     const speed = this.speedTarget(record);
+    record.appliedFlightSpeedMultiplier = this.flightSpeedMultiplier(record);
     record.velocity = { x: direction.x * speed, y: direction.y * speed };
     record.collisionEnabled = true;
     record.damageEnabled = true;
@@ -404,12 +452,21 @@ export class OrbStore {
     const direction = normalize(record.velocity);
     const speed = this.speedTarget(record);
     record.velocity = { x: direction.x * speed, y: direction.y * speed };
+    record.appliedFlightSpeedMultiplier = this.flightSpeedMultiplier(record);
   }
 
   private speedTarget(record: OrbRecord): number {
     return this.getChargedSpeed()
       * coreLaunchSpeedMultiplier(record.coreType, record.coreState)
-      * this.getWallSpeedMultiplier(record.wallHits);
+      * this.getWallSpeedMultiplier(record.wallHits)
+      * this.flightSpeedMultiplier(record);
+  }
+
+  private flightSpeedMultiplier(record: OrbRecord): number {
+    return this.getFlightSpeedMultiplier(
+        record.lastNowMs < record.killOverclockUntilMs,
+        record.lastNowMs < record.collisionAccelerationUntilMs,
+      );
   }
 
   private runtimeOrbLimit(): number {
@@ -442,6 +499,11 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getWallSpeedMultiplier?(wallHits: number): number;
   getOrbRadius?(): number;
   getRecoveryRadius?(): number;
+  getFlightSpeedMultiplier?(
+    killOverclockActive: boolean,
+    collisionAccelerationActive: boolean,
+  ): number;
+  getTrackingRadiusBonus?(active: boolean): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -495,6 +557,8 @@ export class OrbManager {
       options.getWallSpeedMultiplier,
       options.getOrbRadius,
       options.getRecoveryRadius,
+      options.getFlightSpeedMultiplier,
+      options.getTrackingRadiusBonus,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);

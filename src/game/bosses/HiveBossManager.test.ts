@@ -124,6 +124,7 @@ function result(damage = 3, reflect = true): PermanentHitResult {
     preserveChargedKinetics: false,
     coreType: 'conduction',
     conductionTriggered: true,
+    speedRatio: 1.35,
   };
 }
 

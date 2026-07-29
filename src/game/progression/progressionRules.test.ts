@@ -35,8 +35,14 @@ describe('progression rules', () => {
       'recovery-field': 3,
       'mobility-motor': 2,
       'armor-reinforcement': 3,
+      'reload-overcharge': 3,
+      'consecutive-impact': 3,
+      'kill-overclock': 3,
+      'collision-acceleration': 2,
+      'tracking-magnet': 2,
+      'high-speed-impact': 1,
     });
-    expect(MAX_BUILD_LEVEL).toBe(41);
+    expect(MAX_BUILD_LEVEL).toBe(55);
   });
 
   it('maps enemy kinds to XP and levels to exact costs', () => {

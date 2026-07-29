@@ -14,6 +14,7 @@ export interface BossDirectHitEvent {
   direction: Vector;
   coreType?: OrbCoreId;
   conductionTriggered?: boolean;
+  speedRatio?: number;
   killed: boolean;
 }
 

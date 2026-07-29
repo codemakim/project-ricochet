@@ -62,6 +62,7 @@ export class CombatProcState {
   private readonly splitConsumed = new Set<number>();
   private microMissileHits = 0;
   private proximityRecoveries = 0;
+  private highSpeedHits = 0;
 
   constructor(seed: number) {
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
@@ -168,6 +169,13 @@ export class CombatProcState {
     this.proximityRecoveries += 1;
     if (this.proximityRecoveries < this.requirePositiveInteger(recoveriesRequired)) return false;
     this.proximityRecoveries = 0;
+    return true;
+  }
+
+  recordHighSpeedHit(hitsRequired: number): boolean {
+    this.highSpeedHits += 1;
+    if (this.highSpeedHits < this.requirePositiveInteger(hitsRequired)) return false;
+    this.highSpeedHits = 0;
     return true;
   }
 
