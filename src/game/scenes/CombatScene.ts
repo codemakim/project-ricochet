@@ -146,7 +146,10 @@ export class CombatScene extends Phaser.Scene {
   declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
   declare debugAdvanceEncounter?: (deltaMs: number) => void;
   declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
-  declare debugDamageBossPart?: (partId: BossPartId | HivePartId, damage: number) => void;
+  declare debugDamageBossPart?: (
+    partId: BossPartId | HivePartId | 'defenseModule',
+    damage: number,
+  ) => void;
   declare debugSetBossPosition?: (x: number) => void;
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
   declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;

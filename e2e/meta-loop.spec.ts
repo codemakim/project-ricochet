@@ -66,7 +66,7 @@ test('@desktop completes all three bosses without a final combat reward', async 
   await expect.poll(async () => (await combatSnapshot(page)).encounter.stageId).toBe('default-3');
 
   await enterBoss(page, 210_000, 'siege');
-  await defeatParts(page, ['leftWeakpoint', 'rightWeakpoint', 'core']);
+  await defeatParts(page, ['leftWeakpoint', 'rightWeakpoint', 'defenseModule', 'core']);
   await expect.poll(async () => (await combatSnapshot(page)).runCompleteVisible).toBe(true);
   const complete = await combatSnapshot(page);
   expect(complete.encounter.state).toBe('runComplete');

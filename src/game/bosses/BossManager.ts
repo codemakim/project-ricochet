@@ -31,6 +31,7 @@ import {
   damageBossPart,
   exposedBossParts,
   nextBossAttack,
+  type BossPattern,
   type BossPartId,
   type BossPhase,
   type BossState,
@@ -40,10 +41,13 @@ const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
 const BOSS_ACTION_DEPTH = 1;
 
-const PART_HIT_IDS: Record<BossPartId, number> = {
+type ManagedPartId = BossPartId | 'defenseModule';
+
+const PART_HIT_IDS: Record<ManagedPartId, number> = {
   leftWeakpoint: -1,
   rightWeakpoint: -2,
   core: -3,
+  defenseModule: -4,
 };
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
@@ -57,7 +61,7 @@ type Warning =
 
 interface PendingHit {
   result: HitResult | PermanentHitResult;
-  partId: BossPartId;
+  partId: ManagedPartId;
   source: BossDirectHitEvent['source'];
   sourceOrbId: number;
   direction: Vector;
@@ -83,7 +87,7 @@ export interface BossManagerSnapshot extends BossEncounterSnapshot {
   active: boolean;
   phase: BossPhase | null;
   position: Vector | null;
-  parts: Record<BossPartId, number> | null;
+  parts: (Record<BossPartId, number> & { defenseModule?: number }) | null;
   bullets: number;
   basicBullets: number;
   aimedBullets: number;
@@ -110,6 +114,7 @@ export class BossManager implements BossEncounter {
   private readonly acceptedAt = new Map<string, number>();
   private warnings: Warning[] = [];
   private state: BossState = createBossState();
+  private defenseHp: number;
   private motion: BossMotion = { x: GAME_WIDTH / 2, direction: 1 };
   private lastGameplayElapsedMs: number;
   private nextAttackAt: number;
@@ -126,6 +131,7 @@ export class BossManager implements BossEncounter {
     private readonly options: BossManagerOptions,
   ) {
     const now = options.getGameplayElapsedMs();
+    this.defenseHp = options.kind === 'siege' ? GAME_TUNING.siegeBoss.defenseHp : 0;
     this.lastGameplayElapsedMs = now;
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
     this.nextBasicShotAt = now + GAME_TUNING.projectiles.bossBasic.intervalMs;
@@ -186,7 +192,11 @@ export class BossManager implements BossEncounter {
       this.addPermanentOrbColliders(orb);
     }
     this.unsubscribeOrbAdded = options.orbManager.onOrbAdded((orb) => this.addPermanentOrbColliders(orb));
-    this.addTemporaryCollider(options.temporaryOrbManager.getGroup(), this.body, null);
+    this.addTemporaryCollider(
+      options.temporaryOrbManager.getGroup(),
+      this.body,
+      this.bodyPartId(),
+    );
     for (const partId of this.partIds()) {
       this.addTemporaryCollider(options.temporaryOrbManager.getGroup(), this.partSprites[partId], partId);
     }
@@ -271,6 +281,7 @@ export class BossManager implements BossEncounter {
         leftWeakpoint: this.state.leftWeakpointHp,
         rightWeakpoint: this.state.rightWeakpointHp,
         core: this.state.coreHp,
+        ...(this.options.kind === 'siege' ? { defenseModule: this.defenseHp } : {}),
       },
       bullets: this.getBulletCount(),
       basicBullets: projectiles.filter(({ kind }) => kind === 'basic').length,
@@ -291,15 +302,15 @@ export class BossManager implements BossEncounter {
     radius: number,
     damage: number,
     excludedTargetId?: string,
-  ): BossPartId[] {
+  ): ManagedPartId[] {
     if (this.destroyed || bossPhase(this.state) === 'defeated') return [];
-    const targets = exposedBossParts(this.state)
+    const targets = this.exposedParts()
       .filter((partId) => partId !== excludedTargetId)
       .map((partId) => ({
         partId,
         distance: Math.hypot(
-          this.partSprites[partId].x - center.x,
-          this.partSprites[partId].y - center.y,
+          this.spriteFor(partId).x - center.x,
+          this.spriteFor(partId).y - center.y,
         ),
       }))
       .filter(({ distance }) => distance <= radius)
@@ -313,7 +324,7 @@ export class BossManager implements BossEncounter {
 
   applyDirectDamage(targetId: string, damage: number): boolean {
     if (this.destroyed || bossPhase(this.state) === 'defeated') return false;
-    const partId = exposedBossParts(this.state).find((candidate) => candidate === targetId);
+    const partId = this.exposedParts().find((candidate) => candidate === targetId);
     if (!partId) return false;
     this.damagePart(partId, damage);
     return true;
@@ -325,11 +336,11 @@ export class BossManager implements BossEncounter {
     thickness: number,
     damage: number,
     excludedTargetId?: string,
-  ): BossPartId[] {
-    const targets = exposedBossParts(this.state).filter((partId) => (
+  ): ManagedPartId[] {
+    const targets = this.exposedParts().filter((partId) => (
       partId !== excludedTargetId
       && Math.abs(
-        (axis === 'horizontal' ? this.partSprites[partId].y : this.partSprites[partId].x)
+        (axis === 'horizontal' ? this.spriteFor(partId).y : this.spriteFor(partId).x)
         - coordinate,
       ) <= thickness / 2
     ));
@@ -338,8 +349,8 @@ export class BossManager implements BossEncounter {
   }
 
   getTargetPosition(targetId: string): Vector | null {
-    const partId = exposedBossParts(this.state).find((candidate) => candidate === targetId);
-    const sprite = partId && this.partSprites[partId];
+    const partId = this.exposedParts().find((candidate) => candidate === targetId);
+    const sprite = partId && this.spriteFor(partId);
     return sprite ? { x: sprite.x, y: sprite.y } : null;
   }
 
@@ -370,7 +381,7 @@ export class BossManager implements BossEncounter {
     this.debugSetPosition = undefined;
   }
 
-  private addPermanentCollider(orb: OrbSprite, target: BossSprite, partId: BossPartId | null): void {
+  private addPermanentCollider(orb: OrbSprite, target: BossSprite, partId: ManagedPartId | null): void {
     this.colliders.push(this.scene.physics.add.collider(
       orb,
       target,
@@ -385,7 +396,7 @@ export class BossManager implements BossEncounter {
 
   private addPermanentOrbColliders(orb: OrbSprite): void {
     if (this.destroyed) return;
-    this.addPermanentCollider(orb, this.body, null);
+    this.addPermanentCollider(orb, this.body, this.bodyPartId());
     for (const partId of this.partIds()) {
       this.addPermanentCollider(orb, this.partSprites[partId], partId);
     }
@@ -394,7 +405,7 @@ export class BossManager implements BossEncounter {
   private addTemporaryCollider(
     group: Phaser.Physics.Arcade.Group,
     target: BossSprite,
-    partId: BossPartId | null,
+    partId: ManagedPartId | null,
   ): void {
     this.colliders.push(this.scene.physics.add.collider(
       group,
@@ -408,7 +419,7 @@ export class BossManager implements BossEncounter {
     ));
   }
 
-  private processPermanentHit(orb: OrbSprite, partId: BossPartId | null): boolean {
+  private processPermanentHit(orb: OrbSprite, partId: ManagedPartId | null): boolean {
     if (!orb.active) return false;
     if (partId === null) return this.processBodyReflection(orb);
     if (!this.canHitPart(orb, `permanent:${orb.orbId}`, partId)) return false;
@@ -419,8 +430,8 @@ export class BossManager implements BossEncounter {
       this.options.getGameplayElapsedMs(),
       false,
       Math.hypot(
-        this.partSprites[partId].x - this.options.player.x,
-        this.partSprites[partId].y - this.options.player.y,
+        this.spriteFor(partId).x - this.options.player.x,
+        this.spriteFor(partId).y - this.options.player.y,
       ),
     );
     if (!result) return false;
@@ -433,7 +444,7 @@ export class BossManager implements BossEncounter {
     return true;
   }
 
-  private processTemporaryHit(orb: TemporaryOrbSprite, partId: BossPartId | null): boolean {
+  private processTemporaryHit(orb: TemporaryOrbSprite, partId: ManagedPartId | null): boolean {
     if (!orb.active) return false;
     if (partId === null) return this.processBodyReflection(orb);
     if (!this.canHitPart(orb, `temporary:${orb.temporaryOrbId}`, partId)) return false;
@@ -491,7 +502,7 @@ export class BossManager implements BossEncounter {
     ) <= circle.halfWidth;
   }
 
-  private finishPermanentHit(orb: OrbSprite, _target: BossSprite, partId: BossPartId | null): void {
+  private finishPermanentHit(orb: OrbSprite, _target: BossSprite, partId: ManagedPartId | null): void {
     if (partId === null) {
       this.options.orbManager.synchronizeOrb(orb);
       return;
@@ -506,7 +517,7 @@ export class BossManager implements BossEncounter {
   private finishTemporaryHit(
     orb: TemporaryOrbSprite,
     _target: BossSprite,
-    partId: BossPartId | null,
+    partId: ManagedPartId | null,
   ): void {
     if (partId === null) {
       this.options.temporaryOrbManager.synchronizeOrb(orb);
@@ -523,10 +534,10 @@ export class BossManager implements BossEncounter {
   private canHitPart(
     orb: Phaser.Physics.Arcade.Sprite,
     sourceKey: string,
-    partId: BossPartId,
+    partId: ManagedPartId,
   ): boolean {
-    if (!exposedBossParts(this.state).includes(partId)) return false;
-    if (!(this.partSprites[partId].body as Phaser.Physics.Arcade.Body).enable) return false;
+    if (!this.exposedParts().includes(partId)) return false;
+    if (!(this.spriteFor(partId).body as Phaser.Physics.Arcade.Body).enable) return false;
     const now = this.options.getGameplayElapsedMs();
     if (this.acceptedAt.get(sourceKey) === now) return false;
     this.acceptedAt.set(sourceKey, now);
@@ -535,7 +546,7 @@ export class BossManager implements BossEncounter {
 
   private createPending(
     result: HitResult | PermanentHitResult,
-    partId: BossPartId,
+    partId: ManagedPartId,
     source: BossDirectHitEvent['source'],
     sourceOrbId: number,
     orb: Phaser.Physics.Arcade.Sprite,
@@ -545,8 +556,8 @@ export class BossManager implements BossEncounter {
   }
 
   private applyPendingHit(pending: PendingHit): void {
-    if (!exposedBossParts(this.state).includes(pending.partId)) return;
-    const part = this.partSprites[pending.partId];
+    if (!this.exposedParts().includes(pending.partId)) return;
+    const part = this.spriteFor(pending.partId);
     const previousHp = this.partHp(pending.partId);
     const defeated = this.damagePart(pending.partId, pending.result.damage, false);
     const core = pending.source === 'permanent'
@@ -572,13 +583,16 @@ export class BossManager implements BossEncounter {
     if (defeated) this.reportDefeat();
   }
 
-  private damagePart(partId: BossPartId, damage: number, reportDefeat = true): boolean {
+  private damagePart(partId: ManagedPartId, damage: number, reportDefeat = true): boolean {
+    const scaledDamage = damage
+      * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1);
+    if (partId === 'defenseModule') {
+      this.defenseHp = Math.max(0, this.defenseHp - scaledDamage);
+      this.synchronizePartBodies();
+      return false;
+    }
     const previousPhase = bossPhase(this.state);
-    this.state = damageBossPart(
-      this.state,
-      partId,
-      damage * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1),
-    );
+    this.state = damageBossPart(this.state, partId, scaledDamage);
     const phase = bossPhase(this.state);
     this.synchronizePartBodies();
     if (phase !== previousPhase && phase !== 'defeated') {
@@ -597,15 +611,22 @@ export class BossManager implements BossEncounter {
   }
 
   private synchronizePartBodies(): void {
-    const exposed = new Set(exposedBossParts(this.state));
+    const exposed = new Set(this.exposedParts());
     for (const partId of this.partIds()) {
       const enabled = exposed.has(partId);
       const sprite = this.partSprites[partId];
       (sprite.body as Phaser.Physics.Arcade.Body).enable = enabled;
       sprite.setVisible(enabled);
     }
-    const coreExposed = bossPhase(this.state) === 'core';
-    (this.body.body as Phaser.Physics.Arcade.Body).enable = !coreExposed && bossPhase(this.state) !== 'defeated';
+    if (this.options.kind === 'siege') {
+      const defenseEnabled = exposed.has('defenseModule');
+      (this.body.body as Phaser.Physics.Arcade.Body).enable = defenseEnabled;
+      this.body.setVisible(defenseEnabled);
+    } else {
+      const coreExposed = bossPhase(this.state) === 'core';
+      (this.body.body as Phaser.Physics.Arcade.Body).enable = !coreExposed
+        && bossPhase(this.state) !== 'defeated';
+    }
   }
 
   private scheduleAttacks(now: number): void {
@@ -615,6 +636,7 @@ export class BossManager implements BossEncounter {
       this.state = attack.state;
       let lastMajorDueAt = startsAt;
       for (const pattern of attack.patterns) {
+        if (this.options.kind === 'siege' && !this.siegePatternAvailable(pattern)) continue;
         const dueAt = pattern === 'aimedShot'
           ? this.beginAimedWarning(startsAt)
           : this.beginSupportWarnings(startsAt, this.state.attackIndex);
@@ -627,6 +649,11 @@ export class BossManager implements BossEncounter {
   }
 
   private scheduleBasicAttack(now: number): void {
+    if (
+      this.options.kind === 'siege'
+      && this.state.rightWeakpointHp <= 0
+      && !this.siegeCoreExposed()
+    ) return;
     const tuning = GAME_TUNING.projectiles.bossBasic;
     const basicPending = this.warnings.some(({ kind }) => kind === 'basicShot');
     if (basicPending || this.hasMajorWarnings() || this.nextBasicShotAt >= this.nextAttackAt) return;
@@ -636,6 +663,7 @@ export class BossManager implements BossEncounter {
   }
 
   private scheduleLaser(now: number): void {
+    if (this.defenseHp <= 0 && !this.siegeCoreExposed()) return;
     const tuning = GAME_TUNING.projectiles.siegeLaser;
     if (
       !this.warnings.some(({ kind }) => kind === 'movingLaser')
@@ -912,7 +940,8 @@ export class BossManager implements BossEncounter {
     }
   }
 
-  private partHp(partId: BossPartId): number {
+  private partHp(partId: ManagedPartId): number {
+    if (partId === 'defenseModule') return this.defenseHp;
     if (partId === 'leftWeakpoint') return this.state.leftWeakpointHp;
     if (partId === 'rightWeakpoint') return this.state.rightWeakpointHp;
     return this.state.coreHp;
@@ -920,6 +949,35 @@ export class BossManager implements BossEncounter {
 
   private partIds(): BossPartId[] {
     return ['leftWeakpoint', 'rightWeakpoint', 'core'];
+  }
+
+  private bodyPartId(): ManagedPartId | null {
+    return this.options.kind === 'siege' ? 'defenseModule' : null;
+  }
+
+  private spriteFor(partId: ManagedPartId): BossSprite {
+    return partId === 'defenseModule' ? this.body : this.partSprites[partId];
+  }
+
+  private exposedParts(): ManagedPartId[] {
+    const parts: ManagedPartId[] = exposedBossParts(this.state);
+    if (this.options.kind !== 'siege') return parts;
+    const filtered = parts.filter((partId) => partId !== 'core' || this.defenseHp === 0);
+    if (this.defenseHp > 0 && bossPhase(this.state) !== 'defeated') filtered.push('defenseModule');
+    return filtered;
+  }
+
+  private siegeCoreExposed(): boolean {
+    return this.options.kind === 'siege'
+      && this.defenseHp === 0
+      && bossPhase(this.state) === 'core';
+  }
+
+  private siegePatternAvailable(pattern: BossPattern): boolean {
+    if (this.siegeCoreExposed()) return true;
+    return pattern === 'aimedShot'
+      ? this.state.leftWeakpointHp > 0
+      : this.defenseHp > 0;
   }
 
   private kind(): 'sentinel' | 'siege' {

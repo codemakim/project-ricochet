@@ -207,7 +207,7 @@ export interface GameTuning {
     };
     timing: { shieldedMs: number; telegraphMs: number; exposedMs: number };
   };
-  siegeBoss: { damageTakenScale: number; movementSpeedScale: number };
+  siegeBoss: { defenseHp: number; damageTakenScale: number; movementSpeedScale: number };
   relics: {
     auxiliaryLink: { procScale: number };
     crossCut: { damageScale: number };
@@ -424,7 +424,7 @@ export const GAME_TUNING = {
     },
     timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
   },
-  siegeBoss: { damageTakenScale: 0.45, movementSpeedScale: 0.6 },
+  siegeBoss: { defenseHp: 60, damageTakenScale: 0.45, movementSpeedScale: 0.6 },
   relics: {
     auxiliaryLink: { procScale: 0.25 },
     crossCut: { damageScale: 0.6 },

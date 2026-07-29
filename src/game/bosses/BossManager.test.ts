@@ -236,9 +236,16 @@ function updateAt(boundary: ReturnType<typeof createBoundary>, now: number) {
 describe('BossManager', () => {
   it('runs the siege variant with a moving laser warning', () => {
     const boundary = createBoundary('siege');
-    expect(boundary.manager.getSnapshot()).toMatchObject({ kind: 'siege', phase: 'twoWeakpoints' });
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      kind: 'siege',
+      phase: 'twoWeakpoints',
+      parts: { defenseModule: GAME_TUNING.siegeBoss.defenseHp },
+    });
     expect(boundary.sprites.some(({ texture }) => texture === 'siege-body')).toBe(true);
-
+    expect(boundary.manager.applyDirectDamage('core', 999)).toBe(false);
+    expect(boundary.manager.applyDirectDamage('defenseModule', 10)).toBe(true);
+    expect(boundary.manager.getSnapshot().parts?.defenseModule)
+      .toBe(GAME_TUNING.siegeBoss.defenseHp - 10 * GAME_TUNING.siegeBoss.damageTakenScale);
     const warningAt = GAME_TUNING.projectiles.siegeLaser.intervalMs
       - GAME_TUNING.projectiles.siegeLaser.warningMs;
     expect(updateAt(boundary, warningAt)).toMatchObject({
@@ -248,6 +255,23 @@ describe('BossManager', () => {
     expect(active.projectiles).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'movingLaser' }),
     ]));
+  });
+
+  it('keeps the siege core locked until both cannons and defense are destroyed', () => {
+    const boundary = createBoundary('siege');
+    boundary.manager.applyDirectDamage('leftWeakpoint', 999);
+    boundary.manager.applyDirectDamage('rightWeakpoint', 999);
+    expect(boundary.manager.applyDirectDamage('core', 999)).toBe(false);
+    boundary.manager.applyDirectDamage('defenseModule', 999);
+    expect(boundary.manager.applyDirectDamage('core', 1)).toBe(true);
+  });
+
+  it('stops defense laser scheduling when that module is destroyed', () => {
+    const boundary = createBoundary('siege');
+    boundary.manager.applyDirectDamage('defenseModule', 999);
+    const warningAt = GAME_TUNING.projectiles.siegeLaser.intervalMs
+      - GAME_TUNING.projectiles.siegeLaser.warningMs;
+    expect(updateAt(boundary, warningAt).warningKinds).not.toContain('movingLaser');
   });
 
   it('conforms to the common sentinel encounter contract', () => {
