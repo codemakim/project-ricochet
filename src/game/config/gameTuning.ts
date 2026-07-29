@@ -940,4 +940,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
 }
 
-if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) validateGameTuning(GAME_TUNING);
+if ((import.meta as ImportMeta & { env?: { DEV: boolean } }).env?.DEV) {
+  validateGameTuning(GAME_TUNING);
+}
