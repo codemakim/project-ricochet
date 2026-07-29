@@ -126,6 +126,7 @@ interface DevelopmentScene {
   children: {
     list: Array<{
       active?: boolean;
+      name?: string;
       x?: number;
       y?: number;
       displayWidth?: number;
@@ -159,6 +160,7 @@ interface DevelopmentScene {
   debugSetBossPosition(x: number): void;
   debugAdvanceHiveCycle(deltaMs: number): void;
   debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
+  debugShowCoreFeedback(type: 'corrosion' | 'conduction', position: Vector): void;
 }
 
 async function sceneCall<T, A = undefined>(
@@ -466,6 +468,27 @@ test('@desktop chooses permanent orb cores and a typed bonus orb', async ({ page
     'inertia',
     'corrosion',
   ]);
+});
+
+test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugShowCoreFeedback('corrosion', { x: 150, y: 300 });
+    scene.debugShowCoreFeedback('conduction', { x: 300, y: 300 });
+  });
+
+  const feedbackNames = () => sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name?.startsWith('core-feedback-'))
+    .map((child) => child.name));
+  await expect.poll(feedbackNames).toEqual(expect.arrayContaining([
+    'core-feedback-corrosion',
+    'core-feedback-conduction',
+  ]));
+
+  await page.waitForTimeout(300);
+  expect(await feedbackNames()).toEqual(['core-feedback-corrosion']);
+  await page.waitForTimeout(2_500);
+  expect(await feedbackNames()).toEqual([]);
 });
 
 test('@mobile supports simultaneous touch movement and retained aim', async ({ page }) => {

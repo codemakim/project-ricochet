@@ -143,6 +143,10 @@ export class CombatScene extends Phaser.Scene {
   declare debugSetBossPosition?: (x: number) => void;
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
   declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
+  declare debugShowCoreFeedback?: (
+    type: 'corrosion' | 'conduction',
+    position: Vector,
+  ) => void;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerInput?: PlayerInput;
@@ -155,6 +159,7 @@ export class CombatScene extends Phaser.Scene {
   private bossRewardTier: BossRewardTier | null = null;
   private readonly combatEffects = new CombatEffectScheduler();
   private readonly corrosionFields = new CorrosionFieldState();
+  private readonly corrosionVisuals = new Map<number, Phaser.GameObjects.Graphics>();
   private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
@@ -197,6 +202,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardTier = null;
     this.combatEffects.clear();
     this.corrosionFields.clear();
+    this.corrosionVisuals.clear();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
@@ -326,6 +332,14 @@ export class CombatScene extends Phaser.Scene {
       this.debugPlaceTemporaryOrb = (id, position) => (
         this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
       );
+      this.debugShowCoreFeedback = (type, position) => {
+        if (type === 'corrosion') {
+          this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
+          this.syncCorrosionVisuals();
+        } else {
+          this.drawConductionFeedback(position);
+        }
+      };
     }
 
     this.aimGuide = this.add.graphics().setDepth(5);
@@ -566,6 +580,7 @@ export class CombatScene extends Phaser.Scene {
         event.position,
         this.gameplayElapsedMs,
       );
+      this.syncCorrosionVisuals();
     }
     if (corePlan.dischargeConduction) {
       const conduction = GAME_TUNING.orbCores.conduction;
@@ -585,6 +600,7 @@ export class CombatScene extends Phaser.Scene {
           excludedBossTargetId,
         );
       }
+      this.drawConductionFeedback(event.position);
     }
     if (plan.immediateAreas.length > 0) {
       this.applyAreaEffects(
@@ -643,7 +659,59 @@ export class CombatScene extends Phaser.Scene {
   private drainCorrosionFields(): void {
     for (const tick of this.corrosionFields.drainDue(this.gameplayElapsedMs)) {
       this.applyAreaEffects(tick.position, [tick]);
+      this.drawCorrosionTick(tick.position, tick.radius);
     }
+    this.syncCorrosionVisuals();
+  }
+
+  private syncCorrosionVisuals(): void {
+    const fields = this.corrosionFields.getSnapshot();
+    const activeIds = new Set(fields.map(({ fieldId }) => fieldId));
+    for (const [fieldId, visual] of this.corrosionVisuals) {
+      if (activeIds.has(fieldId)) continue;
+      visual.destroy();
+      this.corrosionVisuals.delete(fieldId);
+    }
+    for (const field of fields) {
+      if (this.corrosionVisuals.has(field.fieldId)) continue;
+      const tuning = GAME_TUNING.orbCores.corrosion;
+      const feedback = GAME_TUNING.visual.coreFeedback;
+      const visual = this.add.graphics()
+        .fillStyle(tuning.fill, feedback.corrosionFieldAlpha)
+        .fillCircle(field.position.x, field.position.y, tuning.radius)
+        .lineStyle(2, tuning.accent, feedback.corrosionLineAlpha)
+        .strokeCircle(field.position.x, field.position.y, tuning.radius)
+        .setDepth(3)
+        .setName('core-feedback-corrosion');
+      this.corrosionVisuals.set(field.fieldId, visual);
+    }
+  }
+
+  private drawCorrosionTick(position: Vector, radius: number): void {
+    const pulse = this.add.graphics()
+      .lineStyle(3, GAME_TUNING.orbCores.corrosion.accent, 0.8)
+      .strokeCircle(position.x, position.y, radius * 0.72)
+      .setDepth(4)
+      .setName('core-feedback-corrosion-tick');
+    this.time.delayedCall(
+      GAME_TUNING.visual.coreFeedback.corrosionTickDurationMs,
+      () => pulse.destroy(),
+    );
+  }
+
+  private drawConductionFeedback(position: Vector): void {
+    const { conduction } = GAME_TUNING.orbCores;
+    const pulse = this.add.graphics()
+      .lineStyle(3, conduction.accent, 0.95)
+      .strokeCircle(position.x, position.y, conduction.radius * 0.35)
+      .lineStyle(2, conduction.fill, 0.8)
+      .strokeCircle(position.x, position.y, conduction.radius * 0.62)
+      .setDepth(4)
+      .setName('core-feedback-conduction');
+    this.time.delayedCall(
+      GAME_TUNING.visual.coreFeedback.conductionDurationMs,
+      () => pulse.destroy(),
+    );
   }
 
   private handleOrbRecovery(source: Parameters<BossBuild['recoverySalvoCount']>[0]): void {

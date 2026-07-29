@@ -159,6 +159,12 @@ export interface GameTuning {
   };
   visual: {
     friendly: { permanentOrb: ProjectileVisualTuning; temporaryOrb: ProjectileVisualTuning };
+    coreFeedback: {
+      corrosionFieldAlpha: number;
+      corrosionLineAlpha: number;
+      corrosionTickDurationMs: number;
+      conductionDurationMs: number;
+    };
     hostile: {
       enemyBullet: ProjectileVisualTuning;
       bossBasic: ProjectileVisualTuning;
@@ -300,6 +306,12 @@ export const GAME_TUNING = {
     friendly: {
       permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 16, height: 16 },
       temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 12, height: 12 },
+    },
+    coreFeedback: {
+      corrosionFieldAlpha: 0.16,
+      corrosionLineAlpha: 0.7,
+      corrosionTickDurationMs: 160,
+      conductionDurationMs: 180,
     },
     hostile: {
       enemyBullet: { fill: 0xff4d5a, accent: 0x4a0710, width: 10, height: 10 },
@@ -737,6 +749,20 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(friendly.width, `visual.friendly.${name}.width`);
     positive(friendly.height, `visual.friendly.${name}.height`);
   }
+  const feedback = visual.coreFeedback;
+  for (const [name, alpha] of Object.entries({
+    corrosionFieldAlpha: feedback.corrosionFieldAlpha,
+    corrosionLineAlpha: feedback.corrosionLineAlpha,
+  })) {
+    if (!Number.isFinite(alpha) || alpha <= 0 || alpha > 1) {
+      throw new RangeError(`visual.coreFeedback.${name} must be greater than zero and at most one`);
+    }
+  }
+  positive(
+    feedback.corrosionTickDurationMs,
+    'visual.coreFeedback.corrosionTickDurationMs',
+  );
+  positive(feedback.conductionDurationMs, 'visual.coreFeedback.conductionDurationMs');
   const friendlyPairs = [
     ...Object.values(visual.friendly).map(({ fill, accent }) => `${fill}:${accent}`),
     ...corePalettes,
