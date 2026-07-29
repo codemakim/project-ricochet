@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { AbilityId } from '../src/game/progression/progressionRules';
+import {
+  ABILITY_IDS,
+  ABILITY_MAX_RANKS,
+  type AbilityId,
+} from '../src/game/progression/progressionRules';
 
 interface Vector {
   x: number;
@@ -1035,45 +1039,16 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
 
 test('@desktop stops XP and keeps level-up closed when all abilities reach their caps', async ({ page }) => {
   await loadCanvas(page);
-  await sceneCall(page, (scene) => {
-    for (let rank = 0; rank < 5; rank += 1) scene.debugUpgradeAbility('firepower');
-    for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
-    scene.debugUpgradeAbility('explosion');
-    scene.debugUpgradeAbility('split');
-    for (const ability of [
-      'near-amplification',
-      'precision-hit',
-      'kinetic-conversion',
-      'wall-acceleration',
-    ] as const) {
-      for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility(ability);
+  await sceneCall(page, (scene, maximumRanks) => {
+    for (const [ability, maximum] of Object.entries(maximumRanks) as Array<[AbilityId, number]>) {
+      for (let rank = 0; rank < maximum; rank += 1) scene.debugUpgradeAbility(ability);
     }
-    for (const ability of [
-      'horizontal-cutter',
-      'vertical-cutter',
-      'destruction-reaction',
-      'micro-missile',
-    ] as const) scene.debugUpgradeAbility(ability);
-    for (let rank = 0; rank < 2; rank += 1) scene.debugUpgradeAbility('recovery-shockwave');
     scene.debugGrantXp(100);
-  });
+  }, ABILITY_MAX_RANKS);
 
   const completed = await snapshot(page);
-  expect(completed.buildRanks).toEqual({
-    firepower: 5,
-    kinetic: 3,
-    explosion: 1,
-    split: 1,
-    'near-amplification': 3,
-    'precision-hit': 3,
-    'kinetic-conversion': 3,
-    'wall-acceleration': 3,
-    'horizontal-cutter': 1,
-    'vertical-cutter': 1,
-    'destruction-reaction': 1,
-    'micro-missile': 1,
-    'recovery-shockwave': 2,
-  });
+  expect(ABILITY_IDS).toHaveLength(33);
+  expect(completed.buildRanks).toEqual(ABILITY_MAX_RANKS);
   expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
   expect(completed.levelUpVisible).toBe(false);
   expect(completed.pauseReasons).not.toContain('levelUp');

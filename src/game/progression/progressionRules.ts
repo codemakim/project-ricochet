@@ -45,6 +45,7 @@ export const MAX_ABILITY_KINDS = 12;
 
 export interface AbilityEligibilityContext {
   coreTypes?: readonly OrbCoreId[];
+  orbCount?: number;
 }
 
 const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
@@ -119,6 +120,11 @@ function relevanceMet(
   ranks: Readonly<AbilityRanks>,
   context: AbilityEligibilityContext,
 ): boolean {
+  if (
+    id === 'additional-core'
+    && context.orbCount !== undefined
+    && context.orbCount >= GAME_TUNING.build.basicGrowth.maximumOrbs
+  ) return false;
   const relevance = ABILITY_RELEVANCE[id];
   if (!relevance || ranks[id] > 0) return true;
   return Boolean(

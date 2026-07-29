@@ -106,5 +106,6 @@ describe('progression rules', () => {
     expect(eligibleAbilityIds(empty)).not.toContain('conduction-expansion');
     expect(eligibleAbilityIds(empty, { coreTypes: ['conduction'] }))
       .toContain('conduction-expansion');
+    expect(eligibleAbilityIds(empty, { orbCount: 6 })).not.toContain('additional-core');
   });
 });

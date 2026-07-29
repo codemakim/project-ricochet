@@ -214,7 +214,10 @@ export class CombatScene extends Phaser.Scene {
     this.progression = new ProgressionManager(
       PROGRESSION_SEED,
       build,
-      () => this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
+      () => ({
+        coreTypes: this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
+        orbCount: this.orbManager?.getSnapshot().length ?? 3,
+      }),
     );
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
