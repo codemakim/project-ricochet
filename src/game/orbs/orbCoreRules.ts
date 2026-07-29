@@ -43,6 +43,7 @@ export function applyCoreWallBounce(
 export function resolveCoreDirectHit(
   type: OrbCoreId,
   state: Readonly<OrbCoreState>,
+  conductionHitsRequired: number = GAME_TUNING.orbCores.conduction.hitsRequired,
 ): CoreHitResolution {
   const next = { ...state };
   let directDamageBonus = 0;
@@ -54,7 +55,7 @@ export function resolveCoreDirectHit(
     next.echoStacks = 0;
   } else if (type === 'conduction') {
     next.conductionHits += 1;
-    if (next.conductionHits >= GAME_TUNING.orbCores.conduction.hitsRequired) {
+    if (next.conductionHits >= conductionHitsRequired) {
       next.conductionHits = 0;
       conductionTriggered = true;
     }

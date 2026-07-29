@@ -15,6 +15,8 @@ export interface BossDirectHitEvent {
   coreType?: OrbCoreId;
   conductionTriggered?: boolean;
   speedRatio?: number;
+  firstHitAfterProximity?: boolean;
+  echoStacks?: number;
   killed: boolean;
 }
 

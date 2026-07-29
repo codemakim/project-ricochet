@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { CorrosionFieldState } from './CorrosionFieldState';
 
 describe('CorrosionFieldState', () => {
+  it('ignites and removes overlapping fields for a fraction of remaining damage', () => {
+    const fields = new CorrosionFieldState();
+    fields.spawn(1, { x: 10, y: 10 }, 0);
+    fields.spawn(2, { x: 200, y: 200 }, 0);
+
+    const ignited = fields.igniteOverlapping({ x: 20, y: 10 }, 20, 500, 0.5);
+
+    expect(ignited).toEqual([expect.objectContaining({
+      position: { x: 10, y: 10 },
+      damage: 0.5,
+    })]);
+    expect(fields.getSnapshot()).toHaveLength(1);
+    expect(fields.getSnapshot()[0]!.position).toEqual({ x: 200, y: 200 });
+  });
   it('keeps only the newest two fields for each permanent orb', () => {
     const fields = new CorrosionFieldState();
     fields.spawn(1, { x: 10, y: 10 }, 0);

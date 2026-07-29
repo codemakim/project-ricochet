@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { BuildState } from './BuildState';
 
 describe('BuildState', () => {
+  it('exposes reload overcharge damage independently for relic linking', () => {
+    const build = new BuildState({ 'reload-overcharge': 2 });
+    expect(build.reloadOverchargeBonus()).toBe(0.4);
+  });
   it('derives exact firepower and kinetic values within their rank caps', () => {
     const build = new BuildState();
     for (let rank = 1; rank <= 5; rank += 1) {

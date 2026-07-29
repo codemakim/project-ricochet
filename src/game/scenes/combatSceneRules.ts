@@ -96,6 +96,7 @@ export function planDirectHitEffects(
     BossBuild,
     | 'recordPermanentDirectHit'
     | 'temporaryExplosionEnabled'
+    | 'temporaryProcChance'
     | 'aftershock'
     | 'chainSplitEnabled'
   >,
@@ -113,7 +114,10 @@ export function planDirectHitEffects(
   const explosion = build.explosion();
   const permanentExplosion = event.source === 'permanent' && decision.explosion;
   const temporaryExplosion = event.source === 'temporary'
-    && bossBuild.temporaryExplosionEnabled();
+    && (
+      (decision.explosion && bossBuild.temporaryProcChance(1) > 0)
+      || bossBuild.temporaryExplosionEnabled()
+    );
   const explosionTriggered = Boolean(
     explosion && (permanentExplosion || temporaryExplosion),
   );
@@ -135,7 +139,8 @@ export function planDirectHitEffects(
         damage: explosion.damage * aftershock.damageScale,
       }
       : null,
-    spawnChildren: event.source === 'temporary' && bossBuild.chainSplitEnabled(),
+    spawnChildren: event.source === 'temporary'
+      && (decision.split || bossBuild.chainSplitEnabled()),
     splitCount: event.source === 'permanent' && decision.split
       ? build.split()?.count ?? 0
       : 0,
@@ -217,11 +222,14 @@ interface CombatLifecycleBoss {
   destroy(): void;
 }
 
-export interface CombatLifecycleState<TBoss extends CombatLifecycleBoss = CombatLifecycleBoss> {
+export interface CombatLifecycleState<
+  TBoss extends CombatLifecycleBoss = CombatLifecycleBoss,
+  TChoice = BossRewardId,
+> {
   activeBoss?: TBoss;
   activeBossKind?: BossKind;
   bossRewardTier: BossRewardTier | null;
-  bossRewardChoices: readonly BossRewardId[];
+  bossRewardChoices: readonly TChoice[];
   bossDefeatPending: boolean;
   bossBuild: BossBuild;
 }
@@ -234,11 +242,11 @@ export interface CombatLifecycleDependencies {
   hideRewardOverlay(): void;
 }
 
-export function finalizeCombatLifecycle<TBoss extends CombatLifecycleBoss>(
+export function finalizeCombatLifecycle<TBoss extends CombatLifecycleBoss, TChoice>(
   reason: CombatLifecycleReason,
-  state: CombatLifecycleState<TBoss>,
+  state: CombatLifecycleState<TBoss, TChoice>,
   dependencies: CombatLifecycleDependencies,
-): CombatLifecycleState<TBoss> {
+): CombatLifecycleState<TBoss, TChoice> {
   dependencies.clearEnemyHostileActions();
   dependencies.clearWarning();
   dependencies.scheduler.clear();

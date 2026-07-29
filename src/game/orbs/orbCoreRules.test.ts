@@ -8,6 +8,15 @@ import {
 } from './orbCoreRules';
 
 describe('orb core rules', () => {
+  it('uses an overridden conduction hit requirement', () => {
+    let state = createOrbCoreState();
+    state = resolveCoreDirectHit('conduction', state, 3).next;
+    state = resolveCoreDirectHit('conduction', state, 3).next;
+    const third = resolveCoreDirectHit('conduction', state, 3);
+
+    expect(third.conductionTriggered).toBe(true);
+    expect(third.next.conductionHits).toBe(0);
+  });
   it('caps and spends echo stacks on the next direct hit', () => {
     let state = createOrbCoreState();
     for (let bounce = 0; bounce < 7; bounce += 1) {

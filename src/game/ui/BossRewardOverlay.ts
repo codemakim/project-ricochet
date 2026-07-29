@@ -1,44 +1,24 @@
 import Phaser from 'phaser';
-import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRules';
+import {
+  type BossRewardChoice,
+  type BossRewardId,
+} from '../progression/bossRewardRules';
+import { ABILITY_DEFINITIONS } from '../progression/progressionRules';
 
-const SECOND_RELIC_TUNING = GAME_TUNING.relics.secondBoss;
-const REWARD_COPY: Partial<Record<BossRewardId, { label: string; effect: string }>> = {
-  'expanded-magazine': {
-    label: '증설 탄창',
-    get effect() {
-      return `영구 구슬 +1 · 최대 ${SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit}개`;
-    },
-  },
-  'recovery-capacitor': { label: '회수 축전기', effect: '근접 회수 충전 3 → 5' },
-  'opening-amplifier': { label: '초동 증폭기', effect: '근접 회수 후 첫 적중 직접 피해 +1' },
-  'chain-warhead': { label: '연쇄 탄두', effect: '임시 분열 구슬도 폭발 효과 상속' },
-  'auxiliary-orbit': {
-    label: '보조 궤도',
-    effect: `영구 구슬 한도 +1 · 전체 최대 ${SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit}개`,
-  },
-  'recovery-salvo': {
-    label: '회수 일제사',
-    effect: `근접 직접 회수 재발사 시 좌우 임시 구슬 ${SECOND_RELIC_TUNING.recoverySalvo.temporaryOrbCount}개`,
-  },
-  'siege-resonance': {
-    label: '공성 공명',
-    effect: `영구 구슬 직접 적중 ${SECOND_RELIC_TUNING.siegeResonance.hitsRequired}회 후 반경 ${SECOND_RELIC_TUNING.siegeResonance.radius}px · 피해 ${SECOND_RELIC_TUNING.siegeResonance.damage} 충격파`,
-  },
-  'hyperpressure-core': {
-    label: '초고압 탄심',
-    effect: `충전 직접 피해 +${SECOND_RELIC_TUNING.hyperpressureCore.chargedDamageBonus}`,
-  },
-  'inertial-penetration': { label: '관성 관통', effect: '충전 구슬 직접 처치 시 반사 없이 방향·속도 유지' },
-  'aftershock-explosion': {
-    label: '잔향 폭발',
-    effect: `${SECOND_RELIC_TUNING.aftershockExplosion.delayMs}ms 뒤 반경 ${SECOND_RELIC_TUNING.aftershockExplosion.radiusScale * 100}% · 피해 ${SECOND_RELIC_TUNING.aftershockExplosion.damageScale * 100}% 잔향 폭발`,
-  },
-  'chain-split': {
-    label: '연쇄 분열',
-    effect: `임시 구슬 첫 직접 적중 시 ±${Math.abs(SECOND_RELIC_TUNING.chainSplit.angles[0])}° 자식 구슬 ${SECOND_RELIC_TUNING.chainSplit.childCount}개`,
-  },
+const REWARD_COPY: Record<
+  Extract<BossRewardChoice, { kind: 'relic' }>['id'],
+  { label: string; effect: string }
+> = {
+  'auxiliary-link': { label: '보조체 연결', effect: '임시 구슬이 낮은 확률로 발동 효과 사용' },
+  'cross-cut': { label: '교차 절단', effect: '절단선 발동 시 반대 방향 절단선 추가' },
+  'gas-ignition': { label: '가스 점화', effect: '폭발이 부식 가스의 남은 피해를 즉시 점화' },
+  'recursive-split': { label: '재귀 분열', effect: '임시 구슬이 한 번 추가 분열 가능' },
+  'inertia-retention': { label: '관성 보존', effect: '관성 속도 보너스가 두 번째 직접 타격까지 유지' },
+  'complete-cycle': { label: '완전 순환', effect: '과충전 첫 타격 처치 시 즉시 귀환' },
+  'direct-link': { label: '직격 연동', effect: '재장전 과충전 일부를 보조 피해에도 적용' },
+  'superconducting-circuit': { label: '초전도 회로', effect: '전도 요구 타격 감소 · 피해 증가' },
+  'resonance-rupture': { label: '공명 파열', effect: '최대 공명 직접 타격에 확정 충격파' },
 };
 
 const CARD_Y = [270, 400, 530] as const;
@@ -47,6 +27,14 @@ const KEY_CODES = [
   Phaser.Input.Keyboard.KeyCodes.TWO,
   Phaser.Input.Keyboard.KeyCodes.THREE,
 ] as const;
+
+function copyFor(choice: BossRewardChoice): { label: string; effect: string } {
+  if (choice.kind === 'relic') return REWARD_COPY[choice.id];
+  return {
+    label: `${ABILITY_DEFINITIONS[choice.id].label} +1등급`,
+    effect: ABILITY_DEFINITIONS[choice.id].summary,
+  };
+}
 
 export class BossRewardOverlay {
   private objects: Phaser.GameObjects.GameObject[] = [];
@@ -57,60 +45,38 @@ export class BossRewardOverlay {
   constructor(private readonly scene: Phaser.Scene) {}
 
   show(
-    tier: BossRewardTier,
-    choices: readonly BossRewardId[],
-    onSelect: (id: BossRewardId) => boolean,
-  ): void;
-  /** @deprecated Use the tiered overload. */
-  show(choices: readonly BossRewardId[], onSelect: (id: BossRewardId) => boolean): void;
-  show(
-    tierOrChoices: BossRewardTier | readonly BossRewardId[],
-    choicesOrSelect: readonly BossRewardId[] | ((id: BossRewardId) => boolean),
-    maybeOnSelect?: (id: BossRewardId) => boolean,
+    choices: readonly BossRewardChoice[],
+    onSelect: (choice: BossRewardChoice) => boolean,
   ): void {
-    const legacy = Array.isArray(tierOrChoices);
-    const tier: BossRewardTier = legacy ? 'first' : tierOrChoices as BossRewardTier;
-    const choices = (legacy ? tierOrChoices : choicesOrSelect) as readonly BossRewardId[];
-    const onSelect = (legacy ? choicesOrSelect : maybeOnSelect) as (id: BossRewardId) => boolean;
     this.hide();
     this.visible = true;
     this.consumed = false;
-
     this.objects.push(
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x02050d, 0.92)
         .setDepth(40)
         .setInteractive(),
-      this.scene.add.text(GAME_WIDTH / 2, 132, tier === 'second' ? '상위 유물 보상' : 'BOSS REWARD', {
-        color: '#ffd166',
-        fontSize: '30px',
-        fontStyle: 'bold',
+      this.scene.add.text(GAME_WIDTH / 2, 132, 'BOSS REWARD', {
+        color: '#ffd166', fontSize: '30px', fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(42),
-      this.scene.add.text(GAME_WIDTH / 2, 172, '유물 하나를 선택하세요', {
-        color: '#f7e7b2',
-        fontSize: '16px',
+      this.scene.add.text(GAME_WIDTH / 2, 172, '강화 하나를 선택하세요', {
+        color: '#f7e7b2', fontSize: '16px',
       }).setOrigin(0.5).setDepth(42),
     );
 
-    choices.slice(0, 3).forEach((id, index) => {
-      const select = () => this.select(id, onSelect);
+    choices.slice(0, 3).forEach((choice, index) => {
+      const select = () => this.select(choice, onSelect);
       const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 380, 104, 0x2b2340, 0.99)
         .setDepth(41)
         .setInteractive({ useHandCursor: true })
         .on('pointerup', select);
-      const copy = REWARD_COPY[id] ?? { label: id, effect: '' };
+      const copy = copyFor(choice);
       const text = this.scene.add.text(
         GAME_WIDTH / 2,
         CARD_Y[index]!,
         `${index + 1}. ${copy.label}\n${copy.effect}`,
-        {
-          align: 'center',
-          color: '#fff4cf',
-          fontSize: '18px',
-          lineSpacing: 8,
-        },
+        { align: 'center', color: '#fff4cf', fontSize: '18px', lineSpacing: 8 },
       ).setOrigin(0.5).setDepth(42);
       this.objects.push(card, text);
-
       const key = this.scene.input.keyboard?.addKey(KEY_CODES[index]!);
       if (key) {
         key.on('down', select);
@@ -136,10 +102,14 @@ export class BossRewardOverlay {
     this.hide();
   }
 
-  private select(id: BossRewardId, onSelect: (id: BossRewardId) => boolean): void {
-    if (this.consumed || !this.visible) return;
-    if (!onSelect(id)) return;
+  private select(
+    choice: BossRewardChoice,
+    onSelect: (choice: BossRewardChoice) => boolean,
+  ): void {
+    if (this.consumed || !this.visible || !onSelect(choice)) return;
     this.consumed = true;
     this.hide();
   }
 }
+
+export type { BossRewardId };

@@ -117,6 +117,11 @@ export class BuildState {
     return Math.min(GAME_TUNING.build.conditionalDamageCap, bonus);
   }
 
+  reloadOverchargeBonus(): number {
+    return this.ranks['reload-overcharge']
+      * GAME_TUNING.build.directHitFlight.reloadDamageBonusPerRank;
+  }
+
   wallSpeedMultiplier(wallHits: number): number {
     const stacks = Math.min(
       GAME_TUNING.build.wallAcceleration.maxStacks,

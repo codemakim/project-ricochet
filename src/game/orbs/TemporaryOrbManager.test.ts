@@ -295,6 +295,15 @@ describe('TemporaryOrbManager', () => {
     expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 })).toBe(0);
   });
 
+  it('uses an explicit recursive child count', () => {
+    const { manager } = createManager();
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
+    const root = manager.getSnapshot()[0]!;
+
+    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 }, 1)).toBe(1);
+    expect(manager.getSnapshot()).toHaveLength(2);
+  });
+
   it('rejects unknown, inactive, child, and consumed split parents', () => {
     const { manager, group } = createManager();
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);

@@ -54,7 +54,8 @@ import {
   type AbilityRanks,
 } from '../progression/progressionRules';
 import {
-  selectLegacyBossRewardOptions,
+  selectBossRewardOptions,
+  type BossRewardChoice,
   type BossRewardId,
   type BossRewardTier,
 } from '../progression/bossRewardRules';
@@ -71,7 +72,6 @@ import {
   inactiveBossSnapshot,
   planDirectHitEffects,
   planOrbCoreEffects,
-  rewardAddsPermanentOrb,
   rewardTierForBoss,
   schedulePlannedAftershock,
   settlePlannedAreaEffects,
@@ -117,7 +117,7 @@ export interface CombatDebugSnapshot {
   >>;
   bossRewardTier: BossRewardTier | null;
   bossRewards: BossRewardId[];
-  bossRewardChoices: BossRewardId[];
+  bossRewardChoices: Array<BossRewardId | AbilityId>;
   bossRewardVisible: boolean;
   runCompleteVisible: boolean;
   temporaryOrbs: number;
@@ -174,7 +174,7 @@ export class CombatScene extends Phaser.Scene {
   private bossRewardOverlay?: BossRewardOverlay;
   private runCompleteOverlay?: RunCompleteOverlay;
   private bossWarning?: Phaser.GameObjects.Text;
-  private bossRewardChoices: BossRewardId[] = [];
+  private bossRewardChoices: BossRewardChoice[] = [];
   private bossDefeatPending = false;
   private health: HealthState = createHealth();
   private experiment: ExperimentSettings = parseExperimentSettings('');
@@ -246,6 +246,8 @@ export class CombatScene extends Phaser.Scene {
       ),
       getTrackingRadiusBonus: (active) => build.trackingRadiusBonus(active),
       getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
+      getConductionHitsRequired: (base) => this.bossBuild?.conductionHitsRequired(base) ?? base,
+      getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
       getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
       getOpeningHitBonus: (source, firstHitPending) => (
         this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
@@ -505,7 +507,7 @@ export class CombatScene extends Phaser.Scene {
       },
       bossRewardTier: this.bossRewardTier,
       bossRewards: this.bossBuild?.snapshot() ?? [],
-      bossRewardChoices: [...this.bossRewardChoices],
+      bossRewardChoices: this.bossRewardChoices.map(({ id }) => id),
       bossRewardVisible: this.bossRewardOverlay?.isVisible() ?? false,
       runCompleteVisible: this.runCompleteOverlay?.isVisible() ?? false,
       temporaryOrbs: this.temporaryOrbManager?.getSnapshot().length ?? 0,
@@ -549,11 +551,17 @@ export class CombatScene extends Phaser.Scene {
       | 'conductionTriggered'
       | 'killed'
       | 'speedRatio'
+      | 'firstHitAfterProximity'
+      | 'echoStacks'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
   ): void {
     if (!this.build || !this.bossBuild) return;
+    const linkedBonus = event.firstHitAfterProximity
+      ? this.bossBuild.reloadSecondaryBonus(this.build.reloadOverchargeBonus())
+      : 0;
+    const linkedDamage = (damage: number) => damage * (1 + linkedBonus);
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
@@ -572,46 +580,60 @@ export class CombatScene extends Phaser.Scene {
         corrosion.cooldownMs,
       )
     );
+    const procOrbId = permanent ? event.sourceOrbId : event.sourceOrbId + 1_000_000;
+    const chanceFor = (chance: number) => (
+      permanent ? chance : this.bossBuild!.temporaryProcChance(chance)
+    );
     const corePlan = planOrbCoreEffects(event, corrosionTriggered);
+    const recursiveSplit = permanent ? null : this.bossBuild.recursiveSplit();
     const decision = {
-      explosion: Boolean(permanent && explosion && this.combatProcs?.tryProc(
+      explosion: Boolean(explosion && chanceFor(explosion.chance) > 0 && this.combatProcs?.tryProc(
         'explosion',
-        event.sourceOrbId,
+        procOrbId,
         this.gameplayElapsedMs,
-        explosion.chance,
+        chanceFor(explosion.chance),
         explosion.cooldownMs,
       )),
-      split: Boolean(permanent && split && this.combatProcs?.trySplit(
-        event.sourceOrbId,
-        this.gameplayElapsedMs,
-        split.chance,
-        split.cooldownMs,
-      )),
-      horizontalCutter: Boolean(permanent && horizontalCutter
+      split: Boolean(
+        permanent
+          ? split && this.combatProcs?.trySplit(
+            event.sourceOrbId,
+            this.gameplayElapsedMs,
+            split.chance,
+            split.cooldownMs,
+          )
+          : recursiveSplit && this.combatProcs?.trySplit(
+            procOrbId,
+            this.gameplayElapsedMs,
+            recursiveSplit.chance,
+            GAME_TUNING.build.split.cooldownMs,
+          ),
+      ),
+      horizontalCutter: Boolean(horizontalCutter && chanceFor(horizontalCutter.chance) > 0
         && this.combatProcs?.tryProc(
           'horizontal-cutter',
-          event.sourceOrbId,
+          procOrbId,
           this.gameplayElapsedMs,
-          horizontalCutter.chance,
+          chanceFor(horizontalCutter.chance),
           horizontalCutter.cooldownMs,
         )),
-      verticalCutter: Boolean(permanent && verticalCutter
+      verticalCutter: Boolean(verticalCutter && chanceFor(verticalCutter.chance) > 0
         && this.combatProcs?.tryProc(
           'vertical-cutter',
-          event.sourceOrbId,
+          procOrbId,
           this.gameplayElapsedMs,
-          verticalCutter.chance,
+          chanceFor(verticalCutter.chance),
           verticalCutter.cooldownMs,
         )),
       destructionReaction: Boolean(
-        permanent
-        && event.killed
+        event.killed
         && destructionReaction
+        && chanceFor(destructionReaction.chance) > 0
         && this.combatProcs?.tryProc(
           'destruction-reaction',
-          event.sourceOrbId,
+          procOrbId,
           this.gameplayElapsedMs,
-          destructionReaction.chance,
+          chanceFor(destructionReaction.chance),
           destructionReaction.cooldownMs,
         ),
       ),
@@ -627,6 +649,7 @@ export class CombatScene extends Phaser.Scene {
         event.sourceOrbId,
         event.position,
         event.direction,
+        recursiveSplit?.childCount,
       );
     }
     if (corePlan.spawnCorrosion) {
@@ -646,7 +669,9 @@ export class CombatScene extends Phaser.Scene {
       const conduction = GAME_TUNING.orbCores.conduction;
       const radius = this.build.circularRadius(conduction.radius);
       const targetCount = this.build.conductionTargetCount(conduction.targetCount);
-      const damage = this.build.secondaryDamage(conduction.damage);
+      const damage = this.build.secondaryDamage(
+        this.bossBuild.conductionDamage(conduction.damage),
+      ) * (1 + linkedBonus);
       let targetPositions: Vector[] = [];
       if (excludedBossTargetId === undefined) {
         targetPositions = this.enemyManager?.nearestSecondaryTargets(
@@ -679,25 +704,49 @@ export class CombatScene extends Phaser.Scene {
       this.applyCutter(
         'horizontal',
         event.position.y,
-        horizontalCutter!,
+        { ...horizontalCutter!, damage: linkedDamage(horizontalCutter!.damage) },
         excludedEnemyId,
         excludedBossTargetId,
       );
+      const crossDamage = linkedDamage(
+        this.bossBuild.crossCutDamage(horizontalCutter!.damage),
+      );
+      if (crossDamage > 0) {
+        this.applyCutter(
+          'vertical',
+          event.position.x,
+          { ...horizontalCutter!, damage: crossDamage },
+          excludedEnemyId,
+          excludedBossTargetId,
+        );
+      }
     }
     if (decision.verticalCutter) {
       this.applyCutter(
         'vertical',
         event.position.x,
-        verticalCutter!,
+        { ...verticalCutter!, damage: linkedDamage(verticalCutter!.damage) },
         excludedEnemyId,
         excludedBossTargetId,
       );
+      const crossDamage = linkedDamage(
+        this.bossBuild.crossCutDamage(verticalCutter!.damage),
+      );
+      if (crossDamage > 0) {
+        this.applyCutter(
+          'horizontal',
+          event.position.y,
+          { ...verticalCutter!, damage: crossDamage },
+          excludedEnemyId,
+          excludedBossTargetId,
+        );
+      }
     }
     if (decision.destructionReaction) {
       const reaction = destructionReaction!;
       this.applyAreaEffects(
         event.position,
-        [{ radius: reaction.radius, damage: reaction.damage }],
+        [{ radius: reaction.radius, damage: linkedDamage(reaction.damage) }],
         excludedEnemyId,
         excludedBossTargetId,
       );
@@ -709,14 +758,34 @@ export class CombatScene extends Phaser.Scene {
       );
     }
     if (plan.immediateAreas.length > 0) {
+      const linkedAreas = plan.immediateAreas.map((effect) => ({
+        ...effect,
+        damage: linkedDamage(effect.damage),
+      }));
       this.applyAreaEffects(
         event.position,
-        plan.immediateAreas,
+        linkedAreas,
         excludedEnemyId,
         excludedBossTargetId,
       );
-      for (const effect of plan.immediateAreas) {
+      for (const effect of linkedAreas) {
         this.drawExplosion(event.position, effect.radius);
+        const ignitionFraction = effect.kind === 'explosion'
+          ? this.bossBuild.gasIgnitionFraction()
+          : 0;
+        if (ignitionFraction > 0) {
+          const ignited = this.corrosionFields.igniteOverlapping(
+            event.position,
+            effect.radius,
+            this.gameplayElapsedMs,
+            ignitionFraction,
+          );
+          for (const field of ignited) {
+            this.applyAreaEffects(field.position, [field]);
+            this.drawExplosion(field.position, field.radius);
+          }
+          this.syncCorrosionVisuals();
+        }
       }
     }
     schedulePlannedAftershock(
@@ -739,7 +808,12 @@ export class CombatScene extends Phaser.Scene {
       && missile
       && this.combatProcs?.recordMicroMissileHit(missile.hitsRequired)
     ) {
-      this.launchMicroMissile(event.position, excludedEnemyId, excludedBossTargetId, missile);
+      this.launchMicroMissile(
+        event.position,
+        excludedEnemyId,
+        excludedBossTargetId,
+        { ...missile, damage: linkedDamage(missile.damage) },
+      );
     }
     const highSpeedImpact = this.build.highSpeedImpact();
     if (
@@ -750,7 +824,7 @@ export class CombatScene extends Phaser.Scene {
     ) {
       this.applyAreaEffects(
         event.position,
-        [{ radius: highSpeedImpact.radius, damage: highSpeedImpact.damage }],
+        [{ radius: highSpeedImpact.radius, damage: linkedDamage(highSpeedImpact.damage) }],
         excludedEnemyId,
         excludedBossTargetId,
       );
@@ -760,6 +834,34 @@ export class CombatScene extends Phaser.Scene {
         GAME_TUNING.visual.triggerFeedback.shockwaveColor,
         'trigger-feedback-high-speed-impact',
       );
+    }
+    const rupture = event.coreType === 'echo'
+      ? this.bossBuild.resonanceRupture(
+        GAME_TUNING.orbCores.echo.maxStacks,
+        event.echoStacks ?? 0,
+      )
+      : null;
+    if (rupture) {
+      this.applyAreaEffects(
+        event.position,
+        [{ radius: rupture.radius, damage: linkedDamage(rupture.damage) }],
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
+      this.drawEffectRing(
+        event.position,
+        rupture.radius,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+        'trigger-feedback-resonance-rupture',
+      );
+    }
+    if (
+      permanent
+      && event.killed
+      && event.firstHitAfterProximity
+      && this.bossBuild.completeCycleEnabled()
+    ) {
+      this.orbManager?.beginImmediateRecall(event.sourceOrbId);
     }
   }
 
@@ -1071,23 +1173,23 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardTier = rewardTierForBoss(defeatedBossKind);
     this.encounterDirector?.markBossDefeated();
     const owned = new Set(this.bossBuild?.snapshot() ?? []);
-    this.bossRewardChoices = selectLegacyBossRewardOptions(
-      this.bossRewardTier,
-      owned,
-      this.build?.getRanks() ?? createEmptyAbilityRanks(),
+    this.bossRewardChoices = selectBossRewardOptions({
+      ownedRewards: owned,
+      ranks: this.build?.getRanks() ?? createEmptyAbilityRanks(),
+      coreTypes: this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
+    },
       BOSS_REWARD_SEED,
     );
     this.applyLifecycle('rewardOpened');
     this.pause.add('bossReward');
     this.syncPauseState();
     this.bossRewardOverlay?.show(
-      this.bossRewardTier,
       this.bossRewardChoices,
-      (id) => this.chooseBossReward(id),
+      (choice) => this.chooseBossReward(choice),
     );
   }
 
-  private chooseBossReward(id: BossRewardId): boolean {
+  private chooseBossReward(choice: BossRewardChoice): boolean {
     if (
       this.defeated
       || !this.bossRewardOverlay?.isVisible()
@@ -1095,14 +1197,12 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return false;
     if (!this.bossRewardTier) return false;
-    if (!this.bossRewardChoices.includes(id) || this.bossBuild.owns(id)) return false;
-    this.bossBuild.acquire(id);
-    if (rewardAddsPermanentOrb(id)) {
-      this.orbLoadoutOverlay?.showAdditional((type) => {
-        if (!this.orbManager?.addOrb(type)) return false;
-        return this.completeBossReward();
-      });
-      return true;
+    if (!this.bossRewardChoices.some((candidate) =>
+      candidate.kind === choice.kind && candidate.id === choice.id)) return false;
+    if (choice.kind === 'ability-rank') this.build?.upgrade(choice.id);
+    else {
+      if (this.bossBuild.owns(choice.id)) return false;
+      this.bossBuild.acquire(choice.id);
     }
     return this.completeBossReward();
   }

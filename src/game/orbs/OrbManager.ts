@@ -53,6 +53,8 @@ export interface PermanentHitResult extends HitResult {
   coreType: OrbCoreId;
   conductionTriggered: boolean;
   speedRatio: number;
+  firstHitAfterProximity?: boolean;
+  echoStacks?: number;
 }
 
 export interface OrbCallbacks {
@@ -108,6 +110,8 @@ export class OrbStore {
     ) => number = () => 1,
     private readonly getTrackingRadiusBonus: (active: boolean) => number = () => 0,
     private readonly getTimedDurationMs: (baseMs: number) => number = (baseMs) => baseMs,
+    private readonly getConductionHitsRequired: (base: number) => number = (base) => base,
+    private readonly getInertiaHitLimit: () => number = () => 1,
   ) {
     this.records = Array.from(
       { length: STARTING_ORB_COUNT },
@@ -221,6 +225,10 @@ export class OrbStore {
     return this.beginDirectReturn(id, 'floor-returning', 'floorRecall');
   }
 
+  beginImmediateRecall(id: number): boolean {
+    return this.beginDirectReturn(id, 'floor-returning', 'floorRecall');
+  }
+
   handleEnemyHit(
     id: number,
     enemyId: number,
@@ -236,6 +244,8 @@ export class OrbStore {
     if (lastHitMs !== undefined && nowMs - lastHitMs < HIT_COOLDOWN_MS) return null;
 
     const source = record.lastRecoverySource;
+    const firstHitAfterProximity = source === 'proximity' && record.firstHitPending;
+    const echoStacks = record.coreState.echoStacks;
     let openingBonus = 0;
     if (source === 'proximity' && record.firstHitPending) {
       openingBonus = this.getOpeningHitBonus(source, true);
@@ -243,7 +253,17 @@ export class OrbStore {
         throw new RangeError('opening hit bonus must be exactly 0 or 1');
       }
     }
-    const core = resolveCoreDirectHit(record.coreType, record.coreState);
+    const inertiaLaunchStacks = record.coreState.inertiaLaunchStacks;
+    const retainInertia = record.coreType === 'inertia'
+      && inertiaLaunchStacks > 0
+      && !record.hasDirectHit
+      && this.getInertiaHitLimit() > 1;
+    const core = resolveCoreDirectHit(
+      record.coreType,
+      record.coreState,
+      this.getConductionHitsRequired(GAME_TUNING.orbCores.conduction.hitsRequired),
+    );
+    if (retainInertia) core.next.inertiaLaunchStacks = inertiaLaunchStacks;
     const speed = Math.hypot(record.velocity.x, record.velocity.y);
     const conditionalBonus = Math.min(
       GAME_TUNING.build.conditionalDamageCap,
@@ -293,6 +313,8 @@ export class OrbStore {
       coreType: record.coreType,
       conductionTriggered: core.conductionTriggered,
       speedRatio: speed / ORB_SPEED,
+      firstHitAfterProximity,
+      echoStacks,
     };
   }
 
@@ -509,6 +531,8 @@ export interface OrbManagerOptions extends OrbCallbacks {
   ): number;
   getTrackingRadiusBonus?(active: boolean): number;
   getTimedDurationMs?(baseMs: number): number;
+  getConductionHitsRequired?(base: number): number;
+  getInertiaHitLimit?(): number;
   startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
   textureKey?: string;
 }
@@ -565,6 +589,8 @@ export class OrbManager {
       options.getFlightSpeedMultiplier,
       options.getTrackingRadiusBonus,
       options.getTimedDurationMs,
+      options.getConductionHitsRequired,
+      options.getInertiaHitLimit,
     );
     if (options.startingCoreTypes) {
       this.store.configureStartingCores(options.startingCoreTypes);
@@ -647,6 +673,15 @@ export class OrbManager {
     if (!owned) return false;
     this.synchronizeOwnedSprite(owned.sprite, owned.id);
     const changed = this.store.beginFloorRecall(owned.id);
+    if (changed) this.synchronizeSprites();
+    return changed;
+  }
+
+  beginImmediateRecall(orb: OrbSprite | number): boolean {
+    const owned = this.resolveOwnedOrb(orb);
+    if (!owned) return false;
+    this.synchronizeOwnedSprite(owned.sprite, owned.id);
+    const changed = this.store.beginImmediateRecall(owned.id);
     if (changed) this.synchronizeSprites();
     return changed;
   }
