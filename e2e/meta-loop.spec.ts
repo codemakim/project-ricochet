@@ -71,6 +71,9 @@ test('@desktop completes all three bosses without a final combat reward', async 
   const complete = await combatSnapshot(page);
   expect(complete.encounter.state).toBe('runComplete');
   expect(complete.bossRewardVisible).toBe(false);
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
+  expect((await combatSnapshot(page)).encounter.stageId).toBe('default-1');
 });
 
 test('@desktop settles, unlocks a core, and persists the redeploy loadout', async ({ page }) => {

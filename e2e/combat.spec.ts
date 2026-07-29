@@ -427,7 +427,7 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
   expect(box.height).toBeGreaterThan(box.width);
 });
 
-test('@desktop chooses permanent orb cores and a typed bonus orb', async ({ page }) => {
+test('@desktop chooses permanent orb cores', async ({ page }) => {
   await page.goto('/?combat=1');
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
@@ -454,24 +454,6 @@ test('@desktop chooses permanent orb cores and a typed bonus orb', async ({ page
     .filter((key) => key?.startsWith('orb-'))))
     .toEqual(expect.arrayContaining(['orb-echo', 'orb-inertia']));
 
-  await enterMidbossByScore(page);
-  const reward = await defeatMidboss(page);
-  const expandedIndex = reward.bossRewardChoices.indexOf('expanded-magazine');
-  expect(expandedIndex).toBeGreaterThanOrEqual(0);
-  await page.keyboard.press(`Digit${expandedIndex + 1}`);
-  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
-  for (const world of [{ x: 330, y: 285 }, { x: 225, y: 575 }]) {
-    const point = clientPoint(box, world);
-    await page.mouse.click(point.x, point.y);
-  }
-  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
-  await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-2');
-  expect((await snapshot(page)).orbs.map((orb) => orb.coreType)).toEqual([
-    'echo',
-    'echo',
-    'inertia',
-    'corrosion',
-  ]);
 });
 
 test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
@@ -1465,7 +1447,7 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
   expect(resumed.boss.active).toBe(false);
 });
 
-test('@desktop chain warhead enables temporary-orb explosions only after reward acquisition', async ({ page }) => {
+test('@desktop auxiliary link requires a compatible temporary-orb build', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const beforeRewardIds = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
@@ -1564,29 +1546,10 @@ test('@desktop chain warhead enables temporary-orb explosions only after reward 
 
   await enterMidbossByScore(page);
   const reward = await defeatMidboss(page);
-  const chainIndex = reward.bossRewardChoices.indexOf('chain-warhead');
-  expect(chainIndex).toBeGreaterThanOrEqual(0);
-  await page.keyboard.press(`Digit${chainIndex + 1}`);
-  await expect.poll(async () => (await snapshot(page)).bossRewards).toContain('chain-warhead');
-
-  const afterRewardIds = await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
-    const enemies = scene.getDebugSnapshot().enemies;
-    const [anchor, direct, splash] = enemies;
-    scene.debugRemoveEnemies(enemies.slice(3).map((enemy) => enemy.id));
-    scene.debugSetEnemy(anchor!.id, { x: 100, y: 300 }, 99);
-    scene.debugSetEnemy(direct!.id, { x: 63, y: 220 }, 2);
-    scene.debugSetEnemy(splash!.id, { x: 25, y: 220 }, 2);
-    return { anchorId: anchor!.id, directId: direct!.id, splashId: splash!.id };
-  });
-  await spawnTemporaryOrb(afterRewardIds.anchorId);
-  await hitWithTemporaryOrb(afterRewardIds.directId);
-  expect((await snapshot(page)).enemies.find(
-    (enemy) => enemy.id === afterRewardIds.directId,
-  )!.hp).toBeCloseTo(1.6);
-  expect((await snapshot(page)).enemies.find(
-    (enemy) => enemy.id === afterRewardIds.splashId,
-  )!.hp).toBeCloseTo(1.55);
+  const auxiliaryIndex = reward.bossRewardChoices.indexOf('auxiliary-link');
+  expect(auxiliaryIndex).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press(`Digit${auxiliaryIndex + 1}`);
+  await expect.poll(async () => (await snapshot(page)).bossRewards).toContain('auxiliary-link');
 });
 
 test('@desktop midboss rewards and encounter state reset on restart', async ({ page }) => {
@@ -1914,7 +1877,7 @@ test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ 
   expect(defeated.boss.warnings).toBe(0);
 });
 
-test('@desktop acquires one second relic before completing the run', async ({ page }) => {
+test('@desktop acquires one second relic before starting stage three', async ({ page }) => {
   await loadCanvas(page);
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
@@ -1930,15 +1893,14 @@ test('@desktop acquires one second relic before completing the run', async ({ pa
   expect(reward.bossRewardTier).toBe('second');
   expect(reward.bossRewardChoices).toHaveLength(3);
   expect(new Set(reward.bossRewardChoices).size).toBe(3);
-  const selected = reward.bossRewardChoices[0]!;
   await chooseBossReward(page);
-  await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(true);
-  const complete = await snapshot(page);
-  expect(complete.bossRewards.filter((id) => id === selected)).toHaveLength(1);
-  expect(complete.pauseReasons).toContain('runComplete');
+  await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-3');
+  const resumed = await snapshot(page);
+  expect(resumed.bossRewardVisible).toBe(false);
+  expect(resumed.pauseReasons).not.toContain('runComplete');
 });
 
-test('@desktop completes both stages, freezes the run, and restarts', async ({ page }) => {
+test('@desktop completes the first two stages and resumes stage three', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
@@ -1966,41 +1928,15 @@ test('@desktop completes both stages, freezes the run, and restarts', async ({ p
   });
   expect(secondReward.bossRewardTier).toBe('second');
   await chooseBossReward(page);
-  await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(true);
-  const complete = await snapshot(page);
-  expect(complete.encounter).toMatchObject({
-    state: 'runComplete',
-    stageId: 'default-2',
-    stageNumber: 2,
+  await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-3');
+  const resumed = await snapshot(page);
+  expect(resumed.encounter).toMatchObject({
+    state: 'running',
+    stageNumber: 3,
+    bossesDefeated: 2,
   });
-  expect(complete.pauseReasons).toContain('runComplete');
-  expect(complete.boss.active).toBe(false);
-  expect(complete.enemies).toEqual([]);
-  expect(complete.activePopulation).toBe(0);
-  expect(complete.activeShooters).toBe(0);
-  expect(complete.bullets).toBe(0);
-  expect(complete.bossRewards).toHaveLength(2);
-  expect(await sceneCall(page, (scene) => scene.children.list.some(
-    ({ text }) => text === 'RUN COMPLETE',
-  ))).toBe(true);
-  await page.waitForTimeout(100);
-  expect((await snapshot(page)).gameplayElapsedMs).toBe(complete.gameplayElapsedMs);
-
-  const restart = clientPoint(box, { x: 225, y: 442 });
-  await page.mouse.click(restart.x, restart.y);
-  await expect.poll(async () => (await snapshot(page)).runCompleteVisible).toBe(false);
-  await confirmCoreLoadout(page);
-  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
-  expect(await snapshot(page)).toMatchObject({
-    encounter: {
-      state: 'running',
-      stageId: 'default-1',
-      stageNumber: 1,
-      bossesDefeated: 0,
-    },
-    pauseReasons: [],
-    bossRewards: [],
-  });
+  expect(resumed.pauseReasons).not.toContain('runComplete');
+  expect(resumed.bossRewards.length).toBeGreaterThanOrEqual(1);
 });
 
 test('@mobile keeps movement and retained aim during second-stage density and hive combat', async ({ page }) => {

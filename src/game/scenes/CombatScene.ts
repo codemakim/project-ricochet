@@ -1454,6 +1454,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private readonly handleVisibilityChange = (): void => {
+    if (!this.sys.isActive()) return;
     if (document.hidden) {
       this.pause.add('visibility');
     } else {
