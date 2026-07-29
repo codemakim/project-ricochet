@@ -1,12 +1,29 @@
-import type { AbilityId, AbilityRanks } from './progressionRules';
+import type { OrbCoreId } from '../orbs/orbCoreRules';
+import {
+  ABILITY_IDS,
+  ABILITY_MAX_RANKS,
+  type AbilityId,
+  type AbilityRanks,
+} from './progressionRules';
 
 export const BOSS_REWARD_IDS = [
+  'auxiliary-link',
+  'cross-cut',
+  'gas-ignition',
+  'recursive-split',
+  'inertia-retention',
+  'complete-cycle',
+  'direct-link',
+  'superconducting-circuit',
+  'resonance-rupture',
+] as const;
+
+export const LEGACY_FIRST_BOSS_REWARD_IDS = [
   'expanded-magazine',
   'recovery-capacitor',
   'opening-amplifier',
   'chain-warhead',
 ] as const;
-
 export const SECOND_BOSS_REWARD_IDS = [
   'auxiliary-orbit',
   'recovery-salvo',
@@ -16,19 +33,54 @@ export const SECOND_BOSS_REWARD_IDS = [
   'aftershock-explosion',
   'chain-split',
 ] as const;
-
-const SECOND_UNIVERSAL_REWARD_IDS = SECOND_BOSS_REWARD_IDS.slice(0, 3);
-const SECOND_EVOLUTION_BY_ABILITY = {
-  firepower: 'hyperpressure-core',
-  kinetic: 'inertial-penetration',
-  explosion: 'aftershock-explosion',
-  split: 'chain-split',
-} as const satisfies Partial<Record<AbilityId, SecondBossRewardId>>;
-
-export type FirstBossRewardId = typeof BOSS_REWARD_IDS[number];
-export type SecondBossRewardId = typeof SECOND_BOSS_REWARD_IDS[number];
 export type BossRewardTier = 'first' | 'second';
-export type BossRewardId = FirstBossRewardId | SecondBossRewardId;
+type NewBossRewardId = typeof BOSS_REWARD_IDS[number];
+type LegacyBossRewardId =
+  | typeof LEGACY_FIRST_BOSS_REWARD_IDS[number]
+  | typeof SECOND_BOSS_REWARD_IDS[number];
+export type BossRewardId = NewBossRewardId | LegacyBossRewardId;
+export type BossRewardChoice =
+  | { kind: 'relic'; id: NewBossRewardId }
+  | { kind: 'ability-rank'; id: AbilityId };
+
+export interface BossRewardContext {
+  ownedRewards: ReadonlySet<BossRewardId>;
+  ranks: Readonly<AbilityRanks>;
+  coreTypes: readonly OrbCoreId[];
+}
+
+const TRIGGER_ABILITIES: readonly AbilityId[] = [
+  'explosion',
+  'horizontal-cutter',
+  'vertical-cutter',
+  'destruction-reaction',
+  'micro-missile',
+  'high-speed-impact',
+];
+
+function eligible(id: NewBossRewardId, context: BossRewardContext): boolean {
+  const rank = (ability: AbilityId) => context.ranks[ability] > 0;
+  const core = (type: OrbCoreId) => context.coreTypes.includes(type);
+  switch (id) {
+    case 'auxiliary-link':
+    case 'recursive-split':
+      return rank('split');
+    case 'cross-cut':
+      return rank('horizontal-cutter') || rank('vertical-cutter');
+    case 'gas-ignition':
+      return rank('explosion') && core('corrosion');
+    case 'inertia-retention':
+      return core('inertia');
+    case 'complete-cycle':
+      return rank('reload-overcharge');
+    case 'direct-link':
+      return rank('reload-overcharge') && TRIGGER_ABILITIES.some(rank);
+    case 'superconducting-circuit':
+      return core('conduction');
+    case 'resonance-rupture':
+      return core('echo');
+  }
+}
 
 function nextSeed(seed: number): number {
   return (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -45,75 +97,38 @@ function seededShuffle<T>(values: readonly T[], seed: number): T[] {
   return shuffled;
 }
 
-function selectFirstBossRewardOptions(
-  owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<Partial<AbilityRanks>>,
+export function selectBossRewardOptions(
+  context: BossRewardContext,
   seed: number,
-): BossRewardId[] {
-  const eligible = BOSS_REWARD_IDS.filter((id) =>
-    !owned.has(id)
-    && (
-      id !== 'chain-warhead'
-      || ((ranks.split ?? 0) >= 1 && (ranks.explosion ?? 0) >= 1)
-    ),
-  );
-  if (eligible.length < 3) {
-    throw new RangeError(`at least 3 eligible boss rewards are required; received ${eligible.length}`);
-  }
-  return seededShuffle(eligible, seed).slice(0, 3);
-}
-
-function selectSecondBossRewardOptions(
-  owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<Partial<AbilityRanks>>,
-  seed: number,
-): BossRewardId[] {
-  const universals = SECOND_UNIVERSAL_REWARD_IDS.filter((id) => !owned.has(id));
-  const evolutions = Object.entries(SECOND_EVOLUTION_BY_ABILITY)
-    .filter(([ability, id]) => (ranks[ability as AbilityId] ?? 0) >= 1 && !owned.has(id))
-    .map(([, id]) => id);
-
-  const guaranteed = seededShuffle(evolutions, seed)[0];
-  const pool = guaranteed
-    ? [...universals, ...evolutions.filter((id) => id !== guaranteed)]
-    : universals;
-  const options = [
-    ...(guaranteed ? [guaranteed] : []),
-    ...seededShuffle(pool, seed ^ 0x9e3779b9).slice(0, guaranteed ? 2 : 3),
-  ];
-
-  if (options.length !== 3 || new Set(options).size !== 3) {
+): BossRewardChoice[] {
+  const relics: BossRewardChoice[] = BOSS_REWARD_IDS
+    .filter((id) => !context.ownedRewards.has(id) && eligible(id, context))
+    .map((id) => ({ kind: 'relic', id }));
+  const abilityRanks: BossRewardChoice[] = ABILITY_IDS
+    .filter((id) => context.ranks[id] > 0 && context.ranks[id] < ABILITY_MAX_RANKS[id])
+    .map((id) => ({ kind: 'ability-rank', id }));
+  const choices = seededShuffle(relics, seed)
+    .concat(seededShuffle(abilityRanks, seed ^ 0x9e3779b9))
+    .slice(0, 3);
+  if (choices.length !== 3) {
     throw new RangeError(
-      `second boss reward selection requires exactly 3 distinct eligible rewards; received ${options.length}`,
+      `boss reward selection requires exactly 3 distinct choices; received ${choices.length}`,
     );
   }
-  return options;
+  return choices;
 }
 
-export function selectBossRewardOptions(
+/** @deprecated Removed after CombatScene migrates to tagged choices. */
+export function selectLegacyBossRewardOptions(
   tier: BossRewardTier,
   owned: ReadonlySet<BossRewardId>,
   ranks: Readonly<Partial<AbilityRanks>>,
   seed: number,
-): BossRewardId[];
-/** @deprecated Use the tiered overload. */
-export function selectBossRewardOptions(
-  owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<Partial<AbilityRanks>>,
-  seed: number,
-): BossRewardId[];
-export function selectBossRewardOptions(
-  tierOrOwned: BossRewardTier | ReadonlySet<BossRewardId>,
-  ownedOrRanks: ReadonlySet<BossRewardId> | Readonly<Partial<AbilityRanks>>,
-  ranksOrSeed: Readonly<Partial<AbilityRanks>> | number,
-  maybeSeed?: number,
-): BossRewardId[] {
-  const legacy = typeof tierOrOwned !== 'string';
-  const tier = legacy ? 'first' : tierOrOwned;
-  const owned = (legacy ? tierOrOwned : ownedOrRanks) as ReadonlySet<BossRewardId>;
-  const ranks = (legacy ? ownedOrRanks : ranksOrSeed) as Readonly<Partial<AbilityRanks>>;
-  const seed = (legacy ? ranksOrSeed : maybeSeed) as number;
-  return tier === 'first'
-    ? selectFirstBossRewardOptions(owned, ranks, seed)
-    : selectSecondBossRewardOptions(owned, ranks, seed);
+): LegacyBossRewardId[] {
+  const first = LEGACY_FIRST_BOSS_REWARD_IDS.filter((id) =>
+    !owned.has(id)
+    && (id !== 'chain-warhead' || ((ranks.split ?? 0) > 0 && (ranks.explosion ?? 0) > 0)));
+  const second = SECOND_BOSS_REWARD_IDS.filter((id) => !owned.has(id));
+  const pool = tier === 'first' ? first : second;
+  return seededShuffle(pool, seed).slice(0, 3);
 }

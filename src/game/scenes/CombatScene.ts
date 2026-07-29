@@ -54,7 +54,7 @@ import {
   type AbilityRanks,
 } from '../progression/progressionRules';
 import {
-  selectBossRewardOptions,
+  selectLegacyBossRewardOptions,
   type BossRewardId,
   type BossRewardTier,
 } from '../progression/bossRewardRules';
@@ -1071,7 +1071,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardTier = rewardTierForBoss(defeatedBossKind);
     this.encounterDirector?.markBossDefeated();
     const owned = new Set(this.bossBuild?.snapshot() ?? []);
-    this.bossRewardChoices = selectBossRewardOptions(
+    this.bossRewardChoices = selectLegacyBossRewardOptions(
       this.bossRewardTier,
       owned,
       this.build?.getRanks() ?? createEmptyAbilityRanks(),

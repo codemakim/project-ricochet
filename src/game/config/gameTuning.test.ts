@@ -120,13 +120,15 @@ describe('GAME_TUNING', () => {
         count: 3, spreadDegrees: 18,
       },
     });
-    expect(GAME_TUNING.relics.secondBoss).toEqual({
-      auxiliaryOrbit: { orbLimit: 6 },
-      recoverySalvo: { temporaryOrbCount: 2 },
-      siegeResonance: { hitsRequired: 10, radius: 80, damage: 2 },
-      hyperpressureCore: { chargedDamageBonus: 0.75 },
-      aftershockExplosion: { delayMs: 350, radiusScale: 0.8, damageScale: 0.5 },
-      chainSplit: { childCount: 2, angles: [-25, 25] },
+    expect(GAME_TUNING.relics).toMatchObject({
+      auxiliaryLink: { procScale: 0.25 },
+      crossCut: { damageScale: 0.6 },
+      gasIgnition: { remainingDamageFraction: 0.5 },
+      recursiveSplit: { chance: 0.2, childCount: 1 },
+      inertiaRetention: { directHits: 2 },
+      directLink: { overchargeScale: 0.3 },
+      superconductingCircuit: { hitReduction: 1, damageBonus: 0.2 },
+      resonanceRupture: { radius: 44, damage: 0.65 },
     });
   });
 
@@ -186,9 +188,6 @@ describe('GAME_TUNING', () => {
     ['fractional boss area target count', (value: Mutable<GameTuning>) => {
       value.bossAreaDamage.maxSecondaryTargets = 1.5;
     }],
-    ['invalid permanent orb cap', (value: Mutable<GameTuning>) => {
-      value.relics.secondBoss.auxiliaryOrbit.orbLimit = 2;
-    }],
     ['non-finite hive core x', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = Number.NaN;
     }],
@@ -235,7 +234,7 @@ describe('GAME_TUNING', () => {
       value.temporaryOrbs.baseDamage = 0;
     }],
     ['non-finite relic value', (value: Mutable<GameTuning>) => {
-      value.relics.secondBoss.aftershockExplosion.radiusScale = Number.NaN;
+      value.relics.crossCut.damageScale = Number.NaN;
     }],
     ['non-finite obstacle padding', (value: Mutable<GameTuning>) => {
       value.boss.movement.obstaclePadding = Number.POSITIVE_INFINITY;

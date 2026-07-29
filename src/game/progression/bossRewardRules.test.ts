@@ -1,152 +1,95 @@
 import { describe, expect, it } from 'vitest';
+import { createEmptyAbilityRanks } from './progressionRules';
 import {
   BOSS_REWARD_IDS,
-  SECOND_BOSS_REWARD_IDS,
   selectBossRewardOptions,
+  type BossRewardContext,
   type BossRewardId,
 } from './bossRewardRules';
 
-const noRanks = { firepower: 0, kinetic: 0, explosion: 0, split: 0 } as const;
-const secondEvolutionIds = new Set<BossRewardId>(SECOND_BOSS_REWARD_IDS.slice(3));
+function context(
+  ranks: Partial<ReturnType<typeof createEmptyAbilityRanks>> = {},
+  coreTypes: BossRewardContext['coreTypes'] = ['echo'],
+  ownedRewards: BossRewardId[] = [],
+): BossRewardContext {
+  return {
+    ranks: { ...createEmptyAbilityRanks(), ...ranks },
+    coreTypes,
+    ownedRewards: new Set(ownedRewards),
+  };
+}
 
 describe('bossRewardRules', () => {
-  it('defines exactly four reward ids', () => {
+  it('defines the nine approved build-relevant relics', () => {
     expect(BOSS_REWARD_IDS).toEqual([
-      'expanded-magazine',
-      'recovery-capacitor',
-      'opening-amplifier',
-      'chain-warhead',
+      'auxiliary-link',
+      'cross-cut',
+      'gas-ignition',
+      'recursive-split',
+      'inertia-retention',
+      'complete-cycle',
+      'direct-link',
+      'superconducting-circuit',
+      'resonance-rupture',
     ]);
   });
 
-  it('selects the three unique universal rewards when chain warhead is ineligible', () => {
-    const options = selectBossRewardOptions('first', new Set(), noRanks, 17);
+  it('admits relics only when their build prerequisites are present', () => {
+    const choices = Array.from({ length: 64 }, (_, seed) => selectBossRewardOptions(
+      context({
+        split: 1,
+        explosion: 1,
+        'horizontal-cutter': 1,
+        'reload-overcharge': 1,
+      }, ['echo', 'corrosion', 'conduction', 'inertia']),
+      seed,
+    )).flat();
+    const relics = choices.flatMap((choice) => choice.kind === 'relic' ? [choice.id] : []);
 
-    expect(options).toHaveLength(3);
-    expect(new Set(options).size).toBe(3);
-    expect(options).toEqual(expect.arrayContaining([
-      'expanded-magazine',
-      'recovery-capacitor',
-      'opening-amplifier',
+    expect(new Set(relics)).toEqual(new Set(BOSS_REWARD_IDS));
+    expect(selectBossRewardOptions(context({
+      firepower: 1,
+      kinetic: 1,
+      explosion: 1,
+      'armor-reinforcement': 1,
+    }, []), 4))
+      .toEqual(expect.not.arrayContaining([
+        expect.objectContaining({ kind: 'relic' }),
+      ]));
+  });
+
+  it('excludes owned relics and is deterministic', () => {
+    const build = context(
+      { split: 1, explosion: 1, 'reload-overcharge': 1 },
+      ['echo', 'inertia'],
+      ['recursive-split'],
+    );
+    const first = selectBossRewardOptions(build, 9876);
+
+    expect(first).toHaveLength(3);
+    expect(new Set(first.map((choice) => `${choice.kind}:${choice.id}`)).size).toBe(3);
+    expect(first).not.toContainEqual({ kind: 'relic', id: 'recursive-split' });
+    expect(selectBossRewardOptions(build, 9876)).toEqual(first);
+  });
+
+  it('fills an undersized relic pool with owned non-max ability ranks', () => {
+    const choices = selectBossRewardOptions(context({
+      firepower: 1,
+      kinetic: 1,
+      'armor-reinforcement': 1,
+    }, []), 17);
+
+    expect(choices).toHaveLength(3);
+    expect(choices.every((choice) => choice.kind === 'ability-rank')).toBe(true);
+    expect(new Set(choices.map(({ id }) => id))).toEqual(new Set([
+      'firepower',
+      'kinetic',
+      'armor-reinforcement',
     ]));
   });
 
-  it('requires both split and explosion rank 1 for chain warhead', () => {
-    for (const ranks of [
-      { ...noRanks, split: 1 },
-      { ...noRanks, explosion: 1 },
-    ]) {
-      expect(selectBossRewardOptions('first', new Set(), ranks, 4)).not.toContain('chain-warhead');
-    }
-
-    const eligible = Array.from({ length: 32 }, (_, seed) =>
-      selectBossRewardOptions('first', new Set(), { ...noRanks, split: 1, explosion: 1 }, seed),
-    ).flat();
-    expect(eligible).toContain('chain-warhead');
-  });
-
-  it('excludes owned rewards and is deterministic for the same seed', () => {
-    const owned = new Set<typeof BOSS_REWARD_IDS[number]>(['expanded-magazine']);
-    const ranks = { ...noRanks, split: 1, explosion: 1 };
-
-    const first = selectBossRewardOptions('first', owned, ranks, 9876);
-    expect(first).toHaveLength(3);
-    expect(first).not.toContain('expanded-magazine');
-    expect(selectBossRewardOptions('first', owned, ranks, 9876)).toEqual(first);
-  });
-
-  it('rejects an eligible pool smaller than three after ownership and chain filtering', () => {
-    const owned = new Set<typeof BOSS_REWARD_IDS[number]>([
-      'expanded-magazine',
-      'recovery-capacitor',
-    ]);
-
-    expect(() => selectBossRewardOptions('first', owned, noRanks, 9)).toThrow(
-      new RangeError('at least 3 eligible boss rewards are required; received 1'),
-    );
-  });
-
-  it('defines the seven second-tier reward ids', () => {
-    expect(SECOND_BOSS_REWARD_IDS).toEqual([
-      'auxiliary-orbit',
-      'recovery-salvo',
-      'siege-resonance',
-      'hyperpressure-core',
-      'inertial-penetration',
-      'aftershock-explosion',
-      'chain-split',
-    ]);
-  });
-
-  it('selects the three universal second-tier rewards when no evolution is eligible', () => {
-    const options = selectBossRewardOptions('second', new Set(), noRanks, 91);
-
-    expect(options).toHaveLength(3);
-    expect(new Set(options).size).toBe(3);
-    expect(options).toEqual(expect.arrayContaining([
-      'auxiliary-orbit',
-      'recovery-salvo',
-      'siege-resonance',
-    ]));
-  });
-
-  it('is deterministic, excludes owned rewards, and guarantees an eligible evolution', () => {
-    const ranks = { firepower: 1, kinetic: 2, explosion: 0, split: 0 };
-    const owned = new Set<BossRewardId>(['auxiliary-orbit']);
-    const first = selectBossRewardOptions('second', owned, ranks, 314159);
-
-    expect(first).toHaveLength(3);
-    expect(new Set(first).size).toBe(3);
-    expect(first).not.toContain('auxiliary-orbit');
-    expect(first.some((id) =>
-      id === 'hyperpressure-core' || id === 'inertial-penetration',
-    )).toBe(true);
-    expect(first).not.toContain('aftershock-explosion');
-    expect(first).not.toContain('chain-split');
-    expect(selectBossRewardOptions('second', owned, ranks, 314159)).toEqual(first);
-  });
-
-  it.each([
-    ['firepower', 'hyperpressure-core'],
-    ['kinetic', 'inertial-penetration'],
-    ['explosion', 'aftershock-explosion'],
-    ['split', 'chain-split'],
-  ] as const)('only admits the %s evolution when its rank is positive', (rank, reward) => {
-    const ranks = { ...noRanks, [rank]: 1 };
-    for (let seed = 0; seed < 20; seed += 1) {
-      const options = selectBossRewardOptions('second', new Set(), ranks, seed);
-      expect(options).toContain(reward);
-      expect(options.filter((id) => secondEvolutionIds.has(id))).toEqual([reward]);
-    }
-  });
-
-  it('excludes an owned eligible evolution from the second-tier pool', () => {
-    const options = selectBossRewardOptions(
-      'second',
-      new Set<BossRewardId>(['chain-split']),
-      { firepower: 1, kinetic: 1, explosion: 1, split: 1 },
-      812,
-    );
-
-    expect(options).not.toContain('chain-split');
-    expect(options.some((id) => secondEvolutionIds.has(id))).toBe(true);
-  });
-
-  it('throws a descriptive invariant when ownership leaves fewer than three second rewards', () => {
-    const owned = new Set<BossRewardId>([
-      'auxiliary-orbit',
-      'recovery-salvo',
-      'hyperpressure-core',
-      'inertial-penetration',
-      'aftershock-explosion',
-      'chain-split',
-    ]);
-
-    expect(() => selectBossRewardOptions(
-      'second',
-      owned,
-      { ...noRanks, firepower: 1 },
-      1,
-    )).toThrow('second boss reward selection requires exactly 3 distinct eligible rewards');
+  it('throws when fewer than three total choices exist', () => {
+    expect(() => selectBossRewardOptions(context({ firepower: 1 }, []), 1))
+      .toThrow('boss reward selection requires exactly 3 distinct choices; received 1');
   });
 });

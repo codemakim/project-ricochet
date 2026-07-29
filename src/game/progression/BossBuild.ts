@@ -2,12 +2,14 @@ import type { RecoverySource } from '../orbs/orbRules';
 import { GAME_TUNING } from '../config/gameTuning';
 import {
   BOSS_REWARD_IDS,
+  LEGACY_FIRST_BOSS_REWARD_IDS,
   SECOND_BOSS_REWARD_IDS,
   type BossRewardId,
 } from './bossRewardRules';
 
 const ALL_BOSS_REWARD_IDS: readonly BossRewardId[] = [
   ...BOSS_REWARD_IDS,
+  ...LEGACY_FIRST_BOSS_REWARD_IDS,
   ...SECOND_BOSS_REWARD_IDS,
 ];
 const SECOND_RELIC_TUNING = GAME_TUNING.relics.secondBoss;

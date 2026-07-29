@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { BossRewardId, BossRewardTier } from '../progression/bossRewardRules';
 
 const SECOND_RELIC_TUNING = GAME_TUNING.relics.secondBoss;
-const REWARD_COPY: Record<BossRewardId, { label: string; effect: string }> = {
+const REWARD_COPY: Partial<Record<BossRewardId, { label: string; effect: string }>> = {
   'expanded-magazine': {
     label: '증설 탄창',
     get effect() {
@@ -97,7 +97,7 @@ export class BossRewardOverlay {
         .setDepth(41)
         .setInteractive({ useHandCursor: true })
         .on('pointerup', select);
-      const copy = REWARD_COPY[id];
+      const copy = REWARD_COPY[id] ?? { label: id, effect: '' };
       const text = this.scene.add.text(
         GAME_WIDTH / 2,
         CARD_Y[index]!,

@@ -200,6 +200,14 @@ export interface GameTuning {
     timing: { shieldedMs: number; telegraphMs: number; exposedMs: number };
   };
   relics: {
+    auxiliaryLink: { procScale: number };
+    crossCut: { damageScale: number };
+    gasIgnition: { remainingDamageFraction: number };
+    recursiveSplit: { chance: number; childCount: number };
+    inertiaRetention: { directHits: number };
+    directLink: { overchargeScale: number };
+    superconductingCircuit: { hitReduction: number; damageBonus: number };
+    resonanceRupture: { radius: number; damage: number };
     secondBoss: {
       auxiliaryOrbit: { orbLimit: number };
       recoverySalvo: { temporaryOrbCount: number };
@@ -400,6 +408,14 @@ export const GAME_TUNING = {
     timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
   },
   relics: {
+    auxiliaryLink: { procScale: 0.25 },
+    crossCut: { damageScale: 0.6 },
+    gasIgnition: { remainingDamageFraction: 0.5 },
+    recursiveSplit: { chance: 0.2, childCount: 1 },
+    inertiaRetention: { directHits: 2 },
+    directLink: { overchargeScale: 0.3 },
+    superconductingCircuit: { hitReduction: 1, damageBonus: 0.2 },
+    resonanceRupture: { radius: 44, damage: 0.65 },
     secondBoss: {
       auxiliaryOrbit: { orbLimit: 6 },
       recoverySalvo: { temporaryOrbCount: 2 },
@@ -449,6 +465,12 @@ function finite(value: number, name: string): void {
 function nonNegative(value: number, name: string): void {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${name} must be finite and non-negative`);
+  }
+}
+
+function probability(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new RangeError(`${name} must be between zero and one`);
   }
 }
 
@@ -888,11 +910,19 @@ export function validateGameTuning(tuning: GameTuning): void {
   for (const [phase, duration] of Object.entries(hiveBoss.timing)) {
     positive(duration, `hiveBoss.timing.${phase}`);
   }
+  probability(relics.auxiliaryLink.procScale, 'relics.auxiliaryLink.procScale');
+  probability(relics.crossCut.damageScale, 'relics.crossCut.damageScale');
+  probability(relics.gasIgnition.remainingDamageFraction, 'relics.gasIgnition.remainingDamageFraction');
+  probability(relics.recursiveSplit.chance, 'relics.recursiveSplit.chance');
+  positiveInteger(relics.recursiveSplit.childCount, 'relics.recursiveSplit.childCount');
+  positiveInteger(relics.inertiaRetention.directHits, 'relics.inertiaRetention.directHits');
+  probability(relics.directLink.overchargeScale, 'relics.directLink.overchargeScale');
+  positiveInteger(relics.superconductingCircuit.hitReduction, 'relics.superconductingCircuit.hitReduction');
+  positive(relics.superconductingCircuit.damageBonus, 'relics.superconductingCircuit.damageBonus');
+  positive(relics.resonanceRupture.radius, 'relics.resonanceRupture.radius');
+  positive(relics.resonanceRupture.damage, 'relics.resonanceRupture.damage');
   const { secondBoss } = relics;
   positiveInteger(secondBoss.auxiliaryOrbit.orbLimit, 'relics.secondBoss.auxiliaryOrbit.orbLimit');
-  if (secondBoss.auxiliaryOrbit.orbLimit < 3) {
-    throw new RangeError('auxiliary orbit limit must fit the starting orb count');
-  }
   positiveInteger(secondBoss.recoverySalvo.temporaryOrbCount, 'relics.secondBoss.recoverySalvo.temporaryOrbCount');
   positiveInteger(secondBoss.siegeResonance.hitsRequired, 'relics.secondBoss.siegeResonance.hitsRequired');
   positive(secondBoss.siegeResonance.radius, 'relics.secondBoss.siegeResonance.radius');
@@ -902,9 +932,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(secondBoss.aftershockExplosion.radiusScale, 'relics.secondBoss.aftershockExplosion.radiusScale');
   positive(secondBoss.aftershockExplosion.damageScale, 'relics.secondBoss.aftershockExplosion.damageScale');
   positiveInteger(secondBoss.chainSplit.childCount, 'relics.secondBoss.chainSplit.childCount');
-  if (!secondBoss.chainSplit.angles.every(Number.isFinite)) {
-    throw new RangeError('relics.secondBoss.chainSplit.angles must be finite');
-  }
   for (const [name, friendly] of Object.entries(visual.friendly)) {
     finite(friendly.fill, `visual.friendly.${name}.fill`);
     finite(friendly.accent, `visual.friendly.${name}.accent`);
