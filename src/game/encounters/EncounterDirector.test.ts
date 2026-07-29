@@ -106,7 +106,7 @@ describe('EncounterDirector', () => {
 
   it('advances the first reward to stage 2 with reset stage clocks', () => {
     const director = new EncounterDirector(1234);
-    finishActiveBoss(director);
+    expect(finishActiveBoss(director)).toEqual({ type: 'rewardRequired' });
     const elapsedMs = director.getSnapshot().elapsedMs;
 
     expect(director.resumeAfterBossReward()).toEqual({
@@ -139,17 +139,27 @@ describe('EncounterDirector', () => {
     });
   });
 
-  it('returns run completion after the final boss reward', () => {
+  it('advances the second reward to stage 3', () => {
     const director = startStageTwo();
-    finishActiveBoss(director);
+    expect(finishActiveBoss(director)).toEqual({ type: 'rewardRequired' });
 
-    expect(director.resumeAfterBossReward()).toEqual({ type: 'runCompleted' });
+    expect(director.resumeAfterBossReward()).toEqual({
+      type: 'stageStarted',
+      stageId: 'default-3',
+      stageNumber: 3,
+    });
+  });
+
+  it('completes directly when the third boss is defeated', () => {
+    const director = startStageThree();
+
+    expect(finishActiveBoss(director)).toEqual({ type: 'runCompleted' });
     expect(director.getSnapshot()).toMatchObject({
       state: 'runComplete',
-      stageIndex: 1,
-      stageId: 'default-2',
-      stageNumber: 2,
-      bossesDefeated: 2,
+      stageIndex: 2,
+      stageId: 'default-3',
+      stageNumber: 3,
+      bossesDefeated: 3,
     });
     expect(director.update(999_999, clearTop)).toEqual({ formation: null, transition: null });
   });
@@ -177,11 +187,11 @@ describe('EncounterDirector', () => {
       .toThrow('cannot resume after boss reward while encounter state is running');
   });
 
-  function finishActiveBoss(director: EncounterDirector): void {
+  function finishActiveBoss(director: EncounterDirector) {
     const stage = STAGES[director.getSnapshot().stageIndex]!;
     director.update(stage.boss.hardMaximumMs, clearTop);
     director.update(stage.boss.warningMs, clearTop);
-    director.markBossDefeated();
+    return director.markBossDefeated();
   }
 
   function startStageTwo(): EncounterDirector {
@@ -189,6 +199,13 @@ describe('EncounterDirector', () => {
     finishActiveBoss(director);
     director.resumeAfterBossReward();
     createFormationSpy.mockClear();
+    return director;
+  }
+
+  function startStageThree(): EncounterDirector {
+    const director = startStageTwo();
+    finishActiveBoss(director);
+    director.resumeAfterBossReward();
     return director;
   }
 });

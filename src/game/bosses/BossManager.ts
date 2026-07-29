@@ -17,7 +17,13 @@ import type {
   BossProjectileSnapshot as CommonBossProjectileSnapshot,
 } from './bossEncounter';
 import { BOSS_GEOMETRY } from './bossGeometry';
-import { aimedBurst, aimedShot, fallingOrigins } from './bossAttackPatterns';
+import {
+  aimedBurst,
+  aimedShot,
+  fallingOrigins,
+  movingVerticalLaser,
+  type MovingLaserSpec,
+} from './bossAttackPatterns';
 import { updateBossMotion, type BossMotion, type HorizontalInterval } from './bossMovementRules';
 import {
   bossPhase,
@@ -41,12 +47,13 @@ const PART_HIT_IDS: Record<BossPartId, number> = {
 };
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
-type BossProjectileKind = 'basic' | 'aimed';
+type BossProjectileKind = 'basic' | 'aimed' | 'movingLaser';
 type BossProjectileSprite = BossSprite & { bossProjectileKind: BossProjectileKind };
 type Warning =
   | { kind: 'basicShot'; dueAt: number; marker: BossSprite }
   | { kind: 'aimedShot'; dueAt: number; marker: BossSprite; target: Vector }
-  | { kind: 'supportDrop'; dueAt: number; marker: BossSprite; x: number };
+  | { kind: 'supportDrop'; dueAt: number; marker: BossSprite; x: number }
+  | { kind: 'movingLaser'; dueAt: number; marker: BossSprite; spec: MovingLaserSpec };
 
 interface PendingHit {
   result: HitResult | PermanentHitResult;
@@ -59,6 +66,7 @@ interface PendingHit {
 export type { BossDirectHitEvent } from './bossEncounter';
 
 export interface BossManagerOptions {
+  kind?: 'sentinel' | 'siege';
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
   temporaryOrbManager: TemporaryOrbManager;
@@ -71,7 +79,7 @@ export interface BossManagerOptions {
 }
 
 export interface BossManagerSnapshot extends BossEncounterSnapshot {
-  kind: 'sentinel';
+  kind: 'sentinel' | 'siege';
   active: boolean;
   phase: BossPhase | null;
   position: Vector | null;
@@ -95,6 +103,7 @@ export class BossManager implements BossEncounter {
   private readonly partSprites: Record<BossPartId, BossSprite>;
   private readonly aimedBulletGroup: Phaser.Physics.Arcade.Group;
   private readonly fallingHazardGroup: Phaser.Physics.Arcade.Group;
+  private readonly laserGroup?: Phaser.Physics.Arcade.Group;
   private readonly warningGroup: Phaser.Physics.Arcade.Group;
   private readonly colliders: Phaser.Physics.Arcade.Collider[] = [];
   private readonly pendingHits = new Map<string, PendingHit>();
@@ -105,6 +114,9 @@ export class BossManager implements BossEncounter {
   private lastGameplayElapsedMs: number;
   private nextAttackAt: number;
   private nextBasicShotAt: number;
+  private nextLaserAt: number;
+  private laserExpiresAt = 0;
+  private lastLaserHitAt = Number.NEGATIVE_INFINITY;
   private destroyed = false;
   private defeatReported = false;
   private readonly unsubscribeOrbAdded: () => void;
@@ -117,8 +129,14 @@ export class BossManager implements BossEncounter {
     this.lastGameplayElapsedMs = now;
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
     this.nextBasicShotAt = now + GAME_TUNING.projectiles.bossBasic.intervalMs;
+    this.nextLaserAt = now + GAME_TUNING.projectiles.siegeLaser.intervalMs;
 
-    this.body = scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, 'boss-body');
+    const texturePrefix = options.kind === 'siege' ? 'siege' : 'boss';
+    this.body = scene.physics.add.sprite(
+      this.motion.x,
+      GAME_TUNING.boss.y,
+      `${texturePrefix}-body`,
+    );
     this.body
       .setImmovable(true)
       .setSize(GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height)
@@ -127,14 +145,14 @@ export class BossManager implements BossEncounter {
       leftWeakpoint: scene.physics.add.sprite(
         this.motion.x - BOSS_GEOMETRY.weakpointOffsetX,
         GAME_TUNING.boss.y,
-        'boss-left-weakpoint',
+        `${texturePrefix}-left-weakpoint`,
       ),
       rightWeakpoint: scene.physics.add.sprite(
         this.motion.x + BOSS_GEOMETRY.weakpointOffsetX,
         GAME_TUNING.boss.y,
-        'boss-right-weakpoint',
+        `${texturePrefix}-right-weakpoint`,
       ),
-      core: scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, 'boss-core'),
+      core: scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, `${texturePrefix}-core`),
     };
     this.partSprites.leftWeakpoint
       .setImmovable(true)
@@ -159,6 +177,9 @@ export class BossManager implements BossEncounter {
 
     this.aimedBulletGroup = scene.physics.add.group({ allowGravity: false });
     this.fallingHazardGroup = scene.physics.add.group({ allowGravity: false });
+    this.laserGroup = options.kind === 'siege'
+      ? scene.physics.add.group({ allowGravity: false })
+      : undefined;
     this.warningGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
 
     for (const orb of options.orbManager.getSprites()) {
@@ -174,6 +195,13 @@ export class BossManager implements BossEncounter {
       this.aimedBulletGroup,
       (_player, bullet) => this.consumeBossProjectile(bullet as BossProjectileSprite),
     ));
+    if (this.laserGroup) {
+      this.colliders.push(scene.physics.add.overlap(
+        options.player,
+        this.laserGroup,
+        () => this.hitPlayerWithLaser(),
+      ));
+    }
     this.colliders.push(scene.physics.add.overlap(
       options.player,
       this.fallingHazardGroup,
@@ -204,9 +232,14 @@ export class BossManager implements BossEncounter {
     this.lastGameplayElapsedMs = now;
 
     if (bossPhase(this.state) !== 'defeated') {
-      this.motion = updateBossMotion(this.motion, deltaMs, this.enemyObstacles());
+      this.motion = updateBossMotion(
+        this.motion,
+        deltaMs * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.movementSpeedScale : 1),
+        this.enemyObstacles(),
+      );
       this.positionBossSprites();
       this.scheduleAttacks(now);
+      if (this.options.kind === 'siege') this.scheduleLaser(now);
       this.resolveWarnings(now);
     }
     this.cleanOffscreenHostiles();
@@ -215,7 +248,7 @@ export class BossManager implements BossEncounter {
   getSnapshot(): BossManagerSnapshot {
     if (this.destroyed) {
       return {
-        kind: 'sentinel',
+        kind: this.kind(),
         active: false,
         phase: null,
         position: null,
@@ -230,7 +263,7 @@ export class BossManager implements BossEncounter {
     }
     const projectiles = this.activeProjectiles();
     return {
-      kind: 'sentinel',
+      kind: this.kind(),
       active: true,
       phase: bossPhase(this.state),
       position: { x: this.motion.x, y: GAME_TUNING.boss.y },
@@ -244,6 +277,7 @@ export class BossManager implements BossEncounter {
       aimedBullets: projectiles.filter(({ kind }) => kind === 'aimed').length,
       fallingHazards: this.activeCount(this.fallingHazardGroup),
       warnings: this.warnings.length,
+      warningKinds: this.warnings.map(({ kind }) => kind),
       projectiles,
     };
   }
@@ -313,6 +347,7 @@ export class BossManager implements BossEncounter {
     if (this.destroyed) return;
     this.clearGroup(this.aimedBulletGroup);
     this.clearGroup(this.fallingHazardGroup);
+    if (this.laserGroup) this.clearGroup(this.laserGroup);
     this.clearGroup(this.warningGroup);
     this.warnings = [];
   }
@@ -330,6 +365,7 @@ export class BossManager implements BossEncounter {
     for (const sprite of Object.values(this.partSprites)) sprite.destroy();
     this.aimedBulletGroup.destroy(true);
     this.fallingHazardGroup.destroy(true);
+    this.laserGroup?.destroy(true);
     this.warningGroup.destroy(true);
     this.debugSetPosition = undefined;
   }
@@ -517,7 +553,7 @@ export class BossManager implements BossEncounter {
       ? pending.result as PermanentHitResult
       : null;
     this.options.onDirectHit({
-      bossKind: 'sentinel',
+      bossKind: this.kind(),
       targetId: pending.partId,
       source: pending.source,
       sourceOrbId: pending.sourceOrbId,
@@ -538,7 +574,11 @@ export class BossManager implements BossEncounter {
 
   private damagePart(partId: BossPartId, damage: number, reportDefeat = true): boolean {
     const previousPhase = bossPhase(this.state);
-    this.state = damageBossPart(this.state, partId, damage);
+    this.state = damageBossPart(
+      this.state,
+      partId,
+      damage * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1),
+    );
     const phase = bossPhase(this.state);
     this.synchronizePartBodies();
     if (phase !== previousPhase && phase !== 'defeated') {
@@ -592,6 +632,32 @@ export class BossManager implements BossEncounter {
     if (basicPending || this.hasMajorWarnings() || this.nextBasicShotAt >= this.nextAttackAt) return;
     if (now >= this.nextBasicShotAt - tuning.warningMs) {
       this.beginBasicWarning(this.nextBasicShotAt);
+    }
+  }
+
+  private scheduleLaser(now: number): void {
+    const tuning = GAME_TUNING.projectiles.siegeLaser;
+    if (
+      !this.warnings.some(({ kind }) => kind === 'movingLaser')
+      && now >= this.nextLaserAt - tuning.warningMs
+    ) {
+      const direction = this.state.attackIndex % 2 === 0 ? 1 : -1;
+      const spec = movingVerticalLaser(
+        direction === 1 ? 30 : GAME_WIDTH - 30,
+        direction,
+        { minimum: 30, maximum: GAME_WIDTH - 30 },
+        tuning.speed,
+        tuning.warningMs,
+        tuning.activeMs,
+        tuning.width,
+      );
+      const marker = this.warningGroup.create(
+        spec.startX,
+        GAME_HEIGHT / 2,
+        'siege-laser',
+      ) as BossSprite;
+      marker.setSize(spec.width, GAME_HEIGHT).setAlpha(0.25).setDepth(BOSS_ACTION_DEPTH);
+      this.warnings.push({ kind: 'movingLaser', dueAt: this.nextLaserAt, marker, spec });
     }
   }
 
@@ -666,6 +732,7 @@ export class BossManager implements BossEncounter {
       }
       warning.marker.destroy();
       if (warning.kind === 'basicShot') this.fireBasicShot(now);
+      else if (warning.kind === 'movingLaser') this.fireMovingLaser(warning.spec, now);
       else {
         majorResolved = true;
         if (warning.kind === 'aimedShot') this.fireAimedFan(warning.target);
@@ -676,6 +743,28 @@ export class BossManager implements BossEncounter {
     if (majorResolved) {
       this.nextBasicShotAt = now + GAME_TUNING.projectiles.bossBasic.intervalMs;
     }
+  }
+
+  private fireMovingLaser(spec: MovingLaserSpec, now: number): void {
+    if (!this.laserGroup) return;
+    const laser = this.laserGroup.create(
+      spec.startX,
+      GAME_HEIGHT / 2,
+      'siege-laser',
+    ) as BossProjectileSprite;
+    laser.bossProjectileKind = 'movingLaser';
+    laser.setSize(spec.width, GAME_HEIGHT)
+      .setDepth(BOSS_ACTION_DEPTH)
+      .setVelocity(spec.endX >= spec.startX ? spec.speed : -spec.speed, 0);
+    this.laserExpiresAt = now + spec.activeMs;
+    this.nextLaserAt = now + GAME_TUNING.projectiles.siegeLaser.intervalMs;
+  }
+
+  private hitPlayerWithLaser(): void {
+    const now = this.options.getGameplayElapsedMs();
+    if (now - this.lastLaserHitAt < 500) return;
+    this.lastLaserHitAt = now;
+    this.options.onPlayerHit(GAME_TUNING.projectiles.siegeLaser.damage);
   }
 
   private fireBasicShot(now: number): void {
@@ -755,6 +844,9 @@ export class BossManager implements BossEncounter {
     for (const hazard of this.fallingHazardGroup.getChildren() as BossSprite[]) {
       if (hazard.active && hazard.y > GAME_HEIGHT + margin) hazard.destroy();
     }
+    if (this.options.getGameplayElapsedMs() >= this.laserExpiresAt) {
+      if (this.laserGroup) this.clearGroup(this.laserGroup);
+    }
   }
 
   private enemyObstacles(): HorizontalInterval[] {
@@ -794,13 +886,20 @@ export class BossManager implements BossEncounter {
   }
 
   private activeProjectiles(): BossProjectileSnapshot[] {
-    return (this.aimedBulletGroup.getChildren() as BossProjectileSprite[])
+    return this.activeProjectileSprites()
       .filter((projectile) => projectile.active)
       .map((projectile) => ({
         kind: projectile.bossProjectileKind,
         position: { x: projectile.x, y: projectile.y },
         velocity: { ...(projectile.body as Phaser.Physics.Arcade.Body).velocity },
       }));
+  }
+
+  private activeProjectileSprites(): BossProjectileSprite[] {
+    return [
+      ...this.aimedBulletGroup.getChildren(),
+      ...(this.laserGroup?.getChildren() ?? []),
+    ] as BossProjectileSprite[];
   }
 
   private activeCount(group: Phaser.Physics.Arcade.Group): number {
@@ -821,6 +920,10 @@ export class BossManager implements BossEncounter {
 
   private partIds(): BossPartId[] {
     return ['leftWeakpoint', 'rightWeakpoint', 'core'];
+  }
+
+  private kind(): 'sentinel' | 'siege' {
+    return this.options.kind ?? 'sentinel';
   }
 
 }

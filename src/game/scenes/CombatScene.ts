@@ -1154,6 +1154,11 @@ export class CombatScene extends Phaser.Scene {
         getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
       }),
       hive: () => new HiveBossManager(this, commonOptions),
+      siege: () => new BossManager(this, {
+        ...commonOptions,
+        kind: 'siege',
+        getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
+      }),
     });
   }
 
@@ -1170,8 +1175,13 @@ export class CombatScene extends Phaser.Scene {
     this.bossDefeatPending = false;
     const defeatedBossKind = this.activeBossKind;
     if (!defeatedBossKind) throw new Error('boss defeat has no active boss kind');
+    const advance = this.encounterDirector?.markBossDefeated();
+    if (advance?.type === 'runCompleted') {
+      this.applyLifecycle('rewardCompleted');
+      this.finishRun();
+      return;
+    }
     this.bossRewardTier = rewardTierForBoss(defeatedBossKind);
-    this.encounterDirector?.markBossDefeated();
     const owned = new Set(this.bossBuild?.snapshot() ?? []);
     this.bossRewardChoices = selectBossRewardOptions({
       ownedRewards: owned,
@@ -1222,17 +1232,21 @@ export class CombatScene extends Phaser.Scene {
     this.applyLifecycle('rewardCompleted');
     this.pause.remove('bossReward');
     if (advance.type === 'runCompleted') {
-      this.enemyManager?.clearEnemies();
-      this.pause.add('runComplete');
-      this.syncPauseState();
-      this.runCompleteOverlay?.show(() => {
-        this.handleShutdown();
-        this.scene.restart();
-      });
+      this.finishRun();
       return true;
     }
     this.syncPauseState();
     return true;
+  }
+
+  private finishRun(): void {
+    this.enemyManager?.clearEnemies();
+    this.pause.add('runComplete');
+    this.syncPauseState();
+    this.runCompleteOverlay?.show(() => {
+      this.handleShutdown();
+      this.scene.restart();
+    });
   }
 
   private clearTemporaryOrbs(): void {

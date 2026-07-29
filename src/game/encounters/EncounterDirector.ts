@@ -6,6 +6,7 @@ import {
   bossProgressForKill,
   type EncounterState,
   type EncounterTransition,
+  type BossDefeatAdvance,
   type StageAdvance,
 } from './encounterProgressionRules';
 import {
@@ -130,12 +131,19 @@ export class EncounterDirector {
     if (this.state === 'running') this.bossScore += bossProgressForKill(kind);
   }
 
-  markBossDefeated(): void {
+  markBossDefeated(): BossDefeatAdvance {
     if (this.state !== 'boss') {
       throw new Error(`cannot mark boss defeated while encounter state is ${this.state}`);
     }
-    this.state = 'bossRewardPaused';
     this.bossesDefeated += 1;
+    if (this.stageIndex + 1 >= STAGES.length) {
+      this.state = 'runComplete';
+      this.pendingBossKind = null;
+      this.pendingFormation = null;
+      return { type: 'runCompleted' };
+    }
+    this.state = 'bossRewardPaused';
+    return { type: 'rewardRequired' };
   }
 
   resumeAfterBossReward(): StageAdvance {

@@ -9,6 +9,9 @@ export type EncounterTransition =
 export type StageAdvance =
   | { type: 'stageStarted'; stageId: StageId; stageNumber: number }
   | { type: 'runCompleted' };
+export type BossDefeatAdvance =
+  | { type: 'rewardRequired' }
+  | { type: 'runCompleted' };
 
 export function bossProgressForKill(kind: EnemyKind): number {
   switch (kind) {

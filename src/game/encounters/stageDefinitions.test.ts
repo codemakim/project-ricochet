@@ -7,10 +7,14 @@ import {
 } from './stageDefinitions';
 
 describe('stage content', () => {
-  it('defines the two existing boss sections as ordered stages', () => {
-    expect(STAGES).toHaveLength(2);
+  it('defines three ordered boss stages without increasing descent speed', () => {
+    expect(STAGES).toHaveLength(3);
     expect(STAGES.map(({ id, number, boss }) => [id, number, boss.kind]))
-      .toEqual([['default-1', 1, 'sentinel'], ['default-2', 2, 'hive']]);
+      .toEqual([
+        ['default-1', 1, 'sentinel'],
+        ['default-2', 2, 'hive'],
+        ['default-3', 3, 'siege'],
+      ]);
     expect(STAGES[0]!.phases.map(({ startsAtMs }) => startsAtMs)).toEqual([0, 60_000, 120_000]);
     expect(STAGES[1]!.phases.map(({ startsAtMs }) => startsAtMs)).toEqual([0, 60_000]);
     expect(STAGES[0]!.boss).toEqual({
@@ -19,6 +23,7 @@ describe('stage content', () => {
     expect(STAGES[1]!.boss).toEqual({
       kind: 'hive', minimumMs: 150_000, scoreTarget: 110, hardMaximumMs: 210_000, warningMs: 2_000,
     });
+    expect(STAGES[2]!.boss.kind).toBe('siege');
     expect(STAGES.every(({ descentSpeedMultiplier }) => descentSpeedMultiplier === 1)).toBe(true);
   });
 

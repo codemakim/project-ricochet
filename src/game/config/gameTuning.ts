@@ -1,7 +1,7 @@
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y } from '../constants';
 
 export interface RangeTuning { minimum: number; maximum: number }
-export type BossKind = 'sentinel' | 'hive';
+export type BossKind = 'sentinel' | 'hive' | 'siege';
 
 export interface ProjectileVisualTuning {
   fill: number;
@@ -67,6 +67,14 @@ export interface GameTuning {
         intervalMs: number; warningMs: number; speed: number; damage: number; radius: number;
         count: number; spreadDegrees: number;
       };
+    };
+    siegeLaser: {
+      intervalMs: number;
+      warningMs: number;
+      activeMs: number;
+      speed: number;
+      damage: number;
+      width: number;
     };
   };
   build: {
@@ -199,6 +207,7 @@ export interface GameTuning {
     };
     timing: { shieldedMs: number; telegraphMs: number; exposedMs: number };
   };
+  siegeBoss: { damageTakenScale: number; movementSpeedScale: number };
   relics: {
     auxiliaryLink: { procScale: number };
     crossCut: { damageScale: number };
@@ -285,6 +294,14 @@ export const GAME_TUNING = {
         intervalMs: 1600, warningMs: 350, speed: 190, damage: 1, radius: 5,
         count: 3, spreadDegrees: 18,
       },
+    },
+    siegeLaser: {
+      intervalMs: 5_000,
+      warningMs: 700,
+      activeMs: 1_800,
+      speed: 70,
+      damage: 2,
+      width: 18,
     },
   },
   build: {
@@ -407,6 +424,7 @@ export const GAME_TUNING = {
     },
     timing: { shieldedMs: 4000, telegraphMs: 1500, exposedMs: 7000 },
   },
+  siegeBoss: { damageTakenScale: 0.45, movementSpeedScale: 0.6 },
   relics: {
     auxiliaryLink: { procScale: 0.25 },
     crossCut: { damageScale: 0.6 },

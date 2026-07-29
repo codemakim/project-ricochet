@@ -4,7 +4,7 @@ import { populationCostForEnemy } from '../enemies/splitterRules';
 import type { FormationStyle } from './formationRules';
 
 export type BattlefieldId = 'default';
-export type StageId = 'default-1' | 'default-2';
+export type StageId = 'default-1' | 'default-2' | 'default-3';
 export type EnemyTag = 'standard' | 'armored' | 'shooter' | 'splitter';
 
 export interface EnemyCatalogEntry {
@@ -113,6 +113,19 @@ export const STAGES = [
       phase(60_000, 84, 5_500, 'onslaught', { basic: 21, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
     ],
     boss: { kind: 'hive', minimumMs: 150_000, scoreTarget: 110, hardMaximumMs: 210_000, warningMs: 2_000 },
+  },
+  {
+    id: 'default-3',
+    number: 3,
+    battlefield: 'default',
+    hpMultiplier: 1.3,
+    descentSpeedMultiplier: 1,
+    phases: [
+      phase(0, 84, 5_500, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
+      phase(60_000, 96, 5_000, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
+      phase(120_000, 108, 4_500, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
+    ],
+    boss: { kind: 'siege', minimumMs: 150_000, scoreTarget: 140, hardMaximumMs: 210_000, warningMs: 2_000 },
   },
 ] as const satisfies readonly StageDefinition[];
 

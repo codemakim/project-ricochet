@@ -1,4 +1,5 @@
 import { GAME_TUNING, type ProjectileVisualTuning } from '../config/gameTuning';
+import { GAME_HEIGHT } from '../constants';
 
 type TextureShape =
   | 'outlinedCircle'
@@ -37,6 +38,46 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     'boss-aimed-bullet': { ...hostile.bossAimed, shape: 'centeredCircle' },
     'boss-falling-hazard': { ...hostile.bossHazard, shape: 'outlinedRoundedRect' },
     'boss-muzzle-flash': { ...hostile.bossMuzzleFlash, shape: 'flash' },
+    'siege-laser': {
+      fill: 0xff355d,
+      accent: 0xffd6df,
+      width: GAME_TUNING.projectiles.siegeLaser.width,
+      height: GAME_HEIGHT,
+      shape: 'outlinedRoundedRect',
+      deferred: true,
+    },
+    'siege-body': {
+      fill: 0x30264f,
+      accent: 0xc58cff,
+      width: 210,
+      height: 120,
+      shape: 'outlinedRoundedRect',
+      deferred: true,
+    },
+    'siege-left-weakpoint': {
+      fill: 0x8a2b61,
+      accent: 0xff87be,
+      width: 32,
+      height: 62,
+      shape: 'outlinedRoundedRect',
+      deferred: true,
+    },
+    'siege-right-weakpoint': {
+      fill: 0x8a2b61,
+      accent: 0xff87be,
+      width: 32,
+      height: 62,
+      shape: 'outlinedRoundedRect',
+      deferred: true,
+    },
+    'siege-core': {
+      fill: 0xff355d,
+      accent: 0xffffff,
+      width: 42,
+      height: 42,
+      shape: 'outlinedCircle',
+      deferred: true,
+    },
     'enemy-splitter': { fill: 0xff5c70, accent: 0x6d1730, width: 38, height: 30, shape: 'crackedRoundedRect', deferred: true },
     'enemy-fragment-left': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentLeft', deferred: true },
     'enemy-fragment-right': { fill: 0xff5c70, accent: 0x6d1730, width: 22, height: 18, shape: 'fragmentRight', deferred: true },

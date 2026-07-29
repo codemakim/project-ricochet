@@ -60,6 +60,7 @@ class FakeSprite {
     return this;
   }
   setTint(tint: number): this { this.tint = tint; return this; }
+  setAlpha(): this { return this; }
   clearTint(): this { this.tint = undefined; return this; }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
   setPosition(x: number, y: number): this {
@@ -131,7 +132,7 @@ function hitResult(damage = 3, charged = true): PermanentHitResult {
   };
 }
 
-function createBoundary() {
+function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
   const sprites: FakeSprite[] = [];
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
@@ -196,6 +197,7 @@ function createBoundary() {
   const onDirectHit = vi.fn();
   const onDefeated = vi.fn();
   const manager = new BossManager(scene, {
+    kind,
     player: player as unknown as Phaser.Physics.Arcade.Sprite,
     orbManager,
     temporaryOrbManager,
@@ -232,6 +234,22 @@ function updateAt(boundary: ReturnType<typeof createBoundary>, now: number) {
 }
 
 describe('BossManager', () => {
+  it('runs the siege variant with a moving laser warning', () => {
+    const boundary = createBoundary('siege');
+    expect(boundary.manager.getSnapshot()).toMatchObject({ kind: 'siege', phase: 'twoWeakpoints' });
+    expect(boundary.sprites.some(({ texture }) => texture === 'siege-body')).toBe(true);
+
+    const warningAt = GAME_TUNING.projectiles.siegeLaser.intervalMs
+      - GAME_TUNING.projectiles.siegeLaser.warningMs;
+    expect(updateAt(boundary, warningAt)).toMatchObject({
+      warningKinds: ['movingLaser'],
+    });
+    const active = updateAt(boundary, GAME_TUNING.projectiles.siegeLaser.intervalMs);
+    expect(active.projectiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'movingLaser' }),
+    ]));
+  });
+
   it('conforms to the common sentinel encounter contract', () => {
     const boundary = createBoundary();
     const encounter: BossEncounter = boundary.manager;

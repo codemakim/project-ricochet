@@ -5,6 +5,15 @@ export interface DirectedShot {
   speed: number;
 }
 
+export interface MovingLaserSpec {
+  startX: number;
+  endX: number;
+  speed: number;
+  warningMs: number;
+  activeMs: number;
+  width: number;
+}
+
 function finite(value: number, name: string): void {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
 }
@@ -96,4 +105,41 @@ export function fallingOrigins(
     finite(offset, 'offset');
     return Math.max(left, Math.min(right, anchorX + offset));
   });
+}
+
+export function movingVerticalLaser(
+  startX: number,
+  direction: -1 | 1,
+  bounds: { minimum: number; maximum: number },
+  speed: number,
+  warningMs: number,
+  activeMs: number,
+  width: number,
+): MovingLaserSpec {
+  for (const [value, name] of [
+    [startX, 'laser start'],
+    [bounds.minimum, 'laser minimum'],
+    [bounds.maximum, 'laser maximum'],
+    [speed, 'laser speed'],
+    [warningMs, 'laser warning'],
+    [activeMs, 'laser active time'],
+    [width, 'laser width'],
+  ] as const) finite(value, name);
+  if (bounds.minimum > bounds.maximum) throw new RangeError('laser minimum must not exceed maximum');
+  if (speed <= 0) throw new RangeError('laser speed must be positive');
+  if (warningMs < 0 || activeMs <= 0 || width <= 0) {
+    throw new RangeError('laser timing and width must be valid');
+  }
+  const clampedStart = Math.max(bounds.minimum, Math.min(bounds.maximum, startX));
+  return {
+    startX: clampedStart,
+    endX: Math.max(
+      bounds.minimum,
+      Math.min(bounds.maximum, clampedStart + direction * speed * activeMs / 1000),
+    ),
+    speed,
+    warningMs,
+    activeMs,
+    width,
+  };
 }

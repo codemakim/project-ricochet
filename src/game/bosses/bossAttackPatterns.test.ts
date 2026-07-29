@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aimedBurst, aimedShot, fallingOrigins, fanShots } from './bossAttackPatterns';
+import {
+  aimedBurst,
+  aimedShot,
+  fallingOrigins,
+  fanShots,
+  movingVerticalLaser,
+} from './bossAttackPatterns';
 
 function angles(shots: readonly { direction: { x: number; y: number } }[]): number[] {
   return shots.map(({ direction }) => Math.round(Math.atan2(direction.x, direction.y) * 180 / Math.PI));
@@ -32,6 +38,34 @@ describe('boss attack patterns', () => {
 
   it('clamps deterministic falling origins to the playfield', () => {
     expect(fallingOrigins(30, 24, 426, [0, 90, -90, 500])).toEqual([30, 120, 24, 426]);
+  });
+
+  it('defines a bounded moving vertical laser', () => {
+    expect(movingVerticalLaser(
+      80,
+      1,
+      { minimum: 40, maximum: 410 },
+      90,
+      600,
+      1600,
+      18,
+    )).toEqual({
+      startX: 80,
+      endX: 224,
+      speed: 90,
+      warningMs: 600,
+      activeMs: 1600,
+      width: 18,
+    });
+    expect(() => movingVerticalLaser(
+      80,
+      1,
+      { minimum: 40, maximum: 410 },
+      0,
+      600,
+      1600,
+      18,
+    )).toThrow('laser speed must be positive');
   });
 
   it.each([

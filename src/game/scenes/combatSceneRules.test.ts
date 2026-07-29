@@ -372,6 +372,10 @@ describe('boss scene selection', () => {
         calls.push('hive');
         return 'hive-manager';
       },
+      siege: () => {
+        calls.push('siege');
+        return 'siege-manager';
+      },
     };
 
     expect(createBossForKind('hive', factories)).toBe('hive-manager');
