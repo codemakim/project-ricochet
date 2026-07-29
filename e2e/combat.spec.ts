@@ -239,7 +239,7 @@ async function confirmCoreLoadout(
 }
 
 async function loadCanvas(page: Page, search = '') {
-  await page.goto(`/${search}`);
+  await page.goto(`/${search}${search ? '&' : '?'}combat=1`);
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
   await confirmCoreLoadout(page);
@@ -428,7 +428,7 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
 });
 
 test('@desktop chooses permanent orb cores and a typed bonus orb', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?combat=1');
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
   const box = (await canvas.boundingBox())!;
