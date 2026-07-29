@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
+import { formatDisplayNumber } from './displayNumber';
 
 const CARD_Y = [270, 400, 530] as const;
 const KEY_CODES = [
@@ -90,16 +91,16 @@ export class LevelUpOverlay {
     next.upgrade(id);
     switch (id) {
       case 'firepower':
-        return `직접 피해 +${next.directDamageBonus()}`;
+        return `직접 피해 +${formatDisplayNumber(next.directDamageBonus())}`;
       case 'kinetic':
-        return `충전 속도 ${next.chargedSpeed()}px/s`;
+        return `충전 속도 ${formatDisplayNumber(next.chargedSpeed(), 0)}px/s`;
       case 'explosion': {
         const effect = next.explosion()!;
-        return `발동 ${effect.chance * 100}% · 반경 ${effect.radius}px · 피해 ${effect.damage}`;
+        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
       }
       case 'split': {
         const effect = next.split()!;
-        return `발동 ${effect.chance * 100}% · 임시 구슬 ${effect.count}개`;
+        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 임시 구슬 ${effect.count}개`;
       }
       default:
         return ABILITY_DEFINITIONS[id].summary;

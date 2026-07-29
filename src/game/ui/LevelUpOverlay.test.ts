@@ -153,4 +153,14 @@ describe('LevelUpOverlay', () => {
     expect(card.listenerCount('pointerup')).toBe(0);
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it('does not expose floating-point noise in kinetic speed text', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+
+    overlay.show(['kinetic'], new BuildState({ kinetic: 1 }), vi.fn());
+
+    expect(objects.find((object) => object.text?.includes('운동 에너지'))?.text)
+      .toContain('456px/s');
+  });
 });
