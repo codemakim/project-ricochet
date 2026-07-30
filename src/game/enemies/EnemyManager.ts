@@ -333,10 +333,23 @@ export class EnemyManager {
     this.activeShooters.clear();
   }
 
-  clearEnemies(): void {
-    if (this.destroyed) return;
+  clearEnemies(): Vector[] {
+    if (this.destroyed) return [];
     this.clearHostileActions();
-    for (const enemy of [...this.enemies.values()]) this.destroyEnemy(enemy);
+    return this.removeMatchingEnemies(() => true);
+  }
+
+  clearCorridor(corridor: {
+    left: number;
+    right: number;
+    bottom: number;
+  }): Vector[] {
+    return this.removeMatchingEnemies((enemy) => {
+      const body = enemy.body as Phaser.Physics.Arcade.Body;
+      return body.left < corridor.right
+        && body.right > corridor.left
+        && body.top < corridor.bottom;
+    });
   }
 
   applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
@@ -647,6 +660,17 @@ export class EnemyManager {
     enemy.clearTint();
     enemy.destroy();
     this.enemies.delete(enemy.enemyId);
+  }
+
+  private removeMatchingEnemies(
+    matches: (enemy: EnemySprite) => boolean,
+  ): Vector[] {
+    if (this.destroyed) return [];
+    const removed = [...this.enemies.values()]
+      .filter((enemy) => enemy.active && matches(enemy))
+      .map((enemy) => ({ enemy, position: { x: enemy.x, y: enemy.y } }));
+    for (const { enemy } of removed) this.destroyEnemy(enemy);
+    return removed.map(({ position }) => position);
   }
 
   private createKillEvent(enemy: EnemySprite): EnemyKilledEvent {

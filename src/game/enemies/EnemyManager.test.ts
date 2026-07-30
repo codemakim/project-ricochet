@@ -70,6 +70,9 @@ class FakeBody {
   enable = true;
   width = 0;
   height = 0;
+  get left(): number { return this.center.x - this.width / 2; }
+  get right(): number { return this.center.x + this.width / 2; }
+  get top(): number { return this.center.y - this.height / 2; }
 
   constructor(readonly gameObject: FakeSprite) {}
 
@@ -340,6 +343,34 @@ describe('EnemyManager', () => {
     });
     manager.spawnFormation([{ kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 }]);
     expect(manager.getSnapshot().activePopulation).toBe(1);
+  });
+
+  it('clears only bodies inside a boss corridor without kill or breach effects', () => {
+    const boundary = createBoundary([
+      {
+        kind: 'armored', hp: 10, x: 200, y: 120, column: 2, row: 0,
+        width: 2, height: 2, speed: 0,
+      },
+      { kind: 'basic', hp: 3, x: 380, y: 120, column: 7, row: 0, speed: 0 },
+      { kind: 'splitter', hp: 7, x: 220, y: -40, column: 3, row: 0, speed: 0 },
+    ]);
+
+    expect(boundary.manager.clearCorridor({ left: 100, right: 300, bottom: 180 }))
+      .toEqual(expect.arrayContaining([{ x: 200, y: 120 }, { x: 220, y: -40 }]));
+    expect(boundary.manager.getSnapshot().enemies.map(({ position }) => position))
+      .toEqual([{ x: 380, y: 120 }]);
+    expect(boundary.manager.getSnapshot().enemies).toHaveLength(1);
+    expect(boundary.onEnemyKilled).not.toHaveBeenCalled();
+    expect(boundary.onBreach).not.toHaveBeenCalled();
+  });
+
+  it('keeps a body that only touches the corridor edge', () => {
+    const { manager } = createBoundary([
+      { kind: 'basic', hp: 3, x: 76, y: 120, column: 0, row: 0, speed: 0 },
+    ]);
+
+    expect(manager.clearCorridor({ left: 100, right: 300, bottom: 180 })).toEqual([]);
+    expect(manager.getSnapshot().enemies).toHaveLength(1);
   });
 
   it('registers one collider for each runtime permanent orb and unsubscribes on destroy', () => {
