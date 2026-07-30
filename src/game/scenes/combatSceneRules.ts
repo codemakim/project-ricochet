@@ -1,5 +1,4 @@
 import type { BossKind } from '../config/gameTuning';
-import { GAME_TUNING } from '../config/gameTuning';
 import type { EncounterTransition } from '../encounters/encounterProgressionRules';
 import type { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
@@ -8,7 +7,6 @@ import type {
   BossEncounterSnapshot,
   BossTargetId,
 } from '../bosses/bossEncounter';
-import type { CombatEffectScheduler } from '../combat/CombatEffectScheduler';
 import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
@@ -49,14 +47,13 @@ export function createBossForKind<T>(
 }
 
 export interface PlannedAreaEffect {
-  kind: 'siege' | 'explosion';
+  kind: 'explosion';
   radius: number;
   damage: number;
 }
 
 export interface DirectHitEffectPlan {
   immediateAreas: PlannedAreaEffect[];
-  aftershock: { radius: number; damage: number } | null;
   spawnChildren: boolean;
   splitCount: number;
 }
@@ -92,55 +89,14 @@ export function planOrbCoreEffects(
 export function planDirectHitEffects(
   event: { source: 'permanent' | 'temporary'; charged: boolean },
   build: Pick<BuildState, 'explosion' | 'split'>,
-  bossBuild: Pick<
-    BossBuild,
-    | 'recordPermanentDirectHit'
-    | 'temporaryExplosionEnabled'
-    | 'temporaryProcChance'
-    | 'aftershock'
-    | 'chainSplitEnabled'
-  >,
   decision: ProcDecision,
 ): DirectHitEffectPlan {
-  const immediateAreas: PlannedAreaEffect[] = [];
-  if (event.source === 'permanent' && bossBuild.recordPermanentDirectHit()) {
-    const { radius, damage } = GAME_TUNING.relics.secondBoss.siegeResonance;
-    immediateAreas.push({
-      kind: 'siege',
-      radius,
-      damage,
-    });
-  }
   const explosion = build.explosion();
-  const permanentExplosion = event.source === 'permanent' && decision.explosion;
-  const temporaryExplosion = event.source === 'temporary'
-    && (
-      (decision.explosion && bossBuild.temporaryProcChance(1) > 0)
-      || bossBuild.temporaryExplosionEnabled()
-    );
-  const explosionTriggered = Boolean(
-    explosion && (permanentExplosion || temporaryExplosion),
-  );
-  if (explosion && explosionTriggered) {
-    immediateAreas.push({
-      kind: 'explosion',
-      radius: explosion.radius,
-      damage: explosion.damage,
-    });
-  }
-  const aftershock = event.source === 'permanent' && explosionTriggered
-    ? bossBuild.aftershock()
-    : null;
   return {
-    immediateAreas,
-    aftershock: aftershock && explosion
-      ? {
-        radius: explosion.radius * aftershock.radiusScale,
-        damage: explosion.damage * aftershock.damageScale,
-      }
-      : null,
-    spawnChildren: event.source === 'temporary'
-      && (decision.split || bossBuild.chainSplitEnabled()),
+    immediateAreas: explosion && decision.explosion
+      ? [{ kind: 'explosion', radius: explosion.radius, damage: explosion.damage }]
+      : [],
+    spawnChildren: event.source === 'temporary' && decision.split,
     splitCount: event.source === 'permanent' && decision.split
       ? build.split()?.count ?? 0
       : 0,
@@ -180,36 +136,6 @@ export function settlePlannedAreaEffects(
   }
 }
 
-export function schedulePlannedAftershock(
-  plan: Pick<DirectHitEffectPlan, 'aftershock'>,
-  scheduler: Pick<CombatEffectScheduler, 'scheduleAftershock'>,
-  gameplayElapsedMs: number,
-  position: Vector,
-  excludedBossTargetId?: BossTargetId,
-): void {
-  if (!plan.aftershock) return;
-  scheduler.scheduleAftershock(
-    gameplayElapsedMs,
-    position,
-    plan.aftershock.radius,
-    plan.aftershock.damage,
-    excludedBossTargetId,
-  );
-}
-
-export function bossOrbModifiers(
-  bossBuild: Pick<BossBuild, 'chargedDamageBonus' | 'chargedKillPierces'>,
-): { chargedDamageBonus: number; chargedKillPierces: boolean } {
-  return {
-    chargedDamageBonus: bossBuild.chargedDamageBonus(),
-    chargedKillPierces: bossBuild.chargedKillPierces(),
-  };
-}
-
-export function rewardAddsPermanentOrb(id: BossRewardId): boolean {
-  return id === 'expanded-magazine' || id === 'auxiliary-orbit';
-}
-
 export type CombatLifecycleReason =
   | 'defeat'
   | 'rewardOpened'
@@ -235,7 +161,6 @@ export interface CombatLifecycleState<
 }
 
 export interface CombatLifecycleDependencies {
-  scheduler: Pick<CombatEffectScheduler, 'clear'>;
   clearEnemyHostileActions(): void;
   clearWarning(): void;
   clearTemporaryOrbs(): void;
@@ -249,11 +174,9 @@ export function finalizeCombatLifecycle<TBoss extends CombatLifecycleBoss, TChoi
 ): CombatLifecycleState<TBoss, TChoice> {
   dependencies.clearEnemyHostileActions();
   dependencies.clearWarning();
-  dependencies.scheduler.clear();
   state.activeBoss?.clearHostileActions();
   dependencies.clearTemporaryOrbs();
   if (reason !== 'rewardOpened') dependencies.hideRewardOverlay();
-  state.bossBuild.resetTransientState();
   state.activeBoss?.destroy();
   const preservesRun = reason === 'rewardOpened' || reason === 'rewardCompleted';
   return {

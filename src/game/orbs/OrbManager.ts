@@ -91,13 +91,7 @@ export class OrbStore {
     private readonly hasFixedTerrainLineOfSight: FixedTerrainLineOfSight = () => false,
     private readonly getDirectDamageBonus: () => number = () => 0,
     private readonly getChargedSpeed: () => number = () => ORB_SPEED,
-    private readonly getRestoredCharges: (source: RecoverySource) => number = () => DEFAULT_RESTORED_CHARGES,
-    private readonly getOpeningHitBonus: (source: RecoverySource, firstHitPending: boolean) => number = () => 0,
-    private readonly getChargedDamageBonus: () => number = () => 0,
-    private readonly chargedKillPierces: () => boolean = () => false,
-    private readonly getOrbLimit: () => number = () => (
-      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit
-    ),
+    private readonly getOrbLimit: () => number = () => GAME_TUNING.build.basicGrowth.maximumOrbs,
     private readonly getConditionalDirectDamageBonus: (
       context: PermanentDirectHitContext,
     ) => number = () => 0,
@@ -246,13 +240,6 @@ export class OrbStore {
     const source = record.lastRecoverySource;
     const firstHitAfterProximity = source === 'proximity' && record.firstHitPending;
     const echoStacks = record.coreState.echoStacks;
-    let openingBonus = 0;
-    if (source === 'proximity' && record.firstHitPending) {
-      openingBonus = this.getOpeningHitBonus(source, true);
-      if (openingBonus !== 0 && openingBonus !== 1) {
-        throw new RangeError('opening hit bonus must be exactly 0 or 1');
-      }
-    }
     const inertiaLaunchStacks = record.coreState.inertiaLaunchStacks;
     const retainInertia = record.coreType === 'inertia'
       && inertiaLaunchStacks > 0
@@ -282,10 +269,7 @@ export class OrbStore {
       this.settings,
       piercing,
       this.getDirectDamageBonus(),
-      this.getChargedDamageBonus(),
-      this.chargedKillPierces(),
       conditionalBonus,
-      openingBonus,
     );
     record.enemyHits.set(enemyId, nowMs);
     record.firstHitPending = false;
@@ -424,14 +408,8 @@ export class OrbStore {
 
   private arrive(record: OrbRecord): void {
     const source = record.lastRecoverySource;
-    const restoredCharges = source === 'proximity'
-      ? this.getRestoredCharges(source)
-      : DEFAULT_RESTORED_CHARGES;
-    if (source === 'proximity' && restoredCharges !== 3 && restoredCharges !== 5) {
-      throw new RangeError('proximity restored charges must be exactly 3 or 5');
-    }
     record.state = transitionOrb(record.state, 'stored');
-    record.charges = restoredCharges;
+    record.charges = DEFAULT_RESTORED_CHARGES;
     record.firstHitPending = source === 'proximity';
     record.coreState = resolveCoreRecovery(record.coreType, record.coreState, source!);
     record.velocity = { x: 0, y: 0 };
@@ -505,7 +483,7 @@ export class OrbStore {
         `orb limit must be an integer of at least ${STARTING_ORB_COUNT}`,
       );
     }
-    return Math.min(limit, GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit);
+    return Math.min(limit, GAME_TUNING.build.basicGrowth.maximumOrbs);
   }
 }
 
@@ -516,10 +494,6 @@ export interface OrbManagerOptions extends OrbCallbacks {
   hasFixedTerrainLineOfSight: FixedTerrainLineOfSight;
   getDirectDamageBonus(): number;
   getChargedSpeed(): number;
-  getRestoredCharges?(source: RecoverySource): number;
-  getOpeningHitBonus?(source: RecoverySource, firstHitPending: boolean): number;
-  getChargedDamageBonus?(): number;
-  chargedKillPierces?(): boolean;
   getOrbLimit?(): number;
   getConditionalDirectDamageBonus?(context: PermanentDirectHitContext): number;
   getWallSpeedMultiplier?(wallHits: number): number;
@@ -577,10 +551,6 @@ export class OrbManager {
       options.hasFixedTerrainLineOfSight,
       options.getDirectDamageBonus,
       options.getChargedSpeed,
-      options.getRestoredCharges,
-      options.getOpeningHitBonus,
-      options.getChargedDamageBonus,
-      options.chargedKillPierces,
       options.getOrbLimit,
       options.getConditionalDirectDamageBonus,
       options.getWallSpeedMultiplier,

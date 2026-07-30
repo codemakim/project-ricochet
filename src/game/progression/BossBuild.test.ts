@@ -2,13 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { BossBuild } from './BossBuild';
 
 describe('BossBuild', () => {
-  it('exposes orb-limit rewards as a bonus', () => {
-    const build = new BossBuild();
-    expect(build.orbLimitBonus()).toBe(0);
-    build.acquire('auxiliary-orbit');
-    expect(build.orbLimitBonus()).toBe(1);
-  });
-
   it('stores approved relics once in acquisition order', () => {
     const build = new BossBuild();
     build.acquire('auxiliary-link');
@@ -16,7 +9,8 @@ describe('BossBuild', () => {
 
     expect(build.snapshot()).toEqual(['auxiliary-link', 'cross-cut']);
     expect(() => build.acquire('auxiliary-link')).toThrow('auxiliary-link is already owned');
-    expect(() => build.acquire('expanded-magazine')).toThrow('unknown boss reward');
+    expect(() => build.acquire('expanded-magazine' as never)).toThrow('unknown boss reward');
+    expect(() => build.acquire('auxiliary-orbit' as never)).toThrow('unknown boss reward');
   });
 
   it('scales temporary procs, cross cuts, gas ignition, and recursive split', () => {

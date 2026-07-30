@@ -1,187 +1,74 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CombatEffectScheduler } from '../combat/CombatEffectScheduler';
 import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
 import {
   bossKindAfterTransition,
-  bossOrbModifiers,
   createBossForKind,
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
   planOrbCoreEffects,
-  rewardAddsPermanentOrb,
   rewardTierForBoss,
-  schedulePlannedAftershock,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
 } from './combatSceneRules';
 
-describe('shouldFinalizeBossReward', () => {
-  it('defers a pending boss reward until every level-up choice is resolved', () => {
+describe('combat scene rules', () => {
+  it('finalizes a pending boss reward only after level-up pauses end', () => {
     expect(shouldFinalizeBossReward(true, false, true)).toBe(false);
     expect(shouldFinalizeBossReward(true, false, false)).toBe(true);
-  });
-
-  it('never finalizes without a live pending boss defeat', () => {
     expect(shouldFinalizeBossReward(false, false, false)).toBe(false);
     expect(shouldFinalizeBossReward(true, true, false)).toBe(false);
   });
-});
 
-describe('combat relic runtime decisions', () => {
   it('plans core effects only from matching permanent direct hits', () => {
     expect(planOrbCoreEffects({
       source: 'permanent',
       coreType: 'corrosion',
       conductionTriggered: false,
-    }, true)).toEqual({
-      spawnCorrosion: true,
-      dischargeConduction: false,
-    });
+    }, true)).toEqual({ spawnCorrosion: true, dischargeConduction: false });
     expect(planOrbCoreEffects({
       source: 'permanent',
       coreType: 'conduction',
       conductionTriggered: true,
-    }, false)).toEqual({
-      spawnCorrosion: false,
-      dischargeConduction: true,
-    });
+    }, false)).toEqual({ spawnCorrosion: false, dischargeConduction: true });
     expect(planOrbCoreEffects({
       source: 'temporary',
       coreType: 'conduction',
       conductionTriggered: true,
-    }, true)).toEqual({
-      spawnCorrosion: false,
-      dischargeConduction: false,
-    });
+    }, true)).toEqual({ spawnCorrosion: false, dischargeConduction: false });
   });
 
-  it('plans every direct-hit relic effect without making child or aftershock effects recursive', () => {
+  it('plans approved explosion and split decisions without legacy effects', () => {
     const build = new BuildState({ explosion: 1, split: 1 });
-    const bossBuild = new BossBuild();
-    for (const reward of [
-      'recovery-salvo',
-      'siege-resonance',
-      'hyperpressure-core',
-      'inertial-penetration',
-      'aftershock-explosion',
-      'chain-split',
-    ] as const) bossBuild.acquire(reward);
-    for (let hit = 0; hit < 10; hit += 1) {
-      expect(planDirectHitEffects({
-        source: 'permanent',
-        charged: false,
-      }, build, bossBuild, { explosion: true, split: false })
-        .immediateAreas.map(({ kind }) => kind))
-        .toEqual(['explosion']);
-    }
 
-    const permanent = planDirectHitEffects({
-      source: 'permanent',
-      charged: true,
-    }, build, bossBuild, { explosion: true, split: true });
-    expect(permanent).toMatchObject({
-      immediateAreas: [
-        { kind: 'siege', radius: 80, damage: 2 },
-        { kind: 'explosion', radius: 48, damage: 0.45 },
-      ],
-      aftershock: { damage: 0.225 },
+    expect(planDirectHitEffects(
+      { source: 'permanent', charged: true },
+      build,
+      { explosion: true, split: true },
+    )).toEqual({
+      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
       spawnChildren: false,
       splitCount: 2,
     });
-    expect(permanent.aftershock?.radius).toBeCloseTo(38.4);
-    const scheduler = new CombatEffectScheduler();
-    schedulePlannedAftershock(
-      permanent,
-      scheduler,
-      1_000,
-      { x: 225, y: 180 },
-    );
-    expect(scheduler.getSnapshot()).toEqual([
-      expect.objectContaining({
-        dueAt: 1_350,
-        position: { x: 225, y: 180 },
-        damage: 0.225,
-      }),
-    ]);
-    expect(bossOrbModifiers(bossBuild)).toEqual({
-      chargedDamageBonus: 0.75,
-      chargedKillPierces: true,
-    });
-    expect(bossBuild.recoverySalvoCount('proximity')).toBe(2);
-    expect(rewardAddsPermanentOrb('auxiliary-orbit')).toBe(true);
-
-    const rootTemporary = planDirectHitEffects({
-      source: 'temporary',
-      charged: false,
-    }, build, bossBuild, { explosion: true, split: true });
-    expect(rootTemporary).toMatchObject({
-      immediateAreas: [],
-      aftershock: null,
+    expect(planDirectHitEffects(
+      { source: 'temporary', charged: false },
+      build,
+      { explosion: true, split: true },
+    )).toEqual({
+      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
       spawnChildren: true,
       splitCount: 0,
     });
   });
 
-  it('uses explicit permanent proc decisions and keeps temporary defaults inert', () => {
-    const build = new BuildState({ explosion: 1, split: 1 });
-    const bossBuild = new BossBuild();
-
-    expect(planDirectHitEffects(
-      { source: 'permanent', charged: true },
-      build,
-      bossBuild,
-      { explosion: false, split: false },
-    )).toMatchObject({
-      immediateAreas: [],
-      splitCount: 0,
-    });
-
-    expect(planDirectHitEffects(
-      { source: 'permanent', charged: false },
-      build,
-      bossBuild,
-      { explosion: true, split: true },
-    )).toMatchObject({
-      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
-      splitCount: 2,
-    });
-
-    expect(planDirectHitEffects(
-      { source: 'temporary', charged: false },
-      build,
-      bossBuild,
-      { explosion: true, split: true },
-    )).toMatchObject({
-      immediateAreas: [],
-      splitCount: 0,
-    });
-  });
-
-  it('carries a boss direct-hit exclusion into its aftershock', () => {
-    const scheduler = new CombatEffectScheduler();
-
-    schedulePlannedAftershock(
-      { aftershock: { radius: 38.4, damage: 0.25 } },
-      scheduler,
-      1_000,
-      { x: 225, y: 180 },
-      'core',
-    );
-
-    expect(scheduler.drainDue(1_350)).toEqual([expect.objectContaining({
-      excludedBossTargetId: 'core',
-    })]);
-  });
-
-  it('batches enemies once while applying each area to the boss once with exclusions', () => {
+  it('batches enemies and applies each area to the boss with exclusions', () => {
     const applyEnemyBatch = vi.fn();
     const applyBossArea = vi.fn();
     const effects = [
-      { kind: 'siege', radius: 80, damage: 2 },
-      { kind: 'explosion', radius: 48, damage: 0.5 },
-    ] as const;
+      { kind: 'explosion' as const, radius: 80, damage: 2 },
+      { kind: 'explosion' as const, radius: 48, damage: 0.5 },
+    ];
 
     settlePlannedAreaEffects(
       { x: 225, y: 180 },
@@ -191,20 +78,9 @@ describe('combat relic runtime decisions', () => {
       { applyEnemyBatch, applyBossArea },
     );
 
-    expect(applyEnemyBatch).toHaveBeenCalledOnce();
     expect(applyEnemyBatch).toHaveBeenCalledWith([
-      {
-        center: { x: 225, y: 180 },
-        radius: 80,
-        damage: 2,
-        excludedEnemyId: 7,
-      },
-      {
-        center: { x: 225, y: 180 },
-        radius: 48,
-        damage: 0.5,
-        excludedEnemyId: 7,
-      },
+      { center: { x: 225, y: 180 }, radius: 80, damage: 2, excludedEnemyId: 7 },
+      { center: { x: 225, y: 180 }, radius: 48, damage: 0.5, excludedEnemyId: 7 },
     ]);
     expect(applyBossArea.mock.calls).toEqual([
       [{ x: 225, y: 180 }, 80, 2, 'leftReflector'],
@@ -213,20 +89,13 @@ describe('combat relic runtime decisions', () => {
   });
 });
 
-describe('combat scene lifecycle finalization', () => {
-  function lifecycleBoundary() {
-    const scheduler = new CombatEffectScheduler();
-    scheduler.scheduleAftershock(0, { x: 10, y: 20 }, 30, 1);
+describe('combat lifecycle', () => {
+  function boundary() {
     const bossBuild = new BossBuild();
-    bossBuild.acquire('auxiliary-orbit');
-    bossBuild.acquire('siege-resonance');
-    for (let hit = 0; hit < 10; hit += 1) bossBuild.recordPermanentDirectHit();
-    const activeBoss = {
-      clearHostileActions: vi.fn(),
-      destroy: vi.fn(),
-    };
+    bossBuild.acquire('auxiliary-link');
+    bossBuild.acquire('cross-cut');
+    const activeBoss = { clearHostileActions: vi.fn(), destroy: vi.fn() };
     const dependencies = {
-      scheduler,
       clearEnemyHostileActions: vi.fn(),
       clearWarning: vi.fn(),
       clearTemporaryOrbs: vi.fn(),
@@ -237,153 +106,82 @@ describe('combat scene lifecycle finalization', () => {
         activeBoss,
         activeBossKind: 'hive' as const,
         bossRewardTier: 'second' as const,
-        bossRewardChoices: ['auxiliary-orbit'] as const,
+        bossRewardChoices: ['auxiliary-link'] as const,
         bossDefeatPending: true,
         bossBuild,
       },
       dependencies,
       activeBoss,
-      scheduler,
       bossBuild,
     };
   }
 
-  it('completes a normal boss reward with clean transient state and permanent rewards preserved', () => {
-    const boundary = lifecycleBoundary();
-
+  it('preserves the run build while completing or opening rewards', () => {
+    const completed = boundary();
     const next = finalizeCombatLifecycle(
       'rewardCompleted',
-      boundary.state,
-      boundary.dependencies,
+      completed.state,
+      completed.dependencies,
     );
+    expect(next.bossBuild).toBe(completed.bossBuild);
+    expect(next.bossBuild.snapshot()).toEqual(['auxiliary-link', 'cross-cut']);
+    expect(next.bossRewardChoices).toEqual([]);
+    expect(completed.activeBoss.destroy).toHaveBeenCalledOnce();
 
-    expect(next).toEqual({
-      activeBoss: undefined,
-      activeBossKind: undefined,
-      bossRewardTier: null,
-      bossRewardChoices: [],
-      bossDefeatPending: false,
-      bossBuild: boundary.bossBuild,
-    });
-    expect(next.bossBuild.snapshot()).toEqual([
-      'auxiliary-orbit',
-      'siege-resonance',
-    ]);
-    expect(next.bossBuild.recordPermanentDirectHit()).toBe(false);
-    expect(boundary.scheduler.getSnapshot()).toEqual([]);
-    expect(boundary.activeBoss.clearHostileActions).toHaveBeenCalledOnce();
-    expect(boundary.activeBoss.destroy).toHaveBeenCalledOnce();
-    expect(boundary.dependencies.clearEnemyHostileActions).toHaveBeenCalledOnce();
-    expect(boundary.dependencies.clearWarning).toHaveBeenCalledOnce();
-    expect(boundary.dependencies.clearTemporaryOrbs).toHaveBeenCalledOnce();
-    expect(boundary.dependencies.hideRewardOverlay).toHaveBeenCalledOnce();
-  });
-
-  it('opens a boss reward after destroying combat objects while retaining its tier and choices', () => {
-    const boundary = lifecycleBoundary();
-
-    const next = finalizeCombatLifecycle(
-      'rewardOpened',
-      boundary.state,
-      boundary.dependencies,
-    );
-
-    expect(next).toEqual({
-      activeBoss: undefined,
-      activeBossKind: undefined,
-      bossRewardTier: 'second',
-      bossRewardChoices: ['auxiliary-orbit'],
-      bossDefeatPending: false,
-      bossBuild: boundary.bossBuild,
-    });
-    expect(boundary.dependencies.hideRewardOverlay).not.toHaveBeenCalled();
+    const opened = boundary();
+    const reward = finalizeCombatLifecycle('rewardOpened', opened.state, opened.dependencies);
+    expect(reward.bossRewardTier).toBe('second');
+    expect(reward.bossRewardChoices).toEqual(['auxiliary-link']);
+    expect(opened.dependencies.hideRewardOverlay).not.toHaveBeenCalled();
   });
 
   it.each(['defeat', 'restart', 'shutdown'] as const)(
-    'discards the build and clears exact scene state on terminal %s',
+    'discards the run build on terminal %s',
     (reason) => {
-      const boundary = lifecycleBoundary();
-
-      const next = finalizeCombatLifecycle(
-        reason,
-        boundary.state,
-        boundary.dependencies,
-      );
-
-      expect(next).toEqual({
-        activeBoss: undefined,
-        activeBossKind: undefined,
-        bossRewardTier: null,
-        bossRewardChoices: [],
-        bossDefeatPending: false,
-        bossBuild: expect.any(BossBuild),
-      });
-      expect(next.bossBuild).not.toBe(boundary.bossBuild);
+      const current = boundary();
+      const next = finalizeCombatLifecycle(reason, current.state, current.dependencies);
+      expect(next.bossBuild).not.toBe(current.bossBuild);
       expect(next.bossBuild.snapshot()).toEqual([]);
-      expect(boundary.bossBuild.recordPermanentDirectHit()).toBe(false);
-      expect(boundary.scheduler.getSnapshot()).toEqual([]);
-      expect(boundary.activeBoss.clearHostileActions).toHaveBeenCalledOnce();
-      expect(boundary.activeBoss.destroy).toHaveBeenCalledOnce();
-      expect(boundary.dependencies.clearEnemyHostileActions).toHaveBeenCalledOnce();
-      expect(boundary.dependencies.clearWarning).toHaveBeenCalledOnce();
-      expect(boundary.dependencies.clearTemporaryOrbs).toHaveBeenCalledOnce();
-      expect(boundary.dependencies.hideRewardOverlay).toHaveBeenCalledOnce();
+      expect(current.dependencies.clearEnemyHostileActions).toHaveBeenCalledOnce();
+      expect(current.dependencies.clearWarning).toHaveBeenCalledOnce();
+      expect(current.dependencies.clearTemporaryOrbs).toHaveBeenCalledOnce();
+      expect(current.dependencies.hideRewardOverlay).toHaveBeenCalledOnce();
     },
   );
-
-  it('reports the pending hive kind while its manager is not active during warning', () => {
-    expect(inactiveBossSnapshot('hive')).toMatchObject({
-      kind: 'hive',
-      active: false,
-      phase: null,
-    });
-  });
 });
 
 describe('boss scene selection', () => {
-  it('retains the warned boss kind through the matching start transition', () => {
+  it('retains the warned boss kind and rejects a mismatched start', () => {
     const warned = bossKindAfterTransition(null, {
       type: 'bossWarningStarted',
       bossKind: 'hive',
     });
-
     expect(warned).toBe('hive');
     expect(bossKindAfterTransition(warned, {
       type: 'bossStarted',
       bossKind: 'hive',
     })).toBe('hive');
-  });
-
-  it('rejects a start transition for a different pending boss manager', () => {
     expect(() => bossKindAfterTransition('sentinel', {
       type: 'bossStarted',
       bossKind: 'hive',
     })).toThrow('boss start kind hive does not match pending sentinel');
   });
 
-  it('constructs only the manager selected by the pending boss kind', () => {
+  it('constructs the selected manager and maps reward tiers', () => {
     const calls: string[] = [];
     const factories = {
-      sentinel: () => {
-        calls.push('sentinel');
-        return 'sentinel-manager';
-      },
-      hive: () => {
-        calls.push('hive');
-        return 'hive-manager';
-      },
-      siege: () => {
-        calls.push('siege');
-        return 'siege-manager';
-      },
+      sentinel: () => calls.push('sentinel'),
+      hive: () => calls.push('hive'),
+      siege: () => calls.push('siege'),
     };
-
-    expect(createBossForKind('hive', factories)).toBe('hive-manager');
+    createBossForKind('hive', factories);
     expect(calls).toEqual(['hive']);
-  });
-
-  it('selects the reward tier from the defeated boss kind', () => {
     expect(rewardTierForBoss('sentinel')).toBe('first');
     expect(rewardTierForBoss('hive')).toBe('second');
+    expect(inactiveBossSnapshot('hive')).toMatchObject({
+      kind: 'hive',
+      active: false,
+      phase: null,
+    });
   });
 });

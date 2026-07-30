@@ -45,16 +45,11 @@ export function directHit(
   settings: Pick<ExperimentSettings, 'passThroughOnKill'>,
   piercing: boolean,
   directDamageBonus = 0,
-  chargedDamageBonus = 0,
-  chargedKillPierces = false,
   conditionalDamageBonus = 0,
   flatDamageBonus = 0,
 ): HitResult {
   if (!Number.isFinite(directDamageBonus) || directDamageBonus < 0) {
     throw new RangeError('direct damage bonus must be finite and non-negative');
-  }
-  if (!Number.isFinite(chargedDamageBonus) || chargedDamageBonus < 0) {
-    throw new RangeError('charged damage bonus must be finite and non-negative');
   }
   if (!Number.isFinite(conditionalDamageBonus) || conditionalDamageBonus < 0) {
     throw new RangeError('conditional damage bonus must be finite and non-negative');
@@ -66,17 +61,15 @@ export function directHit(
   const damage = (charged ? 1.5 : 1)
     * (1 + directDamageBonus)
     * (1 + conditionalDamageBonus)
-    + (charged ? chargedDamageBonus : 0)
     + flatDamageBonus;
   const killed = enemyHp <= damage;
-  const rewardPiercing = charged && killed && chargedKillPierces;
 
   return {
     charged,
     charges: charged ? charges - 1 : 0,
     damage,
     killed,
-    reflect: piercing ? false : !(killed && (settings.passThroughOnKill || rewardPiercing)),
-    preserveChargedKinetics: rewardPiercing,
+    reflect: piercing ? false : !(killed && settings.passThroughOnKill),
+    preserveChargedKinetics: false,
   };
 }

@@ -93,7 +93,7 @@ export class TemporaryOrbManager {
     parentId: number,
     position: Vector,
     direction: Vector,
-    requestedCount?: number,
+    requestedCount: number,
   ): number {
     const parent = [...this.records.values()].find((record) => record.id === parentId);
     if (
@@ -104,11 +104,8 @@ export class TemporaryOrbManager {
       || parent.splitConsumed
     ) return 0;
 
-    const legacy = GAME_TUNING.relics.secondBoss.chainSplit;
-    const childCount = requestedCount ?? legacy.childCount;
-    const configuredAngles = requestedCount === undefined
-      ? legacy.angles
-      : this.spawnAngles(requestedCount);
+    const childCount = requestedCount;
+    const configuredAngles = this.spawnAngles(requestedCount);
     if (
       !Number.isInteger(childCount)
       || childCount < 1

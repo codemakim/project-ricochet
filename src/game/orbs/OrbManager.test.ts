@@ -83,8 +83,7 @@ function createManager(
   getDirectDamageBonus: () => number = () => 0,
   getChargedSpeed: () => number = () => ORB_SPEED,
   passThroughOnKill = false,
-  chargedKillPierces: () => boolean = () => false,
-  getOrbLimit: () => number = () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+  getOrbLimit: () => number = () => GAME_TUNING.build.basicGrowth.maximumOrbs,
   getOrbRadius: () => number = () => 8,
   getRecoveryRadius: () => number = () => ORB_PICKUP_RADIUS,
 ) {
@@ -107,7 +106,6 @@ function createManager(
     hasFixedTerrainLineOfSight,
     getDirectDamageBonus,
     getChargedSpeed,
-    chargedKillPierces,
     getOrbLimit,
     getOrbRadius,
     getRecoveryRadius,
@@ -150,7 +148,7 @@ describe('OrbStore', () => {
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
     expect(store.getSnapshot()).toHaveLength(
-      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      GAME_TUNING.build.basicGrowth.maximumOrbs,
     );
   });
 
@@ -193,11 +191,7 @@ describe('OrbStore', () => {
       () => false,
       () => 0,
       () => 480,
-      () => 3,
-      () => 0,
-      () => 0,
-      () => false,
-      () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      () => GAME_TUNING.build.basicGrowth.maximumOrbs,
       (next) => {
         context = next;
         return 0.2;
@@ -227,11 +221,7 @@ describe('OrbStore', () => {
       () => false,
       () => 0,
       () => ORB_SPEED,
-      () => 3,
-      () => 0,
-      () => 0,
-      () => false,
-      () => GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      () => GAME_TUNING.build.basicGrowth.maximumOrbs,
       () => 0,
       (wallHits) => 1 + wallHits * 0.04,
     );
@@ -289,10 +279,6 @@ describe('OrbStore', () => {
       () => false,
       () => 0,
       () => ORB_SPEED,
-      () => 3,
-      () => 0,
-      () => 0,
-      () => false,
       () => orbLimit,
     );
 
@@ -307,7 +293,7 @@ describe('OrbStore', () => {
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
     expect(store.getSnapshot()).toHaveLength(
-      GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit,
+      GAME_TUNING.build.basicGrowth.maximumOrbs,
     );
   });
 
@@ -342,10 +328,6 @@ describe('OrbStore', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       () => 74,
     );
     store.activateAim();
@@ -361,7 +343,6 @@ describe('OrbStore', () => {
       () => 0,
       () => ORB_SPEED,
       false,
-      () => false,
       () => 6,
       () => 9.28,
     );
@@ -435,120 +416,6 @@ describe('OrbStore', () => {
     });
   });
 
-  it('uses source-dependent restored charges while floor and timeout keep their defaults', () => {
-    const restored = vi.fn((source) => source === 'proximity' ? 5 : 3);
-    const create = (autoReturnAfterMs: number | null = null) => new OrbStore(
-      { ...EXPERIMENT_DEFAULTS, autoReturnAfterMs }, {}, () => false,
-      () => 0, () => ORB_SPEED, restored,
-    );
-    const recover = (store: OrbStore, source: 'proximity' | 'floor' | 'timeout') => {
-      store.activateAim();
-      store.update(0, 0, player, up);
-      if (source === 'proximity') store.beginProximityRecovery(0);
-      else if (source === 'floor') store.beginFloorRecall(0);
-      else store.update(1, 1, player, up);
-      store.update(source === 'timeout' ? 201 : 200, 200, player, up);
-      return store.getSnapshot()[0]?.charges;
-    };
-
-    expect(recover(create(), 'proximity')).toBe(5);
-    expect(recover(create(), 'floor')).toBe(3);
-    expect(recover(create(1), 'timeout')).toBe(3);
-    expect(restored).toHaveBeenCalledWith('proximity');
-    expect(restored).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([-1, 2.5, Number.NaN, 4, 6])(
-    'rejects invalid proximity restored charges %s before storing or relaunching',
-    (invalidCharges) => {
-      const store = new OrbStore(
-        EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED,
-        () => invalidCharges,
-      );
-      store.activateAim();
-      store.update(0, 0, player, up);
-      store.beginProximityRecovery(0);
-
-      expect(() => store.update(100, 100, player, up)).toThrow(
-        new RangeError('proximity restored charges must be exactly 3 or 5'),
-      );
-      expect(store.getSnapshot()[0]).toMatchObject({ state: 'attracting', charges: 3 });
-    },
-  );
-
-  it('forces non-proximity restoration to three without consulting the provider', () => {
-    const restored = vi.fn(() => 5);
-    const store = new OrbStore(
-      EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, restored,
-    );
-    store.activateAim();
-    store.update(0, 0, player, up);
-    store.beginFloorRecall(0);
-    store.update(1_000, 1_000, player, up);
-
-    expect(restored).not.toHaveBeenCalled();
-    expect(store.getSnapshot()[0]?.charges).toBe(3);
-  });
-
-  it('consumes opening damage once on the first damage-enabled hit after proximity recovery', () => {
-    const openingBonus = vi.fn((source, pending) => source === 'proximity' && pending ? 1 : 0);
-    const store = new OrbStore(
-      EXPERIMENT_DEFAULTS,
-      {},
-      () => false,
-      () => 0,
-      () => ORB_SPEED,
-      () => 3,
-      openingBonus,
-    );
-    store.activateAim();
-    store.update(0, 0, player, up);
-    store.update(100, 100, player, up);
-    store.update(200, 100, player, up);
-    store.beginProximityRecovery(0);
-    store.update(300, 100, player, up);
-
-    expect(store.handleEnemyHit(0, -1, 99, 1_000, false)?.damage).toBe(2.5);
-    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.damage).toBe(1.5);
-    expect(openingBonus).toHaveBeenNthCalledWith(1, 'proximity', true);
-    expect(openingBonus).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([-1, 0.5, Number.NaN, 2])(
-    'rejects invalid opening bonus %s without consuming the pending hit',
-    (invalidBonus) => {
-      let bonus = invalidBonus;
-      const openingBonus = vi.fn(() => bonus);
-      const store = new OrbStore(
-        EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, () => 3, openingBonus,
-      );
-      store.activateAim();
-      store.update(0, 0, player, up);
-      store.update(100, 100, player, up);
-      store.update(200, 100, player, up);
-      store.beginProximityRecovery(0);
-      store.update(300, 100, player, up);
-
-      expect(() => store.handleEnemyHit(0, 7, 99, 1_000, false)).toThrow(
-        new RangeError('opening hit bonus must be exactly 0 or 1'),
-      );
-      bonus = 1;
-      expect(store.handleEnemyHit(0, 7, 99, 1_000, false)?.damage).toBe(2.5);
-    },
-  );
-
-  it('does not consult the opening provider outside a pending proximity hit', () => {
-    const openingBonus = vi.fn(() => 1);
-    const store = new OrbStore(
-      EXPERIMENT_DEFAULTS, {}, () => false, () => 0, () => ORB_SPEED, () => 3, openingBonus,
-    );
-    store.activateAim();
-    store.update(0, 0, player, up);
-
-    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.damage).toBe(1.5);
-    expect(openingBonus).not.toHaveBeenCalled();
-  });
-
   it('homes from any distance after floor recall', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.activateAim();
@@ -620,10 +487,6 @@ describe('OrbStore', () => {
       () => true,
       () => 0,
       () => ORB_SPEED,
-      () => 3,
-      () => 0,
-      () => 0,
-      () => false,
       () => 6,
       (context) => {
         contexts.push(context);
@@ -655,45 +518,6 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()[0]?.state).toBe('attracting');
   });
 
-  it.each([440, 480, 520])(
-    'preserves rank-derived charged speed %i and direction on the final inertial lethal hit',
-    (chargedSpeed) => {
-    const store = new OrbStore(
-      EXPERIMENT_DEFAULTS,
-      {},
-      () => false,
-      () => 0.25,
-      () => chargedSpeed,
-      () => 3,
-      () => 0,
-      () => 0.75,
-      () => true,
-    );
-    store.activateAim();
-    store.update(0, 0, player, { x: 3, y: 4 });
-    store.handleEnemyHit(0, 10, 99, 900, false);
-    store.handleEnemyHit(0, 11, 99, 900, false);
-
-    expect(store.handleEnemyHit(0, 1, 2.5, 1_000, false)).toMatchObject({
-      charged: true,
-      charges: 0,
-      damage: 2.625,
-      killed: true,
-      reflect: false,
-      preserveChargedKinetics: true,
-    });
-    const after = store.getSnapshot()[0]!;
-    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(chargedSpeed);
-    expect(after.velocity.x / after.velocity.y).toBeCloseTo(3 / 4);
-    expect(store.handleEnemyHit(0, 4, 1.25, 1_000, false)).toMatchObject({
-      charged: false,
-      damage: 1.25,
-      killed: true,
-      reflect: true,
-      preserveChargedKinetics: false,
-    });
-  });
-
   it('keeps permanent speed when a non-reward pass-through consumes the final charge', () => {
     const store = new OrbStore(
       { ...EXPERIMENT_DEFAULTS, passThroughOnKill: true },
@@ -716,36 +540,6 @@ describe('OrbStore', () => {
       store.getSnapshot()[0]!.velocity.x,
       store.getSnapshot()[0]!.velocity.y,
     )).toBeCloseTo(480);
-  });
-
-  it('rejects an invalid charged bonus without consuming charge, cooldown, or damage callback', () => {
-    let chargedBonus = Number.NaN;
-    const onEnemyDamage = vi.fn();
-    const store = new OrbStore(
-      EXPERIMENT_DEFAULTS,
-      { onEnemyDamage },
-      () => false,
-      () => 0,
-      () => ORB_SPEED,
-      () => 3,
-      () => 0,
-      () => chargedBonus,
-    );
-    store.activateAim();
-    store.update(0, 0, player, up);
-
-    expect(() => store.handleEnemyHit(0, 7, 2, 1_000, false)).toThrow(
-      new RangeError('charged damage bonus must be finite and non-negative'),
-    );
-    expect(store.getSnapshot()[0]?.charges).toBe(3);
-    expect(onEnemyDamage).not.toHaveBeenCalled();
-
-    chargedBonus = 0.75;
-    expect(store.handleEnemyHit(0, 7, 2, 1_000, false)).toMatchObject({
-      damage: 2.25,
-      killed: true,
-    });
-    expect(onEnemyDamage).toHaveBeenCalledOnce();
   });
 
   it('reports each recovery once so only proximity recovery produces a two-orb salvo', () => {
@@ -841,7 +635,6 @@ describe('OrbManager Phaser adapter', () => {
       () => 0,
       () => ORB_SPEED,
       false,
-      () => false,
       () => limit,
     );
 
@@ -873,37 +666,6 @@ describe('OrbManager Phaser adapter', () => {
     const after = manager.getSnapshot()[0]!;
     expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(480);
     expect(Math.hypot(sprites[0]!.body.velocity.x, sprites[0]!.body.velocity.y)).toBeCloseTo(480);
-  });
-
-  it('keeps the pre-hit charged body velocity after inertial penetration spends its last charge', () => {
-    const { manager, sprites } = createManager(
-      true,
-      () => false,
-      null,
-      () => 0,
-      () => 480,
-      false,
-      () => true,
-    );
-    manager.activateAim();
-    manager.update(0, 0, player, { x: 3, y: 4 });
-    manager.handleEnemyHit(0, 1, 99, 900, false);
-    manager.handleEnemyHit(0, 2, 99, 900, false);
-
-    const result = manager.handleEnemyHit(0, 3, 1.5, 1_000, false);
-
-    expect(result).toMatchObject({
-      charged: true,
-      charges: 0,
-      reflect: false,
-      preserveChargedKinetics: true,
-    });
-    expect(manager.getSnapshot()[0]!.velocity).toEqual(sprites[0]!.body.velocity);
-    expect(Math.hypot(
-      sprites[0]!.body.velocity.x,
-      sprites[0]!.body.velocity.y,
-    )).toBeCloseTo(480);
-    expect(sprites[0]!.body.velocity.x / sprites[0]!.body.velocity.y).toBeCloseTo(3 / 4);
   });
 
   it('normalizes a reflected body to permanent build speed after the last charge', () => {

@@ -223,14 +223,6 @@ export interface GameTuning {
     directLink: { overchargeScale: number };
     superconductingCircuit: { hitReduction: number; damageBonus: number };
     resonanceRupture: { radius: number; damage: number };
-    secondBoss: {
-      auxiliaryOrbit: { orbLimit: number };
-      recoverySalvo: { temporaryOrbCount: number };
-      siegeResonance: { hitsRequired: number; radius: number; damage: number };
-      hyperpressureCore: { chargedDamageBonus: number };
-      aftershockExplosion: { delayMs: number; radiusScale: number; damageScale: number };
-      chainSplit: { childCount: number; angles: readonly [number, number] };
-    };
   };
   visual: {
     friendly: { permanentOrb: ProjectileVisualTuning; temporaryOrb: ProjectileVisualTuning };
@@ -440,14 +432,6 @@ export const GAME_TUNING = {
     directLink: { overchargeScale: 0.3 },
     superconductingCircuit: { hitReduction: 1, damageBonus: 0.2 },
     resonanceRupture: { radius: 44, damage: 0.65 },
-    secondBoss: {
-      auxiliaryOrbit: { orbLimit: 6 },
-      recoverySalvo: { temporaryOrbCount: 2 },
-      siegeResonance: { hitsRequired: 10, radius: 80, damage: 2 },
-      hyperpressureCore: { chargedDamageBonus: 0.75 },
-      aftershockExplosion: { delayMs: 350, radiusScale: 0.8, damageScale: 0.5 },
-      chainSplit: { childCount: 2, angles: [-25, 25] },
-    },
   },
   visual: {
     friendly: {
@@ -955,17 +939,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(relics.superconductingCircuit.damageBonus, 'relics.superconductingCircuit.damageBonus');
   positive(relics.resonanceRupture.radius, 'relics.resonanceRupture.radius');
   positive(relics.resonanceRupture.damage, 'relics.resonanceRupture.damage');
-  const { secondBoss } = relics;
-  positiveInteger(secondBoss.auxiliaryOrbit.orbLimit, 'relics.secondBoss.auxiliaryOrbit.orbLimit');
-  positiveInteger(secondBoss.recoverySalvo.temporaryOrbCount, 'relics.secondBoss.recoverySalvo.temporaryOrbCount');
-  positiveInteger(secondBoss.siegeResonance.hitsRequired, 'relics.secondBoss.siegeResonance.hitsRequired');
-  positive(secondBoss.siegeResonance.radius, 'relics.secondBoss.siegeResonance.radius');
-  positive(secondBoss.siegeResonance.damage, 'relics.secondBoss.siegeResonance.damage');
-  positive(secondBoss.hyperpressureCore.chargedDamageBonus, 'relics.secondBoss.hyperpressureCore.chargedDamageBonus');
-  positive(secondBoss.aftershockExplosion.delayMs, 'relics.secondBoss.aftershockExplosion.delayMs');
-  positive(secondBoss.aftershockExplosion.radiusScale, 'relics.secondBoss.aftershockExplosion.radiusScale');
-  positive(secondBoss.aftershockExplosion.damageScale, 'relics.secondBoss.aftershockExplosion.damageScale');
-  positiveInteger(secondBoss.chainSplit.childCount, 'relics.secondBoss.chainSplit.childCount');
   for (const [name, friendly] of Object.entries(visual.friendly)) {
     finite(friendly.fill, `visual.friendly.${name}.fill`);
     finite(friendly.accent, `visual.friendly.${name}.accent`);

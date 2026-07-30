@@ -285,14 +285,14 @@ describe('TemporaryOrbManager', () => {
     const root = manager.getSnapshot()[0]!;
 
     expect(root).toMatchObject({ generation: 0, splitConsumed: false });
-    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 })).toBe(2);
+    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 }, 2)).toBe(2);
     expect(group.children.slice(1).map(angleDegrees)).toEqual([-25, 25]);
     expect(manager.getSnapshot()).toMatchObject([
       { id: root.id, generation: 0, splitConsumed: true },
       { generation: 1, splitConsumed: false },
       { generation: 1, splitConsumed: false },
     ]);
-    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 })).toBe(0);
+    expect(manager.spawnChildren(root.id, { x: 20, y: 30 }, { x: 1, y: 0 }, 2)).toBe(0);
   });
 
   it('uses an explicit recursive child count', () => {
@@ -308,17 +308,17 @@ describe('TemporaryOrbManager', () => {
     const { manager, group } = createManager();
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
     const rootId = manager.getSnapshot()[0]!.id;
-    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(2);
+    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 }, 2)).toBe(2);
     const childId = manager.getSnapshot()[1]!.id;
 
-    expect(manager.spawnChildren(999, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
-    expect(manager.spawnChildren(childId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
-    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+    expect(manager.spawnChildren(999, { x: 0, y: 0 }, { x: 1, y: 0 }, 2)).toBe(0);
+    expect(manager.spawnChildren(childId, { x: 0, y: 0 }, { x: 1, y: 0 }, 2)).toBe(0);
+    expect(manager.spawnChildren(rootId, { x: 0, y: 0 }, { x: 1, y: 0 }, 2)).toBe(0);
 
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
     const inactiveId = manager.getSnapshot().at(-1)!.id;
     group.children.at(-1)!.active = false;
-    expect(manager.spawnChildren(inactiveId, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(0);
+    expect(manager.spawnChildren(inactiveId, { x: 0, y: 0 }, { x: 1, y: 0 }, 2)).toBe(0);
   });
 
   it('truncates children deterministically at the cap and uses configured lifetime', () => {
@@ -332,7 +332,7 @@ describe('TemporaryOrbManager', () => {
     manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
 
     expect(manager.getSnapshot()).toHaveLength(29);
-    expect(manager.spawnChildren(rootId, { x: 5, y: 6 }, { x: 1, y: 0 })).toBe(1);
+    expect(manager.spawnChildren(rootId, { x: 5, y: 6 }, { x: 1, y: 0 }, 2)).toBe(1);
     expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
     expect(manager.getSnapshot().at(-1)).toMatchObject({
       generation: 1,
@@ -344,34 +344,4 @@ describe('TemporaryOrbManager', () => {
     expect(manager.getSnapshot()).toEqual([]);
   });
 
-  it('honors configured child count and rejects a count larger than configured angles', () => {
-    const chainSplit = GAME_TUNING.relics.secondBoss.chainSplit as {
-      childCount: number;
-      angles: readonly [number, number];
-    };
-    const originalCount = chainSplit.childCount;
-    try {
-      const { manager, group } = createManager();
-      manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
-      const firstRoot = manager.getSnapshot()[0]!.id;
-
-      chainSplit.childCount = 1;
-      expect(manager.spawnChildren(firstRoot, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(1);
-      expect(angleDegrees(group.children.at(-1)!)).toBe(-25);
-
-      manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1);
-      const secondRoot = manager.getSnapshot().at(-1)!.id;
-      chainSplit.childCount = 3;
-      expect(() => manager.spawnChildren(
-        secondRoot,
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-      )).toThrow(new RangeError('chain split child count must fit configured angles'));
-      expect(manager.getSnapshot().find(({ id }) => id === secondRoot)).toMatchObject({
-        splitConsumed: false,
-      });
-    } finally {
-      chainSplit.childCount = originalCount;
-    }
-  });
 });

@@ -11,7 +11,6 @@ import { HiveBossManager } from '../bosses/HiveBossManager';
 import type { BossPartId } from '../bosses/bossRules';
 import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
-import { CombatEffectScheduler, type ScheduledAreaEffect } from '../combat/CombatEffectScheduler';
 import { CombatProcState } from '../combat/CombatProcState';
 import {
   CorrosionFieldState,
@@ -45,6 +44,7 @@ import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
 import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
+import type { RecoverySource } from '../orbs/orbRules';
 import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
@@ -73,14 +73,12 @@ import {
 } from '../run/runContract';
 import {
   bossKindAfterTransition,
-  bossOrbModifiers,
   createBossForKind,
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
   planDirectHitEffects,
   planOrbCoreEffects,
   rewardTierForBoss,
-  schedulePlannedAftershock,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
 } from './combatSceneRules';
@@ -130,7 +128,6 @@ export interface CombatDebugSnapshot {
   runCompleteVisible: boolean;
   temporaryOrbs: number;
   temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
-  scheduledEffects: ScheduledAreaEffect[];
   corrosionFields: readonly CorrosionFieldSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
@@ -169,7 +166,6 @@ export class CombatScene extends Phaser.Scene {
   private activeBoss?: BossEncounter;
   private activeBossKind?: BossKind;
   private bossRewardTier: BossRewardTier | null = null;
-  private readonly combatEffects = new CombatEffectScheduler();
   private readonly corrosionFields = new CorrosionFieldState();
   private readonly corrosionVisuals = new Map<number, Phaser.GameObjects.Graphics>();
   private combatProcs?: CombatProcState;
@@ -224,7 +220,6 @@ export class CombatScene extends Phaser.Scene {
     this.bossDefeatPending = false;
     this.activeBossKind = undefined;
     this.bossRewardTier = null;
-    this.combatEffects.clear();
     this.corrosionFields.clear();
     this.corrosionVisuals.clear();
     this.bossRewardChoices = [];
@@ -274,20 +269,9 @@ export class CombatScene extends Phaser.Scene {
       getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
       getConductionHitsRequired: (base) => this.bossBuild?.conductionHitsRequired(base) ?? base,
       getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
-      getRestoredCharges: (source) => this.bossBuild?.restoredCharges(source) ?? 3,
-      getOpeningHitBonus: (source, firstHitPending) => (
-        this.bossBuild?.openingHitBonus(source, firstHitPending) ?? 0
-      ),
-      getChargedDamageBonus: () => (
-        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedDamageBonus : 0
-      ),
-      chargedKillPierces: () => (
-        this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
-      ),
       getOrbLimit: () => Math.min(
         GAME_TUNING.build.basicGrowth.maximumOrbs,
-        build.orbLimit(STARTING_ORB_COUNT)
-          + (this.bossBuild?.orbLimitBonus() ?? 0),
+        build.orbLimit(STARTING_ORB_COUNT),
       ),
       onRecovery: (orbId, source) => {
         this.combatProcs?.resetOrbFlight(orbId);
@@ -465,7 +449,6 @@ export class CombatScene extends Phaser.Scene {
     this.temporaryOrbManager?.update(this.gameplayElapsedMs);
     this.enemyManager.update();
     this.activeBoss?.update();
-    this.drainCombatEffects();
     this.drainCorrosionFields();
     this.advanceEncounter(gameplayDelta);
   }
@@ -554,7 +537,6 @@ export class CombatScene extends Phaser.Scene {
         position: { ...orb.position },
         velocity: { ...orb.velocity },
       })) ?? [],
-      scheduledEffects: this.combatEffects.getSnapshot(),
       corrosionFields: this.corrosionFields.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
@@ -679,7 +661,6 @@ export class CombatScene extends Phaser.Scene {
     const plan = planDirectHitEffects(
       event,
       this.build,
-      this.bossBuild,
       decision,
     );
     if (plan.spawnChildren) {
@@ -687,7 +668,7 @@ export class CombatScene extends Phaser.Scene {
         event.sourceOrbId,
         event.position,
         event.direction,
-        recursiveSplit?.childCount,
+        recursiveSplit!.childCount,
       );
     }
     if (corePlan.spawnCorrosion) {
@@ -826,13 +807,6 @@ export class CombatScene extends Phaser.Scene {
         }
       }
     }
-    schedulePlannedAftershock(
-      plan,
-      this.combatEffects,
-      this.gameplayElapsedMs,
-      event.position,
-      excludedBossTargetId,
-    );
     if (plan.splitCount > 0) {
       this.temporaryOrbManager?.spawn(
         event.position,
@@ -949,13 +923,6 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
-  private drainCombatEffects(): void {
-    for (const effect of this.combatEffects.drainDue(this.gameplayElapsedMs)) {
-      this.applyAreaEffects(effect.position, [effect], -1, effect.excludedBossTargetId);
-      this.drawExplosion(effect.position, effect.radius);
-    }
-  }
-
   private drainCorrosionFields(): void {
     for (const tick of this.corrosionFields.drainDue(this.gameplayElapsedMs)) {
       const targets = this.enemyManager?.nearestSecondaryTargets(
@@ -1043,15 +1010,7 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
-  private handleOrbRecovery(source: Parameters<BossBuild['recoverySalvoCount']>[0]): void {
-    const count = this.bossBuild?.recoverySalvoCount(source) ?? 0;
-    if (count > 0 && this.player) {
-      this.temporaryOrbManager?.spawn(
-        { x: this.player.x, y: this.player.y },
-        this.aim,
-        count,
-      );
-    }
+  private handleOrbRecovery(source: RecoverySource): void {
     const shockwave = this.build?.recoveryShockwave();
     if (
       source === 'proximity'
@@ -1204,7 +1163,6 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated || this.bossDefeatPending) return;
     this.enemyManager?.clearHostileActions();
     this.activeBoss?.clearHostileActions();
-    this.combatEffects.clear();
     this.bossDefeatPending = true;
   }
 
@@ -1308,7 +1266,6 @@ export class CombatScene extends Phaser.Scene {
       bossDefeatPending: this.bossDefeatPending,
       bossBuild: this.bossBuild ?? new BossBuild(),
     }, {
-      scheduler: this.combatEffects,
       clearEnemyHostileActions: () => this.enemyManager?.clearHostileActions(),
       clearWarning: () => this.clearBossWarning(),
       clearTemporaryOrbs: () => this.clearTemporaryOrbs(),

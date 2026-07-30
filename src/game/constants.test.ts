@@ -19,7 +19,7 @@ describe('logical playfield', () => {
 
   it('starts with one permanent orb and caps them at six', () => {
     expect(STARTING_ORB_COUNT).toBe(1);
-    expect(GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit).toBe(6);
+    expect(GAME_TUNING.build.basicGrowth.maximumOrbs).toBe(6);
   });
 
   it('uses the approved experiment defaults', () => {

@@ -32,19 +32,6 @@ describe('orb rules', () => {
     });
   });
 
-  it('adds the charged bonus only while a permanent orb has a charge', () => {
-    expect(directHit(1, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
-      charged: true,
-      charges: 0,
-      damage: 2.625,
-    });
-    expect(directHit(0, 9, { passThroughOnKill: false }, false, 0.25, 0.75)).toMatchObject({
-      charged: false,
-      charges: 0,
-      damage: 1.25,
-    });
-  });
-
   it('multiplies base firepower and conditional direct-hit bonuses before flat rewards', () => {
     expect(directHit(
       1,
@@ -52,25 +39,9 @@ describe('orb rules', () => {
       { passThroughOnKill: false },
       false,
       0.25,
-      0.75,
-      false,
       0.2,
       1,
-    )).toMatchObject({ damage: 4 });
-  });
-
-  it('lets only a charged lethal reward hit pass through while consuming its charge', () => {
-    expect(directHit(1, 1.5, { passThroughOnKill: false }, false, 0, 0, true)).toMatchObject({
-      charged: true,
-      charges: 0,
-      killed: true,
-      reflect: false,
-      preserveChargedKinetics: true,
-    });
-    expect(directHit(1, 2, { passThroughOnKill: false }, false, 0, 0, true))
-      .toMatchObject({ reflect: true, preserveChargedKinetics: false });
-    expect(directHit(0, 1, { passThroughOnKill: false }, false, 0, 0, true))
-      .toMatchObject({ reflect: true, preserveChargedKinetics: false });
+    )).toMatchObject({ damage: 3.25 });
   });
 
   it('does not preserve charged kinetics for experiment or ordinary piercing pass-through', () => {
@@ -84,20 +55,6 @@ describe('orb rules', () => {
     'rejects invalid direct damage bonus %s',
     (bonus) => {
       expect(() => directHit(0, 1, { passThroughOnKill: false }, false, bonus)).toThrow(RangeError);
-    },
-  );
-
-  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-    'rejects invalid charged damage bonus %s before calculating damage',
-    (bonus) => {
-      expect(() => directHit(
-        1,
-        1,
-        { passThroughOnKill: false },
-        false,
-        0,
-        bonus,
-      )).toThrow(new RangeError('charged damage bonus must be finite and non-negative'));
     },
   );
 

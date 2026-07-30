@@ -112,7 +112,6 @@ interface CombatSnapshot {
     position: Vector;
     velocity: Vector;
   }>;
-  scheduledEffects: Array<{ dueAt: number }>;
   corrosionFields: Array<{
     fieldId: number;
     orbId: number;

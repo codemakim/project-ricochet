@@ -18,29 +18,10 @@ export const BOSS_REWARD_IDS = [
   'resonance-rupture',
 ] as const;
 
-export const LEGACY_FIRST_BOSS_REWARD_IDS = [
-  'expanded-magazine',
-  'recovery-capacitor',
-  'opening-amplifier',
-  'chain-warhead',
-] as const;
-export const SECOND_BOSS_REWARD_IDS = [
-  'auxiliary-orbit',
-  'recovery-salvo',
-  'siege-resonance',
-  'hyperpressure-core',
-  'inertial-penetration',
-  'aftershock-explosion',
-  'chain-split',
-] as const;
 export type BossRewardTier = 'first' | 'second';
-type NewBossRewardId = typeof BOSS_REWARD_IDS[number];
-type LegacyBossRewardId =
-  | typeof LEGACY_FIRST_BOSS_REWARD_IDS[number]
-  | typeof SECOND_BOSS_REWARD_IDS[number];
-export type BossRewardId = NewBossRewardId | LegacyBossRewardId;
+export type BossRewardId = typeof BOSS_REWARD_IDS[number];
 export type BossRewardChoice =
-  | { kind: 'relic'; id: NewBossRewardId }
+  | { kind: 'relic'; id: BossRewardId }
   | { kind: 'ability-rank'; id: AbilityId };
 
 export interface BossRewardContext {
@@ -58,7 +39,7 @@ const TRIGGER_ABILITIES: readonly AbilityId[] = [
   'high-speed-impact',
 ];
 
-function eligible(id: NewBossRewardId, context: BossRewardContext): boolean {
+function eligible(id: BossRewardId, context: BossRewardContext): boolean {
   const rank = (ability: AbilityId) => context.ranks[ability] > 0;
   const core = (type: OrbCoreId) => context.coreTypes.includes(type);
   switch (id) {
@@ -120,19 +101,4 @@ export function selectBossRewardOptions(
     );
   }
   return choices;
-}
-
-/** @deprecated Removed after CombatScene migrates to tagged choices. */
-export function selectLegacyBossRewardOptions(
-  tier: BossRewardTier,
-  owned: ReadonlySet<BossRewardId>,
-  ranks: Readonly<Partial<AbilityRanks>>,
-  seed: number,
-): LegacyBossRewardId[] {
-  const first = LEGACY_FIRST_BOSS_REWARD_IDS.filter((id) =>
-    !owned.has(id)
-    && (id !== 'chain-warhead' || ((ranks.split ?? 0) > 0 && (ranks.explosion ?? 0) > 0)));
-  const second = SECOND_BOSS_REWARD_IDS.filter((id) => !owned.has(id));
-  const pool = tier === 'first' ? first : second;
-  return seededShuffle(pool, seed).slice(0, 3);
 }
