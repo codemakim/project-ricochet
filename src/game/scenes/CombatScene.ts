@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { traceFirstBounce } from '../aim/trajectory';
 import { BossManager, type BossManagerSnapshot } from '../bosses/BossManager';
+import { bossEntryCleanup } from '../bosses/bossEntryRules';
 import type {
   BossDirectHitEvent,
   BossEncounter,
@@ -1135,6 +1136,16 @@ export class CombatScene extends Phaser.Scene {
     if (!this.player || !this.orbManager || !this.temporaryOrbManager || !this.enemyManager) return;
     this.clearBossWarning();
     this.activeBoss?.destroy();
+    const cleanup = bossEntryCleanup(
+      kind,
+      GAME_TUNING.encounter.bossEntry.cleanupMode,
+    );
+    const removed = cleanup.mode === 'all'
+      ? this.enemyManager.clearEnemies()
+      : this.enemyManager.clearCorridor(cleanup.corridor);
+    for (const position of removed) {
+      this.drawExplosion(position, GAME_TUNING.encounter.bossEntry.padding + 12);
+    }
     const commonOptions = {
       player: this.player,
       orbManager: this.orbManager,

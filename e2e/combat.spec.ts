@@ -1238,6 +1238,33 @@ test('@desktop midboss hard-time entry does not require kill score', async ({ pa
   expect((await snapshot(page)).boss.active).toBe(true);
 });
 
+test('@desktop clears only the boss entry corridor without kill rewards', async ({ page }) => {
+  await loadCanvas(page);
+  const arranged = await sceneCall(page, (scene) => {
+    const enemies = scene.getDebugSnapshot().enemies;
+    const center = enemies[0]!;
+    const side = enemies[1]!;
+    scene.debugFreezeEnemies();
+    scene.debugRemoveEnemies(enemies.slice(2).map(({ id }) => id));
+    scene.debugSetEnemy(center.id, { x: 225, y: 120 }, 99);
+    scene.debugSetEnemy(side.id, { x: 40, y: 120 }, 99);
+    const xp = scene.getDebugSnapshot().progression.xp;
+    scene.debugAdvanceEncounter(120_000);
+    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(0);
+    return { centerId: center.id, sideId: side.id, xp };
+  });
+  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
+
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
+  const after = await snapshot(page);
+
+  expect(after.boss.active).toBe(true);
+  expect(after.enemies.some(({ id }) => id === arranged.centerId)).toBe(false);
+  expect(after.enemies.some(({ id }) => id === arranged.sideId)).toBe(true);
+  expect(after.progression.xp).toBe(arranged.xp);
+});
+
 test('@desktop midboss movement is constrained by enemies and expands after obstacle removal', async ({ page }) => {
   await loadCanvas(page);
   await enterMidbossByScore(page);
@@ -1900,7 +1927,7 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
   expect(projectileEnd).toBeGreaterThan(reflector.x);
 });
 
-test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ page }) => {
+test('@desktop hive attacks respect hostile cap and clean up on defeat', async ({ page }) => {
   await loadCanvas(page);
   await enterHiveByScore(page);
   await sceneCall(page, (scene) => {
@@ -1911,10 +1938,9 @@ test('@desktop hive attacks share hostile cap and clean up on defeat', async ({ 
   });
   await expect.poll(async () => {
     const current = await snapshot(page);
-    return current.bullets > 0 && (current.boss.bullets ?? 0) > 0;
+    return (current.boss.bullets ?? 0) > 0;
   }, { timeout: 4_000 }).toBe(true);
   const attacking = await snapshot(page);
-  expect(attacking.bullets).toBeGreaterThan(0);
   expect(attacking.boss.bullets ?? 0).toBeGreaterThan(0);
   expect(attacking.bullets + (attacking.boss.bullets ?? 0)).toBeLessThanOrEqual(12);
   await sceneCall(page, (scene) => {
@@ -2038,5 +2064,6 @@ test('@mobile keeps movement and retained aim during second-stage density and hi
   expect(after.aim.x).toBeLessThan(0);
   expect(after.aim.y).toBeLessThan(0);
   expect(after.boss.kind).toBe('hive');
-  expect(after.enemies.length).toBe(dense.enemies.length);
+  expect(after.enemies.length).toBeGreaterThan(0);
+  expect(after.enemies.length).toBeLessThan(dense.enemies.length);
 });
