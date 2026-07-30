@@ -30,7 +30,10 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.encounter.reinforcementReleaseY).toBe(50);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
-    expect(Object.hasOwn(GAME_TUNING.encounter, 'bossEntry')).toBe(false);
+    expect(GAME_TUNING.encounter.bossEntry).toEqual({
+      cleanupMode: 'corridor',
+      padding: 8,
+    });
     expect(GAME_TUNING.build).toEqual({
       conditionalDamageCap: 1.5,
       firepower: { damageBonusPerRank: 0.12 },
@@ -261,5 +264,11 @@ describe('GAME_TUNING', () => {
     const tuning = mutableTuning();
     mutate(tuning);
     expect(() => validateGameTuning(tuning)).toThrow();
+  });
+
+  it('accepts all-enemy boss entry cleanup', () => {
+    const tuning = mutableTuning();
+    tuning.encounter.bossEntry.cleanupMode = 'all';
+    expect(() => validateGameTuning(tuning)).not.toThrow();
   });
 });

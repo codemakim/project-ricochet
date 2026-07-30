@@ -48,6 +48,10 @@ export interface GameTuning {
   };
   encounter: {
     reinforcementReleaseY: number;
+    bossEntry: {
+      cleanupMode: 'corridor' | 'all';
+      padding: number;
+    };
     grid: {
       columns: number;
       left: number;
@@ -273,6 +277,7 @@ export const GAME_TUNING = {
   },
   encounter: {
     reinforcementReleaseY: 50,
+    bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
   },
   projectiles: {
@@ -563,6 +568,11 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
   finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
+  if (encounter.bossEntry.cleanupMode !== 'corridor'
+    && encounter.bossEntry.cleanupMode !== 'all') {
+    throw new RangeError('encounter.bossEntry.cleanupMode must be corridor or all');
+  }
+  nonNegative(encounter.bossEntry.padding, 'encounter.bossEntry.padding');
   positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
   nonNegative(encounter.grid.left, 'encounter.grid.left');
   positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
