@@ -231,7 +231,7 @@ async function bulletState(page: Page): Promise<Array<{ x: number; y: number; vx
 
 async function confirmCoreLoadout(
   page: Page,
-  keys: readonly string[] = ['Digit1', 'Digit1', 'Digit1'],
+  keys: readonly string[] = ['Digit1'],
 ): Promise<void> {
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
   for (const key of keys) await page.keyboard.press(key);
@@ -385,7 +385,14 @@ async function dispatchTouchPointers(
   }, events);
 }
 
-test('@desktop moves, retains mouse aim, and launches three permanent orbs', async ({ page }) => {
+async function confirmAdditionalCore(page: Page, key = 'Digit1'): Promise<void> {
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
+  await page.keyboard.press(key);
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+}
+
+test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const before = await snapshot(page);
   const aimPoint = clientPoint(box, { x: before.player.x + 100, y: before.player.y - 100 });
@@ -394,21 +401,9 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
     timeout: 90,
-  }).toEqual({ active: 1, queued: 2 });
+  }).toEqual({ active: 1, queued: 0 });
   const firstLaunch = await snapshot(page);
   expect(firstLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 140,
-  }).toEqual({ active: 2, queued: 1 });
-  const secondLaunch = await snapshot(page);
-  expect(secondLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 140,
-  }).toEqual({ active: 3, queued: 0 });
-  const thirdLaunch = await snapshot(page);
-  expect(thirdLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
 
   await page.keyboard.down('KeyW');
   await page.keyboard.down('KeyD');
@@ -423,7 +418,7 @@ test('@desktop moves, retains mouse aim, and launches three permanent orbs', asy
   expect(after.player.y).toBeLessThan(before.player.y);
   expect(after.aim.x).toBeGreaterThan(0);
   expect(after.aim.y).toBeLessThan(0);
-  expect(after.orbs).toHaveLength(3);
+  expect(after.orbs).toHaveLength(1);
   expect(after.orbs.every((orb) => orb.state !== 'stored')).toBe(true);
   expect(box.height).toBeGreaterThan(box.width);
 });
@@ -434,26 +429,17 @@ test('@desktop chooses permanent orb cores', async ({ page }) => {
   await expect(canvas).toBeVisible();
   const box = (await canvas.boundingBox())!;
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
-  for (const world of [
-    { x: 120, y: 285 },
-    { x: 120, y: 285 },
-    { x: 330, y: 410 },
-    { x: 225, y: 575 },
-  ]) {
+  for (const world of [{ x: 330, y: 410 }, { x: 225, y: 575 }]) {
     const point = clientPoint(box, world);
     await page.mouse.click(point.x, point.y);
   }
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
 
-  expect((await snapshot(page)).orbs.map((orb) => orb.coreType)).toEqual([
-    'echo',
-    'echo',
-    'inertia',
-  ]);
+  expect((await snapshot(page)).orbs.map((orb) => orb.coreType)).toEqual(['inertia']);
   expect(await sceneCall(page, (scene) => scene.children.list
     .map((child) => child.texture?.key)
     .filter((key) => key?.startsWith('orb-'))))
-    .toEqual(expect.arrayContaining(['orb-echo', 'orb-inertia']));
+    .toContain('orb-inertia');
 
 });
 
@@ -506,21 +492,23 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
   expect(after.player.y).toBeLessThan(before.player.y);
   expect(after.aim.x).toBeLessThan(0);
   expect(after.aim.y).toBeLessThan(0);
-  expect(after.orbs).toHaveLength(3);
+  expect(after.orbs).toHaveLength(1);
   expect(after.orbs.every((orb) => orb.state === 'active')).toBe(true);
 });
 
 test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
   await page.clock.install();
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(12));
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
+  expect(paused.progression.choices).toEqual(['additional-core']);
   expect(paused.pauseReasons).toContain('levelUp');
 
   const card = clientPoint(box, { x: 225, y: 270 });
   await page.touchscreen.tap(card.x, card.y);
+  await confirmAdditionalCore(page);
 
   await expect.poll(async () => {
     const current = await snapshot(page);
@@ -530,6 +518,7 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
       paused: current.pauseReasons.includes('levelUp'),
     };
   }).toEqual({ rank: 1, visible: false, paused: false });
+  expect((await snapshot(page)).orbs).toHaveLength(2);
 
   await expect.poll(async () => {
     await page.clock.runFor(16);
@@ -560,9 +549,7 @@ test('@desktop recovers active orbs through proximity and bottom worldbounds', a
   expect(['active', 'queued']).toContain(proximity.state);
 
   const floorId = await sceneCall(page, (scene) => {
-    const active = scene.getDebugSnapshot().orbs.find(
-      (orb) => orb.state === 'active' && orb.lastRecoverySource !== 'proximity',
-    )!;
+    const active = scene.getDebugSnapshot().orbs.find((orb) => orb.state === 'active')!;
     if (!scene.debugPlaceOrb(active.id, { x: 225, y: 799 })) throw new Error('active floor orb required');
     return active.id;
   });
@@ -575,7 +562,7 @@ test('@desktop recovers active orbs through proximity and bottom worldbounds', a
     const orb = (await snapshot(page)).orbs[floorId]!;
     return { state: orb.state, charges: orb.charges, source: orb.lastRecoverySource };
   }).toMatchObject({ state: 'active', charges: 3, source: 'floorRecall' });
-  expect(launched.orbs).toHaveLength(3);
+  expect(launched.orbs).toHaveLength(1);
 });
 
 for (const passThroughOnKill of [false, true]) {
@@ -585,9 +572,7 @@ for (const passThroughOnKill of [false, true]) {
       scene.debugFreezeEnemies();
       const enemies = scene.getDebugSnapshot().enemies;
       const target = enemies.find((enemy) => enemy.kind === 'basic')!;
-      enemies.filter((enemy) => enemy.id !== target.id).forEach((enemy, index) => {
-        scene.debugSetEnemy(enemy.id, { x: 36, y: 80 + index % 5 * 24 }, enemy.hp);
-      });
+      scene.debugRemoveEnemies(enemies.filter((enemy) => enemy.id !== target.id).map(({ id }) => id));
       scene.debugSetEnemy(target.id, { x: 225, y: 300 }, 1);
     });
     const before = await snapshot(page);
@@ -600,7 +585,7 @@ for (const passThroughOnKill of [false, true]) {
     await expect.poll(async () => orbStateCounts(await snapshot(page)), {
       intervals: [5],
       timeout: 90,
-    }).toEqual({ active: 1, queued: 2 });
+    }).toEqual({ active: 1, queued: 0 });
     const chargeBefore = (await snapshot(page)).orbs[0]!.charges;
     await sceneCall(page, (scene) => {
       const basics = scene.getDebugSnapshot().enemies.filter((candidate) => candidate.kind === 'basic');
@@ -608,12 +593,17 @@ for (const passThroughOnKill of [false, true]) {
       const enemy = basics
         .filter((candidate) => candidate.position.y === bottomY)
         .sort((left, right) => Math.abs(left.position.x - 225) - Math.abs(right.position.x - 225))[0]!;
-      scene.debugPlaceOrb(0, { x: enemy.position.x, y: enemy.position.y + 24 });
+      const orb = scene.getDebugSnapshot().orbs[0]!;
+      const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
+      scene.debugPlaceOrb(0, {
+        x: enemy.position.x - orb.velocity.x / speed * 100,
+        y: enemy.position.y - orb.velocity.y / speed * 100,
+      });
     });
 
     await expect.poll(async () => (await snapshot(page)).enemies.some((enemy) => enemy.id === target.id), {
       intervals: [5],
-      timeout: 90,
+      timeout: 1_000,
     }).toBe(false);
     const after = await snapshot(page);
     const orb = after.orbs[0]!;
@@ -655,7 +645,7 @@ test('@desktop bounds permanent explosion and split procs per flight', async ({ 
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
     timeout: 300,
-  }).toEqual({ active: 3, queued: 0 });
+  }).toEqual({ active: 1, queued: 0 });
   const orbId = (await snapshot(page)).orbs.find((orb) => orb.state === 'active')!.id;
 
   const placeEligibleHit = async () => {
@@ -891,7 +881,7 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   await page.mouse.move(aim.x, aim.y);
   await page.clock.runFor(120);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(12));
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const pausedBullets = await bulletState(page);
@@ -912,6 +902,7 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   expect(frozen.encounter).toEqual(paused.encounter);
 
   await page.keyboard.press('Digit1');
+  await confirmAdditionalCore(page);
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const selected = await snapshot(page);
@@ -927,13 +918,14 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   await page.mouse.move(aimPoint.x, aimPoint.y);
   await page.clock.runFor(32);
   const aimed = await snapshot(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(12));
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
 
   const card = clientPoint(box, { x: 225, y: 270 });
   await page.mouse.click(card.x, card.y);
+  await confirmAdditionalCore(page);
 
   await expect.poll(async () => {
     const current = await snapshot(page);
@@ -958,7 +950,7 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
   await page.clock.runFor(1_000);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(12));
+  await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -970,6 +962,7 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
     const choice = scene.getDebugSnapshot().progression.choices[0]!;
     scene.debugChooseAbility(choice);
   });
+  await confirmAdditionalCore(page);
 
   const selected = await snapshot(page);
   expect(selected.levelUpVisible).toBe(false);
@@ -1008,6 +1001,7 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
     const choice = scene.getDebugSnapshot().progression.choices[0]!;
     scene.debugChooseAbility(choice);
   });
+  await confirmAdditionalCore(page);
 
   const between = await snapshot(page);
   expect(between.progression.pendingChoices).toBe(1);
@@ -1021,7 +1015,7 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const selected = await snapshot(page);
-  expect(selected.progression).toMatchObject({ level: 2, xp: 1, pendingChoices: 0 });
+  expect(selected.progression).toMatchObject({ level: 2, xp: 5, pendingChoices: 0 });
   expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(2);
   expect(selected.pauseReasons).not.toContain('levelUp');
 });
@@ -1059,7 +1053,7 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   await page.waitForTimeout(370);
   await sceneCall(page, (scene) => scene.debugGrantXp(13));
   const dirty = await snapshot(page);
-  expect(dirty.progression).toMatchObject({ level: 1, xp: 1, pendingChoices: 1 });
+  expect(dirty.progression).toMatchObject({ level: 1, xp: 5, pendingChoices: 1 });
   expect(dirty.buildRanks.split).toBe(0);
   expect(dirty.temporaryOrbs).toBe(0);
   expect(dirty.levelUpVisible).toBe(true);
@@ -1153,7 +1147,7 @@ test('@desktop midboss enters from kill score and stops formations through warni
   await loadCanvas(page);
   await sceneCall(page, (scene) => {
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    scene.debugAdvanceEncounter(8_000);
+    scene.debugAdvanceEncounter(9_000);
   });
   const control = await snapshot(page);
   expect(control.encounter.spawnSequence).toBe(1);
@@ -1215,7 +1209,7 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
     );
     return { width: body?.displayWidth, height: body?.displayHeight };
   });
-  expect(bodySize).toEqual({ width: 168, height: 96 });
+  expect(bodySize).toEqual({ width: 176, height: 96 });
 
   const movement = await sceneCall(page, (scene) => {
     const enemies = scene.getDebugSnapshot().enemies;
@@ -1324,7 +1318,9 @@ test('@desktop midboss basic shots aim, damage once, pause for major warning, an
   expect(secondFire.boss.projectiles.find(({ kind }) => kind === 'basic')).toBeDefined();
 
   const majorCycle = await sceneCall(page, (scene) => {
-    scene.update(0, 1_000);
+    for (let step = 0; step < 3_000 && scene.getDebugSnapshot().boss.warnings === 0; step += 1) {
+      scene.update(0, 1);
+    }
     const atWarning = scene.getDebugSnapshot();
     const basicDuringWarning: number[] = [];
     for (let step = 0; step < 1_000 && scene.getDebugSnapshot().boss.warnings > 0; step += 1) {
@@ -1363,7 +1359,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
     timeout: 100,
-  }).toEqual({ active: 1, queued: 2 });
+  }).toEqual({ active: 1, queued: 0 });
   const launched = await snapshot(page);
   const orb = launched.orbs.find((candidate) => candidate.state === 'active')!;
   const initialCharges = orb.charges;
@@ -1488,7 +1484,7 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
     timeout: 300,
-  }).toEqual({ active: 3, queued: 0 });
+  }).toEqual({ active: 1, queued: 0 });
   const orbId = (await snapshot(page)).orbs.find((orb) => orb.state === 'active')!.id;
 
   const spawnTemporaryOrb = async (anchorId: number) => {
@@ -1637,7 +1633,7 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   }, parent.id);
   const aim = clientPoint(box, { x: pressurePhase.player.x, y: pressurePhase.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
   await sceneCall(page, (scene) => {
     const orb = scene.getDebugSnapshot().orbs.find(({ state }) => state === 'active')!;
     scene.debugPlaceOrb(orb.id, { x: 11, y: 324 });
@@ -1650,21 +1646,24 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   expect(split.activePopulation).toBe(populationBefore);
   expect(split.progression.xp).toBe(xpBefore + 1);
   expect(split.encounter.bossScore).toBe(scoreBefore + 2);
-  for (const [index, fragment] of fragments.entries()) {
+  for (const fragment of fragments) {
     const arranged = await sceneCall(page, (scene, target) => {
       const orb = scene.getDebugSnapshot().orbs.filter(
         ({ state, collisionEnabled, damageEnabled }) => (
           state === 'active' && collisionEnabled && damageEnabled
         ),
-      )[target.orb]!;
-      const position = { x: 150 + target.orb * 150, y: 300 };
+      )[0]!;
+      const position = { x: 225, y: 300 };
       scene.debugSetEnemy(target.id, position, 1);
-      const approachY = position.y + (orb.velocity.y < 0 ? 18 : -18);
+      const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
       return {
-        placed: scene.debugPlaceOrb(orb.id, { x: position.x, y: approachY }),
+        placed: scene.debugPlaceOrb(orb.id, {
+          x: position.x - orb.velocity.x / speed * 40,
+          y: position.y - orb.velocity.y / speed * 40,
+        }),
         orbId: orb.id,
       };
-    }, { id: fragment.id, orb: index });
+    }, { id: fragment.id });
     expect(arranged.placed).toBe(true);
     await expect.poll(async () => (
       await snapshot(page)
@@ -1828,7 +1827,7 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
   expect(exposed.boss.phase).toBe('exposed');
   const aim = clientPoint(box, { x: exposed.player.x, y: exposed.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
   const reflector = (await snapshot(page)).boss.partPositions!.leftReflector!;
   await sceneCall(page, (scene) => {
     const wall = scene.children.list.find(
@@ -1932,7 +1931,7 @@ test('@desktop completes the first two stages and resumes stage three', async ({
   const before = await snapshot(page);
   const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 3, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
   await sceneCall(page, (scene) => {
     scene.debugPlaceOrb(0, { x: 225, y: 172 });
   });
@@ -1967,7 +1966,7 @@ test('@mobile keeps movement and retained aim during second-stage density and hi
   });
   const dense = await snapshot(page);
   expect(dense.encounter.phase).toBe(1);
-  expect(dense.enemies.length).toBeGreaterThanOrEqual(21);
+  expect(dense.activePopulation).toBeGreaterThanOrEqual(17);
   await sceneCall(page, (scene) => {
     for (let score = scene.getDebugSnapshot().encounter.bossScore; score < 110; score += 1) {
       scene.debugRecordEnemyKill('basic');

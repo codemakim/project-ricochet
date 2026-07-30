@@ -58,4 +58,24 @@ describe('hive boss geometry', () => {
       )).toBe(false);
     }
   });
+
+  it('gives every visible part a hitbox and spans at least four by three grid cells', () => {
+    const bodies = [
+      HIVE_BOSS_GEOMETRY.core,
+      ...Object.values(HIVE_BOSS_GEOMETRY.shooters),
+      ...Object.values(HIVE_BOSS_GEOMETRY.reflectors).map((body) => ({
+        ...body,
+        x: body.travel.minimum,
+      })),
+    ];
+    expect(bodies.every(({ width, height }) => width > 0 && height > 0)).toBe(true);
+
+    const bounds = bodies.map(bodyBounds);
+    const width = Math.max(...bounds.map(({ right }) => right))
+      - Math.min(...bounds.map(({ left }) => left));
+    const height = Math.max(...bounds.map(({ bottom }) => bottom))
+      - Math.min(...bounds.map(({ top }) => top));
+    expect(width).toBeGreaterThanOrEqual(208);
+    expect(height).toBeGreaterThanOrEqual(144);
+  });
 });

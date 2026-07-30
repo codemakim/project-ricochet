@@ -288,20 +288,24 @@ describe('HiveBossManager', () => {
     expect(boundary.onDirectHit).not.toHaveBeenCalled();
   });
 
-  it('accepts permanent and temporary direct hits on modules throughout all hittable phases', () => {
+  it('registers solid permanent-orb collisions for both visible lower guns', () => {
     const boundary = createBoundary();
-    const permanent = boundary.colliderFor('hive-left-shooter');
+    const left = boundary.colliderFor('hive-left-shooter');
+    const right = boundary.colliderFor('hive-right-shooter');
     const temporary = boundary.colliderFor('hive-right-shooter', boundary.temporaryGroup);
 
-    permanent.trigger(boundary.orb, permanent.second as FakeSprite);
+    expect(left.trigger(boundary.orb, left.second as FakeSprite)).toBe(true);
+    boundary.gameplay.now = 80;
+    expect(right.trigger(boundary.orb, right.second as FakeSprite)).toBe(true);
     boundary.updateAt(4000);
     temporary.trigger(boundary.temporaryOrb, temporary.second as FakeSprite);
     boundary.updateAt(5500);
-    permanent.trigger(boundary.orb, permanent.second as FakeSprite);
+    boundary.gameplay.now = 5_501;
+    left.trigger(boundary.orb, left.second as FakeSprite);
 
     expect(boundary.manager.getSnapshot().parts).toMatchObject({
       leftShooter: 14,
-      rightShooter: 19.5,
+      rightShooter: 16.5,
     });
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'hive',

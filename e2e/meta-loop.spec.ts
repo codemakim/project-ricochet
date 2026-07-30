@@ -16,6 +16,15 @@ async function combatSnapshot(page: Page) {
   });
 }
 
+async function combatSceneReady(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      scene: { getScene(key: string): unknown };
+    } }).__RICHOCHET_GAME__;
+    return Boolean(game?.scene.getScene('combat'));
+  });
+}
+
 async function enterBoss(page: Page, hardMaximumMs: number, kind: string) {
   await page.evaluate(({ hardMaximumMs }) => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
@@ -50,7 +59,7 @@ async function defeatParts(page: Page, parts: string[]) {
 test('@desktop completes all three bosses without a final combat reward', async ({ page }) => {
   await page.goto('/?combat=1');
   await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
-  for (let index = 0; index < 3; index += 1) await page.keyboard.press('Digit1');
+  await page.keyboard.press('Digit1');
   await page.keyboard.press('Enter');
 
   await enterBoss(page, 210_000, 'sentinel');
@@ -81,6 +90,8 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
   await expect(page.getByRole('heading', { name: '출격 준비' })).toBeVisible();
   await page.getByRole('button', { name: '출격', exact: true }).click();
   await expect(page.locator('#game-root canvas')).toBeVisible();
+  await expect.poll(() => combatSceneReady(page)).toBe(true);
+  await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(false);
 
   await page.evaluate(() => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
@@ -88,7 +99,8 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
     } }).__RICHOCHET_GAME__!;
     game.events.emit('ricochet:run-ended', {
       identity: { runId: 'meta-e2e-1', battlefieldId: 'default', threatId: 'normal', seed: 1 },
-      loadout: ['echo', 'echo', 'echo'],
+      loadout: ['echo'],
+      unlockedCoreTypes: ['echo'],
       success: false,
       durationMs: 180_000,
       defeatedBossIds: [],
@@ -104,12 +116,65 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
   await page.getByRole('button', { name: '돌아가기' }).click();
 
   const slots = page.locator('[data-loadout-slot]');
-  await expect(slots).toHaveCount(3);
-  await slots.nth(2).selectOption('conduction');
+  await expect(slots).toHaveCount(1);
+  await slots.selectOption('conduction');
   await page.getByRole('button', { name: '출격', exact: true }).click();
   await expect(page.locator('#game-root canvas')).toBeVisible();
+  await expect.poll(() => combatSceneReady(page)).toBe(true);
+  await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(false);
+
+  await page.evaluate(() => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      scene: { getScene(key: string): { debugGrantXp(amount: number): void } };
+    } }).__RICHOCHET_GAME__!;
+    game.scene.getScene('combat').debugGrantXp(8);
+  });
+  await page.keyboard.press('Digit1');
+  await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
+  const coreCopy = await page.evaluate(() => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      scene: { getScene(key: string): {
+        children: { list: Array<{ text?: string; active?: boolean }> };
+      } };
+    } }).__RICHOCHET_GAME__!;
+    return game.scene.getScene('combat').children.list
+      .filter(({ active, text }) => active && text)
+      .map(({ text }) => text);
+  });
+  expect(coreCopy.some((text) => text?.includes('전도'))).toBe(true);
+  await page.keyboard.press('Digit2');
+  await page.keyboard.press('Enter');
+
   await page.reload();
-  await expect(page.locator('[data-loadout-slot]').nth(2)).toHaveValue('conduction');
+  await expect(page.locator('[data-loadout-slot]')).toHaveValue('conduction');
   await page.getByRole('button', { name: '코어 작업장' }).click();
   await expect(page.getByText('전도 코어').locator('..')).toContainText('해금됨');
+});
+
+test('@desktop migrates a schema 1 loadout without losing parts or unlocks', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('project-ricochet.meta', JSON.stringify({
+      schemaVersion: 1,
+      parts: 40,
+      unlockedCores: ['echo', 'inertia'],
+      loadout: ['inertia', 'echo', 'echo'],
+      claimedRunIds: [],
+      firstBossKills: [],
+      firstValidRunClaimed: true,
+    }));
+  });
+  await page.goto('/');
+
+  await expect(page.locator('[data-loadout-slot]')).toHaveCount(1);
+  await expect(page.locator('[data-loadout-slot]')).toHaveValue('inertia');
+  await expect(page.getByText('부품 40')).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(
+    localStorage.getItem('project-ricochet.meta')!,
+  ));
+  expect(saved).toMatchObject({
+    schemaVersion: 2,
+    parts: 40,
+    unlockedCores: ['echo', 'inertia'],
+    loadout: ['inertia'],
+  });
 });

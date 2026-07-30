@@ -1,13 +1,16 @@
 import { expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
+import { GAME_WIDTH } from '../constants';
 import { BOSS_GEOMETRY } from './bossGeometry';
 
-it('derives every boss extent from tuning', () => {
-  expect(BOSS_GEOMETRY).toMatchObject({
-    bodyHalfWidth: 84,
-    bodyHalfHeight: 48,
-    weakpointOffsetX: 88,
-    collisionHalfWidth: 99,
-    collisionHalfHeight: 48,
-    movementBounds: { minimum: 99, maximum: 351 },
+it('fills at least a four-by-two grid envelope and keeps symmetric movement bounds', () => {
+  const grid = GAME_TUNING.encounter.grid;
+  expect(BOSS_GEOMETRY.collisionHalfWidth * 2)
+    .toBeGreaterThanOrEqual(grid.cellWidth * 4 - grid.gap);
+  expect(BOSS_GEOMETRY.collisionHalfHeight * 2)
+    .toBeGreaterThanOrEqual(grid.cellHeight * 2 - grid.gap);
+  expect(BOSS_GEOMETRY.movementBounds).toEqual({
+    minimum: BOSS_GEOMETRY.collisionHalfWidth,
+    maximum: GAME_WIDTH - BOSS_GEOMETRY.collisionHalfWidth,
   });
 });

@@ -262,7 +262,7 @@ export interface GameTuning {
 export const GAME_TUNING = {
   boss: {
     y: 120,
-    body: { width: 168, height: 96 },
+    body: { width: 176, height: 96 },
     weakpoint: {
       visual: { width: 18, height: 48 },
       hitbox: { width: 22, height: 52 },

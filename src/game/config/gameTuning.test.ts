@@ -15,7 +15,7 @@ function mutableTuning(): Mutable<GameTuning> {
 
 describe('GAME_TUNING', () => {
   it('defines the approved global boss, enemy, and encounter values once', () => {
-    expect(GAME_TUNING.boss.body).toEqual({ width: 168, height: 96 });
+    expect(GAME_TUNING.boss.body).toEqual({ width: 176, height: 96 });
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
       descentSpeed: 8,
