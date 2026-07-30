@@ -26,7 +26,8 @@ describe('EncounterDirector', () => {
       topmostEnemyY: 120,
     };
 
-    expect(director.update(7_999, clearTop).formation).toBeNull();
+    const interval = STAGES[0].phases[0].spawnIntervalMs;
+    expect(director.update(interval - 1, clearTop).formation).toBeNull();
     expect(director.update(1, { activePopulation: 0, topmostEnemyY: 49 }).formation).toBeNull();
     expect(createFormationSpy).not.toHaveBeenCalled();
 
@@ -47,8 +48,11 @@ describe('EncounterDirector', () => {
       topmostEnemyY: 120,
     };
 
-    director.update(8_000, blocked);
-    director.update(52_000, blocked);
+    director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
+    director.update(
+      60_000 - STAGES[0].phases[0].spawnIntervalMs,
+      blocked,
+    );
 
     expect(createFormationSpy).toHaveBeenNthCalledWith(1, recipeAt(0, 0), 0, 1234);
     expect(createFormationSpy).toHaveBeenNthCalledWith(2, recipeAt(0, 1), 0, 1234);
@@ -62,7 +66,7 @@ describe('EncounterDirector', () => {
 
     expect(formation).toEqual(expected.enemies);
     expect(director.getSnapshot()).toMatchObject({
-      elapsedMs: 8_000,
+      elapsedMs: STAGES[0].phases[0].spawnIntervalMs,
       runSeed: 1234,
       lastFormationId: expected.id,
       spawnSequence: 1,
@@ -102,6 +106,28 @@ describe('EncounterDirector', () => {
       type: 'bossStarted',
       bossKind: 'sentinel',
     });
+  });
+
+  it('discards a blocked pending chunk when boss warning starts', () => {
+    const director = new EncounterDirector(1234);
+    const blocked = {
+      activePopulation: STAGES[0].phases[0].activeCap,
+      topmostEnemyY: 120,
+    };
+    director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
+    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+    for (let index = 0; index < STAGES[0].boss.scoreTarget; index += 1) {
+      director.recordEnemyKill('basic');
+    }
+
+    expect(director.update(
+      STAGES[0].boss.minimumMs - STAGES[0].phases[0].spawnIntervalMs,
+      blocked,
+    ).transition?.type).toBe('bossWarningStarted');
+    expect(director.update(STAGES[0].boss.warningMs, clearTop).transition?.type)
+      .toBe('bossStarted');
+    expect(director.update(60_000, clearTop).formation).toBeNull();
+    expect(createFormationSpy).toHaveBeenCalledTimes(1);
   });
 
   it('advances the first reward to stage 2 with reset stage clocks', () => {

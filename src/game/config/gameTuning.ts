@@ -275,7 +275,7 @@ export const GAME_TUNING = {
   },
   enemies: {
     descentSpeed: 8,
-    hp: { basic: 2, shooter: 2, armored: 5, splitter: 3, fragment: 1 },
+    hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
     shooter: { intervalMs: 1300, warningMs: 350, bulletSpeed: 180, damage: 1 },
     splitter: { width: 38, height: 30, fragmentOffsetX: 12, populationCost: 2, score: 2, xp: 1, breachDamage: 3 },
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },

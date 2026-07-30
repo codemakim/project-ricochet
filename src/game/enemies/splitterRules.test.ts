@@ -7,11 +7,11 @@ describe('splitter rules', () => {
       x: 225, y: 180, column: 3, row: 2, speed: 8,
     })).toEqual([
       {
-        kind: 'fragment', side: 'left', hp: 1, x: 199, y: 180,
+        kind: 'fragment', side: 'left', hp: 2, x: 199, y: 180,
         column: 3, row: 2, width: 1, height: 1, speed: 8,
       },
       {
-        kind: 'fragment', side: 'right', hp: 1, x: 251, y: 180,
+        kind: 'fragment', side: 'right', hp: 2, x: 251, y: 180,
         column: 4, row: 2, width: 1, height: 1, speed: 8,
       },
     ]);

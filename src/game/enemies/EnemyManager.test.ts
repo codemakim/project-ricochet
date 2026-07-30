@@ -298,6 +298,7 @@ describe('EnemyManager', () => {
       footprint: { column: 1, row: 0, width: 2, height: 2 },
       speed: 8,
     });
+    expect(manager.getSnapshot().activePopulation).toBe(4);
     expect({
       displayWidth: sprite.displayWidth,
       displayHeight: sprite.displayHeight,
@@ -432,8 +433,8 @@ describe('EnemyManager', () => {
     colliders[0]!.trigger(orb, splitter);
 
     expect(manager.getSnapshot().enemies).toEqual([
-      expect.objectContaining({ kind: 'fragment', hp: 1, position: { x: 213, y: 180 } }),
-      expect.objectContaining({ kind: 'fragment', hp: 1, position: { x: 237, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 213, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 237, y: 180 } }),
     ]);
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
     expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
@@ -448,10 +449,10 @@ describe('EnemyManager', () => {
 
     expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 1, -1)).toEqual([0]);
     expect(manager.getSnapshot().enemies.map(({ id, kind, hp }) => ({ id, kind, hp }))).toEqual([
-      { id: 1, kind: 'fragment', hp: 1 },
-      { id: 2, kind: 'fragment', hp: 1 },
+      { id: 1, kind: 'fragment', hp: 2 },
+      { id: 2, kind: 'fragment', hp: 2 },
     ]);
-    expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 1, -1)).toEqual([1, 2]);
+    expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 2, -1)).toEqual([1, 2]);
     expect(onEnemyKilled.mock.calls.map(([event]) => event.kind))
       .toEqual(['splitter', 'fragment', 'fragment']);
   });
@@ -472,8 +473,8 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().enemies.map(({ kind, hp }) => ({ kind, hp }))).toEqual([
       { kind: 'basic', hp: 1 },
       { kind: 'armored', hp: 5 },
-      { kind: 'fragment', hp: 1 },
-      { kind: 'fragment', hp: 1 },
+      { kind: 'fragment', hp: 2 },
+      { kind: 'fragment', hp: 2 },
     ]);
   });
 

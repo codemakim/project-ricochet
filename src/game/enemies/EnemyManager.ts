@@ -293,7 +293,13 @@ export class EnemyManager {
         },
       })),
       activePopulation: enemies.reduce(
-        (population, enemy) => population + populationCostForEnemy(enemy.kind),
+        (population, enemy) => (
+          population + (
+            enemy.row < 0
+              ? populationCostForEnemy(enemy.kind)
+              : enemy.footprintWidth * enemy.footprintHeight
+          )
+        ),
         0,
       ),
       topmostEnemyY,

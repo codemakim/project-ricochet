@@ -1,6 +1,5 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { EnemyKind, FormationEnemySpec } from '../enemies/enemyRules';
-import { populationCostForEnemy } from '../enemies/splitterRules';
 import {
   FORMATION_COLUMNS,
   footprintWorldRect,
@@ -392,7 +391,7 @@ function createFormation(
     style,
     enemies,
     populationCost: enemies.reduce(
-      (sum, enemy) => sum + populationCostForEnemy(enemy.kind),
+      (sum, enemy) => sum + enemy.width * enemy.height,
       0,
     ),
   };

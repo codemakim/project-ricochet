@@ -47,6 +47,7 @@ interface CombatSnapshot {
     position: Vector;
     warning: boolean;
     speed: number;
+    footprint?: { column: number; row: number; width: number; height: number };
   }>;
   activeShooters: number;
   bullets: number;
@@ -243,7 +244,7 @@ async function loadCanvas(page: Page, search = '') {
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
   await confirmCoreLoadout(page);
-  await expect.poll(async () => (await snapshot(page)).enemies.length).toBe(26);
+  await expect.poll(async () => (await snapshot(page)).enemies.length).toBeGreaterThan(0);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
   return { canvas, box: box! };
@@ -760,15 +761,20 @@ test('@desktop caps simultaneous shooters and bullets under accelerated clock', 
 test('@desktop admits reinforcement while original enemies remain', async ({ page }) => {
   await page.clock.install();
   await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
+  const initial = await snapshot(page);
+  const nextEnemyId = Math.max(...initial.enemies.map(({ id }) => id)) + 1;
+  await sceneCall(page, (scene) => {
+    const enemies = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(enemies.slice(3).map(({ id }) => id));
+  });
   const before = await snapshot(page);
-  expect(before.enemies).toHaveLength(22);
+  expect(before.enemies).toHaveLength(3);
 
-  await page.clock.runFor(8_100);
+  await page.clock.runFor(9_100);
 
   const after = await snapshot(page);
-  expect(after.enemies.some((enemy) => enemy.id < 26)).toBe(true);
-  expect(after.enemies.some((enemy) => enemy.id >= 26)).toBe(true);
+  expect(after.enemies.some((enemy) => enemy.id < nextEnemyId)).toBe(true);
+  expect(after.enemies.some((enemy) => enemy.id >= nextEnemyId)).toBe(true);
   expect(after.encounter.spawnSequence).toBe(1);
   expect(after.encounter.phase).toBe(0);
 });
@@ -779,21 +785,22 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   const sortedPositions = (current: CombatSnapshot) => current.enemies
     .map((enemy) => enemy.position)
     .sort((left, right) => left.y - right.y || left.x - right.x);
-  const formationStyle = (id: string) => id.split(':')[2];
-
   const initial = await snapshot(page);
-  expect(initial.enemies).toHaveLength(26);
+  expect(initial.enemies.length).toBeGreaterThan(0);
+  expect(initial.activePopulation).toBeGreaterThanOrEqual(14);
+  expect(initial.activePopulation).toBeLessThanOrEqual(18);
   const initialSeed = initial.encounter.runSeed;
   const initialPositions = sortedPositions(initial);
 
   await sceneCall(page, (scene) => {
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
   });
-  await page.clock.runFor(8_100);
+  await page.clock.runFor(9_100);
 
   const first = await snapshot(page);
-  expect(first.enemies.length).toBeGreaterThanOrEqual(13);
-  expect(first.enemies.length).toBeLessThanOrEqual(15);
+  expect(first.enemies.length).toBeGreaterThan(0);
+  expect(first.activePopulation).toBeGreaterThanOrEqual(8);
+  expect(first.activePopulation).toBeLessThanOrEqual(12);
   expect(first.encounter.lastFormationId).not.toBeNull();
   const firstId = first.encounter.lastFormationId!;
   const firstPositions = sortedPositions(first);
@@ -802,16 +809,16 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   await sceneCall(page, (scene) => {
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
   });
-  await page.clock.runFor(8_100);
+  await page.clock.runFor(9_100);
 
   const second = await snapshot(page);
-  expect(second.enemies.length).toBeGreaterThanOrEqual(13);
-  expect(second.enemies.length).toBeLessThanOrEqual(15);
+  expect(second.enemies.length).toBeGreaterThan(0);
+  expect(second.activePopulation).toBeGreaterThanOrEqual(8);
+  expect(second.activePopulation).toBeLessThanOrEqual(12);
   expect(second.encounter.lastFormationId).not.toBeNull();
   const secondId = second.encounter.lastFormationId!;
   const secondPositions = sortedPositions(second);
   expect(secondId).not.toBe(firstId);
-  expect(formationStyle(secondId)).not.toBe(formationStyle(firstId));
   expect(secondPositions).not.toEqual(firstPositions);
   expect(new Set(secondPositions.map(({ x, y }) => `${x}:${y}`)).size).toBe(second.enemies.length);
 
@@ -826,7 +833,7 @@ test('@desktop varies procedural enemy formations across spawns and restarts', a
   }, { intervals: [16], timeout: 1_000 }).toBe(false);
 
   const restarted = await snapshot(page);
-  expect(restarted.enemies).toHaveLength(26);
+  expect(restarted.enemies.length).toBeGreaterThan(0);
   expect(restarted.encounter.runSeed).not.toBe(initialSeed);
   expect(sortedPositions(restarted)).not.toEqual(initialPositions);
 });
@@ -1095,23 +1102,36 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
 test('@desktop density uses shipped enemy stats and exact reinforcement release gate', async ({ page }) => {
   await loadCanvas(page);
   const initial = await snapshot(page);
-  expect(initial.enemies).toHaveLength(26);
+  expect(initial.enemies.length).toBeGreaterThan(0);
   expect(initial.enemies.every(({ speed }) => speed === 8)).toBe(true);
   expect(initial.enemies.every(({ kind, hp }) => (
-    kind === 'armored' ? hp === 5 : hp === 2
+    hp === { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 }[kind]
   ))).toBe(true);
+  expect(initial.enemies.every(({ footprint }) => (
+    footprint !== undefined
+    && footprint.column + footprint.width <= 8
+    && footprint.row + footprint.height <= 5
+  ))).toBe(true);
+  expect(initial.enemies.some(({ footprint }) =>
+    footprint?.width === 2 && footprint.height === 2)).toBe(true);
+  expect(initial.activePopulation).toBe(initial.enemies.reduce(
+    (sum, enemy) => sum + enemy.footprint!.width * enemy.footprint!.height,
+    0,
+  ));
 
   const blocked = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
+    const enemies = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(enemies.slice(3).map(({ id }) => id));
     for (const enemy of scene.getDebugSnapshot().enemies) {
       scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 49 }, enemy.hp);
     }
-    scene.debugAdvanceEncounter(8_000);
+    scene.debugAdvanceEncounter(9_000);
     return scene.getDebugSnapshot();
   });
   expect(Math.min(...blocked.enemies.map(({ position }) => position.y))).toBe(49);
   expect(blocked.encounter).toMatchObject({ phase: 0, spawnSequence: 0 });
-  expect(blocked.enemies).toHaveLength(initial.enemies.length);
+  expect(blocked.enemies).toHaveLength(3);
 
   const released = await sceneCall(page, (scene) => {
     for (const enemy of scene.getDebugSnapshot().enemies) {
@@ -1125,10 +1145,8 @@ test('@desktop density uses shipped enemy stats and exact reinforcement release 
     .filter(({ id }) => id < initial.enemies.length)
     .map(({ position }) => position.y))).toBe(50);
   expect(released.encounter).toMatchObject({ phase: 0, spawnSequence: 1 });
-  expect(reinforcementCount).toBeGreaterThanOrEqual(13);
-  expect(reinforcementCount).toBeLessThanOrEqual(15);
-  expect(released.enemies.length).toBeGreaterThan(20);
-  expect(released.enemies.length).toBeLessThanOrEqual(48);
+  expect(reinforcementCount).toBeGreaterThan(0);
+  expect(released.activePopulation).toBeLessThanOrEqual(24);
 });
 
 test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {

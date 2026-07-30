@@ -227,9 +227,9 @@ export const STAGES = [
     hpMultiplier: 1,
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 24, 8_000, 'opening', { basic: 12, armored: 1, shooter: 0, splitter: 0 }, { armored: 1, shooter: 0, splitter: 0 }),
-      phase(60_000, 30, 7_000, 'pressure', { basic: 15, armored: 2, shooter: 1, splitter: 0 }, { armored: 2, shooter: 1, splitter: 0 }),
-      phase(120_000, 36, 6_000, 'assault', { basic: 18, armored: 2, shooter: 2, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
+      phase(0, 24, 9_000, 'opening', { basic: 12, armored: 1, shooter: 0, splitter: 0 }, { armored: 1, shooter: 0, splitter: 0 }),
+      phase(60_000, 30, 8_000, 'pressure', { basic: 15, armored: 2, shooter: 1, splitter: 0 }, { armored: 2, shooter: 1, splitter: 0 }),
+      phase(120_000, 36, 7_000, 'assault', { basic: 18, armored: 2, shooter: 2, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
     ],
     boss: { kind: 'sentinel', minimumMs: 120_000, scoreTarget: 70, hardMaximumMs: 210_000, warningMs: 2_000 },
   },

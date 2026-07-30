@@ -48,6 +48,7 @@ describe('multi-cell formation generation', () => {
       && row + height <= 5
     ))).toBe(true);
     expect(first.enemies.some(({ width, height }) => width > 1 || height > 1)).toBe(true);
+    expect(first.populationCost).toBe(cells.length);
   });
 
   it('uses the catalog footprint for every enemy kind', () => {

@@ -19,7 +19,7 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
       descentSpeed: 8,
-      hp: { basic: 2, shooter: 2, armored: 5, splitter: 3, fragment: 1 },
+      hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
       splitter: {
         width: 38, height: 30, fragmentOffsetX: 12,
         populationCost: 2, score: 2, xp: 1, breachDamage: 3,

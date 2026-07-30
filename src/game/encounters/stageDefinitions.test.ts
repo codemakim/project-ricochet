@@ -16,6 +16,13 @@ describe('stage content', () => {
     ]);
     expect(STAGES.every(({ descentSpeedMultiplier }) =>
       descentSpeedMultiplier === 1)).toBe(true);
+    expect(STAGES[0]!.phases.map(({ activeCap, spawnIntervalMs }) => (
+      [activeCap, spawnIntervalMs]
+    ))).toEqual([
+      [24, 9_000],
+      [30, 8_000],
+      [36, 7_000],
+    ]);
   });
 
   it('defines approved enemy footprints and reusable chunk profiles', () => {
