@@ -13,6 +13,7 @@ import {
   type EnemyCatalogEntry,
   type EnemyTag,
   type FormationProfile,
+  type StagePowerBand,
   type FormationTemplate,
   type FormationTemplateId,
 } from './stageDefinitions';
@@ -34,7 +35,7 @@ export interface FormationRecipe {
   excludedKinds?: readonly EnemyKind[];
   enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
   maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
-  hpMultiplier: number;
+  powerBand: StagePowerBand;
   descentSpeedMultiplier: number;
 }
 
@@ -195,7 +196,13 @@ function pickKind(
   ));
   return weightedChoice(
     available,
-    (entry) => entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1),
+    (entry) => (
+      entry.weight
+      * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1)
+      * (entry.width * entry.height >= 4
+        ? 1 + recipe.powerBand.largeEnemyRatio * 4
+        : 1)
+    ),
     random,
   );
 }
@@ -340,7 +347,11 @@ function emitEnemies(
     const rect = footprintWorldRect(placement, originY);
     return {
       ...placement,
-      hp: GAME_TUNING.enemies.hp[placement.kind] * recipe.hpMultiplier,
+      hp: GAME_TUNING.enemies.hp[placement.kind] * (
+        placement.width * placement.height >= 4
+          ? recipe.powerBand.eliteHpMultiplier
+          : recipe.powerBand.normalHpMultiplier
+      ),
       x: rect.x,
       y: rect.y,
       speed: GAME_TUNING.enemies.descentSpeed * recipe.descentSpeedMultiplier,
@@ -417,7 +428,12 @@ export function createInitialFormation(runSeed: number): FormationResult {
     profile: INITIAL_PROFILE,
     enemyWeightMultipliers: { basic: 12, armored: 2, shooter: 2, splitter: 0 },
     maxPerFormationOverrides: { armored: 2, shooter: 2, splitter: 0 },
-    hpMultiplier: 1,
+    powerBand: {
+      expectedOrbCount: 2,
+      normalHpMultiplier: 1,
+      eliteHpMultiplier: 1,
+      largeEnemyRatio: 0.12,
+    },
     descentSpeedMultiplier: 1,
   }, 0, runSeed, 56);
   let shooters = result.enemies.filter(({ kind }) => kind === 'shooter').length;

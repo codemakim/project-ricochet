@@ -215,7 +215,7 @@ function formationRecipe(
       : {}),
     enemyWeightMultipliers: phase.enemyWeightMultipliers,
     maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    hpMultiplier: stage.hpMultiplier,
+    powerBand: stage.powerBand,
     descentSpeedMultiplier: stage.descentSpeedMultiplier,
   };
 }

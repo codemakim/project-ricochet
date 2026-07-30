@@ -17,7 +17,7 @@ function recipe(stageIndex = 0, phaseIndex = 0): FormationRecipe {
     profile: FORMATION_PROFILES.find(({ id }) => id === stagePhase.formationProfileId)!,
     enemyWeightMultipliers: stagePhase.enemyWeightMultipliers,
     maxPerFormationOverrides: stagePhase.maxPerFormationOverrides,
-    hpMultiplier: stage.hpMultiplier,
+    powerBand: stage.powerBand,
     descentSpeedMultiplier: stage.descentSpeedMultiplier,
   };
 }
@@ -135,13 +135,18 @@ describe('multi-cell formation generation', () => {
       ...recipe(),
       enemyWeightMultipliers: { basic: 1, armored: 100, shooter: 0, splitter: 0 },
       maxPerFormationOverrides: { armored: 1, shooter: 0, splitter: 0 },
-      hpMultiplier: 2,
+      powerBand: {
+        expectedOrbCount: 2,
+        normalHpMultiplier: 2,
+        eliteHpMultiplier: 3,
+        largeEnemyRatio: 0.12,
+      },
       descentSpeedMultiplier: 1.5,
     }, 0, 808);
 
     expect(result.enemies.filter(({ kind }) => kind === 'armored')).toHaveLength(1);
-    expect(result.enemies.every(({ kind, hp }) =>
-      hp === GAME_TUNING.enemies.hp[kind] * 2)).toBe(true);
+    expect(result.enemies.every(({ kind, hp, width, height }) =>
+      hp === GAME_TUNING.enemies.hp[kind] * (width * height >= 4 ? 3 : 2))).toBe(true);
     expect(result.enemies.every(({ speed }) =>
       speed === GAME_TUNING.enemies.descentSpeed * 1.5)).toBe(true);
   });

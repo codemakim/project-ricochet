@@ -16,6 +16,26 @@ describe('stage content', () => {
     ]);
     expect(STAGES.every(({ descentSpeedMultiplier }) =>
       descentSpeedMultiplier === 1)).toBe(true);
+    expect(STAGES.map(({ powerBand }) => powerBand)).toEqual([
+      {
+        expectedOrbCount: 2,
+        normalHpMultiplier: 1,
+        eliteHpMultiplier: 1,
+        largeEnemyRatio: 0.12,
+      },
+      {
+        expectedOrbCount: 3,
+        normalHpMultiplier: 1.6,
+        eliteHpMultiplier: 1.8,
+        largeEnemyRatio: 0.22,
+      },
+      {
+        expectedOrbCount: 4,
+        normalHpMultiplier: 2.4,
+        eliteHpMultiplier: 2.8,
+        largeEnemyRatio: 0.32,
+      },
+    ]);
     expect(STAGES[0]!.phases.map(({ activeCap, spawnIntervalMs }) => (
       [activeCap, spawnIntervalMs]
     ))).toEqual([

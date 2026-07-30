@@ -69,11 +69,18 @@ export interface StageBossDefinition {
   warningMs: number;
 }
 
+export interface StagePowerBand {
+  expectedOrbCount: number;
+  normalHpMultiplier: number;
+  eliteHpMultiplier: number;
+  largeEnemyRatio: number;
+}
+
 export interface StageDefinition {
   id: StageId;
   number: number;
   battlefield: BattlefieldId;
-  hpMultiplier: number;
+  powerBand: StagePowerBand;
   descentSpeedMultiplier: number;
   allowedTags?: readonly EnemyTag[];
   excludedKinds?: readonly EnemyKind[];
@@ -224,7 +231,12 @@ export const STAGES = [
     id: 'default-1',
     number: 1,
     battlefield: 'default',
-    hpMultiplier: 1,
+    powerBand: {
+      expectedOrbCount: 2,
+      normalHpMultiplier: 1,
+      eliteHpMultiplier: 1,
+      largeEnemyRatio: 0.12,
+    },
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 24, 9_000, 'opening', { basic: 12, armored: 1, shooter: 0, splitter: 0 }, { armored: 1, shooter: 0, splitter: 0 }),
@@ -237,7 +249,12 @@ export const STAGES = [
     id: 'default-2',
     number: 2,
     battlefield: 'default',
-    hpMultiplier: 1,
+    powerBand: {
+      expectedOrbCount: 3,
+      normalHpMultiplier: 1.6,
+      eliteHpMultiplier: 1.8,
+      largeEnemyRatio: 0.22,
+    },
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 36, 6_000, 'assault', { basic: 18, armored: 2, shooter: 2, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
@@ -249,7 +266,12 @@ export const STAGES = [
     id: 'default-3',
     number: 3,
     battlefield: 'default',
-    hpMultiplier: 1.3,
+    powerBand: {
+      expectedOrbCount: 4,
+      normalHpMultiplier: 2.4,
+      eliteHpMultiplier: 2.8,
+      largeEnemyRatio: 0.32,
+    },
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 44, 5_500, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
@@ -374,8 +396,19 @@ export function validateStageContent(
     if (stageIds.has(stage.id)) throw new RangeError('stage IDs must be unique');
     stageIds.add(stage.id);
     positiveInteger(stage.number, `${stage.id}.number`);
-    if (!Number.isFinite(stage.hpMultiplier) || stage.hpMultiplier <= 0) {
-      throw new RangeError(`${stage.id}.hpMultiplier must be positive`);
+    positiveInteger(stage.powerBand.expectedOrbCount, `${stage.id}.expectedOrbCount`);
+    for (const [name, multiplier] of Object.entries({
+      normalHpMultiplier: stage.powerBand.normalHpMultiplier,
+      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier,
+    })) {
+      if (!Number.isFinite(multiplier) || multiplier <= 0) {
+        throw new RangeError(`${stage.id}.${name} must be positive`);
+      }
+    }
+    if (!Number.isFinite(stage.powerBand.largeEnemyRatio)
+      || stage.powerBand.largeEnemyRatio < 0
+      || stage.powerBand.largeEnemyRatio > 1) {
+      throw new RangeError(`${stage.id}.largeEnemyRatio must be between zero and one`);
     }
     if (!Number.isFinite(stage.descentSpeedMultiplier) || stage.descentSpeedMultiplier <= 0) {
       throw new RangeError(`${stage.id}.descentSpeedMultiplier must be positive`);

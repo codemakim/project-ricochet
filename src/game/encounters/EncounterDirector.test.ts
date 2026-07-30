@@ -245,7 +245,7 @@ function recipeAt(stageIndex: number, phaseIndex: number): FormationRecipe {
     profile: FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId)!,
     enemyWeightMultipliers: phase.enemyWeightMultipliers,
     maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    hpMultiplier: stage.hpMultiplier,
+    powerBand: stage.powerBand,
     descentSpeedMultiplier: stage.descentSpeedMultiplier,
   };
 }
