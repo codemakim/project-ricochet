@@ -9,8 +9,17 @@ export interface EnemySpec {
   x: number;
   y: number;
   column: number;
+  row?: number;
+  width?: number;
+  height?: number;
   speed: number;
   side?: FragmentSide;
+}
+
+export interface FormationEnemySpec extends EnemySpec {
+  row: number;
+  width: number;
+  height: number;
 }
 
 export function canFire(

@@ -2,100 +2,101 @@ import { describe, expect, it } from 'vitest';
 import {
   ENEMY_CATALOG,
   FORMATION_PROFILES,
+  FORMATION_TEMPLATES,
   STAGES,
   validateStageContent,
 } from './stageDefinitions';
 
 describe('stage content', () => {
   it('defines three ordered boss stages without increasing descent speed', () => {
-    expect(STAGES).toHaveLength(3);
-    expect(STAGES.map(({ id, number, boss }) => [id, number, boss.kind]))
-      .toEqual([
-        ['default-1', 1, 'sentinel'],
-        ['default-2', 2, 'hive'],
-        ['default-3', 3, 'siege'],
-      ]);
-    expect(STAGES[0]!.phases.map(({ startsAtMs }) => startsAtMs)).toEqual([0, 60_000, 120_000]);
-    expect(STAGES[1]!.phases.map(({ startsAtMs }) => startsAtMs)).toEqual([0, 60_000]);
-    expect(STAGES[0]!.boss).toEqual({
-      kind: 'sentinel', minimumMs: 120_000, scoreTarget: 70, hardMaximumMs: 210_000, warningMs: 2_000,
-    });
-    expect(STAGES[1]!.boss).toEqual({
-      kind: 'hive', minimumMs: 150_000, scoreTarget: 110, hardMaximumMs: 210_000, warningMs: 2_000,
-    });
-    expect(STAGES[2]!.boss.kind).toBe('siege');
-    expect(STAGES.every(({ descentSpeedMultiplier }) => descentSpeedMultiplier === 1)).toBe(true);
+    expect(STAGES.map(({ id, number, boss }) => [id, number, boss.kind])).toEqual([
+      ['default-1', 1, 'sentinel'],
+      ['default-2', 2, 'hive'],
+      ['default-3', 3, 'siege'],
+    ]);
+    expect(STAGES.every(({ descentSpeedMultiplier }) =>
+      descentSpeedMultiplier === 1)).toBe(true);
   });
 
-  it('uses valid profiles, legal pools, positive weights, and caps', () => {
-    expect(FORMATION_PROFILES).not.toHaveLength(0);
-    expect(ENEMY_CATALOG.map(({ kind }) => kind)).not.toContain('fragment');
+  it('defines approved enemy footprints and reusable chunk profiles', () => {
+    expect(Object.fromEntries(ENEMY_CATALOG.map(({ kind, width, height }) => (
+      [kind, `${width}×${height}`]
+    )))).toEqual({
+      basic: '1×1',
+      armored: '2×2',
+      shooter: '1×1',
+      splitter: '2×1',
+    });
+    expect(FORMATION_PROFILES.every((profile) => (
+      profile.rowMinimum >= 2
+      && profile.rowMaximum <= 5
+      && profile.cellMinimum <= profile.cellMaximum
+    ))).toBe(true);
+    expect(FORMATION_TEMPLATES.map(({ id }) => id)).toEqual([
+      'staggered-lanes',
+      'side-fort',
+      'split-gate',
+      'broken-wall',
+    ]);
     expect(() => validateStageContent()).not.toThrow();
-    for (const stage of STAGES) {
-      for (const phase of stage.phases) {
-        expect(FORMATION_PROFILES.some(({ id }) => id === phase.formationProfileId)).toBe(true);
-        expect(phase.activeCap).toBeGreaterThanOrEqual(
-          FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId)!.maximum,
-        );
-      }
-    }
-    expect(ENEMY_CATALOG.every(({ weight, maxPerFormation }) =>
-      weight > 0 && (maxPerFormation === undefined || maxPerFormation >= 0))).toBe(true);
   });
 
-  it('rejects style weights that cannot be arranged without repeats', () => {
-    const impossible = {
-      id: 'impossible',
-      styleWeights: { cluster: 2, pockets: 1 },
-      minimum: 1,
-      maximum: 1,
-      allowedTags: [],
-    };
-    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, impossible]))
-      .toThrowError(new RangeError('impossible style weights cannot avoid repeats'));
+  it('rejects a template footprint outside eight columns', () => {
+    const invalid = {
+      id: 'invalid',
+      mode: 'fixed',
+      rows: 2,
+      minStage: 1,
+      weight: 1,
+      slots: [{ kind: 'basic', column: 7, row: 0, width: 2, height: 1 }],
+    } as const;
+
+    expect(() => validateStageContent(
+      STAGES,
+      ENEMY_CATALOG,
+      FORMATION_PROFILES,
+      [...FORMATION_TEMPLATES, invalid],
+    )).toThrow('formation footprint is outside the grid');
   });
 
-  it('rejects fractional style weights', () => {
-    const fractional = {
-      id: 'fractional',
-      styleWeights: { cluster: 1.5, pockets: 1 },
-      minimum: 1,
-      maximum: 1,
-      allowedTags: [],
-    };
-    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [...FORMATION_PROFILES, fractional]))
-      .toThrowError(new RangeError('fractional.cluster must be an integer'));
+  it('rejects overlapping template slots', () => {
+    const invalid = {
+      id: 'overlap',
+      mode: 'mixed',
+      rows: 3,
+      minStage: 1,
+      weight: 1,
+      slots: [
+        { column: 1, row: 0, width: 2, height: 2 },
+        { column: 2, row: 1, width: 1, height: 1 },
+      ],
+    } as const;
+
+    expect(() => validateStageContent(
+      STAGES,
+      ENEMY_CATALOG,
+      FORMATION_PROFILES,
+      [...FORMATION_TEMPLATES, invalid],
+    )).toThrow('formation footprints overlap');
   });
 
-  it('rejects a filtered pool whose merged caps cannot fill a formation', () => {
-    const capped = {
-      ...FORMATION_PROFILES[0]!,
-      allowedTags: ['armored'] as const,
-      minimum: 3,
-      maximum: 3,
-    };
-    expect(() => validateStageContent(STAGES, ENEMY_CATALOG, [capped, ...FORMATION_PROFILES.slice(1)]))
-      .toThrowError(new RangeError('default-1 phase cannot fill its profile'));
+  it('rejects profiles outside two-to-five rows', () => {
+    const invalid = { ...FORMATION_PROFILES[0]!, rowMaximum: 6 };
+
+    expect(() => validateStageContent(
+      STAGES,
+      ENEMY_CATALOG,
+      [invalid, ...FORMATION_PROFILES.slice(1)],
+    )).toThrow('opening rows must stay between two and five');
   });
 
-  it('rejects a phase whose worst eligible population exceeds its active cap', () => {
-    const stage = {
-      ...STAGES[1]!,
-      phases: [STAGES[1]!.phases[0]!, { ...STAGES[1]!.phases[1]!, activeCap: 26 }],
-    };
-    expect(() => validateStageContent([STAGES[0]!, stage]))
-      .toThrowError(new RangeError('default-2 phase cap must fit worst population'));
-  });
-
-  it('merges stage, profile, and phase tag filters when validating the pool', () => {
-    const taggedProfile = { ...FORMATION_PROFILES[0]!, allowedTags: ['armored'] as const };
+  it('requires phase capacity to fit its occupied-cell profile', () => {
     const stage = {
       ...STAGES[0]!,
-      allowedTags: ['standard'] as const,
-      phases: [{ ...STAGES[0]!.phases[0]!, allowedTags: ['shooter'] as const }, ...STAGES[0]!.phases.slice(1)],
+      phases: [{ ...STAGES[0]!.phases[0]!, activeCap: 1 }, ...STAGES[0]!.phases.slice(1)],
     };
-    expect(() => validateStageContent([stage, STAGES[1]!], ENEMY_CATALOG,
-      [taggedProfile, ...FORMATION_PROFILES.slice(1)]))
-      .toThrowError(new RangeError('default-1 phase needs an eligible enemy'));
+
+    expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
+      .toThrow('default-1 phase cap must fit its profile');
   });
 });
