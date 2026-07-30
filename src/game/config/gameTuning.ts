@@ -49,6 +49,13 @@ export interface GameTuning {
   encounter: {
     reinforcementOriginY: number;
     reinforcementReleaseY: number;
+    grid: {
+      columns: number;
+      left: number;
+      cellWidth: number;
+      cellHeight: number;
+      gap: number;
+    };
   };
   projectiles: {
     hostileCap: number;
@@ -276,6 +283,7 @@ export const GAME_TUNING = {
   encounter: {
     reinforcementOriginY: -28,
     reinforcementReleaseY: 50,
+    grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
   },
   projectiles: {
     hostileCap: 12,
@@ -574,6 +582,18 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
   finite(encounter.reinforcementOriginY, 'encounter.reinforcementOriginY');
   finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
+  positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
+  nonNegative(encounter.grid.left, 'encounter.grid.left');
+  positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
+  positiveInteger(encounter.grid.cellHeight, 'encounter.grid.cellHeight');
+  positiveInteger(encounter.grid.gap, 'encounter.grid.gap');
+  if (encounter.grid.columns !== 8) {
+    throw new RangeError('encounter.grid.columns must equal eight');
+  }
+  if (encounter.grid.gap >= encounter.grid.cellWidth
+    || encounter.grid.gap >= encounter.grid.cellHeight) {
+    throw new RangeError('encounter.grid.gap must fit inside its cells');
+  }
   if (!(encounter.reinforcementOriginY < encounter.reinforcementReleaseY
     && encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
     throw new RangeError('encounter reinforcement heights must be ordered below PLAYER_MIN_Y');

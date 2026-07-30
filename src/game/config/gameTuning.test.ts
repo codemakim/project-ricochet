@@ -151,6 +151,12 @@ describe('GAME_TUNING', () => {
 
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
+    ['non-eight-column formation grid', (value: Mutable<GameTuning>) => {
+      value.encounter.grid.columns = 7;
+    }],
+    ['formation gap outside its cells', (value: Mutable<GameTuning>) => {
+      value.encounter.grid.gap = value.encounter.grid.cellWidth;
+    }],
     ['hive geometry outside the game', (value: Mutable<GameTuning>) => {
       value.hiveBoss.core.x = 451;
     }],
