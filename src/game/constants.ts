@@ -4,7 +4,7 @@ export const PLAYER_RADIUS = 18;
 export const PLAYER_SPEED = 420;
 export const PLAYER_MIN_Y = 98;
 
-export const STARTING_ORB_COUNT = 3;
+export const STARTING_ORB_COUNT = 1;
 export const ORB_SPEED = 400;
 export const ORB_RADIUS = 8;
 export const ORB_PICKUP_RADIUS = 50;

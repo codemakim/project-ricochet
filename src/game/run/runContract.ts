@@ -2,7 +2,7 @@ import type { BossKind } from '../config/gameTuning';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
 import type { AbilityRanks } from '../progression/progressionRules';
 
-export type CoreLoadout = [OrbCoreId, OrbCoreId, OrbCoreId];
+export type CoreLoadout = [OrbCoreId];
 
 export interface RunIdentity {
   runId: string;
@@ -28,7 +28,7 @@ export function createRunConfig(
   seed = Date.now() >>> 0,
   runId: string = crypto.randomUUID(),
 ): RunConfig {
-  if (loadout.length !== 3) throw new RangeError('run loadout must contain exactly three cores');
+  if (loadout.length !== 1) throw new RangeError('run loadout must contain exactly one core');
   if (!Number.isInteger(seed) || seed < 0) throw new RangeError('run seed must be a non-negative integer');
   if (!runId) throw new Error('run id is required');
   return {

@@ -14,7 +14,7 @@ const result = (
   bosses: Array<'sentinel' | 'hive' | 'siege'> = [],
   success = false,
 ) => createRunResult(
-  createRunConfig(['echo', 'echo', 'echo'], 1, runId),
+  createRunConfig(['echo'], 1, runId),
   success,
   durationMs,
   bosses,
@@ -52,14 +52,15 @@ describe('meta progress', () => {
     ).earned).toBe(62);
   });
 
-  it('purchases locked cores in price order and permits duplicate equipped cores', () => {
+  it('purchases locked cores in price order and equips one unlocked core', () => {
     const earned = settleRun(createDefaultMetaProgress(), result('run-1', 180_000)).progress;
     const bought = purchaseCore(earned, 'conduction');
     expect(bought.parts).toBe(0);
     expect(() => purchaseCore(bought, 'corrosion')).toThrow('insufficient parts');
-    expect(setLoadout(bought, ['echo', 'echo', 'conduction']).loadout)
-      .toEqual(['echo', 'echo', 'conduction']);
-    expect(() => setLoadout(bought, ['echo', 'corrosion', 'echo']))
+    expect(setLoadout(bought, ['conduction']).loadout).toEqual(['conduction']);
+    expect(() => setLoadout(bought, ['echo', 'conduction']))
+      .toThrow('exactly one core');
+    expect(() => setLoadout(bought, ['corrosion']))
       .toThrow('locked core');
   });
 });

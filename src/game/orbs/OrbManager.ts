@@ -120,7 +120,7 @@ export class OrbStore {
   }
 
   configureStartingCores(
-    types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
+    types: readonly [OrbCoreId],
   ): boolean {
     if (this.aimActivated || this.startingCoresConfigured) return false;
     this.startingCoresConfigured = true;
@@ -533,7 +533,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
   getTimedDurationMs?(baseMs: number): number;
   getConductionHitsRequired?(base: number): number;
   getInertiaHitLimit?(): number;
-  startingCoreTypes?: readonly [OrbCoreId, OrbCoreId, OrbCoreId];
+  startingCoreTypes?: readonly [OrbCoreId];
   textureKey?: string;
 }
 
@@ -620,7 +620,7 @@ export class OrbManager {
   }
 
   configureStartingCores(
-    types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
+    types: readonly [OrbCoreId],
   ): boolean {
     if (this.destroyed) return false;
     const changed = this.store.configureStartingCores(types);

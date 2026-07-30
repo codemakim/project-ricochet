@@ -19,7 +19,9 @@ export class MetaStore {
       return defaults;
     }
     try {
-      const progress = parseProgress(JSON.parse(raw));
+      const value: unknown = JSON.parse(raw);
+      const progress = parseProgress(value);
+      if (isRecord(value) && value.schemaVersion === 1) this.save(progress);
       return progress;
     } catch {
       this.storage.setItem(`${KEY}.corrupt.${this.now()}`, raw);
@@ -46,7 +48,7 @@ export class MetaStore {
 
 function parseProgress(value: unknown): MetaProgress {
   if (!isRecord(value)
-    || value.schemaVersion !== 1
+    || (value.schemaVersion !== 1 && value.schemaVersion !== 2)
     || !Number.isFinite(value.parts)
     || !Number.isInteger(value.parts)
     || (value.parts as number) < 0
@@ -55,16 +57,17 @@ function parseProgress(value: unknown): MetaProgress {
 
   const unlockedCores = coreArray(value.unlockedCores);
   const loadout = coreArray(value.loadout);
-  if (loadout.length !== 3 || loadout.some((core) => !unlockedCores.includes(core))) {
+  const expectedLength = value.schemaVersion === 1 ? 3 : 1;
+  if (loadout.length !== expectedLength || loadout.some((core) => !unlockedCores.includes(core))) {
     throw new Error('invalid loadout');
   }
   const claimedRunIds = stringArray(value.claimedRunIds);
   const firstBossKills = bossArray(value.firstBossKills);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     parts: value.parts as number,
     unlockedCores,
-    loadout: [...loadout] as MetaProgress['loadout'],
+    loadout: [loadout[0]!],
     claimedRunIds,
     firstBossKills,
     firstValidRunClaimed: value.firstValidRunClaimed,

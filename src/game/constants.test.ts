@@ -17,8 +17,8 @@ describe('logical playfield', () => {
     });
   });
 
-  it('starts with three permanent orbs and caps them at six', () => {
-    expect(STARTING_ORB_COUNT).toBe(3);
+  it('starts with one permanent orb and caps them at six', () => {
+    expect(STARTING_ORB_COUNT).toBe(1);
     expect(GAME_TUNING.relics.secondBoss.auxiliaryOrbit.orbLimit).toBe(6);
   });
 

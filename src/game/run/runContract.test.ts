@@ -3,8 +3,8 @@ import { createEmptyAbilityRanks } from '../progression/progressionRules';
 import { createRunConfig, createRunResult } from './runContract';
 
 describe('run contract', () => {
-  it('copies a three-core loadout and builds a terminal result', () => {
-    const config = createRunConfig(['echo', 'conduction', 'echo'], 7, 'run-1');
+  it('copies a one-core loadout and builds a terminal result', () => {
+    const config = createRunConfig(['echo'], 7, 'run-1');
     const ranks = createEmptyAbilityRanks();
     const result = createRunResult(config, true, 180_000, ['sentinel', 'hive', 'siege'], ranks);
 
@@ -14,13 +14,20 @@ describe('run contract', () => {
       threatId: 'normal',
       seed: 7,
     });
-    expect(result).toMatchObject({ success: true, loadout: ['echo', 'conduction', 'echo'] });
+    expect(result).toMatchObject({ success: true, loadout: ['echo'] });
     expect(result.loadout).not.toBe(config.loadout);
     expect(result.buildRanks).not.toBe(ranks);
   });
 
+  it('rejects loadouts that do not contain exactly one core', () => {
+    expect(() => createRunConfig([], 7, 'run-empty'))
+      .toThrow('run loadout must contain exactly one core');
+    expect(() => createRunConfig(['echo', 'inertia'], 7, 'run-many'))
+      .toThrow('run loadout must contain exactly one core');
+  });
+
   it('rejects invalid terminal results', () => {
-    const config = createRunConfig(['echo', 'echo', 'echo'], 1, 'run-2');
+    const config = createRunConfig(['echo'], 1, 'run-2');
     expect(() => createRunResult(config, true, 10, ['sentinel'], createEmptyAbilityRanks()))
       .toThrow('successful run must defeat siege');
   });

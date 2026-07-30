@@ -4,7 +4,7 @@ import type { RunResult, CoreLoadout } from '../run/runContract';
 import { META_TUNING } from './metaTuning';
 
 export interface MetaProgress {
-  schemaVersion: 1;
+  schemaVersion: 2;
   parts: number;
   unlockedCores: OrbCoreId[];
   loadout: CoreLoadout;
@@ -27,10 +27,10 @@ export interface Settlement {
 
 export function createDefaultMetaProgress(): MetaProgress {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     parts: 0,
     unlockedCores: ['echo'],
-    loadout: ['echo', 'echo', 'echo'],
+    loadout: ['echo'],
     claimedRunIds: [],
     firstBossKills: [],
     firstValidRunClaimed: false,
@@ -86,7 +86,7 @@ export function setLoadout(
   progress: Readonly<MetaProgress>,
   loadout: readonly OrbCoreId[],
 ): MetaProgress {
-  if (loadout.length !== 3) throw new Error('loadout must contain exactly three cores');
+  if (loadout.length !== 1) throw new Error('loadout must contain exactly one core');
   if (loadout.some((core) => !progress.unlockedCores.includes(core))) {
     throw new Error('locked core cannot be equipped');
   }

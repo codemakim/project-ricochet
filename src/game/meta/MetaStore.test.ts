@@ -13,6 +13,32 @@ class MemoryStorage implements Storage {
 }
 
 describe('MetaStore', () => {
+  it('migrates schema 1 loadouts to the first core and writes schema 2 back', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('project-ricochet.meta', JSON.stringify({
+      schemaVersion: 1,
+      parts: 40,
+      unlockedCores: ['echo', 'inertia'],
+      loadout: ['inertia', 'echo', 'echo'],
+      claimedRunIds: [],
+      firstBossKills: [],
+      firstValidRunClaimed: true,
+    }));
+
+    const progress = new MetaStore(storage).load();
+
+    expect(progress).toEqual({
+      schemaVersion: 2,
+      parts: 40,
+      unlockedCores: ['echo', 'inertia'],
+      loadout: ['inertia'],
+      claimedRunIds: [],
+      firstBossKills: [],
+      firstValidRunClaimed: true,
+    });
+    expect(JSON.parse(storage.getItem('project-ricochet.meta')!)).toEqual(progress);
+  });
+
   it('round trips valid progress and ignores unknown fields', () => {
     const storage = new MemoryStorage();
     const store = new MetaStore(storage);

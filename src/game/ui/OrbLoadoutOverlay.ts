@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
-import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
 
 export class OrbCoreSelection {
   private readonly selected: OrbCoreId[] = [];
@@ -61,17 +60,19 @@ export class OrbLoadoutOverlay {
   constructor(private readonly scene: Phaser.Scene) {}
 
   showStarting(
-    onConfirm: (
-      types: readonly [OrbCoreId, OrbCoreId, OrbCoreId],
-    ) => boolean,
+    availableTypes: readonly OrbCoreId[],
+    onConfirm: (types: readonly [OrbCoreId]) => boolean,
   ): void {
-    this.show(3, '출격 코어 3개 선택', (types) => (
-      onConfirm(types as readonly [OrbCoreId, OrbCoreId, OrbCoreId])
+    this.show(availableTypes, 1, '출격 코어 선택', (types) => (
+      onConfirm(types as readonly [OrbCoreId])
     ));
   }
 
-  showAdditional(onConfirm: (type: OrbCoreId) => boolean): void {
-    this.show(1, '추가 코어 선택', (types) => onConfirm(types[0]!));
+  showAdditional(
+    availableTypes: readonly OrbCoreId[],
+    onConfirm: (type: OrbCoreId) => boolean,
+  ): void {
+    this.show(availableTypes, 1, '추가 코어 선택', (types) => onConfirm(types[0]!));
   }
 
   hide(): void {
@@ -100,6 +101,7 @@ export class OrbLoadoutOverlay {
   }
 
   private show(
+    availableTypes: readonly OrbCoreId[],
     capacity: number,
     title: string,
     onConfirm: (types: readonly OrbCoreId[]) => boolean,
@@ -123,7 +125,7 @@ export class OrbLoadoutOverlay {
       }).setOrigin(0.5).setDepth(42),
     );
 
-    ORB_CORE_IDS.forEach((type, index) => {
+    availableTypes.forEach((type, index) => {
       const column = index % 2;
       const row = Math.floor(index / 2);
       const x = column === 0 ? 120 : 330;

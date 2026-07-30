@@ -43,6 +43,7 @@ import {
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
+import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
 import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
@@ -410,7 +411,7 @@ export class CombatScene extends Phaser.Scene {
     } else {
       this.pause.add('loadout');
       this.syncPauseState();
-      this.orbLoadoutOverlay.showStarting((types) => {
+      this.orbLoadoutOverlay.showStarting(ORB_CORE_IDS, (types) => {
         if (!this.orbManager?.configureStartingCores(types)) return false;
         this.pause.remove('loadout');
         this.syncPauseState();
@@ -1330,7 +1331,7 @@ export class CombatScene extends Phaser.Scene {
     this.refreshCombatModifiers();
     if (id === 'additional-core') {
       this.levelUpOverlay?.hide();
-      this.orbLoadoutOverlay?.showAdditional((type) => {
+      this.orbLoadoutOverlay?.showAdditional(ORB_CORE_IDS, (type) => {
         if (!this.orbManager?.addOrb(type)) return false;
         this.completeAbilityChoice();
         return true;

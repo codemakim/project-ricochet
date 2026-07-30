@@ -134,24 +134,23 @@ describe('OrbCoreSelection', () => {
 });
 
 describe('OrbLoadoutOverlay', () => {
-  it('confirms three duplicate-friendly starting cores once', () => {
+  it('confirms one available starting core once', () => {
     const { scene, objects } = makeScene();
     const overlay = new OrbLoadoutOverlay(scene as never);
     const confirm = vi.fn(() => true);
 
-    overlay.showStarting(confirm);
+    overlay.showStarting(['echo', 'inertia'], confirm);
     const coreCards = objects.filter((object) => object.kind === 'rectangle' && object.width === 180);
     const confirmButton = objects.find(
       (object) => object.kind === 'rectangle' && object.width === 220,
     )!;
     coreCards[0]!.emit('pointerup');
-    coreCards[0]!.emit('pointerup');
-    coreCards[3]!.emit('pointerup');
     confirmButton.emit('pointerup');
     confirmButton.emit('pointerup');
 
     expect(confirm).toHaveBeenCalledOnce();
-    expect(confirm).toHaveBeenCalledWith(['echo', 'echo', 'inertia']);
+    expect(confirm).toHaveBeenCalledWith(['echo']);
+    expect(coreCards).toHaveLength(2);
     expect(overlay.isVisible()).toBe(false);
     expect(objects.every((object) => object.destroyed)).toBe(true);
   });
@@ -161,7 +160,7 @@ describe('OrbLoadoutOverlay', () => {
     const overlay = new OrbLoadoutOverlay(scene as never);
     const confirm = vi.fn(() => true);
 
-    overlay.showAdditional(confirm);
+    overlay.showAdditional(['echo', 'conduction'], confirm);
     const coreCards = objects.filter((object) => object.kind === 'rectangle' && object.width === 180);
     const confirmButton = objects.find(
       (object) => object.kind === 'rectangle' && object.width === 220,
@@ -169,7 +168,7 @@ describe('OrbLoadoutOverlay', () => {
     coreCards[1]!.emit('pointerup');
     confirmButton.emit('pointerup');
 
-    expect(confirm).toHaveBeenCalledWith('corrosion');
+    expect(confirm).toHaveBeenCalledWith('conduction');
     expect(overlay.getSelection()).toEqual([]);
   });
 });

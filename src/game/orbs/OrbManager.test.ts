@@ -116,19 +116,16 @@ function createManager(
 }
 
 describe('OrbStore', () => {
-  it('configures three duplicate-friendly starting core types exactly once before aim', () => {
+  it('configures one starting core exactly once before aim', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 
-    expect(store.configureStartingCores(['inertia', 'inertia', 'echo'])).toBe(true);
-    expect(store.getSnapshot().map((orb) => orb.coreType)).toEqual([
-      'inertia',
-      'inertia',
-      'echo',
-    ]);
-    expect(store.configureStartingCores(['echo', 'corrosion', 'conduction'])).toBe(false);
+    expect(store.getSnapshot()).toHaveLength(1);
+    expect(store.configureStartingCores(['inertia'])).toBe(true);
+    expect(store.getSnapshot().map((orb) => orb.coreType)).toEqual(['inertia']);
+    expect(store.configureStartingCores(['echo'])).toBe(false);
 
     store.activateAim();
-    expect(store.configureStartingCores(['echo', 'echo', 'echo'])).toBe(false);
+    expect(store.configureStartingCores(['echo'])).toBe(false);
   });
 
   it('adds and queues one permanent orb at runtime, capped globally at six', () => {
@@ -137,16 +134,18 @@ describe('OrbStore', () => {
     store.update(0, 0, player, up);
 
     expect(store.addOrb('conduction')).toBe(true);
-    expect(store.getSnapshot()[3]).toMatchObject({
-      id: 3,
+    expect(store.getSnapshot()[1]).toMatchObject({
+      id: 1,
       state: 'queued',
       coreType: 'conduction',
     });
     store.update(100, 100, player, up);
     store.update(200, 100, player, up);
     store.update(300, 100, player, up);
-    expect(store.getSnapshot()[3]).toMatchObject({ state: 'active', charges: 3 });
+    expect(store.getSnapshot()[1]).toMatchObject({ state: 'active', charges: 3 });
 
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
@@ -157,7 +156,7 @@ describe('OrbStore', () => {
 
   it('spends echo wall resonance as direct damage on the next hit', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
-    store.configureStartingCores(['echo', 'corrosion', 'conduction']);
+    store.configureStartingCores(['echo']);
     store.activateAim();
     store.update(0, 0, player, up);
     for (let bounce = 0; bounce < 7; bounce += 1) store.handleWallBounce(0);
@@ -174,7 +173,7 @@ describe('OrbStore', () => {
 
   it('reports every fourth conduction hit', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
-    store.configureStartingCores(['conduction', 'echo', 'echo']);
+    store.configureStartingCores(['conduction']);
     store.activateAim();
     store.update(0, 0, player, up);
 
@@ -204,7 +203,7 @@ describe('OrbStore', () => {
         return 0.2;
       },
     );
-    store.configureStartingCores(['conduction', 'echo', 'echo']);
+    store.configureStartingCores(['conduction']);
     store.activateAim();
     store.update(0, 0, player, up);
     store.synchronizeActive(0, { x: 100, y: 500 }, { x: 0, y: -480 });
@@ -259,7 +258,7 @@ describe('OrbStore', () => {
 
   it('uses proximity-built inertia for one launch and clears it on the first hit', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
-    store.configureStartingCores(['inertia', 'echo', 'echo']);
+    store.configureStartingCores(['inertia']);
     store.activateAim();
     store.update(0, 0, player, up);
     for (let hit = 0; hit < 3; hit += 1) {
@@ -283,7 +282,7 @@ describe('OrbStore', () => {
   });
 
   it('honors a runtime build orb-limit provider up to the central cap', () => {
-    let orbLimit = 3;
+    let orbLimit = 1;
     const store = new OrbStore(
       EXPERIMENT_DEFAULTS,
       {},
@@ -298,10 +297,12 @@ describe('OrbStore', () => {
     );
 
     expect(store.addOrb()).toBe(false);
-    orbLimit = 4;
+    orbLimit = 2;
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
     orbLimit = 99;
+    expect(store.addOrb()).toBe(true);
+    expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(true);
     expect(store.addOrb()).toBe(false);
@@ -310,30 +311,24 @@ describe('OrbStore', () => {
     );
   });
 
-  it('queues the three permanent orbs once and releases them 100ms apart', () => {
+  it('queues the starting permanent orb once', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 
     expect(store.getSnapshot().map(({ id, state }) => ({ id, state }))).toEqual([
       { id: 0, state: 'stored' },
-      { id: 1, state: 'stored' },
-      { id: 2, state: 'stored' },
     ]);
 
     store.activateAim();
     store.activateAim();
-    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['queued', 'queued', 'queued']);
+    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['queued']);
 
     store.update(0, 0, player, up);
-    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'queued', 'queued']);
+    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active']);
     expect(store.getSnapshot()[0]).toMatchObject({
       position: { x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 },
       velocity: { x: 0, y: -ORB_SPEED },
     });
 
-    store.update(99, 99, player, up);
-    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'queued', 'queued']);
-    store.update(100, 1, player, up);
-    expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active', 'active', 'queued']);
   });
 
   it('uses build-provided orb and recovery radii', () => {
@@ -798,12 +793,8 @@ describe('OrbManager Phaser adapter', () => {
   it('switches each permanent orb sprite to its configured core texture', () => {
     const { manager, sprites } = createManager();
 
-    expect(manager.configureStartingCores(['echo', 'corrosion', 'inertia'])).toBe(true);
-    expect(sprites.map((sprite) => sprite.textureKey)).toEqual([
-      'orb-echo',
-      'orb-corrosion',
-      'orb-inertia',
-    ]);
+    expect(manager.configureStartingCores(['inertia'])).toBe(true);
+    expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {
@@ -812,10 +803,10 @@ describe('OrbManager Phaser adapter', () => {
     manager.update(0, 0, player, up);
 
     expect(manager.addOrb('conduction')).toBe(true);
-    expect(sprites).toHaveLength(4);
-    expect(manager.getSprites()).toHaveLength(4);
-    expect(manager.getSnapshot()[3]).toMatchObject({ id: 3, state: 'queued' });
-    expect(sprites[3]?.textureKey).toBe('orb-conduction');
+    expect(sprites).toHaveLength(2);
+    expect(manager.getSprites()).toHaveLength(2);
+    expect(manager.getSnapshot()[1]).toMatchObject({ id: 1, state: 'queued' });
+    expect(sprites[1]?.textureKey).toBe('orb-conduction');
   });
 
   it('notifies subscribers once per runtime sprite and supports unsubscribe', () => {
@@ -826,7 +817,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(listener).not.toHaveBeenCalled();
     expect(manager.addOrb()).toBe(true);
     expect(listener).toHaveBeenCalledOnce();
-    expect(listener).toHaveBeenCalledWith(sprites[3]);
+    expect(listener).toHaveBeenCalledWith(sprites[1]);
 
     unsubscribe();
     expect(manager.addOrb()).toBe(true);
@@ -838,11 +829,11 @@ describe('OrbManager Phaser adapter', () => {
     manager.destroy();
 
     expect(manager.addOrb()).toBe(false);
-    expect(sprites).toHaveLength(3);
+    expect(sprites).toHaveLength(1);
   });
 
   it('honors the live build limit before creating a runtime orb sprite', () => {
-    let limit = 3;
+    let limit = 1;
     const { manager, sprites } = createManager(
       true,
       () => false,
@@ -855,10 +846,10 @@ describe('OrbManager Phaser adapter', () => {
     );
 
     expect(manager.addOrb()).toBe(false);
-    expect(sprites).toHaveLength(3);
-    limit = 4;
+    expect(sprites).toHaveLength(1);
+    limit = 2;
     expect(manager.addOrb()).toBe(true);
-    expect(sprites).toHaveLength(4);
+    expect(sprites).toHaveLength(2);
   });
 
   it('launches with injected charged speed', () => {
@@ -1027,6 +1018,7 @@ describe('OrbManager Phaser adapter', () => {
 
   it('synchronizes public recovery starts and applies body state immediately', () => {
     const { manager, sprites } = createManager();
+    manager.addOrb();
     manager.activateAim();
     manager.update(0, 0, player, up);
     manager.update(100, 100, player, up);
@@ -1080,6 +1072,7 @@ describe('OrbManager Phaser adapter', () => {
 
   it('uses private sprite identity instead of mutable orbId during update ingestion', () => {
     const { manager, sprites } = createManager();
+    manager.addOrb();
     manager.activateAim();
     manager.update(0, 0, player, up);
     manager.update(100, 100, player, up);
