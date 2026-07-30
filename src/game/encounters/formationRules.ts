@@ -363,7 +363,7 @@ function createFormation(
   recipe: FormationRecipe,
   sequence: number,
   runSeed: number,
-  originY: number,
+  originY?: number,
 ): FormationResult {
   const random = createRandom(mix(runSeed, sequence ^ 0x4c41594f));
   const style = styleFor(recipe.profile, sequence, runSeed);
@@ -395,7 +395,11 @@ function createFormation(
       random,
     );
   }
-  const enemies = emitEnemies(placements, originY, recipe);
+  const enemies = emitEnemies(
+    placements,
+    originY ?? -rows * GAME_TUNING.encounter.grid.cellHeight,
+    recipe,
+  );
   const sourceId = source.type === 'template' ? source.template.id : style;
   return {
     id: `${runSeed}:${sequence}:${sourceId}`,
@@ -454,7 +458,5 @@ export function createReinforcementFormation(
     throw new RangeError('sequence must be a non-negative integer');
   }
   validateSeed(runSeed, 'runSeed');
-  const originY = GAME_TUNING.encounter.reinforcementOriginY
-    - GAME_TUNING.encounter.grid.cellHeight / 2;
-  return createFormation(recipe, sequence, runSeed, originY);
+  return createFormation(recipe, sequence, runSeed);
 }

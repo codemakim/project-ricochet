@@ -236,7 +236,9 @@ export class EnemyManager {
       const pixelHeight = enemy.footprintHeight * GAME_TUNING.encounter.grid.cellHeight
         - GAME_TUNING.encounter.grid.gap;
       enemy.setDisplaySize(pixelWidth, pixelHeight);
-      (enemy.body as Phaser.Physics.Arcade.Body).setSize(pixelWidth, pixelHeight, true);
+      const body = enemy.body as Phaser.Physics.Arcade.Body;
+      body.setSize(enemy.width, enemy.height, false);
+      body.reset(spec.x, spec.y);
       enemy.setImmovable(true).setVelocityY(spec.speed);
       this.enemies.set(enemy.enemyId, enemy);
     }

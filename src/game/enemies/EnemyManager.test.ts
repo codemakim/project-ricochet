@@ -84,8 +84,8 @@ class FakeBody {
   }
 
   setSize(width: number, height: number): this {
-    this.width = width;
-    this.height = height;
+    this.width = width * (this.gameObject.displayWidth / this.gameObject.width);
+    this.height = height * (this.gameObject.displayHeight / this.gameObject.height);
     return this;
   }
 }
@@ -93,6 +93,8 @@ class FakeBody {
 class FakeSprite {
   x: number;
   y: number;
+  readonly width: number;
+  readonly height: number;
   active = true;
   destroyed = false;
   tint?: number;
@@ -104,6 +106,13 @@ class FakeSprite {
   constructor(x: number, y: number, readonly texture: string) {
     this.x = x;
     this.y = y;
+    [this.width, this.height] = ({
+      'enemy-basic': [36, 28],
+      'enemy-armored': [40, 32],
+      'enemy-shooter': [38, 30],
+      'enemy-fragment-left': [22, 18],
+      'enemy-fragment-right': [22, 18],
+    } as Record<string, [number, number]>)[texture] ?? [0, 0];
   }
 
   setVelocity(x: number, y: number): this {

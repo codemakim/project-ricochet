@@ -47,7 +47,6 @@ export interface GameTuning {
     };
   };
   encounter: {
-    reinforcementOriginY: number;
     reinforcementReleaseY: number;
     grid: {
       columns: number;
@@ -281,7 +280,6 @@ export const GAME_TUNING = {
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
-    reinforcementOriginY: -28,
     reinforcementReleaseY: 50,
     grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
   },
@@ -580,7 +578,6 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(enemy.breachDamage, `enemies.${kind}.breachDamage`);
   }
   positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
-  finite(encounter.reinforcementOriginY, 'encounter.reinforcementOriginY');
   finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
   positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
   nonNegative(encounter.grid.left, 'encounter.grid.left');
@@ -594,9 +591,8 @@ export function validateGameTuning(tuning: GameTuning): void {
     || encounter.grid.gap >= encounter.grid.cellHeight) {
     throw new RangeError('encounter.grid.gap must fit inside its cells');
   }
-  if (!(encounter.reinforcementOriginY < encounter.reinforcementReleaseY
-    && encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
-    throw new RangeError('encounter reinforcement heights must be ordered below PLAYER_MIN_Y');
+  if (!(encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
+    throw new RangeError('encounter reinforcement release must be below PLAYER_MIN_Y');
   }
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;

@@ -151,6 +151,14 @@ describe('multi-cell formation generation', () => {
       speed === GAME_TUNING.enemies.descentSpeed * 1.5)).toBe(true);
   });
 
+  it('spawns every reinforcement above the viewport', () => {
+    const result = createReinforcementFormation(recipe(), 0, 808);
+
+    expect(result.enemies.every(({ y, height }) => (
+      y + height * GAME_TUNING.encounter.grid.cellHeight / 2 <= 0
+    ))).toBe(true);
+  });
+
   it('rejects invalid run seeds and sequences', () => {
     expect(() => createInitialFormation(-1))
       .toThrowError(new RangeError('runSeed must be an unsigned 32-bit integer'));

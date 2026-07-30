@@ -139,7 +139,14 @@ interface DevelopmentScene {
       texture?: { key?: string };
       text?: string;
       setPosition?(x: number, y: number): void;
-      body?: { velocity?: { x: number; y: number }; setVelocity?(x: number, y: number): void };
+      body?: {
+        x?: number;
+        y?: number;
+        width?: number;
+        height?: number;
+        velocity?: { x: number; y: number };
+        setVelocity?(x: number, y: number): void;
+      };
     }>;
   };
   player: { setPosition(x: number, y: number): void };
@@ -424,6 +431,40 @@ test('@desktop moves, retains mouse aim, and launches one permanent orb', async 
   expect(after.orbs).toHaveLength(1);
   expect(after.orbs.every((orb) => orb.state !== 'stored')).toBe(true);
   expect(box.height).toBeGreaterThan(box.width);
+});
+
+test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {
+  await loadCanvas(page);
+
+  const bounds = await sceneCall(page, (scene) => (
+    scene.children.list.filter((child) => (
+      child.active
+      && child.texture?.key?.startsWith('enemy-')
+      && child.texture.key !== 'enemy-bullet'
+    ))
+      .map((child) => ({
+        visual: {
+          x: child.x! - child.displayWidth! / 2,
+          y: child.y! - child.displayHeight! / 2,
+          width: child.displayWidth!,
+          height: child.displayHeight!,
+        },
+        physics: {
+          x: child.body!.x!,
+          y: child.body!.y!,
+          width: child.body!.width!,
+          height: child.body!.height!,
+        },
+      }))
+  ));
+
+  expect(bounds.length).toBeGreaterThan(0);
+  expect(bounds.every(({ visual, physics }) => (
+    Math.abs(visual.x - physics.x) < 0.01
+    && Math.abs(visual.y - physics.y) < 0.01
+    && Math.abs(visual.width - physics.width) < 0.01
+    && Math.abs(visual.height - physics.height) < 0.01
+  ))).toBe(true);
 });
 
 test('@desktop chooses permanent orb cores', async ({ page }) => {

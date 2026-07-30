@@ -246,9 +246,6 @@ describe('GAME_TUNING', () => {
       value.boss.movement.obstaclePadding = Number.POSITIVE_INFINITY;
     }],
     ['non-finite boss y', (value: Mutable<GameTuning>) => { value.boss.y = Number.NaN; }],
-    ['non-finite reinforcement y', (value: Mutable<GameTuning>) => {
-      value.encounter.reinforcementOriginY = Number.NaN;
-    }],
     ['non-finite friendly color', (value: Mutable<GameTuning>) => {
       value.visual.friendly.permanentOrb.fill = Number.NaN;
     }],
