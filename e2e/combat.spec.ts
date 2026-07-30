@@ -122,11 +122,6 @@ interface CombatSnapshot {
   gameplayElapsedMs: number;
 }
 
-const FIFTH_PHASE_FIXTURE = { phase: 4 } satisfies Pick<
-  CombatSnapshot['encounter'],
-  'phase'
->;
-
 interface DevelopmentScene {
   children: {
     list: Array<{

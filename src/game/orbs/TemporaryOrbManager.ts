@@ -49,7 +49,7 @@ export class TemporaryOrbManager {
   private destroyed = false;
 
   constructor(
-    private readonly scene: Phaser.Scene,
+    scene: Phaser.Scene,
     private readonly options: TemporaryOrbManagerOptions,
   ) {
     this.group = scene.physics.add.group({ allowGravity: false });

@@ -63,7 +63,7 @@ export class AppController {
         <h1>출격 준비</h1>
         <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
         <div class="loadout" aria-label="시작 코어 구성">
-          ${this.progress.loadout.map((selected, index) => `
+          ${this.progress.loadout.map((_, index) => `
             <label>시작 코어
               <select data-loadout-slot="${index}">${options}</select>
             </label>
