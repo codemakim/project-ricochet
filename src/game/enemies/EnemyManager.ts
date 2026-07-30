@@ -17,7 +17,7 @@ import {
   type EnemySpec,
   type FragmentSide,
 } from './enemyRules';
-import { fragmentSpecsAt, populationCostForEnemy } from './splitterRules';
+import { fragmentSpecsFor, populationCostForEnemy } from './splitterRules';
 
 const CONTACT_SEPARATION = 6;
 const BULLET_MARGIN = 16;
@@ -26,6 +26,10 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   enemyId: number;
   kind: EnemyKind;
   hp: number;
+  column: number;
+  row: number;
+  footprintWidth: number;
+  footprintHeight: number;
   side?: FragmentSide;
 };
 
@@ -36,6 +40,12 @@ export interface EnemySnapshot {
   position: Vector;
   warning: boolean;
   speed: number;
+  footprint?: {
+    column: number;
+    row: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface EnemyManagerSnapshot {
@@ -217,6 +227,16 @@ export class EnemyManager {
       enemy.kind = spec.kind;
       enemy.side = spec.side;
       enemy.hp = spec.hp;
+      enemy.column = spec.column;
+      enemy.row = spec.row ?? -1;
+      enemy.footprintWidth = spec.width ?? 1;
+      enemy.footprintHeight = spec.height ?? 1;
+      const pixelWidth = enemy.footprintWidth * GAME_TUNING.encounter.grid.cellWidth
+        - GAME_TUNING.encounter.grid.gap;
+      const pixelHeight = enemy.footprintHeight * GAME_TUNING.encounter.grid.cellHeight
+        - GAME_TUNING.encounter.grid.gap;
+      enemy.setDisplaySize(pixelWidth, pixelHeight);
+      (enemy.body as Phaser.Physics.Arcade.Body).setSize(pixelWidth, pixelHeight, true);
       enemy.setImmovable(true).setVelocityY(spec.speed);
       this.enemies.set(enemy.enemyId, enemy);
     }
@@ -265,6 +285,12 @@ export class EnemyManager {
         position: { x: enemy.x, y: enemy.y },
         warning: this.activeShooters.has(enemy.enemyId),
         speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
+        footprint: {
+          column: enemy.column,
+          row: enemy.row,
+          width: enemy.footprintWidth,
+          height: enemy.footprintHeight,
+        },
       })),
       activePopulation: enemies.reduce(
         (population, enemy) => population + populationCostForEnemy(enemy.kind),
@@ -625,7 +651,13 @@ export class EnemyManager {
 
   private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
     const fragments = enemy.kind === 'splitter'
-      ? fragmentSpecsAt(event.position, GAME_TUNING.enemies.descentSpeed)
+      ? fragmentSpecsFor({
+        x: enemy.x,
+        y: enemy.y,
+        column: enemy.column,
+        row: enemy.row,
+        speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
+      })
       : [];
     this.destroyEnemy(enemy);
     this.options.onEnemyKilled?.(event);

@@ -68,6 +68,8 @@ class FakeBody {
   velocity = { x: 0, y: 0 };
   center = { x: 0, y: 0 };
   enable = true;
+  width = 0;
+  height = 0;
 
   constructor(readonly gameObject: FakeSprite) {}
 
@@ -80,6 +82,12 @@ class FakeBody {
     this.center = { x, y };
     this.velocity = { x: 0, y: 0 };
   }
+
+  setSize(width: number, height: number): this {
+    this.width = width;
+    this.height = height;
+    return this;
+  }
 }
 
 class FakeSprite {
@@ -89,6 +97,8 @@ class FakeSprite {
   destroyed = false;
   tint?: number;
   hp = 0;
+  displayWidth = 0;
+  displayHeight = 0;
   readonly body = new FakeBody(this);
 
   constructor(x: number, y: number, readonly texture: string) {
@@ -107,6 +117,11 @@ class FakeSprite {
   }
 
   setImmovable(): this { return this; }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    return this;
+  }
   setCircle(): this { return this; }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
@@ -264,6 +279,42 @@ function createBoundary(
 }
 
 describe('EnemyManager', () => {
+  it('sizes a multi-cell enemy body and keeps constant pixel descent', () => {
+    const { manager, groups } = createBoundary([{
+      kind: 'armored',
+      hp: 10,
+      x: 121,
+      y: 128,
+      column: 1,
+      row: 0,
+      width: 2,
+      height: 2,
+      speed: 8,
+    }]);
+    const sprite = groups[0]!.children[0]!;
+
+    expect(manager.getSnapshot().enemies[0]).toMatchObject({
+      kind: 'armored',
+      footprint: { column: 1, row: 0, width: 2, height: 2 },
+      speed: 8,
+    });
+    expect({
+      displayWidth: sprite.displayWidth,
+      displayHeight: sprite.displayHeight,
+      bodyWidth: sprite.body.width,
+      bodyHeight: sprite.body.height,
+      velocityY: sprite.body.velocity.y,
+    }).toEqual({
+      displayWidth: 100,
+      displayHeight: 92,
+      bodyWidth: 100,
+      bodyHeight: 92,
+      velocityY: 8,
+    });
+    manager.update();
+    expect(sprite.y).toBe(128);
+  });
+
   it('clears all live enemies without destroying the manager', () => {
     const { manager } = createBoundary([
       { kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 },
