@@ -1,5 +1,5 @@
 import type { BossKind } from '../config/gameTuning';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
 import type { AbilityRanks } from '../progression/progressionRules';
 
 export type CoreLoadout = [OrbCoreId];
@@ -14,6 +14,7 @@ export interface RunIdentity {
 export interface RunConfig {
   identity: RunIdentity;
   loadout: CoreLoadout;
+  unlockedCoreTypes: OrbCoreId[];
 }
 
 export interface RunResult extends RunConfig {
@@ -27,13 +28,19 @@ export function createRunConfig(
   loadout: readonly OrbCoreId[],
   seed = Date.now() >>> 0,
   runId: string = crypto.randomUUID(),
+  unlockedCoreTypes: readonly OrbCoreId[] = loadout,
 ): RunConfig {
   if (loadout.length !== 1) throw new RangeError('run loadout must contain exactly one core');
+  if (unlockedCoreTypes.some((core) => !ORB_CORE_IDS.includes(core))) {
+    throw new Error('unlocked core list contains an unknown core');
+  }
+  if (!unlockedCoreTypes.includes(loadout[0]!)) throw new Error('starting core must be unlocked');
   if (!Number.isInteger(seed) || seed < 0) throw new RangeError('run seed must be a non-negative integer');
   if (!runId) throw new Error('run id is required');
   return {
     identity: { runId, battlefieldId: 'default', threatId: 'normal', seed },
     loadout: [...loadout] as CoreLoadout,
+    unlockedCoreTypes: [...unlockedCoreTypes],
   };
 }
 
@@ -53,6 +60,7 @@ export function createRunResult(
   return {
     identity: { ...config.identity },
     loadout: [...config.loadout],
+    unlockedCoreTypes: [...config.unlockedCoreTypes],
     success,
     durationMs,
     defeatedBossIds: [...defeatedBossIds],

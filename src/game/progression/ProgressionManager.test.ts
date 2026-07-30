@@ -6,7 +6,7 @@ describe('ProgressionManager', () => {
   it('preserves overflow and queues multiple choices', () => {
     const manager = new ProgressionManager(7);
     manager.gainExperience(30);
-    expect(manager.getSnapshot()).toMatchObject({ level: 2, xp: 1, pendingChoices: 2 });
+    expect(manager.getSnapshot()).toMatchObject({ level: 2, xp: 5, pendingChoices: 2 });
   });
 
   it('applies one valid choice and rejects stale or invalid choices', () => {

@@ -46,6 +46,7 @@ export const MAX_ABILITY_KINDS = 12;
 export interface AbilityEligibilityContext {
   coreTypes?: readonly OrbCoreId[];
   orbCount?: number;
+  expectedOrbCount?: number;
 }
 
 const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
@@ -148,7 +149,7 @@ export function xpRequiredForLevel(level: number): number {
     throw new RangeError('level must be a non-negative integer');
   }
 
-  return 12 + level * 5;
+  return level === 0 ? 8 : 12 + level * 5;
 }
 
 function nextSeed(seed: number): number {
@@ -162,8 +163,20 @@ export function selectAbilityOptions(
   context: AbilityEligibilityContext = {},
 ): AbilityId[] {
   const eligible = eligibleAbilityIds(ranks, context);
+  if (
+    level === 0
+    && context.orbCount === 1
+    && eligible.includes('additional-core')
+  ) return ['additional-core'];
+
   let state = (seed ^ Math.imul(level + 1, 2654435761)) >>> 0;
   const shuffled = [...eligible];
+  if (
+    context.orbCount !== undefined
+    && context.expectedOrbCount !== undefined
+    && context.orbCount < context.expectedOrbCount
+    && eligible.includes('additional-core')
+  ) shuffled.push('additional-core', 'additional-core');
 
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     state = nextSeed(state);
@@ -171,11 +184,11 @@ export function selectAbilityOptions(
     [shuffled[index], shuffled[swap]] = [shuffled[swap]!, shuffled[index]!];
   }
 
-  const options = shuffled.slice(0, 3);
-  if (level === 0 && !options.some((id) => id === 'explosion' || id === 'split')) {
-    const effect = shuffled.find((id) => id === 'explosion' || id === 'split');
-    if (effect && options.length > 0) options[options.length - 1] = effect;
+  const options: AbilityId[] = [];
+  for (const id of shuffled) {
+    if (!options.includes(id)) options.push(id);
+    if (options.length === 3) break;
   }
 
-  return [...new Set(options)];
+  return options;
 }

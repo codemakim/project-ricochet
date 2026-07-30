@@ -86,7 +86,12 @@ export class AppController {
       .map(({ value }) => value as OrbCoreId);
     this.progress = setLoadout(this.progress, loadout);
     this.store.save(this.progress);
-    const config = createRunConfig(this.progress.loadout);
+    const config = createRunConfig(
+      this.progress.loadout,
+      undefined,
+      undefined,
+      this.progress.unlockedCores,
+    );
     this.root.innerHTML = '<main id="game-root" aria-label="Project Ricochet game"></main>';
     this.game = createCombatGame('game-root', config);
     this.game.events.once(RUN_ENDED_EVENT, (result: RunResult) => this.finish(result));

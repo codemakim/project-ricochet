@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { BossBuild } from './BossBuild';
 
 describe('BossBuild', () => {
+  it('exposes orb-limit rewards as a bonus', () => {
+    const build = new BossBuild();
+    expect(build.orbLimitBonus()).toBe(0);
+    build.acquire('auxiliary-orbit');
+    expect(build.orbLimitBonus()).toBe(1);
+  });
+
   it('stores approved relics once in acquisition order', () => {
     const build = new BossBuild();
     build.acquire('auxiliary-link');

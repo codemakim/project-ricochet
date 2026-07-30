@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { STARTING_ORB_COUNT } from '../constants';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
@@ -103,7 +104,7 @@ export class LevelUpOverlay {
         return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 임시 구슬 ${effect.count}개`;
       }
       case 'additional-core':
-        return `영구 구슬 상한 ${next.orbLimit(3)}개`;
+        return `영구 구슬 상한 ${next.orbLimit(STARTING_ORB_COUNT)}개`;
       case 'core-expansion':
         return `구슬 반경 ${formatDisplayNumber(next.orbRadius())}px`;
       case 'recovery-field':

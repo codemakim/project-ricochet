@@ -27,9 +27,8 @@ export class BossBuild {
     return this.rewards.includes(id);
   }
 
-  orbLimit(): number {
-    const bonuses = Number(this.owns('expanded-magazine')) + Number(this.owns('auxiliary-orbit'));
-    return Math.min(SECOND_RELIC_TUNING.auxiliaryOrbit.orbLimit, 3 + bonuses);
+  orbLimitBonus(): number {
+    return Number(this.owns('expanded-magazine')) + Number(this.owns('auxiliary-orbit'));
   }
 
   restoredCharges(source: RecoverySource): number {

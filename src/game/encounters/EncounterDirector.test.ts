@@ -38,7 +38,11 @@ describe('EncounterDirector', () => {
 
     expect(director.update(0, clearTop).formation).not.toBeNull();
     expect(createFormationSpy).toHaveBeenCalledTimes(1);
-    expect(director.getSnapshot()).toMatchObject({ phase: 0, spawnSequence: 1 });
+    expect(director.getSnapshot()).toMatchObject({
+      phase: 0,
+      spawnSequence: 1,
+      expectedOrbCount: 2,
+    });
   });
 
   it('rebuilds a pending formation from the next stage-local phase', () => {

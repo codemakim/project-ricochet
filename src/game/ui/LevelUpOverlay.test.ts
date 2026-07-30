@@ -176,7 +176,7 @@ describe('LevelUpOverlay', () => {
 
     const labels = objects.flatMap(({ text }) => text ?? []);
     expect(labels).toEqual(expect.arrayContaining([
-      expect.stringContaining('영구 구슬 상한 4개'),
+      expect.stringContaining('영구 구슬 상한 2개'),
       expect.stringContaining('근접 회수 첫타 피해 +20%'),
       expect.stringContaining('보조 효과 피해 +15%'),
     ]));

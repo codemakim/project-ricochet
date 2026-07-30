@@ -105,7 +105,8 @@ describe('BuildState', () => {
       'armor-reinforcement': 3,
     });
 
-    expect(build.orbLimit(3)).toBe(5);
+    expect(new BuildState().orbLimit(1)).toBe(1);
+    expect(build.orbLimit(1)).toBe(3);
     expect(build.orbLimit(5)).toBe(6);
     expect(build.orbRadius()).toBeCloseTo(8 * 1.16);
     expect(build.recoveryRadius()).toBe(74);

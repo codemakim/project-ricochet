@@ -57,15 +57,42 @@ describe('progression rules', () => {
   it('maps enemy kinds to XP and levels to exact costs', () => {
     expect((['basic', 'shooter', 'armored', 'splitter', 'fragment'] as const).map(xpForEnemy))
       .toEqual([1, 2, 3, 1, 1]);
-    expect([0, 1, 2, 3, 4].map(xpRequiredForLevel)).toEqual([12, 17, 22, 27, 32]);
+    expect([0, 1, 2, 3, 4].map(xpRequiredForLevel)).toEqual([8, 17, 22, 27, 32]);
   });
 
-  it('returns three unique deterministic first choices with a combat effect', () => {
-    const first = selectAbilityOptions(empty, 0, 1234);
-    expect(first).toHaveLength(3);
-    expect(new Set(first)).toHaveLength(3);
-    expect(first.some((id) => id === 'explosion' || id === 'split')).toBe(true);
-    expect(selectAbilityOptions(empty, 0, 1234)).toEqual(first);
+  it('guarantees the second permanent orb only for the first choice', () => {
+    expect(selectAbilityOptions(
+      empty,
+      0,
+      123,
+      { coreTypes: ['echo'], orbCount: 1 },
+    )).toEqual(['additional-core']);
+
+    const later = selectAbilityOptions(
+      empty,
+      1,
+      123,
+      { coreTypes: ['echo'], orbCount: 2, expectedOrbCount: 2 },
+    );
+    expect(later).toHaveLength(3);
+    expect(new Set(later)).toHaveLength(3);
+  });
+
+  it('weights additional cores when the active stage expects more orbs', () => {
+    const appearances = (orbCount: number) => Array.from(
+      { length: 100 },
+      (_, seed) => selectAbilityOptions(
+        empty,
+        2,
+        seed,
+        { coreTypes: ['echo'], orbCount, expectedOrbCount: 4 },
+      ).includes('additional-core'),
+    ).filter(Boolean).length;
+
+    const shortage = appearances(2);
+    const onCurve = appearances(4);
+    expect(shortage).toBeGreaterThan(onCurve);
+    expect(shortage).toBeLessThan(100);
   });
 
   it('excludes abilities at their individual rank caps', () => {

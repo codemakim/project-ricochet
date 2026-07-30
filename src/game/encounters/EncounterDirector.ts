@@ -184,6 +184,7 @@ export class EncounterDirector {
       stageIndex: this.stageIndex,
       stageId: stage.id,
       stageNumber: stage.number,
+      expectedOrbCount: stage.powerBand.expectedOrbCount,
       stageElapsedMs: this.stageElapsedMs,
       bossScore: this.bossScore,
       warningElapsedMs: this.warningElapsedMs,

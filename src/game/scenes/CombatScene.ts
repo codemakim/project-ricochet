@@ -30,6 +30,7 @@ import {
   GAME_HEIGHT,
   GAME_WIDTH,
   PLAYER_RADIUS,
+  STARTING_ORB_COUNT,
   type ExperimentSettings,
 } from '../constants';
 import { EncounterDirector } from '../encounters/EncounterDirector';
@@ -206,6 +207,7 @@ export class CombatScene extends Phaser.Scene {
     this.runConfig = {
       identity: { ...config.identity },
       loadout: [...config.loadout],
+      unlockedCoreTypes: [...config.unlockedCoreTypes],
     };
     return this;
   }
@@ -239,7 +241,8 @@ export class CombatScene extends Phaser.Scene {
       build,
       () => ({
         coreTypes: this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
-        orbCount: this.orbManager?.getSnapshot().length ?? 3,
+        orbCount: this.orbManager?.getSnapshot().length ?? STARTING_ORB_COUNT,
+        expectedOrbCount: this.encounterDirector?.getSnapshot().expectedOrbCount ?? 2,
       }),
     );
     this.levelUpOverlay = new LevelUpOverlay(this);
@@ -281,7 +284,11 @@ export class CombatScene extends Phaser.Scene {
       chargedKillPierces: () => (
         this.bossBuild ? bossOrbModifiers(this.bossBuild).chargedKillPierces : false
       ),
-      getOrbLimit: () => build.orbLimit(this.bossBuild?.orbLimit() ?? 3),
+      getOrbLimit: () => Math.min(
+        GAME_TUNING.build.basicGrowth.maximumOrbs,
+        build.orbLimit(STARTING_ORB_COUNT)
+          + (this.bossBuild?.orbLimitBonus() ?? 0),
+      ),
       onRecovery: (orbId, source) => {
         this.combatProcs?.resetOrbFlight(orbId);
         this.handleOrbRecovery(source);
@@ -512,6 +519,7 @@ export class CombatScene extends Phaser.Scene {
         stageIndex: 0,
         stageId: 'default-1',
         stageNumber: 1,
+        expectedOrbCount: 2,
         stageElapsedMs: 0,
         bossScore: 0,
         warningElapsedMs: 0,
@@ -521,7 +529,7 @@ export class CombatScene extends Phaser.Scene {
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
         xp: 0,
-        xpRequired: 12,
+        xpRequired: 8,
         pendingChoices: 0,
         choices: [],
       },
@@ -1331,11 +1339,14 @@ export class CombatScene extends Phaser.Scene {
     this.refreshCombatModifiers();
     if (id === 'additional-core') {
       this.levelUpOverlay?.hide();
-      this.orbLoadoutOverlay?.showAdditional(ORB_CORE_IDS, (type) => {
-        if (!this.orbManager?.addOrb(type)) return false;
-        this.completeAbilityChoice();
-        return true;
-      });
+      this.orbLoadoutOverlay?.showAdditional(
+        this.runConfig?.unlockedCoreTypes ?? ORB_CORE_IDS,
+        (type) => {
+          if (!this.orbManager?.addOrb(type)) return false;
+          this.completeAbilityChoice();
+          return true;
+        },
+      );
       return true;
     }
     this.completeAbilityChoice();
