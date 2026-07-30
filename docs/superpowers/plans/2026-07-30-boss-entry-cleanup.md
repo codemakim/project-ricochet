@@ -31,7 +31,7 @@
 - Consumes: Existing constructors and E2E helpers.
 - Produces: The same runtime behavior with no TypeScript unused declarations.
 
-- [ ] **Step 1: Run the unused-code check and record the baseline**
+- [x] **Step 1: Run the unused-code check and record the baseline**
 
 Run:
 
@@ -41,7 +41,7 @@ rtk ./node_modules/.bin/tsc --noEmit --noUnusedLocals --noUnusedParameters
 
 Expected: FAIL only for `FIFTH_PHASE_FIXTURE`, `selected`, and the stored `scene` constructor property.
 
-- [ ] **Step 2: Delete the three unused declarations**
+- [x] **Step 2: Delete the three unused declarations**
 
 Apply these exact simplifications:
 
@@ -59,7 +59,7 @@ constructor(
 ) {
 ```
 
-- [ ] **Step 3: Verify the cleanup**
+- [x] **Step 3: Verify the cleanup**
 
 Run:
 
@@ -70,7 +70,7 @@ rtk npm test -- src/game/meta/MetaStore.test.ts src/game/orbs/TemporaryOrbManage
 
 Expected: both commands PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 rtk git add e2e/combat.spec.ts src/game/meta/AppController.ts src/game/orbs/TemporaryOrbManager.ts
@@ -105,7 +105,7 @@ rtk git commit -m "refactor: remove unused combat declarations"
 - Consumes: `BOSS_REWARD_IDS`, the nine approved build-relevant relics.
 - Produces: `BossRewardId = typeof BOSS_REWARD_IDS[number]`; `BossBuild.acquire` accepts only that union. Direct-hit planning retains current general abilities and the nine approved relic effects.
 
-- [ ] **Step 1: Add a failing reachability test**
+- [x] **Step 1: Add a failing reachability test**
 
 In `BossBuild.test.ts`, make the existing acquisition test reject both old reward families:
 
@@ -116,7 +116,7 @@ expect(() => build.acquire('auxiliary-orbit' as never))
   .toThrow('unknown boss reward');
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 ```bash
 rtk npm test -- src/game/progression/BossBuild.test.ts
@@ -124,7 +124,7 @@ rtk npm test -- src/game/progression/BossBuild.test.ts
 
 Expected: FAIL because `auxiliary-orbit` is currently accepted.
 
-- [ ] **Step 3: Collapse reward types to the approved set**
+- [x] **Step 3: Collapse reward types to the approved set**
 
 Make `bossRewardRules.ts` expose only:
 
@@ -150,7 +150,7 @@ acquire(id: BossRewardId): void {
 }
 ```
 
-- [ ] **Step 4: Remove every legacy-only runtime path**
+- [x] **Step 4: Remove every legacy-only runtime path**
 
 Delete these `BossBuild` methods and their callers:
 
@@ -197,7 +197,7 @@ Retain `temporaryProcChance`, `crossCutDamage`, `gasIgnitionFraction`, `recursiv
 
 Delete `CombatEffectScheduler`, aftershock scheduling/draining, and legacy-only E2E assertions. Keep general explosion, temporary split, and current relic coverage.
 
-- [ ] **Step 5: Verify the approved reward system**
+- [x] **Step 5: Verify the approved reward system**
 
 Run:
 
@@ -214,7 +214,7 @@ rtk ./node_modules/.bin/tsc --noEmit --noUnusedLocals --noUnusedParameters
 
 Expected: PASS. No reference to `secondBoss`, `selectLegacyBossRewardOptions`, `auxiliary-orbit`, or `aftershock-explosion` remains under `src/`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rtk git add -A src/game e2e/combat.spec.ts
@@ -249,7 +249,7 @@ export function bossEntryCleanup(
 ): { mode: 'all' } | { mode: 'corridor'; corridor: BossEntryCorridor };
 ```
 
-- [ ] **Step 1: Write failing geometry and tuning tests**
+- [x] **Step 1: Write failing geometry and tuning tests**
 
 Add tests with hand-derived invariants:
 
@@ -290,7 +290,7 @@ it('accepts all-enemy cleanup as the alternate mode', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 rtk npm test -- src/game/bosses/bossEntryRules.test.ts src/game/config/gameTuning.test.ts
@@ -298,7 +298,7 @@ rtk npm test -- src/game/bosses/bossEntryRules.test.ts src/game/config/gameTunin
 
 Expected: FAIL because the module and tuning do not exist.
 
-- [ ] **Step 3: Add centralized tuning**
+- [x] **Step 3: Add centralized tuning**
 
 Add:
 
@@ -319,7 +319,7 @@ encounter: {
 
 Validate the mode and require finite non-negative padding.
 
-- [ ] **Step 4: Implement the pure corridor calculation**
+- [x] **Step 4: Implement the pure corridor calculation**
 
 For Sentinel/Siege:
 
@@ -350,7 +350,7 @@ export function bossEntryCleanup(
 }
 ```
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 ```bash
 rtk npm test -- src/game/bosses/bossEntryRules.test.ts src/game/config/gameTuning.test.ts
@@ -358,7 +358,7 @@ rtk npm test -- src/game/bosses/bossEntryRules.test.ts src/game/config/gameTunin
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rtk git add src/game/bosses/bossEntryRules.ts src/game/bosses/bossEntryRules.test.ts src/game/config/gameTuning.ts src/game/config/gameTuning.test.ts
@@ -386,7 +386,7 @@ clearCorridor(corridor: {
 }): Vector[];
 ```
 
-- [ ] **Step 1: Write failing removal tests**
+- [x] **Step 1: Write failing removal tests**
 
 Use one 2×2 center enemy, one side enemy, and one splitter above the viewport:
 
@@ -405,7 +405,7 @@ expect(onBreach).not.toHaveBeenCalled();
 
 Also assert the removed splitter creates no fragments and a body touching exactly at `left` survives.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 ```bash
 rtk npm test -- src/game/enemies/EnemyManager.test.ts
@@ -413,7 +413,7 @@ rtk npm test -- src/game/enemies/EnemyManager.test.ts
 
 Expected: FAIL because `clearCorridor` is missing and `clearEnemies` returns `void`.
 
-- [ ] **Step 3: Implement one shared removal path**
+- [x] **Step 3: Implement one shared removal path**
 
 Implement strict overlap against real Arcade body coordinates:
 
@@ -437,7 +437,7 @@ clearEnemies(): Vector[] {
 
 `removeMatchingEnemies` snapshots positions, calls existing `destroyEnemy`, and never calls `killEnemy`.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 ```bash
 rtk npm test -- src/game/enemies/EnemyManager.test.ts
@@ -445,7 +445,7 @@ rtk npm test -- src/game/enemies/EnemyManager.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/game/enemies/EnemyManager.ts src/game/enemies/EnemyManager.test.ts
@@ -464,7 +464,7 @@ rtk git commit -m "feat: clear enemies from boss entry corridors"
 - Consumes: `bossEntryCleanup(kind, mode)`, `GAME_TUNING.encounter.bossEntry.cleanupMode`, `EnemyManager.clearCorridor`, `EnemyManager.clearEnemies`.
 - Produces: Boss start with no remaining enemy body inside its initial geometry.
 
-- [ ] **Step 1: Write the failing E2E**
+- [x] **Step 1: Write the failing E2E**
 
 Add one test that:
 
@@ -482,7 +482,7 @@ expect(after.enemies.some(({ id }) => id === sideId)).toBe(true);
 expect(after.progression.xp).toBe(before.progression.xp);
 ```
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 ```bash
 rtk npm run test:e2e -- e2e/combat.spec.ts --grep "clears only the boss entry corridor" --reporter=line --workers=1
@@ -490,7 +490,7 @@ rtk npm run test:e2e -- e2e/combat.spec.ts --grep "clears only the boss entry co
 
 Expected: FAIL because the center enemy survives and overlaps the boss.
 
-- [ ] **Step 3: Integrate the selected mode**
+- [x] **Step 3: Integrate the selected mode**
 
 At the start of `startBoss(kind)`:
 
@@ -509,7 +509,7 @@ for (const position of removed) {
 
 Then construct the boss with the existing factory. Do not alter warning timing, formation generation, boss attacks, rewards, or movement rules.
 
-- [ ] **Step 4: Verify the focused integration**
+- [x] **Step 4: Verify the focused integration**
 
 ```bash
 rtk npm run test:e2e -- e2e/combat.spec.ts --grep "clears only the boss entry corridor|midboss movement|hive" --reporter=line --workers=1
@@ -517,7 +517,7 @@ rtk npm run test:e2e -- e2e/combat.spec.ts --grep "clears only the boss entry co
 
 Expected: PASS. Side enemies remain and existing boss behavior is unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/game/scenes/CombatScene.ts e2e/combat.spec.ts
@@ -535,7 +535,7 @@ rtk git commit -m "feat: clear boss entry corridor on arrival"
 - Consumes: All prior tasks.
 - Produces: A clean, tested branch ready to merge.
 
-- [ ] **Step 1: Verify no stale legacy names remain**
+- [x] **Step 1: Verify no stale legacy names remain**
 
 ```bash
 rtk rg -n "selectLegacyBossRewardOptions|SECOND_BOSS_REWARD_IDS|secondBoss|auxiliary-orbit|aftershock-explosion" src/game --glob '!*.test.ts'
@@ -543,7 +543,7 @@ rtk rg -n "selectLegacyBossRewardOptions|SECOND_BOSS_REWARD_IDS|secondBoss|auxil
 
 Expected: no production matches. The legacy rejection test may retain literal legacy IDs.
 
-- [ ] **Step 2: Run complete static and unit verification**
+- [x] **Step 2: Run complete static and unit verification**
 
 ```bash
 rtk git diff --check
@@ -554,7 +554,7 @@ rtk npm run build
 
 Expected: all commands PASS.
 
-- [ ] **Step 3: Run the full browser suite once**
+- [x] **Step 3: Run the full browser suite once**
 
 ```bash
 rtk npm run test:e2e -- --reporter=line --workers=1
@@ -562,7 +562,7 @@ rtk npm run test:e2e -- --reporter=line --workers=1
 
 Expected: all desktop and mobile tests PASS.
 
-- [ ] **Step 4: Mark this plan complete and commit any final test-only corrections**
+- [x] **Step 4: Mark this plan complete and commit any final test-only corrections**
 
 Check every completed checkbox in this file. If verification required no source change, do not create an empty commit. Otherwise:
 
