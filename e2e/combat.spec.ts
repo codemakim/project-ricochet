@@ -388,6 +388,9 @@ async function dispatchTouchPointers(
 async function confirmAdditionalCore(page: Page, key = 'Digit1'): Promise<void> {
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
   await page.keyboard.press(key);
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.text?.startsWith('선택 1/1'),
+  ))).toBe(true);
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
 }
