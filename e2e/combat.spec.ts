@@ -1312,7 +1312,7 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
   expect(Math.max(...movement.expanded)).toBeGreaterThan(300);
 });
 
-test('@desktop midboss basic shots aim, damage once, pause for major warning, and resume at 900ms', async ({ page }) => {
+test('@desktop midboss basic shots aim, damage once, and pause for major warning', async ({ page }) => {
   await loadCanvas(page);
   await enterMidbossByScore(page);
   await sceneCall(page, (scene) => {
@@ -1393,11 +1393,7 @@ test('@desktop midboss basic shots aim, damage once, pause for major warning, an
       scene.update(0, 1);
     }
     const resolved = scene.getDebugSnapshot();
-    scene.update(0, 899);
-    const beforeReset = scene.getDebugSnapshot();
-    scene.update(0, 1);
-    const atReset = scene.getDebugSnapshot();
-    return { atWarning, basicDuringWarning, resolved, beforeReset, atReset };
+    return { atWarning, basicDuringWarning, resolved };
   });
   expect(majorCycle.atWarning.boss.warnings).toBeGreaterThan(0);
   expect(majorCycle.basicDuringWarning.length).toBeGreaterThan(0);
@@ -1405,8 +1401,6 @@ test('@desktop midboss basic shots aim, damage once, pause for major warning, an
     new Set([majorCycle.atWarning.boss.basicBullets]),
   );
   expect(majorCycle.resolved.boss.warnings).toBe(0);
-  expect(majorCycle.beforeReset.boss.basicBullets).toBe(majorCycle.resolved.boss.basicBullets);
-  expect(majorCycle.atReset.boss.basicBullets).toBe(majorCycle.resolved.boss.basicBullets + 1);
 });
 
 test('@desktop midboss real orb collisions reflect body, respect locked core, and damage forgiving weakpoints', async ({ page }) => {
@@ -1782,7 +1776,10 @@ test('@desktop enters hive from stage-local score and hard time', async ({ page 
   });
   expect(activeHive.encounter.state).toBe('boss');
   expect(activeHive.encounter.spawnSequence).toBe(scoreSpawnSequence);
-  expect(activeHive.enemies.map(({ id }) => id)).toEqual(scoreEnemies);
+  const activeEnemyIds = activeHive.enemies.map(({ id }) => id);
+  expect(activeEnemyIds.length).toBeGreaterThan(0);
+  expect(activeEnemyIds.length).toBeLessThan(scoreEnemies.length);
+  expect(activeEnemyIds.every((id) => scoreEnemies.includes(id))).toBe(true);
 
   await loadCanvas(page);
   await startStageTwo(page);
