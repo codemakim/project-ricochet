@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ORB_CORE_DEFINITIONS,
+  ORB_CORE_IDS,
   applyCoreWallBounce,
   coreLaunchSpeedMultiplier,
   createOrbCoreState,
@@ -8,6 +10,24 @@ import {
 } from './orbCoreRules';
 
 describe('orb core rules', () => {
+  it('defines one complete catalog for all six permanent cores', () => {
+    expect(ORB_CORE_IDS).toEqual([
+      'echo',
+      'corrosion',
+      'conduction',
+      'inertia',
+      'split',
+      'explosion',
+    ]);
+    expect(Object.keys(ORB_CORE_DEFINITIONS)).toEqual(ORB_CORE_IDS);
+    expect(Object.values(ORB_CORE_DEFINITIONS)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '분열 구슬', maximumLevel: 5 }),
+        expect.objectContaining({ label: '폭발 구슬', maximumLevel: 5 }),
+      ]),
+    );
+  });
+
   it('uses an overridden conduction hit requirement', () => {
     let state = createOrbCoreState();
     state = resolveCoreDirectHit('conduction', state, 3).next;

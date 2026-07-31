@@ -63,4 +63,28 @@ describe('meta progress', () => {
     expect(() => setLoadout(bought, ['corrosion']))
       .toThrow('locked core');
   });
+
+  it('can purchase all five cores after the default echo core', () => {
+    let progress = { ...createDefaultMetaProgress(), parts: 800 };
+
+    for (const core of [
+      'corrosion',
+      'conduction',
+      'inertia',
+      'split',
+      'explosion',
+    ] as const) {
+      progress = purchaseCore(progress, core);
+    }
+
+    expect(progress.unlockedCores).toEqual([
+      'echo',
+      'corrosion',
+      'conduction',
+      'inertia',
+      'split',
+      'explosion',
+    ]);
+    expect(progress.parts).toBe(0);
+  });
 });

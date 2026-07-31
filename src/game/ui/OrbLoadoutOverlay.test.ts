@@ -9,6 +9,8 @@ vi.mock('phaser', () => ({
           TWO: 50,
           THREE: 51,
           FOUR: 52,
+          FIVE: 53,
+          SIX: 54,
           ENTER: 13,
           R: 82,
         },
@@ -134,6 +136,26 @@ describe('OrbCoreSelection', () => {
 });
 
 describe('OrbLoadoutOverlay', () => {
+  it('renders all six cores from the shared player-facing catalog', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new OrbLoadoutOverlay(scene as never);
+
+    overlay.showStarting(
+      ['echo', 'corrosion', 'conduction', 'inertia', 'split', 'explosion'],
+      () => true,
+    );
+
+    expect(objects.filter(({ kind }) => kind === 'text').map(({ text }) => text))
+      .toEqual(expect.arrayContaining([
+        '1. 반향 구슬',
+        '2. 부식 구슬',
+        '3. 전도 구슬',
+        '4. 관성 구슬',
+        '5. 분열 구슬',
+        '6. 폭발 구슬',
+      ]));
+  });
+
   it('confirms one available starting core once', () => {
     const { scene, objects } = makeScene();
     const overlay = new OrbLoadoutOverlay(scene as never);
@@ -166,13 +188,15 @@ describe('OrbLoadoutOverlay', () => {
       (object) => object.kind === 'rectangle' && object.width === 220,
     )!;
     expect(objects.filter(({ kind }) => kind === 'text').map(({ text }) => text))
-      .toEqual(expect.arrayContaining(['1. 반향', '2. 전도']));
-    expect(objects.some(({ text }) => text?.includes('4회 직격마다 주변 연쇄 피해')))
+      .toEqual(expect.arrayContaining(['1. 반향 구슬', '2. 전도 구슬']));
+    expect(objects.some(({ text }) => text?.includes('직격 에너지를 가까운 적에게 전달')))
       .toBe(false);
 
     coreCards[1]!.emit('pointerup');
     expect(objects.some(
-      ({ destroyed, text }) => !destroyed && text?.includes('4회 직격마다 주변 연쇄 피해'),
+      ({ destroyed, text }) => (
+        !destroyed && text?.includes('직격 에너지를 가까운 적에게 전달')
+      ),
     )).toBe(true);
     confirmButton.emit('pointerup');
 

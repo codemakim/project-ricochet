@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
+import {
+  ORB_CORE_DEFINITIONS,
+  ORB_CORE_IDS,
+  type OrbCoreId,
+} from '../orbs/orbCoreRules';
 import { createRunConfig, type RunConfig, type RunResult } from '../run/runContract';
 import { CombatScene, RUN_ENDED_EVENT } from '../scenes/CombatScene';
 import { MetaStore } from './MetaStore';
@@ -12,13 +16,6 @@ import {
   type Settlement,
 } from './metaProgress';
 import { META_TUNING } from './metaTuning';
-
-const CORE_NAMES: Record<OrbCoreId, string> = {
-  echo: '반향 코어',
-  corrosion: '부식 코어',
-  conduction: '전도 코어',
-  inertia: '관성 코어',
-};
 
 export function createCombatGame(parent: string, config?: RunConfig): Phaser.Game {
   const scene = new CombatScene();
@@ -55,7 +52,7 @@ export class AppController {
 
   private renderDeploy(): void {
     const options = this.progress.unlockedCores
-      .map((id) => `<option value="${id}">${CORE_NAMES[id]}</option>`)
+      .map((id) => `<option value="${id}">${ORB_CORE_DEFINITIONS[id].label}</option>`)
       .join('');
     this.root.innerHTML = `
       <section class="meta-screen">
@@ -139,7 +136,7 @@ export class AppController {
             const unlocked = this.progress.unlockedCores.includes(id);
             return `
               <article>
-                <strong>${CORE_NAMES[id]}</strong>
+                <strong>${ORB_CORE_DEFINITIONS[id].label}</strong>
                 ${unlocked
                   ? '<span>해금됨</span>'
                   : `<button data-buy-core="${id}" ${price === undefined || this.progress.parts < price ? 'disabled' : ''}>${price ?? '-'} 부품</button>`}

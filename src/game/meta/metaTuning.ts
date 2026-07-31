@@ -11,5 +11,5 @@ export const META_TUNING = {
   } satisfies Record<BossKind, number>,
   firstBossKill: 20,
   clear: 30,
-  corePrices: [40, 100, 160] as const,
+  corePrices: [40, 100, 160, 220, 280] as const,
 } as const;

@@ -153,6 +153,57 @@ describe('GAME_TUNING', () => {
     expect(() => validateGameTuning(mutableTuning())).not.toThrow();
   });
 
+  it('provides five finite values for every permanent-core level curve', () => {
+    const curves: Array<[string, readonly number[]]> = [];
+    const visit = (value: unknown, path: string): void => {
+      if (Array.isArray(value)) {
+        if (path.endsWith('ByLevel')) curves.push([path, value as number[]]);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value)) {
+        visit(child, path ? `${path}.${key}` : key);
+      }
+    };
+
+    visit(GAME_TUNING.orbCores, 'orbCores');
+
+    expect(curves.length).toBeGreaterThan(0);
+    for (const [, values] of curves) {
+      expect(values).toHaveLength(5);
+      expect(values.every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it('rejects a permanent-core level curve with the wrong length', () => {
+    const tuning = mutableTuning();
+    tuning.orbCores.explosion.chanceByLevel.pop();
+
+    expect(() => validateGameTuning(tuning)).toThrow(
+      'orbCores.explosion.chanceByLevel must contain 5 values',
+    );
+  });
+
+  it.each([
+    ['probability above one', (tuning: Mutable<GameTuning>) => {
+      tuning.orbCores.explosion.chanceByLevel[2] = 1.1;
+    }, 'orbCores.explosion.chanceByLevel.3 must be between zero and one'],
+    ['fractional count', (tuning: Mutable<GameTuning>) => {
+      tuning.orbCores.split.countByLevel[1] = 1.5;
+    }, 'orbCores.split.countByLevel.2 must be an integer'],
+    ['zero duration', (tuning: Mutable<GameTuning>) => {
+      tuning.orbCores.corrosion.durationMsByLevel[0] = 0;
+    }, 'orbCores.corrosion.durationMsByLevel.1 must be finite and positive'],
+    ['level above five', (tuning: Mutable<GameTuning>) => {
+      tuning.orbCores.echo.replay.fromLevel = 6;
+    }, 'orbCores.echo.replay.fromLevel must be at most 5'],
+  ])('rejects invalid core tuning: %s', (_name, mutate, message) => {
+    const tuning = mutableTuning();
+    mutate(tuning);
+
+    expect(() => validateGameTuning(tuning)).toThrow(message);
+  });
+
   it('rejects invalid reward-flow timing', () => {
     const tuning = mutableTuning();
     tuning.rewardFlow.resumeGameplayMs = Number.NaN;

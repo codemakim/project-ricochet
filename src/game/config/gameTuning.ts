@@ -2,6 +2,7 @@ import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y } from '../constants';
 
 export interface RangeTuning { minimum: number; maximum: number }
 export type BossKind = 'sentinel' | 'hive' | 'siege';
+type FiveLevelValues = readonly [number, number, number, number, number];
 
 export interface ProjectileVisualTuning {
   fill: number;
@@ -166,6 +167,17 @@ export interface GameTuning {
     echo: {
       maxStacks: number;
       damageBonusPerStack: number;
+      maxStacksByLevel: FiveLevelValues;
+      damageBonusPerStackByLevel: FiveLevelValues;
+      shockwave: { fromLevel: number; radius: number; damage: number };
+      cutter: {
+        fromLevel: number;
+        chance: number;
+        damage: number;
+        thickness: number;
+        cooldownMs: number;
+      };
+      replay: { fromLevel: number; damage: number; thickness: number };
       fill: number;
       accent: number;
     };
@@ -177,6 +189,21 @@ export interface GameTuning {
       tickMs: number;
       damagePerTick: number;
       fieldLimitPerOrb: number;
+      chanceByLevel: FiveLevelValues;
+      radiusByLevel: FiveLevelValues;
+      durationMsByLevel: FiveLevelValues;
+      attachedFromLevel: number;
+      vulnerability: {
+        fromLevel: number;
+        damageBonusPerStack: number;
+        maximumStacks: number;
+      };
+      deathSpread: {
+        fromLevel: number;
+        radius: number;
+        durationMs: number;
+        damagePerTick: number;
+      };
       fill: number;
       accent: number;
     };
@@ -185,12 +212,54 @@ export interface GameTuning {
       targetCount: number;
       radius: number;
       damage: number;
+      targetCountByLevel: FiveLevelValues;
+      radiusByLevel: FiveLevelValues;
+      directDamageByLevel: FiveLevelValues;
+      flight: {
+        fromLevel: number;
+        targetCountByLevel: FiveLevelValues;
+        tickMsByLevel: FiveLevelValues;
+        damageByLevel: FiveLevelValues;
+      };
+      overcharge: { fromLevel: number; damage: number };
       fill: number;
       accent: number;
     };
     inertia: {
       maxStacks: number;
       speedBonusPerStack: number;
+      baseSpeedMultiplierByLevel: FiveLevelValues;
+      damagePerSpeedStepByLevel: FiveLevelValues;
+      maximumDamageBonusByLevel: FiveLevelValues;
+      speedStep: number;
+      shockwave: { fromLevel: number; radius: number; damage: number };
+      topSpeedHold: { fromLevel: number; durationMs: number };
+      pierce: {
+        fromLevel: number;
+        enemyCount: number;
+        explosionRadius: number;
+        explosionDamage: number;
+      };
+      fill: number;
+      accent: number;
+    };
+    split: {
+      chanceByLevel: FiveLevelValues;
+      countByLevel: FiveLevelValues;
+      extraBouncesByLevel: FiveLevelValues;
+      lifetimeMsByLevel: FiveLevelValues;
+      inheritedEffects: { fromLevel: number; outputScale: number };
+      genericSynergy: { chanceBonus: number; countBonus: number };
+      fill: number;
+      accent: number;
+    };
+    explosion: {
+      chanceByLevel: FiveLevelValues;
+      damageByLevel: FiveLevelValues;
+      radiusByLevel: FiveLevelValues;
+      pity: { fromLevel: number; chancePerFailure: number; maximumFailures: number };
+      centerBlast: { fromLevel: number; radius: number; damageMultiplier: number };
+      genericSynergy: { chanceBonus: number; damageMultiplier: number };
       fill: number;
       accent: number;
     };
@@ -256,6 +325,42 @@ export interface GameTuning {
     };
   };
 }
+
+const ORB_CORE_LEVEL_TUNING = {
+  echo: {
+    maxStacksByLevel: [5, 7, 7, 9, 9],
+    damageBonusPerStackByLevel: [0.08, 0.1, 0.1, 0.12, 0.12],
+  },
+  corrosion: {
+    chanceByLevel: [0.15, 0.18, 0.18, 0.22, 0.22],
+    radiusByLevel: [42, 50, 50, 58, 58],
+    durationMsByLevel: [2500, 3000, 3000, 3500, 3500],
+  },
+  conduction: {
+    targetCountByLevel: [1, 2, 2, 3, 3],
+    radiusByLevel: [120, 150, 150, 180, 180],
+    directDamageByLevel: [0.25, 0.3, 0.3, 0.35, 0.35],
+    flightTargetCountByLevel: [0, 0, 1, 2, 2],
+    flightTickMsByLevel: [0, 0, 600, 400, 400],
+    flightDamageByLevel: [0, 0, 0.08, 0.1, 0.1],
+  },
+  inertia: {
+    baseSpeedMultiplierByLevel: [1, 1.08, 1.08, 1.15, 1.15],
+    damagePerSpeedStepByLevel: [0.04, 0.05, 0.05, 0.06, 0.06],
+    maximumDamageBonusByLevel: [0.24, 0.32, 0.32, 0.42, 0.42],
+  },
+  split: {
+    chanceByLevel: [0.22, 0.3, 0.3, 0.35, 0.35],
+    countByLevel: [2, 2, 2, 3, 3],
+    extraBouncesByLevel: [0, 0, 1, 1, 1],
+    lifetimeMsByLevel: [1500, 1500, 1500, 1900, 1900],
+  },
+  explosion: {
+    chanceByLevel: [0.2, 0.2, 0.2, 0.2, 0.2],
+    damageByLevel: [0.45, 0.6, 0.6, 0.75, 0.75],
+    radiusByLevel: [48, 48, 48, 58, 58],
+  },
+} as const;
 
 export const GAME_TUNING = {
   boss: {
@@ -377,35 +482,84 @@ export const GAME_TUNING = {
   },
   orbCores: {
     echo: {
-      maxStacks: 5,
-      damageBonusPerStack: 0.08,
+      ...ORB_CORE_LEVEL_TUNING.echo,
+      maxStacks: ORB_CORE_LEVEL_TUNING.echo.maxStacksByLevel[0],
+      damageBonusPerStack: ORB_CORE_LEVEL_TUNING.echo.damageBonusPerStackByLevel[0],
+      shockwave: { fromLevel: 3, radius: 44, damage: 0.5 },
+      cutter: {
+        fromLevel: 4,
+        chance: 0.1,
+        damage: 0.45,
+        thickness: 10,
+        cooldownMs: 120,
+      },
+      replay: { fromLevel: 5, damage: 0.65, thickness: 12 },
       fill: 0x74c8ff,
       accent: 0xeaf8ff,
     },
     corrosion: {
-      chance: 0.15,
+      ...ORB_CORE_LEVEL_TUNING.corrosion,
+      chance: ORB_CORE_LEVEL_TUNING.corrosion.chanceByLevel[0],
       cooldownMs: 120,
-      radius: 42,
-      durationMs: 2500,
+      radius: ORB_CORE_LEVEL_TUNING.corrosion.radiusByLevel[0],
+      durationMs: ORB_CORE_LEVEL_TUNING.corrosion.durationMsByLevel[0],
       tickMs: 500,
       damagePerTick: 0.2,
       fieldLimitPerOrb: 2,
+      attachedFromLevel: 3,
+      vulnerability: { fromLevel: 4, damageBonusPerStack: 0.05, maximumStacks: 3 },
+      deathSpread: { fromLevel: 5, radius: 32, durationMs: 1500, damagePerTick: 0.15 },
       fill: 0x9be564,
       accent: 0xe8ffc8,
     },
     conduction: {
+      targetCountByLevel: ORB_CORE_LEVEL_TUNING.conduction.targetCountByLevel,
+      radiusByLevel: ORB_CORE_LEVEL_TUNING.conduction.radiusByLevel,
+      directDamageByLevel: ORB_CORE_LEVEL_TUNING.conduction.directDamageByLevel,
       hitsRequired: 4,
       targetCount: 2,
       radius: 150,
       damage: 0.45,
+      flight: {
+        fromLevel: 3,
+        targetCountByLevel: ORB_CORE_LEVEL_TUNING.conduction.flightTargetCountByLevel,
+        tickMsByLevel: ORB_CORE_LEVEL_TUNING.conduction.flightTickMsByLevel,
+        damageByLevel: ORB_CORE_LEVEL_TUNING.conduction.flightDamageByLevel,
+      },
+      overcharge: { fromLevel: 5, damage: 0.35 },
       fill: 0xc58cff,
       accent: 0xf3e8ff,
     },
     inertia: {
+      ...ORB_CORE_LEVEL_TUNING.inertia,
       maxStacks: 3,
       speedBonusPerStack: 0.1,
+      speedStep: 0.1,
+      shockwave: { fromLevel: 3, radius: 42, damage: 0.5 },
+      topSpeedHold: { fromLevel: 4, durationMs: 800 },
+      pierce: {
+        fromLevel: 5,
+        enemyCount: 1,
+        explosionRadius: 40,
+        explosionDamage: 0.6,
+      },
       fill: 0xffbd59,
       accent: 0xfff0c2,
+    },
+    split: {
+      ...ORB_CORE_LEVEL_TUNING.split,
+      inheritedEffects: { fromLevel: 5, outputScale: 0.35 },
+      genericSynergy: { chanceBonus: 0.08, countBonus: 1 },
+      fill: 0x52d6b4,
+      accent: 0xd8fff4,
+    },
+    explosion: {
+      ...ORB_CORE_LEVEL_TUNING.explosion,
+      pity: { fromLevel: 3, chancePerFailure: 0.05, maximumFailures: 4 },
+      centerBlast: { fromLevel: 5, radius: 24, damageMultiplier: 2 },
+      genericSynergy: { chanceBonus: 0.08, damageMultiplier: 1.2 },
+      fill: 0xff8f3d,
+      accent: 0xffe4ad,
     },
   },
   temporaryOrbs: {
@@ -501,6 +655,20 @@ function nonNegativeInteger(value: number, name: string): void {
 function positiveInteger(value: number, name: string): void {
   positive(value, name);
   if (!Number.isInteger(value)) throw new RangeError(`${name} must be an integer`);
+}
+
+function levelCurve(
+  values: FiveLevelValues,
+  name: string,
+  validate: (value: number, name: string) => void,
+): void {
+  if (values.length !== 5) throw new RangeError(`${name} must contain 5 values`);
+  values.forEach((value, level) => validate(value, `${name}.${level + 1}`));
+}
+
+function coreLevel(value: number, name: string): void {
+  positiveInteger(value, name);
+  if (value > 5) throw new RangeError(`${name} must be at most 5`);
 }
 
 interface RectBounds {
@@ -755,6 +923,213 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(orbCores.conduction.damage, 'orbCores.conduction.damage');
   positiveInteger(orbCores.inertia.maxStacks, 'orbCores.inertia.maxStacks');
   positive(orbCores.inertia.speedBonusPerStack, 'orbCores.inertia.speedBonusPerStack');
+  levelCurve(
+    orbCores.echo.maxStacksByLevel,
+    'orbCores.echo.maxStacksByLevel',
+    positiveInteger,
+  );
+  levelCurve(
+    orbCores.echo.damageBonusPerStackByLevel,
+    'orbCores.echo.damageBonusPerStackByLevel',
+    nonNegative,
+  );
+  coreLevel(orbCores.echo.shockwave.fromLevel, 'orbCores.echo.shockwave.fromLevel');
+  positive(orbCores.echo.shockwave.radius, 'orbCores.echo.shockwave.radius');
+  nonNegative(orbCores.echo.shockwave.damage, 'orbCores.echo.shockwave.damage');
+  coreLevel(orbCores.echo.cutter.fromLevel, 'orbCores.echo.cutter.fromLevel');
+  probability(orbCores.echo.cutter.chance, 'orbCores.echo.cutter.chance');
+  nonNegative(orbCores.echo.cutter.damage, 'orbCores.echo.cutter.damage');
+  positive(orbCores.echo.cutter.thickness, 'orbCores.echo.cutter.thickness');
+  positive(orbCores.echo.cutter.cooldownMs, 'orbCores.echo.cutter.cooldownMs');
+  coreLevel(orbCores.echo.replay.fromLevel, 'orbCores.echo.replay.fromLevel');
+  nonNegative(orbCores.echo.replay.damage, 'orbCores.echo.replay.damage');
+  positive(orbCores.echo.replay.thickness, 'orbCores.echo.replay.thickness');
+  levelCurve(
+    orbCores.corrosion.chanceByLevel,
+    'orbCores.corrosion.chanceByLevel',
+    probability,
+  );
+  levelCurve(
+    orbCores.corrosion.radiusByLevel,
+    'orbCores.corrosion.radiusByLevel',
+    positive,
+  );
+  levelCurve(
+    orbCores.corrosion.durationMsByLevel,
+    'orbCores.corrosion.durationMsByLevel',
+    positive,
+  );
+  coreLevel(orbCores.corrosion.attachedFromLevel, 'orbCores.corrosion.attachedFromLevel');
+  coreLevel(
+    orbCores.corrosion.vulnerability.fromLevel,
+    'orbCores.corrosion.vulnerability.fromLevel',
+  );
+  nonNegative(
+    orbCores.corrosion.vulnerability.damageBonusPerStack,
+    'orbCores.corrosion.vulnerability.damageBonusPerStack',
+  );
+  positiveInteger(
+    orbCores.corrosion.vulnerability.maximumStacks,
+    'orbCores.corrosion.vulnerability.maximumStacks',
+  );
+  coreLevel(
+    orbCores.corrosion.deathSpread.fromLevel,
+    'orbCores.corrosion.deathSpread.fromLevel',
+  );
+  positive(orbCores.corrosion.deathSpread.radius, 'orbCores.corrosion.deathSpread.radius');
+  positive(
+    orbCores.corrosion.deathSpread.durationMs,
+    'orbCores.corrosion.deathSpread.durationMs',
+  );
+  nonNegative(
+    orbCores.corrosion.deathSpread.damagePerTick,
+    'orbCores.corrosion.deathSpread.damagePerTick',
+  );
+  levelCurve(
+    orbCores.conduction.targetCountByLevel,
+    'orbCores.conduction.targetCountByLevel',
+    positiveInteger,
+  );
+  levelCurve(
+    orbCores.conduction.radiusByLevel,
+    'orbCores.conduction.radiusByLevel',
+    positive,
+  );
+  levelCurve(
+    orbCores.conduction.directDamageByLevel,
+    'orbCores.conduction.directDamageByLevel',
+    nonNegative,
+  );
+  coreLevel(orbCores.conduction.flight.fromLevel, 'orbCores.conduction.flight.fromLevel');
+  levelCurve(
+    orbCores.conduction.flight.targetCountByLevel,
+    'orbCores.conduction.flight.targetCountByLevel',
+    nonNegativeInteger,
+  );
+  levelCurve(
+    orbCores.conduction.flight.tickMsByLevel,
+    'orbCores.conduction.flight.tickMsByLevel',
+    nonNegative,
+  );
+  levelCurve(
+    orbCores.conduction.flight.damageByLevel,
+    'orbCores.conduction.flight.damageByLevel',
+    nonNegative,
+  );
+  coreLevel(
+    orbCores.conduction.overcharge.fromLevel,
+    'orbCores.conduction.overcharge.fromLevel',
+  );
+  nonNegative(orbCores.conduction.overcharge.damage, 'orbCores.conduction.overcharge.damage');
+  levelCurve(
+    orbCores.inertia.baseSpeedMultiplierByLevel,
+    'orbCores.inertia.baseSpeedMultiplierByLevel',
+    positive,
+  );
+  levelCurve(
+    orbCores.inertia.damagePerSpeedStepByLevel,
+    'orbCores.inertia.damagePerSpeedStepByLevel',
+    nonNegative,
+  );
+  levelCurve(
+    orbCores.inertia.maximumDamageBonusByLevel,
+    'orbCores.inertia.maximumDamageBonusByLevel',
+    nonNegative,
+  );
+  positive(orbCores.inertia.speedStep, 'orbCores.inertia.speedStep');
+  coreLevel(orbCores.inertia.shockwave.fromLevel, 'orbCores.inertia.shockwave.fromLevel');
+  positive(orbCores.inertia.shockwave.radius, 'orbCores.inertia.shockwave.radius');
+  nonNegative(orbCores.inertia.shockwave.damage, 'orbCores.inertia.shockwave.damage');
+  coreLevel(
+    orbCores.inertia.topSpeedHold.fromLevel,
+    'orbCores.inertia.topSpeedHold.fromLevel',
+  );
+  positive(
+    orbCores.inertia.topSpeedHold.durationMs,
+    'orbCores.inertia.topSpeedHold.durationMs',
+  );
+  coreLevel(orbCores.inertia.pierce.fromLevel, 'orbCores.inertia.pierce.fromLevel');
+  positiveInteger(orbCores.inertia.pierce.enemyCount, 'orbCores.inertia.pierce.enemyCount');
+  positive(
+    orbCores.inertia.pierce.explosionRadius,
+    'orbCores.inertia.pierce.explosionRadius',
+  );
+  nonNegative(
+    orbCores.inertia.pierce.explosionDamage,
+    'orbCores.inertia.pierce.explosionDamage',
+  );
+  levelCurve(orbCores.split.chanceByLevel, 'orbCores.split.chanceByLevel', probability);
+  levelCurve(orbCores.split.countByLevel, 'orbCores.split.countByLevel', positiveInteger);
+  levelCurve(
+    orbCores.split.extraBouncesByLevel,
+    'orbCores.split.extraBouncesByLevel',
+    nonNegativeInteger,
+  );
+  levelCurve(
+    orbCores.split.lifetimeMsByLevel,
+    'orbCores.split.lifetimeMsByLevel',
+    positive,
+  );
+  coreLevel(
+    orbCores.split.inheritedEffects.fromLevel,
+    'orbCores.split.inheritedEffects.fromLevel',
+  );
+  probability(
+    orbCores.split.inheritedEffects.outputScale,
+    'orbCores.split.inheritedEffects.outputScale',
+  );
+  probability(
+    orbCores.split.genericSynergy.chanceBonus,
+    'orbCores.split.genericSynergy.chanceBonus',
+  );
+  nonNegativeInteger(
+    orbCores.split.genericSynergy.countBonus,
+    'orbCores.split.genericSynergy.countBonus',
+  );
+  levelCurve(
+    orbCores.explosion.chanceByLevel,
+    'orbCores.explosion.chanceByLevel',
+    probability,
+  );
+  levelCurve(
+    orbCores.explosion.damageByLevel,
+    'orbCores.explosion.damageByLevel',
+    nonNegative,
+  );
+  levelCurve(
+    orbCores.explosion.radiusByLevel,
+    'orbCores.explosion.radiusByLevel',
+    positive,
+  );
+  coreLevel(orbCores.explosion.pity.fromLevel, 'orbCores.explosion.pity.fromLevel');
+  probability(
+    orbCores.explosion.pity.chancePerFailure,
+    'orbCores.explosion.pity.chancePerFailure',
+  );
+  positiveInteger(
+    orbCores.explosion.pity.maximumFailures,
+    'orbCores.explosion.pity.maximumFailures',
+  );
+  coreLevel(
+    orbCores.explosion.centerBlast.fromLevel,
+    'orbCores.explosion.centerBlast.fromLevel',
+  );
+  positive(
+    orbCores.explosion.centerBlast.radius,
+    'orbCores.explosion.centerBlast.radius',
+  );
+  positive(
+    orbCores.explosion.centerBlast.damageMultiplier,
+    'orbCores.explosion.centerBlast.damageMultiplier',
+  );
+  probability(
+    orbCores.explosion.genericSynergy.chanceBonus,
+    'orbCores.explosion.genericSynergy.chanceBonus',
+  );
+  positive(
+    orbCores.explosion.genericSynergy.damageMultiplier,
+    'orbCores.explosion.genericSynergy.damageMultiplier',
+  );
   const corePalettes = Object.values(orbCores).map(({ fill, accent }) => {
     finite(fill, 'orbCores.fill');
     finite(accent, 'orbCores.accent');

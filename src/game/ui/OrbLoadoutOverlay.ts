@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
-import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import {
+  ORB_CORE_DEFINITIONS,
+  type OrbCoreId,
+} from '../orbs/orbCoreRules';
 
 export class OrbCoreSelection {
   private readonly selected: OrbCoreId[] = [];
@@ -31,18 +33,13 @@ export class OrbCoreSelection {
   }
 }
 
-const CORE_COPY: Record<OrbCoreId, { label: string; effect: string }> = {
-  echo: { label: '반향', effect: '벽 반사 후 다음 직격 강화' },
-  corrosion: { label: '부식', effect: '확률로 지속 피해 장판 생성' },
-  conduction: { label: '전도', effect: '4회 직격마다 주변 연쇄 피해' },
-  inertia: { label: '관성', effect: '직격 후 근접 회수 시 발사 가속' },
-};
-
 const CORE_KEY_CODES = [
   Phaser.Input.Keyboard.KeyCodes.ONE,
   Phaser.Input.Keyboard.KeyCodes.TWO,
   Phaser.Input.Keyboard.KeyCodes.THREE,
   Phaser.Input.Keyboard.KeyCodes.FOUR,
+  Phaser.Input.Keyboard.KeyCodes.FIVE,
+  Phaser.Input.Keyboard.KeyCodes.SIX,
 ] as const;
 
 export class OrbLoadoutOverlay {
@@ -137,16 +134,16 @@ export class OrbLoadoutOverlay {
         if (!this.selection.add(type)) return;
         this.showDetail(type);
       };
-      const color = GAME_TUNING.orbCores[type].fill;
+      const definition = ORB_CORE_DEFINITIONS[type];
+      const color = definition.color;
       const card = this.scene.add.rectangle(x, y, 180, 96, color, 0.28)
         .setDepth(41)
         .setInteractive({ useHandCursor: true })
         .on('pointerup', choose);
-      const copy = CORE_COPY[type];
       const text = this.scene.add.text(
         x,
         y,
-        `${index + 1}. ${copy.label}`,
+        `${index + 1}. ${definition.label}`,
         {
           align: 'center',
           color: '#f4fbff',
@@ -182,7 +179,7 @@ export class OrbLoadoutOverlay {
   private showDetail(type: OrbCoreId): void {
     for (const object of this.detailObjects) object.destroy();
     this.detailObjects = [
-      this.scene.add.text(GAME_WIDTH / 2, 520, CORE_COPY[type].effect, {
+      this.scene.add.text(GAME_WIDTH / 2, 520, ORB_CORE_DEFINITIONS[type].summary, {
         align: 'center',
         color: '#9ec6df',
         fontSize: '16px',

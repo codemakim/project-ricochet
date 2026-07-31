@@ -1,8 +1,59 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { RecoverySource } from './orbRules';
 
-export const ORB_CORE_IDS = ['echo', 'corrosion', 'conduction', 'inertia'] as const;
+export const ORB_CORE_IDS = [
+  'echo',
+  'corrosion',
+  'conduction',
+  'inertia',
+  'split',
+  'explosion',
+] as const;
 export type OrbCoreId = typeof ORB_CORE_IDS[number];
+
+export const ORB_CORE_DEFINITIONS = {
+  echo: {
+    label: '반향 구슬',
+    summary: '벽 반사 공명을 다음 직격에 방출',
+    color: GAME_TUNING.orbCores.echo.fill,
+    maximumLevel: 5,
+  },
+  corrosion: {
+    label: '부식 구슬',
+    summary: '충돌 지점에 지속 피해 영역 생성',
+    color: GAME_TUNING.orbCores.corrosion.fill,
+    maximumLevel: 5,
+  },
+  conduction: {
+    label: '전도 구슬',
+    summary: '직격 에너지를 가까운 적에게 전달',
+    color: GAME_TUNING.orbCores.conduction.fill,
+    maximumLevel: 5,
+  },
+  inertia: {
+    label: '관성 구슬',
+    summary: '빠를수록 강해지는 정밀 직격',
+    color: GAME_TUNING.orbCores.inertia.fill,
+    maximumLevel: 5,
+  },
+  split: {
+    label: '분열 구슬',
+    summary: '확률로 임시 구슬을 산개',
+    color: GAME_TUNING.orbCores.split.fill,
+    maximumLevel: 5,
+  },
+  explosion: {
+    label: '폭발 구슬',
+    summary: '실패할수록 강해지는 충격 폭발',
+    color: GAME_TUNING.orbCores.explosion.fill,
+    maximumLevel: 5,
+  },
+} as const satisfies Record<OrbCoreId, {
+  label: string;
+  summary: string;
+  color: number;
+  maximumLevel: 5;
+}>;
 
 export interface OrbCoreState {
   echoStacks: number;
