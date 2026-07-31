@@ -16,7 +16,6 @@ export const ABILITY_DEFINITIONS = {
   'destruction-reaction': { label: '파괴 반응', summary: '직접 처치 시 확률 폭발', maxRank: 1, requires: [] },
   'micro-missile': { label: '미세 유도탄', summary: '직격 6회마다 유도탄 발사', maxRank: 1, requires: [] },
   'recovery-shockwave': { label: '회수 충격파', summary: '근접 회수 4회마다 충격파', maxRank: 2, requires: [] },
-  'additional-core': { label: '추가 코어', summary: '영구 구슬 1개 추가', maxRank: 3, requires: [] },
   'core-expansion': { label: '코어 팽창', summary: '영구 구슬 크기 증가', maxRank: 2, requires: [] },
   'recovery-field': { label: '흡수장 확장', summary: '근접 회수 반경 증가', maxRank: 3, requires: [] },
   'mobility-motor': { label: '기동 모터', summary: '플레이어 이동 속도 증가', maxRank: 2, requires: [] },
@@ -45,8 +44,6 @@ export const MAX_ABILITY_KINDS = 12;
 
 export interface AbilityEligibilityContext {
   coreTypes?: readonly OrbCoreId[];
-  orbCount?: number;
-  expectedOrbCount?: number;
 }
 
 const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
@@ -121,11 +118,6 @@ function relevanceMet(
   ranks: Readonly<AbilityRanks>,
   context: AbilityEligibilityContext,
 ): boolean {
-  if (
-    id === 'additional-core'
-    && context.orbCount !== undefined
-    && context.orbCount >= GAME_TUNING.build.basicGrowth.maximumOrbs
-  ) return false;
   const relevance = ABILITY_RELEVANCE[id];
   if (!relevance || ranks[id] > 0) return true;
   return Boolean(
@@ -163,20 +155,9 @@ export function selectAbilityOptions(
   context: AbilityEligibilityContext = {},
 ): AbilityId[] {
   const eligible = eligibleAbilityIds(ranks, context);
-  if (
-    level === 0
-    && context.orbCount === 1
-    && eligible.includes('additional-core')
-  ) return ['additional-core'];
 
   let state = (seed ^ Math.imul(level + 1, 2654435761)) >>> 0;
   const shuffled = [...eligible];
-  if (
-    context.orbCount !== undefined
-    && context.expectedOrbCount !== undefined
-    && context.orbCount < context.expectedOrbCount
-    && eligible.includes('additional-core')
-  ) shuffled.push('additional-core', 'additional-core');
 
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     state = nextSeed(state);

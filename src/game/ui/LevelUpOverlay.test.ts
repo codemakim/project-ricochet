@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   default: {
-    Input: { Keyboard: { KeyCodes: { ONE: 49, TWO: 50, THREE: 51 } } },
+    Input: {
+      Keyboard: {
+        KeyCodes: { ONE: 49, TWO: 50, THREE: 51, ENTER: 13 },
+      },
+    },
   },
 }));
 
@@ -55,6 +59,7 @@ class FakeObject extends FakeEmitter {
   setDepth(): this { return this; }
   setOrigin(): this { return this; }
   setInteractive(): this { this.interactive = true; return this; }
+  setFillStyle(): this { return this; }
   destroy(): void {
     this.destroyed = true;
     this.removeAllListeners();
@@ -96,47 +101,41 @@ function makeScene() {
 describe('LevelUpOverlay', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('creates three cards and consumes pointer or keyboard selection once per show', () => {
+  it('shows compact cards and confirms only after a selected card', () => {
     const { scene, objects, keys } = makeScene();
     const overlay = new LevelUpOverlay(scene as never);
-    const first = vi.fn();
+    const onSelect = vi.fn();
 
-    overlay.show(['firepower', 'explosion', 'split'], new BuildState(), first);
+    overlay.show(['firepower', 'explosion', 'split'], new BuildState(), onSelect);
 
     const cards = objects.filter((object) => object.kind === 'rectangle' && object.width === 360);
-    expect(cards.map(({ y }) => y)).toEqual([270, 400, 530]);
-    expect(cards.every((card) => card.height === 104 && card.interactive)).toBe(true);
-    expect(objects.filter((object) => object.kind === 'text').map(({ text }) => text)).toEqual(expect.arrayContaining([
-      expect.stringContaining('화력 증폭'),
-      expect.stringContaining('직접 피해 +0.12'),
-      expect.stringContaining('충격 폭발'),
-      expect.stringContaining('발동 20% · 반경 48px · 피해 0.45'),
-      expect.stringContaining('분열 프로토콜'),
-      expect.stringContaining('발동 25% · 임시 구슬 2개'),
-    ]));
+    expect(cards.map(({ y }) => y)).toEqual([210, 310, 410]);
+    expect(cards.every((card) => card.height === 76 && card.interactive)).toBe(true);
+    expect(objects.flatMap(({ text }) => text ?? []).join(' ')).not.toContain('px');
 
     cards[1]!.emit('pointerup');
-    cards[1]!.emit('pointerup');
-    keys.get(49)!.emit('down');
-    expect(first).toHaveBeenCalledOnce();
-    expect(first).toHaveBeenCalledWith('explosion');
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(objects.some(({ text }) => text?.includes('직격 시 20% 확률로 충격 폭발')))
+      .toBe(true);
+
+    keys.get(13)!.emit('down');
+    keys.get(13)!.emit('down');
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith('explosion');
 
     overlay.hide();
     expect(objects.every((object) => object.destroyed)).toBe(true);
     expect([...keys.values()].every((key) => key.listenerCount('down') === 0)).toBe(true);
+  });
 
-    const second = vi.fn();
-    overlay.show(['firepower', 'explosion', 'split'], new BuildState(), second);
-    keys.get(52)?.emit('down');
-    expect(second).not.toHaveBeenCalled();
-    keys.get(51)!.emit('down');
-    keys.get(51)!.emit('down');
-    expect(second).toHaveBeenCalledOnce();
-    expect(second).toHaveBeenCalledWith('split');
+  it('does not render a detail panel before selection', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
 
-    overlay.hide();
-    expect(overlay.isVisible()).toBe(false);
-    expect([...keys.values()].every((key) => key.listenerCount('down') === 0)).toBe(true);
+    overlay.show(['kinetic'], new BuildState(), vi.fn());
+
+    expect(objects.some(({ text }) => text === '획득')).toBe(false);
+    expect(objects.flatMap(({ text }) => text ?? []).join(' ')).not.toContain('px/s');
   });
 
   it('makes destroyed cards unable to invoke stale pointer callbacks', () => {
@@ -146,6 +145,7 @@ describe('LevelUpOverlay', () => {
     overlay.show(['firepower'], new BuildState(), onSelect);
     const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
 
+    card.emit('pointerup');
     overlay.hide();
     card.emit('pointerup');
 
@@ -160,23 +160,29 @@ describe('LevelUpOverlay', () => {
 
     overlay.show(['kinetic'], new BuildState({ kinetic: 1 }), vi.fn());
 
-    expect(objects.find((object) => object.text?.includes('운동 에너지'))?.text)
-      .toContain('456px/s');
+    const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
+    card.emit('pointerup');
+
+    expect(objects.find((object) => object.text?.includes('구슬 속도'))?.text)
+      .toContain('구슬 속도 14% 증가');
+    expect(objects.flatMap(({ text }) => text ?? []).join(' ')).not.toContain('000000');
   });
 
-  it('shows exact next-rank values for growth, flight, and effect modifiers', () => {
+  it('shows concise next-rank values for flight and effect modifiers', () => {
     const { scene, objects } = makeScene();
     const overlay = new LevelUpOverlay(scene as never);
 
     overlay.show(
-      ['additional-core', 'reload-overcharge', 'effect-output'],
+      ['reload-overcharge', 'effect-output'],
       new BuildState(),
       vi.fn(),
     );
 
+    const cards = objects.filter((object) => object.kind === 'rectangle' && object.width === 360);
+    cards[0]!.emit('pointerup');
+    cards[1]!.emit('pointerup');
     const labels = objects.flatMap(({ text }) => text ?? []);
     expect(labels).toEqual(expect.arrayContaining([
-      expect.stringContaining('영구 구슬 상한 2개'),
       expect.stringContaining('근접 회수 첫타 피해 +20%'),
       expect.stringContaining('보조 효과 피해 +15%'),
     ]));

@@ -34,6 +34,7 @@ describe('GAME_TUNING', () => {
       cleanupMode: 'corridor',
       padding: 8,
     });
+    expect(GAME_TUNING.rewardFlow).toEqual({ resumeGameplayMs: 300 });
     expect(GAME_TUNING.build).toEqual({
       conditionalDamageCap: 1.5,
       firepower: { damageBonusPerRank: 0.12 },
@@ -150,6 +151,14 @@ describe('GAME_TUNING', () => {
 
   it('accepts the shipped configuration', () => {
     expect(() => validateGameTuning(mutableTuning())).not.toThrow();
+  });
+
+  it('rejects invalid reward-flow timing', () => {
+    const tuning = mutableTuning();
+    tuning.rewardFlow.resumeGameplayMs = Number.NaN;
+    expect(() => validateGameTuning(tuning)).toThrow(
+      'rewardFlow.resumeGameplayMs must be finite',
+    );
   });
 
   it.each([

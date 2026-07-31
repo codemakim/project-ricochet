@@ -6,6 +6,7 @@ import {
   createBossForKind,
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
+  pendingRunRewardKind,
   planDirectHitEffects,
   planOrbCoreEffects,
   rewardTierForBoss,
@@ -14,6 +15,13 @@ import {
 } from './combatSceneRules';
 
 describe('combat scene rules', () => {
+  it('prioritizes core supplies over level-up rewards after the resume gap', () => {
+    expect(pendingRunRewardKind(1, 1, true)).toBe('coreSupply');
+    expect(pendingRunRewardKind(0, 1, true)).toBe('levelUp');
+    expect(pendingRunRewardKind(1, 1, false)).toBeNull();
+    expect(pendingRunRewardKind(0, 0, true)).toBeNull();
+  });
+
   it('finalizes a pending boss reward only after level-up pauses end', () => {
     expect(shouldFinalizeBossReward(true, false, true)).toBe(false);
     expect(shouldFinalizeBossReward(true, false, false)).toBe(true);

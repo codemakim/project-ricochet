@@ -125,11 +125,15 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
 
   await page.evaluate(() => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
-      scene: { getScene(key: string): { debugGrantXp(amount: number): void } };
+      scene: { getScene(key: string): {
+        debugGrantCoreSupply(): void;
+        update(time: number, delta: number): void;
+      } };
     } }).__RICHOCHET_GAME__!;
-    game.scene.getScene('combat').debugGrantXp(8);
+    const scene = game.scene.getScene('combat');
+    scene.debugGrantCoreSupply();
+    scene.update(0, 0);
   });
-  await page.keyboard.press('Digit1');
   await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
   const coreCopy = await page.evaluate(() => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {

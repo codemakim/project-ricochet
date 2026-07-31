@@ -60,6 +60,9 @@ export interface GameTuning {
       gap: number;
     };
   };
+  rewardFlow: {
+    resumeGameplayMs: number;
+  };
   projectiles: {
     hostileCap: number;
     offscreenMargin: number;
@@ -279,6 +282,9 @@ export const GAME_TUNING = {
     reinforcementReleaseY: 50,
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
+  },
+  rewardFlow: {
+    resumeGameplayMs: 300,
   },
   projectiles: {
     hostileCap: 12,
@@ -527,7 +533,7 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 
 export function validateGameTuning(tuning: GameTuning): void {
   const {
-    boss, enemies, encounter, projectiles, build, orbCores, temporaryOrbs,
+    boss, enemies, encounter, rewardFlow, projectiles, build, orbCores, temporaryOrbs,
     bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
   finite(boss.y, 'boss.y');
@@ -588,6 +594,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (!(encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
     throw new RangeError('encounter reinforcement release must be below PLAYER_MIN_Y');
   }
+  nonNegative(rewardFlow.resumeGameplayMs, 'rewardFlow.resumeGameplayMs');
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;
   const collisionWidth = 2 * (weakpointOffset + boss.weakpoint.hitbox.width / 2);

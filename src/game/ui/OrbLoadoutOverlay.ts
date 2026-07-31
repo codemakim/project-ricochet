@@ -53,7 +53,7 @@ export class OrbLoadoutOverlay {
     callback: () => void;
   }> = [];
   private selection?: OrbCoreSelection;
-  private statusText?: Phaser.GameObjects.Text;
+  private detailObjects: Phaser.GameObjects.GameObject[] = [];
   private visible = false;
   private consumed = false;
 
@@ -80,10 +80,11 @@ export class OrbLoadoutOverlay {
       key.off(event, callback);
     }
     for (const object of this.objects) object.destroy();
+    for (const object of this.detailObjects) object.destroy();
     this.keyBindings = [];
     this.objects = [];
+    this.detailObjects = [];
     this.selection = undefined;
-    this.statusText = undefined;
     this.visible = false;
     this.consumed = false;
   }
@@ -131,8 +132,10 @@ export class OrbLoadoutOverlay {
       const x = column === 0 ? 120 : 330;
       const y = 285 + row * 125;
       const choose = () => {
-        if (this.consumed || !this.selection?.add(type)) return;
-        this.updateStatus(capacity);
+        if (this.consumed || !this.selection) return;
+        this.selection.reset();
+        if (!this.selection.add(type)) return;
+        this.showDetail(type);
       };
       const color = GAME_TUNING.orbCores[type].fill;
       const card = this.scene.add.rectangle(x, y, 180, 96, color, 0.28)
@@ -143,7 +146,7 @@ export class OrbLoadoutOverlay {
       const text = this.scene.add.text(
         x,
         y,
-        `${index + 1}. ${copy.label}\n${copy.effect}`,
+        `${index + 1}. ${copy.label}`,
         {
           align: 'center',
           color: '#f4fbff',
@@ -155,10 +158,6 @@ export class OrbLoadoutOverlay {
       this.bindKey(CORE_KEY_CODES[index]!, 'down', choose);
     });
 
-    this.statusText = this.scene.add.text(GAME_WIDTH / 2, 520, '', {
-      color: '#9ec6df',
-      fontSize: '16px',
-    }).setOrigin(0.5).setDepth(42);
     const confirm = () => {
       if (this.consumed) return;
       const selected = this.selection?.confirm();
@@ -166,13 +165,7 @@ export class OrbLoadoutOverlay {
       this.consumed = true;
       this.hide();
     };
-    const reset = () => {
-      if (this.consumed) return;
-      this.selection?.reset();
-      this.updateStatus(capacity);
-    };
     this.objects.push(
-      this.statusText,
       this.scene.add.rectangle(GAME_WIDTH / 2, 575, 220, 54, 0x1d6e88, 0.96)
         .setDepth(41)
         .setInteractive({ useHandCursor: true })
@@ -182,25 +175,19 @@ export class OrbLoadoutOverlay {
         fontSize: '20px',
         fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(42),
-      this.scene.add.rectangle(GAME_WIDTH / 2, 640, 140, 42, 0x27384d, 0.96)
-        .setDepth(41)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerup', reset),
-      this.scene.add.text(GAME_WIDTH / 2, 640, '다시 선택', {
-        color: '#b9cee0',
-        fontSize: '16px',
-      }).setOrigin(0.5).setDepth(42),
     );
     this.bindKey(Phaser.Input.Keyboard.KeyCodes.ENTER, 'down', confirm);
-    this.bindKey(Phaser.Input.Keyboard.KeyCodes.R, 'down', reset);
-    this.updateStatus(capacity);
   }
 
-  private updateStatus(capacity: number): void {
-    const labels = this.getSelection().map((type) => CORE_COPY[type].label);
-    this.statusText?.setText(
-      `선택 ${labels.length}/${capacity}${labels.length ? ` · ${labels.join(' / ')}` : ''}`,
-    );
+  private showDetail(type: OrbCoreId): void {
+    for (const object of this.detailObjects) object.destroy();
+    this.detailObjects = [
+      this.scene.add.text(GAME_WIDTH / 2, 520, CORE_COPY[type].effect, {
+        align: 'center',
+        color: '#9ec6df',
+        fontSize: '16px',
+      }).setOrigin(0.5).setDepth(42),
+    ];
   }
 
   private bindKey(code: number, event: string, callback: () => void): void {

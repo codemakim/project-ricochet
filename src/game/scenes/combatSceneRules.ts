@@ -11,6 +11,16 @@ import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
 
+export function pendingRunRewardKind(
+  pendingCoreSupplies: number,
+  pendingLevelUps: number,
+  cooldownReady: boolean,
+): 'coreSupply' | 'levelUp' | null {
+  if (!cooldownReady) return null;
+  if (pendingCoreSupplies > 0) return 'coreSupply';
+  return pendingLevelUps > 0 ? 'levelUp' : null;
+}
+
 export function shouldFinalizeBossReward(
   bossDefeatPending: boolean,
   defeated: boolean,

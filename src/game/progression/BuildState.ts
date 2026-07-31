@@ -132,13 +132,6 @@ export class BuildState {
       * GAME_TUNING.build.wallAcceleration.speedBonusPerStack;
   }
 
-  orbLimit(baseLimit: number): number {
-    return Math.min(
-      GAME_TUNING.build.basicGrowth.maximumOrbs,
-      baseLimit + this.ranks['additional-core'],
-    );
-  }
-
   orbRadius(): number {
     return ORB_RADIUS * (
       1 + this.ranks['core-expansion']

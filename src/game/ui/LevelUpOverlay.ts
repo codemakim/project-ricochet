@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { STARTING_ORB_COUNT } from '../constants';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
 import { formatDisplayNumber } from './displayNumber';
 
-const CARD_Y = [270, 400, 530] as const;
+const CARD_Y = [210, 310, 410] as const;
+const DETAIL_Y = 545;
+const CONFIRM_Y = 625;
 const KEY_CODES = [
   Phaser.Input.Keyboard.KeyCodes.ONE,
   Phaser.Input.Keyboard.KeyCodes.TWO,
@@ -14,7 +15,11 @@ const KEY_CODES = [
 
 export class LevelUpOverlay {
   private objects: Phaser.GameObjects.GameObject[] = [];
+  private detailObjects: Phaser.GameObjects.GameObject[] = [];
+  private cards: Phaser.GameObjects.Rectangle[] = [];
   private keyBindings: Array<{ key: Phaser.Input.Keyboard.Key; callback: () => void }> = [];
+  private selected?: AbilityId;
+  private onSelect?: (id: AbilityId) => void;
   private visible = false;
   private consumed = false;
 
@@ -28,6 +33,7 @@ export class LevelUpOverlay {
     this.hide();
     this.visible = true;
     this.consumed = false;
+    this.onSelect = onSelect;
 
     this.objects.push(
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x02050d, 0.88)
@@ -41,13 +47,14 @@ export class LevelUpOverlay {
     );
 
     choices.slice(0, 3).forEach((id, index) => {
-      const select = () => this.select(id, onSelect);
-      const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 360, 104, 0x10213d, 0.98)
+      const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 360, 76, 0x10213d, 0.98)
         .setDepth(31)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerup', select);
+        .setInteractive({ useHandCursor: true });
+      const focus = () => this.focus(id, card, build);
+      card.on('pointerup', focus);
+      this.cards.push(card);
       const rank = build.rank(id);
-      const label = `${index + 1}. ${ABILITY_DEFINITIONS[id].label}  ${rank} → ${rank + 1}\n${this.nextEffect(id, build)}`;
+      const label = `${index + 1}. ${ABILITY_DEFINITIONS[id].label}  ${rank} → ${rank + 1}`;
       const text = this.scene.add.text(GAME_WIDTH / 2, CARD_Y[index]!, label, {
         align: 'center',
         color: '#dff7ff',
@@ -58,17 +65,29 @@ export class LevelUpOverlay {
 
       const key = this.scene.input.keyboard?.addKey(KEY_CODES[index]!);
       if (key) {
-        key.on('down', select);
-        this.keyBindings.push({ key, callback: select });
+        key.on('down', focus);
+        this.keyBindings.push({ key, callback: focus });
       }
     });
+
+    const enter = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    if (enter) {
+      const confirm = () => this.confirm();
+      enter.on('down', confirm);
+      this.keyBindings.push({ key: enter, callback: confirm });
+    }
   }
 
   hide(): void {
     for (const { key, callback } of this.keyBindings) key.off('down', callback);
     for (const object of this.objects) object.destroy();
+    for (const object of this.detailObjects) object.destroy();
     this.keyBindings = [];
     this.objects = [];
+    this.detailObjects = [];
+    this.cards = [];
+    this.selected = undefined;
+    this.onSelect = undefined;
     this.visible = false;
     this.consumed = false;
   }
@@ -81,10 +100,41 @@ export class LevelUpOverlay {
     this.hide();
   }
 
-  private select(id: AbilityId, onSelect: (id: AbilityId) => void): void {
+  private focus(
+    id: AbilityId,
+    card: Phaser.GameObjects.Rectangle,
+    build: BuildState,
+  ): void {
     if (this.consumed || !this.visible) return;
+    this.selected = id;
+    for (const candidate of this.cards) candidate.setFillStyle(0x10213d, 0.98);
+    card.setFillStyle(0x1d6e88, 0.98);
+    for (const object of this.detailObjects) object.destroy();
+    this.detailObjects = [
+      this.scene.add.rectangle(GAME_WIDTH / 2, DETAIL_Y, 380, 112, 0x09182c, 0.98)
+        .setDepth(31),
+      this.scene.add.text(GAME_WIDTH / 2, DETAIL_Y, this.nextEffect(id, build), {
+        align: 'center',
+        color: '#dff7ff',
+        fontSize: '17px',
+        wordWrap: { width: 340 },
+      }).setOrigin(0.5).setDepth(32),
+      this.scene.add.rectangle(GAME_WIDTH / 2, CONFIRM_Y, 180, 52, 0x1d6e88, 0.98)
+        .setDepth(31)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerup', () => this.confirm()),
+      this.scene.add.text(GAME_WIDTH / 2, CONFIRM_Y, '획득', {
+        color: '#ffffff',
+        fontSize: '20px',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(32),
+    ];
+  }
+
+  private confirm(): void {
+    if (this.consumed || !this.visible || !this.selected || !this.onSelect) return;
     this.consumed = true;
-    onSelect(id);
+    this.onSelect(this.selected);
   }
 
   private nextEffect(id: AbilityId, build: BuildState): string {
@@ -92,29 +142,23 @@ export class LevelUpOverlay {
     next.upgrade(id);
     switch (id) {
       case 'firepower':
-        return `직접 피해 +${formatDisplayNumber(next.directDamageBonus())}`;
+        return `직접 피해 ${next.rank(id) * 12}% 증가`;
       case 'kinetic':
-        return `충전 속도 ${formatDisplayNumber(next.chargedSpeed(), 0)}px/s`;
-      case 'explosion': {
-        const effect = next.explosion()!;
-        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
-      }
-      case 'split': {
-        const effect = next.split()!;
-        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 임시 구슬 ${effect.count}개`;
-      }
-      case 'additional-core':
-        return `영구 구슬 상한 ${next.orbLimit(STARTING_ORB_COUNT)}개`;
+        return `구슬 속도 ${next.rank(id) * 7}% 증가`;
+      case 'explosion':
+        return '직격 시 20% 확률로 충격 폭발';
+      case 'split':
+        return `직격 시 25% 확률로 임시 구슬 ${next.split()!.count}개 생성`;
       case 'core-expansion':
-        return `구슬 반경 ${formatDisplayNumber(next.orbRadius())}px`;
+        return `구슬 크기 ${next.rank(id) * 8}% 증가`;
       case 'recovery-field':
-        return `근접 회수 반경 ${formatDisplayNumber(next.recoveryRadius())}px`;
+        return '근접 회수 범위 증가';
       case 'mobility-motor':
-        return `이동 속도 ${formatDisplayNumber(next.playerSpeed(), 0)}px/s`;
+        return `이동 속도 ${next.rank(id) * 8}% 증가`;
       case 'armor-reinforcement':
         return `최대 체력 ${next.maximumHealth()} · 즉시 1 회복`;
       case 'near-amplification':
-        return `150px 이내 직접 피해 +${next.rank(id) * 15}%`;
+        return `가까운 적 직접 피해 ${next.rank(id) * 15}% 증가`;
       case 'precision-hit':
         return `첫 벽 충돌 전 직접 피해 +${next.rank(id) * 20}%`;
       case 'kinetic-conversion':
@@ -130,28 +174,19 @@ export class LevelUpOverlay {
       case 'collision-acceleration':
         return `직격 후 속도 +${next.rank(id) * 8}%`;
       case 'tracking-magnet':
-        return `첫 직격 후 흡수 반경 +${next.trackingRadiusBonus(true)}px`;
-      case 'high-speed-impact': {
-        const effect = next.highSpeedImpact()!;
-        return `고속 ${effect.hitsRequired}타 · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
-      }
+        return '첫 직격 후 잠시 회수 범위 증가';
+      case 'high-speed-impact':
+        return `고속 직격 ${next.highSpeedImpact()!.hitsRequired}회마다 충격파`;
       case 'horizontal-cutter':
-      case 'vertical-cutter': {
-        const effect = id === 'horizontal-cutter'
-          ? next.horizontalCutter()!
-          : next.verticalCutter()!;
-        return `발동 ${formatDisplayNumber(effect.chance * 100)}% · 두께 ${formatDisplayNumber(effect.thickness)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
-      }
-      case 'destruction-reaction': {
-        const effect = next.destructionReaction()!;
-        return `처치 발동 ${formatDisplayNumber(effect.chance * 100)}% · 반경 ${formatDisplayNumber(effect.radius)}px`;
-      }
+        return '직격 시 15% 확률로 수평 레이저';
+      case 'vertical-cutter':
+        return '직격 시 15% 확률로 수직 레이저';
+      case 'destruction-reaction':
+        return '직접 처치 시 25% 확률로 폭발';
       case 'micro-missile':
-        return `직격 ${next.microMissile()!.hitsRequired}회마다 피해 ${formatDisplayNumber(next.microMissile()!.damage)}`;
-      case 'recovery-shockwave': {
-        const effect = next.recoveryShockwave()!;
-        return `근접 회수 ${effect.recoveriesRequired}회 · 반경 ${formatDisplayNumber(effect.radius)}px · 피해 ${formatDisplayNumber(effect.damage)}`;
-      }
+        return `직격 ${next.microMissile()!.hitsRequired}회마다 유도탄 발사`;
+      case 'recovery-shockwave':
+        return `근접 회수 ${next.recoveryShockwave()!.recoveriesRequired}회마다 충격파`;
       case 'proc-optimization':
         return `확률형 기본 발동률 +${next.rank(id) * 4}%p`;
       case 'effect-output':
@@ -161,7 +196,7 @@ export class LevelUpOverlay {
       case 'duration-module':
         return `가스·시간제 효과 지속 +${next.rank(id) * 15}%`;
       case 'focusing-lens':
-        return `레이저 두께 +${next.rank(id) * 20}%`;
+        return `레이저 두께 ${next.rank(id) * 20}% 증가`;
       case 'fragment-expansion':
         return `분열 임시 구슬 +${next.rank(id)}개`;
       case 'fragment-output':

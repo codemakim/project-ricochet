@@ -165,7 +165,15 @@ describe('OrbLoadoutOverlay', () => {
     const confirmButton = objects.find(
       (object) => object.kind === 'rectangle' && object.width === 220,
     )!;
+    expect(objects.filter(({ kind }) => kind === 'text').map(({ text }) => text))
+      .toEqual(expect.arrayContaining(['1. 반향', '2. 전도']));
+    expect(objects.some(({ text }) => text?.includes('4회 직격마다 주변 연쇄 피해')))
+      .toBe(false);
+
     coreCards[1]!.emit('pointerup');
+    expect(objects.some(
+      ({ destroyed, text }) => !destroyed && text?.includes('4회 직격마다 주변 연쇄 피해'),
+    )).toBe(true);
     confirmButton.emit('pointerup');
 
     expect(confirm).toHaveBeenCalledWith('conduction');

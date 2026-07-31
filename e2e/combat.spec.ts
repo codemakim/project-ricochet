@@ -62,12 +62,12 @@ interface CombatSnapshot {
     lastFormationId: string | null;
     state: 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused' | 'runComplete';
     stageIndex: number;
-    stageId: 'default-1' | 'default-2';
+    stageId: 'default-1' | 'default-2' | 'default-3';
     stageNumber: number;
     stageElapsedMs: number;
     bossScore: number;
     warningElapsedMs: number;
-    pendingBossKind: 'sentinel' | 'hive' | null;
+    pendingBossKind: 'sentinel' | 'hive' | 'siege' | null;
     bossesDefeated: number;
   };
   progression: {
@@ -120,6 +120,7 @@ interface CombatSnapshot {
   }>;
   activePopulation: number;
   gameplayElapsedMs: number;
+  pendingCoreSupplies: number;
 }
 
 interface DevelopmentScene {
@@ -156,7 +157,8 @@ interface DevelopmentScene {
   debugChooseAbility(id: AbilityId): void;
   debugUpgradeAbility(id: AbilityId): void;
   debugSetEnemy(id: number, position: Vector, hp: number): boolean;
-  debugAdvanceEncounter(deltaMs: number): void;
+  debugAdvanceEncounter(deltaMs: number, resolveCoreSupplies?: boolean): void;
+  debugGrantCoreSupply(): void;
   debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment'): void;
   debugDamageBossPart(
     partId:
@@ -387,14 +389,20 @@ async function dispatchTouchPointers(
   }, events);
 }
 
-async function confirmAdditionalCore(page: Page, key = 'Digit1'): Promise<void> {
+async function chooseFirstCoreSupply(page: Page): Promise<void> {
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
-  await page.keyboard.press(key);
-  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.text?.startsWith('선택 1/1'),
-  ))).toBe(true);
-  await page.keyboard.press('Enter');
+  const box = await page.locator('#game-root canvas').boundingBox();
+  expect(box).not.toBeNull();
+  const card = clientPoint(box!, { x: 120, y: 285 });
+  const confirm = clientPoint(box!, { x: 225, y: 575 });
+  await page.mouse.click(card.x, card.y);
+  await page.mouse.click(confirm.x, confirm.y);
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
+}
+
+async function confirmFocusedLevelUp(page: Page): Promise<void> {
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
 }
 
 test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
@@ -542,12 +550,15 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
-  expect(paused.progression.choices).toEqual(['additional-core']);
   expect(paused.pauseReasons).toContain('levelUp');
 
-  const card = clientPoint(box, { x: 225, y: 270 });
+  const card = clientPoint(box, { x: 225, y: 210 });
   await page.touchscreen.tap(card.x, card.y);
-  await confirmAdditionalCore(page);
+  expect((await snapshot(page)).buildRanks[selectedAbility]).toBe(0);
+  expect((await snapshot(page)).pauseReasons).toContain('levelUp');
+
+  const confirm = clientPoint(box, { x: 225, y: 625 });
+  await page.touchscreen.tap(confirm.x, confirm.y);
 
   await expect.poll(async () => {
     const current = await snapshot(page);
@@ -557,7 +568,7 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
       paused: current.pauseReasons.includes('levelUp'),
     };
   }).toEqual({ rank: 1, visible: false, paused: false });
-  expect((await snapshot(page)).orbs).toHaveLength(2);
+  expect((await snapshot(page)).orbs).toHaveLength(1);
 
   await expect.poll(async () => {
     await page.clock.runFor(16);
@@ -565,6 +576,48 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
     return current.gameplayElapsedMs > paused.gameplayElapsedMs
       && current.enemies[0]!.position.y > paused.enemies[0]!.position.y;
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
+});
+
+test('@desktop grants two stage-one core supplies before the first boss', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(42_000, false));
+  await page.clock.runFor(16);
+  await chooseFirstCoreSupply(page);
+  expect((await snapshot(page)).orbs).toHaveLength(2);
+
+  await page.clock.runFor(320);
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(73_500, false));
+  await page.clock.runFor(16);
+  await chooseFirstCoreSupply(page);
+
+  const current = await snapshot(page);
+  expect(current.orbs).toHaveLength(3);
+  expect(current.orbs.every(({ level }) => level === 1)).toBe(true);
+  expect(current.encounter.state).toBe('running');
+});
+
+test('@desktop gives core supply priority over a pending level-up', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+
+  await sceneCall(page, (scene) => {
+    scene.debugGrantCoreSupply();
+    scene.debugGrantXp(8);
+  });
+  const coreReward = await snapshot(page);
+  expect(coreReward.loadoutVisible).toBe(true);
+  expect(coreReward.levelUpVisible).toBe(false);
+
+  await chooseFirstCoreSupply(page);
+  await page.clock.runFor(250);
+  const gap = await snapshot(page);
+  expect(gap.loadoutVisible).toBe(false);
+  expect(gap.levelUpVisible).toBe(false);
+
+  await page.clock.runFor(70);
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
 });
 
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
@@ -941,7 +994,7 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   expect(frozen.encounter).toEqual(paused.encounter);
 
   await page.keyboard.press('Digit1');
-  await confirmAdditionalCore(page);
+  await confirmFocusedLevelUp(page);
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const selected = await snapshot(page);
@@ -962,9 +1015,9 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   const paused = await snapshot(page);
   const selectedAbility = paused.progression.choices[0]!;
 
-  const card = clientPoint(box, { x: 225, y: 270 });
+  const card = clientPoint(box, { x: 225, y: 210 });
   await page.mouse.click(card.x, card.y);
-  await confirmAdditionalCore(page);
+  await confirmFocusedLevelUp(page);
 
   await expect.poll(async () => {
     const current = await snapshot(page);
@@ -1001,7 +1054,6 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
     const choice = scene.getDebugSnapshot().progression.choices[0]!;
     scene.debugChooseAbility(choice);
   });
-  await confirmAdditionalCore(page);
 
   const selected = await snapshot(page);
   expect(selected.levelUpVisible).toBe(false);
@@ -1031,7 +1083,8 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   await page.keyboard.up('KeyD');
 });
 
-test('@desktop keeps level-up paused across queued choices', async ({ page }) => {
+test('@desktop resumes briefly between queued level-up choices', async ({ page }) => {
+  await page.clock.install();
   await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugGrantXp(30));
   await expect.poll(async () => (await snapshot(page)).progression.pendingChoices).toBe(2);
@@ -1040,12 +1093,14 @@ test('@desktop keeps level-up paused across queued choices', async ({ page }) =>
     const choice = scene.getDebugSnapshot().progression.choices[0]!;
     scene.debugChooseAbility(choice);
   });
-  await confirmAdditionalCore(page);
 
   const between = await snapshot(page);
   expect(between.progression.pendingChoices).toBe(1);
-  expect(between.levelUpVisible).toBe(true);
-  expect(between.pauseReasons).toContain('levelUp');
+  expect(between.levelUpVisible).toBe(false);
+  expect(between.pauseReasons).not.toContain('levelUp');
+
+  await page.clock.runFor(320);
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
 
   await sceneCall(page, (scene) => {
     const choice = scene.getDebugSnapshot().progression.choices[0]!;
@@ -1069,7 +1124,7 @@ test('@desktop stops XP and keeps level-up closed when all abilities reach their
   }, ABILITY_MAX_RANKS);
 
   const completed = await snapshot(page);
-  expect(ABILITY_IDS).toHaveLength(33);
+  expect(ABILITY_IDS).toHaveLength(32);
   expect(completed.buildRanks).toEqual(ABILITY_MAX_RANKS);
   expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
   expect(completed.levelUpVisible).toBe(false);
@@ -1416,10 +1471,10 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
   const initial = await snapshot(page);
   const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
+  await expect.poll(async () => orbStateCounts(await snapshot(page)).active, {
     intervals: [5],
-    timeout: 100,
-  }).toEqual({ active: 1, queued: 0 });
+    timeout: 500,
+  }).toBeGreaterThan(0);
   const launched = await snapshot(page);
   const orb = launched.orbs.find((candidate) => candidate.state === 'active')!;
   const initialCharges = orb.charges;
@@ -1693,7 +1748,8 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   }, parent.id);
   const aim = clientPoint(box, { x: pressurePhase.player.x, y: pressurePhase.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page)).active)
+    .toBeGreaterThan(0);
   await sceneCall(page, (scene) => {
     const orb = scene.getDebugSnapshot().orbs.find(({ state }) => state === 'active')!;
     scene.debugPlaceOrb(orb.id, { x: 11, y: 324 });
@@ -1890,7 +1946,8 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
   expect(exposed.boss.phase).toBe('exposed');
   const aim = clientPoint(box, { x: exposed.player.x, y: exposed.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page)).active)
+    .toBeGreaterThan(0);
   const reflector = (await snapshot(page)).boss.partPositions!.leftReflector!;
   await sceneCall(page, (scene) => {
     const wall = scene.children.list.find(
@@ -1993,7 +2050,8 @@ test('@desktop completes the first two stages and resumes stage three', async ({
   const before = await snapshot(page);
   const aim = clientPoint(box, { x: before.player.x, y: before.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page))).toEqual({ active: 1, queued: 0 });
+  await expect.poll(async () => orbStateCounts(await snapshot(page)).active)
+    .toBeGreaterThan(0);
   await sceneCall(page, (scene) => {
     scene.debugPlaceOrb(0, { x: 225, y: 172 });
   });

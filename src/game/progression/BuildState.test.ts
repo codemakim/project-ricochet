@@ -98,16 +98,12 @@ describe('BuildState', () => {
 
   it('derives all basic growth stats from their ranks', () => {
     const build = new BuildState({
-      'additional-core': 2,
       'core-expansion': 2,
       'recovery-field': 3,
       'mobility-motor': 2,
       'armor-reinforcement': 3,
     });
 
-    expect(new BuildState().orbLimit(1)).toBe(1);
-    expect(build.orbLimit(1)).toBe(3);
-    expect(build.orbLimit(5)).toBe(6);
     expect(build.orbRadius()).toBeCloseTo(8 * 1.16);
     expect(build.recoveryRadius()).toBe(74);
     expect(build.playerSpeed()).toBeCloseTo(420 * 1.16);
