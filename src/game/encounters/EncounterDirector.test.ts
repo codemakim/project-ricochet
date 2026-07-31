@@ -41,7 +41,7 @@ describe('EncounterDirector', () => {
     expect(director.getSnapshot()).toMatchObject({
       phase: 0,
       spawnSequence: 1,
-      expectedOrbCount: 2,
+      expectedOrbCount: 3,
     });
   });
 
@@ -97,6 +97,26 @@ describe('EncounterDirector', () => {
       stageElapsedMs: STAGES[0].boss.minimumMs,
       bossScore: STAGES[0].boss.scoreTarget,
     });
+  });
+
+  it('emits each stage core supply once when progress crosses its milestone', () => {
+    const director = new EncounterDirector(1234);
+
+    expect(director.update(42_000, clearTop).coreSuppliesDue).toBe(1);
+    expect(director.update(0, clearTop).coreSuppliesDue).toBe(0);
+    expect(director.update(73_500, clearTop).coreSuppliesDue).toBe(1);
+    expect(director.getSnapshot().coreSuppliesClaimed).toBe(2);
+  });
+
+  it('reports skipped core supplies when a large update reaches the boss gate', () => {
+    const director = new EncounterDirector(1234);
+    for (let index = 0; index < STAGES[0].boss.scoreTarget; index += 1) {
+      director.recordEnemyKill('basic');
+    }
+
+    const update = director.update(STAGES[0].boss.minimumMs, clearTop);
+    expect(update.coreSuppliesDue).toBe(2);
+    expect(update.transition?.type).toBe('bossWarningStarted');
   });
 
   it('starts the active stage boss after its warning', () => {
@@ -191,7 +211,11 @@ describe('EncounterDirector', () => {
       stageNumber: 3,
       bossesDefeated: 3,
     });
-    expect(director.update(999_999, clearTop)).toEqual({ formation: null, transition: null });
+    expect(director.update(999_999, clearTop)).toEqual({
+      formation: null,
+      transition: null,
+      coreSuppliesDue: 0,
+    });
   });
 
   it('uses population costs for incoming stage formations', () => {

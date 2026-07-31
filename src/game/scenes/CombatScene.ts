@@ -510,6 +510,7 @@ export class CombatScene extends Phaser.Scene {
         warningElapsedMs: 0,
         pendingBossKind: null,
         bossesDefeated: 0,
+        coreSuppliesClaimed: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
         level: 0,

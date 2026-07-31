@@ -81,6 +81,7 @@ export interface StageDefinition {
   number: number;
   battlefield: BattlefieldId;
   powerBand: StagePowerBand;
+  coreSupplyProgress: readonly number[];
   descentSpeedMultiplier: number;
   allowedTags?: readonly EnemyTag[];
   excludedKinds?: readonly EnemyKind[];
@@ -232,11 +233,12 @@ export const STAGES = [
     number: 1,
     battlefield: 'default',
     powerBand: {
-      expectedOrbCount: 2,
+      expectedOrbCount: 3,
       normalHpMultiplier: 1,
       eliteHpMultiplier: 1,
       largeEnemyRatio: 0.12,
     },
+    coreSupplyProgress: [0.2, 0.55],
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 24, 9_000, 'opening', { basic: 12, armored: 1, shooter: 0, splitter: 0 }, { armored: 1, shooter: 0, splitter: 0 }),
@@ -250,11 +252,12 @@ export const STAGES = [
     number: 2,
     battlefield: 'default',
     powerBand: {
-      expectedOrbCount: 3,
+      expectedOrbCount: 6,
       normalHpMultiplier: 1.6,
       eliteHpMultiplier: 1.8,
       largeEnemyRatio: 0.22,
     },
+    coreSupplyProgress: [0.2, 0.45, 0.75],
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 36, 6_000, 'assault', { basic: 18, armored: 2, shooter: 2, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
@@ -267,11 +270,12 @@ export const STAGES = [
     number: 3,
     battlefield: 'default',
     powerBand: {
-      expectedOrbCount: 4,
+      expectedOrbCount: 6,
       normalHpMultiplier: 2.4,
       eliteHpMultiplier: 2.8,
       largeEnemyRatio: 0.32,
     },
+    coreSupplyProgress: [],
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 44, 5_500, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
@@ -412,6 +416,20 @@ export function validateStageContent(
     }
     if (!Number.isFinite(stage.descentSpeedMultiplier) || stage.descentSpeedMultiplier <= 0) {
       throw new RangeError(`${stage.id}.descentSpeedMultiplier must be positive`);
+    }
+    let previousCoreSupply = 0;
+    for (const progress of stage.coreSupplyProgress) {
+      if (!Number.isFinite(progress) || progress <= 0 || progress >= 1) {
+        throw new RangeError(
+          `${stage.id} core supply progress must stay between 0 and 1`,
+        );
+      }
+      if (progress <= previousCoreSupply) {
+        throw new RangeError(
+          `${stage.id} core supplies must be strictly increasing`,
+        );
+      }
+      previousCoreSupply = progress;
     }
     if (stage.phases.length === 0 || stage.phases[0]!.startsAtMs !== 0) {
       throw new RangeError(`${stage.id} must start at zero`);

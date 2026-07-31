@@ -16,21 +16,26 @@ describe('stage content', () => {
     ]);
     expect(STAGES.every(({ descentSpeedMultiplier }) =>
       descentSpeedMultiplier === 1)).toBe(true);
+    expect(STAGES.map(({ coreSupplyProgress }) => coreSupplyProgress)).toEqual([
+      [0.2, 0.55],
+      [0.2, 0.45, 0.75],
+      [],
+    ]);
     expect(STAGES.map(({ powerBand }) => powerBand)).toEqual([
       {
-        expectedOrbCount: 2,
+        expectedOrbCount: 3,
         normalHpMultiplier: 1,
         eliteHpMultiplier: 1,
         largeEnemyRatio: 0.12,
       },
       {
-        expectedOrbCount: 3,
+        expectedOrbCount: 6,
         normalHpMultiplier: 1.6,
         eliteHpMultiplier: 1.8,
         largeEnemyRatio: 0.22,
       },
       {
-        expectedOrbCount: 4,
+        expectedOrbCount: 6,
         normalHpMultiplier: 2.4,
         eliteHpMultiplier: 2.8,
         largeEnemyRatio: 0.32,
@@ -43,6 +48,18 @@ describe('stage content', () => {
       [30, 8_000],
       [36, 7_000],
     ]);
+  });
+
+  it('requires ordered core-supply progress inside the stage', () => {
+    const unordered = { ...STAGES[0], coreSupplyProgress: [0.55, 0.2] };
+    expect(() => validateStageContent(
+      [unordered, ...STAGES.slice(1)],
+    )).toThrow('default-1 core supplies must be strictly increasing');
+
+    const outside = { ...STAGES[0], coreSupplyProgress: [0, 1] };
+    expect(() => validateStageContent(
+      [outside, ...STAGES.slice(1)],
+    )).toThrow('default-1 core supply progress must stay between 0 and 1');
   });
 
   it('defines approved enemy footprints and reusable chunk profiles', () => {
