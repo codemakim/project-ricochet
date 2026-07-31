@@ -38,6 +38,7 @@ const DEFAULT_RESTORED_CHARGES = 3;
 export interface OrbSnapshot {
   id: number;
   coreType: OrbCoreId;
+  level: number;
   coreState: OrbCoreState;
   state: OrbState;
   charges: number;
@@ -138,6 +139,7 @@ export class OrbStore {
     return {
       id,
       coreType,
+      level: 1,
       coreState: createOrbCoreState(),
       state: 'stored',
       charges: DEFAULT_RESTORED_CHARGES,
@@ -317,6 +319,7 @@ export class OrbStore {
     return this.records.map((record) => ({
       id: record.id,
       coreType: record.coreType,
+      level: record.level,
       coreState: { ...record.coreState },
       state: record.state,
       charges: record.charges,

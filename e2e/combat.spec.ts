@@ -13,6 +13,7 @@ interface Vector {
 interface OrbSnapshot {
   id: number;
   coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia';
+  level: number;
   coreState: {
     echoStacks: number;
     conductionHits: number;

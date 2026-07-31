@@ -470,6 +470,7 @@ export class CombatScene extends Phaser.Scene {
       orbs: (this.orbManager?.getSnapshot() ?? []).map((orb) => ({
         id: orb.id,
         coreType: orb.coreType,
+        level: orb.level,
         coreState: { ...orb.coreState },
         state: orb.state,
         charges: orb.charges,

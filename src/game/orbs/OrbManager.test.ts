@@ -114,6 +114,22 @@ function createManager(
 }
 
 describe('OrbStore', () => {
+  it('stores an independent level on every permanent orb', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+
+    expect(store.getSnapshot()).toMatchObject([
+      { id: 0, coreType: 'echo', level: 1 },
+    ]);
+
+    expect(store.addOrb('conduction')).toBe(true);
+    expect(store.addOrb('conduction')).toBe(true);
+    expect(store.getSnapshot()).toMatchObject([
+      { id: 0, coreType: 'echo', level: 1 },
+      { id: 1, coreType: 'conduction', level: 1 },
+      { id: 2, coreType: 'conduction', level: 1 },
+    ]);
+  });
+
   it('configures one starting core exactly once before aim', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 
