@@ -20,6 +20,7 @@ import {
   type RecoverySource,
 } from './orbRules';
 import {
+  ORB_CORE_DEFINITIONS,
   applyCoreWallBounce,
   coreLaunchSpeedMultiplier,
   createOrbCoreState,
@@ -132,6 +133,19 @@ export class OrbStore {
     const record = this.createRecord(this.records.length, coreType);
     this.records.push(record);
     if (this.aimActivated) this.enqueue(record);
+    return true;
+  }
+
+  upgradeOrb(id: number, expectedCoreType?: OrbCoreId): boolean {
+    const record = this.records.find((candidate) => candidate.id === id);
+    if (
+      !record
+      || (expectedCoreType !== undefined && record.coreType !== expectedCoreType)
+      || record.level >= ORB_CORE_DEFINITIONS[record.coreType].maximumLevel
+    ) {
+      return false;
+    }
+    record.level += 1;
     return true;
   }
 
@@ -610,6 +624,10 @@ export class OrbManager {
     this.synchronizeSprites();
     for (const listener of this.orbAddedListeners) listener(sprite);
     return true;
+  }
+
+  upgradeOrb(id: number, expectedCoreType?: OrbCoreId): boolean {
+    return !this.destroyed && this.store.upgradeOrb(id, expectedCoreType);
   }
 
   onOrbAdded(listener: (orb: OrbSprite) => void): () => void {

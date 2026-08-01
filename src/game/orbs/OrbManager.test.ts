@@ -130,6 +130,51 @@ describe('OrbStore', () => {
     ]);
   });
 
+  it('upgrades only the selected same-type orb without changing its active state', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.addOrb('conduction');
+    store.addOrb('conduction');
+    store.activateAim();
+    for (let now = 0; now <= 300; now += 100) {
+      store.update(now, 100, player, up);
+    }
+    store.synchronizeActive(2, { x: 42, y: 84 }, { x: -300, y: 200 });
+    const before = store.getSnapshot()[2]!;
+    expect(before).toMatchObject({
+      state: 'active',
+      position: { x: 42, y: 84 },
+      velocity: { x: -300, y: 200 },
+      collisionEnabled: true,
+      damageEnabled: true,
+    });
+
+    expect(store.upgradeOrb(2, 'conduction')).toBe(true);
+
+    const after = store.getSnapshot()[2]!;
+    expect(store.getSnapshot().map(({ level }) => level)).toEqual([1, 1, 2]);
+    expect({ ...after, level: before.level }).toEqual(before);
+  });
+
+  it('rejects invalid upgrades and keeps newly added same-type orbs at level one', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.addOrb('conduction');
+
+    expect(store.upgradeOrb(99, 'conduction')).toBe(false);
+    expect(store.upgradeOrb(1, 'echo')).toBe(false);
+    expect(store.upgradeOrb(1, 'conduction')).toBe(true);
+    expect(store.upgradeOrb(1, 'conduction')).toBe(true);
+    expect(store.upgradeOrb(1, 'conduction')).toBe(true);
+    expect(store.upgradeOrb(1, 'conduction')).toBe(true);
+    expect(store.getSnapshot()[1]?.level).toBe(5);
+    expect(store.upgradeOrb(1, 'conduction')).toBe(false);
+
+    expect(store.addOrb('conduction')).toBe(true);
+    expect(store.getSnapshot()[2]).toMatchObject({
+      coreType: 'conduction',
+      level: 1,
+    });
+  });
+
   it('configures one starting core exactly once before aim', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 
@@ -617,6 +662,17 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.getSprites()).toHaveLength(2);
     expect(manager.getSnapshot()[1]).toMatchObject({ id: 1, state: 'queued' });
     expect(sprites[1]?.textureKey).toBe('orb-conduction');
+  });
+
+  it('forwards an exact physical-orb upgrade and rejects it after destroy', () => {
+    const { manager } = createManager();
+    manager.addOrb('conduction');
+
+    expect(manager.upgradeOrb(1, 'conduction')).toBe(true);
+    expect(manager.getSnapshot()[1]?.level).toBe(2);
+
+    manager.destroy();
+    expect(manager.upgradeOrb(1, 'conduction')).toBe(false);
   });
 
   it('notifies subscribers once per runtime sprite and supports unsubscribe', () => {
