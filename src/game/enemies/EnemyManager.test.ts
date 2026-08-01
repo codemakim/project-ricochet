@@ -922,6 +922,24 @@ describe('EnemyManager', () => {
       ]);
   });
 
+  it('damages enemies only near the finite directional beam segment', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 3, x: 120, y: 103, column: 0, speed: 0 },
+      { kind: 'basic', hp: 3, x: 180, y: 96, column: 1, speed: 0 },
+      { kind: 'basic', hp: 3, x: 220, y: 100, column: 2, speed: 0 },
+      { kind: 'basic', hp: 3, x: 150, y: 120, column: 3, speed: 0 },
+    ];
+    const { manager } = createBoundary(formation);
+
+    expect(manager.applySegmentDamage(
+      { x: 100, y: 100 },
+      { x: 200, y: 100 },
+      12,
+      1,
+    )).toEqual([0, 1]);
+    expect(manager.getSnapshot().enemies.map(({ hp }) => hp)).toEqual([2, 2, 3, 3]);
+  });
+
   it('clears warning state if a shooter dies before firing', () => {
     const { manager, handleEnemyHit, groups, colliders, time } = createBoundary();
     time.advance(1300);

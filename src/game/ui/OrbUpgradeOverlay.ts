@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { OrbSnapshot } from '../orbs/OrbManager';
-import { ORB_CORE_DEFINITIONS, type OrbCoreId } from '../orbs/orbCoreRules';
+import { orbDefinition, type OrbTypeId } from '../orbs/orbFusionRules';
 
 const KEY_CODES = [
   Phaser.Input.Keyboard.KeyCodes.ONE,
@@ -24,13 +24,13 @@ export class OrbUpgradeOverlay {
   constructor(private readonly scene: Phaser.Scene) {}
 
   show(
-    coreType: OrbCoreId,
+    coreType: OrbTypeId,
     orbs: readonly OrbSnapshot[],
     onConfirm: (orbId: number) => void,
     onCancel: () => void,
   ): void {
     this.hide();
-    const definition = ORB_CORE_DEFINITIONS[coreType];
+    const definition = orbDefinition(coreType);
     const candidates = orbs.filter(({ coreType: type, level }) => (
       type === coreType && level < definition.maximumLevel
     ));
@@ -116,12 +116,12 @@ export class OrbUpgradeOverlay {
     if (!this.visible) return;
     this.selectedId = orb.id;
     for (const candidate of this.rows) candidate.setFillStyle(0x10213d, 0.98);
-    row.setFillStyle(ORB_CORE_DEFINITIONS[orb.coreType].color, 0.55);
+    row.setFillStyle(orbDefinition(orb.coreType).color, 0.55);
     for (const object of this.detailObjects) object.destroy();
     this.detailObjects = [this.scene.add.text(
       GAME_WIDTH / 2,
       580,
-      ORB_CORE_DEFINITIONS[orb.coreType].levelEffects[orb.level]!,
+      orbDefinition(orb.coreType).levelEffects[orb.level]!,
       { align: 'center', color: '#9ec6df', fontSize: '16px' },
     ).setOrigin(0.5).setDepth(42)];
   }

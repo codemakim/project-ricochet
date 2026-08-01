@@ -9,7 +9,14 @@ import type {
 } from '../bosses/bossEncounter';
 import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import type { OrbTypeId } from '../orbs/orbFusionRules';
+import {
+  nanoFusionProfile,
+  photonFusionProfile,
+  resonantSwarmProfile,
+  type NanoFusionProfile,
+  type ResonantSwarmProfile,
+} from '../combat/FusionCombatState';
 import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
 
 export function pendingRunRewardKind(
@@ -80,7 +87,7 @@ export interface OrbCoreEffectPlan {
 export function planOrbCoreEffects(
   event: {
     source: 'permanent' | 'temporary';
-    coreType?: OrbCoreId;
+    coreType?: OrbTypeId;
     conductionTriggered?: boolean;
   },
   corrosionTriggered: boolean,
@@ -93,6 +100,34 @@ export function planOrbCoreEffects(
     dischargeConduction: event.coreType === 'conduction'
       && event.conductionTriggered === true,
   };
+}
+
+export interface FusionDirectHitPlan {
+  photonBeam: ReturnType<typeof photonFusionProfile>['beam'] | null;
+  resonantSwarm: ResonantSwarmProfile | null;
+  nanoSeeds: NanoFusionProfile | null;
+}
+
+export function planFusionDirectHitEffects(
+  event: {
+    source: 'permanent' | 'temporary';
+    coreType?: OrbTypeId;
+    coreLevel?: number;
+  },
+  procTriggered: boolean,
+): FusionDirectHitPlan {
+  const empty = { photonBeam: null, resonantSwarm: null, nanoSeeds: null };
+  if (event.source !== 'permanent' || event.coreLevel === undefined) return empty;
+  if (event.coreType === 'photon-orbit') {
+    return { ...empty, photonBeam: photonFusionProfile(event.coreLevel).beam };
+  }
+  if (event.coreType === 'resonant-swarm' && procTriggered) {
+    return { ...empty, resonantSwarm: resonantSwarmProfile(event.coreLevel) };
+  }
+  if (event.coreType === 'nano-proliferator' && procTriggered) {
+    return { ...empty, nanoSeeds: nanoFusionProfile(event.coreLevel) };
+  }
+  return empty;
 }
 
 export function planDirectHitEffects(

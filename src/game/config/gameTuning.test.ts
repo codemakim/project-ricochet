@@ -40,7 +40,7 @@ describe('GAME_TUNING', () => {
         maximumCards: 3,
         early: { maximumOrbs: 2, orbCards: 2, abilityCards: 1 },
         growing: { maximumOrbs: 5, orbCards: 1, abilityCards: 2 },
-        full: { orbUpgradeCards: 2, minimumAbilityCards: 1 },
+        full: { fusionCards: 1, orbUpgradeCards: 2, minimumAbilityCards: 1 },
       },
     });
     expect(GAME_TUNING.build).toEqual({
@@ -179,6 +179,25 @@ describe('GAME_TUNING', () => {
     expect(curves.length).toBeGreaterThan(0);
     for (const [, values] of curves) {
       expect(values).toHaveLength(5);
+      expect(values.every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it('provides nine finite values for every fusion level curve', () => {
+    const curves: Array<[string, readonly number[]]> = [];
+    const visit = (value: unknown, path: string): void => {
+      if (Array.isArray(value)) {
+        if (path.endsWith('ByLevel')) curves.push([path, value as number[]]);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value)) visit(child, `${path}.${key}`);
+    };
+    visit(GAME_TUNING.orbFusions, 'orbFusions');
+
+    expect(curves.length).toBeGreaterThan(0);
+    for (const [, values] of curves) {
+      expect(values).toHaveLength(9);
       expect(values.every(Number.isFinite)).toBe(true);
     }
   });

@@ -14,6 +14,15 @@ import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import { CombatProcState } from '../combat/CombatProcState';
 import {
+  NanoSeedState,
+  PhotonTrailState,
+  nanoFusionProfile,
+  photonFusionProfile,
+  resonantSwarmProfile,
+  type NanoSeedSnapshot,
+  type PhotonTrailSnapshot,
+} from '../combat/FusionCombatState';
+import {
   CorrosionFieldState,
   type CorrosionFieldSnapshot,
 } from '../combat/CorrosionFieldState';
@@ -50,9 +59,15 @@ import {
   coreDirectEffectProfile,
   explosionProfile,
   splitProfile,
+  type OrbCoreId,
 } from '../orbs/orbCoreRules';
+import { isBasicOrbCoreId } from '../orbs/orbFusionRules';
 import type { RecoverySource } from '../orbs/orbRules';
-import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
+import {
+  TemporaryOrbManager,
+  type ResonantSwarmSource,
+  type TemporaryOrbExpiredEvent,
+} from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
@@ -72,6 +87,7 @@ import {
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
+import { OrbFusionOverlay } from '../ui/OrbFusionOverlay';
 import { OrbUpgradeOverlay } from '../ui/OrbUpgradeOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
@@ -87,6 +103,7 @@ import {
   inactiveBossSnapshot,
   pendingRunRewardKind,
   planDirectHitEffects,
+  planFusionDirectHitEffects,
   planOrbCoreEffects,
   rewardTierForBoss,
   settlePlannedAreaEffects,
@@ -128,6 +145,7 @@ export interface CombatDebugSnapshot {
   levelUpVisible: boolean;
   loadoutVisible: boolean;
   orbUpgradeVisible: boolean;
+  orbFusionVisible: boolean;
   boss: BossEncounterSnapshot & Partial<Pick<
     BossManagerSnapshot,
     'basicBullets' | 'aimedBullets' | 'fallingHazards'
@@ -140,6 +158,8 @@ export interface CombatDebugSnapshot {
   temporaryOrbs: number;
   temporaryOrbSnapshots: ReturnType<TemporaryOrbManager['getSnapshot']>;
   corrosionFields: readonly CorrosionFieldSnapshot[];
+  photonTrails: readonly PhotonTrailSnapshot[];
+  nanoSeeds: readonly NanoSeedSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -163,6 +183,7 @@ export class CombatScene extends Phaser.Scene {
   declare debugSetBossPosition?: (x: number) => void;
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
   declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
+  declare debugAddOrb?: (coreType: OrbCoreId) => boolean;
   declare debugShowCoreFeedback?: (
     type: 'corrosion' | 'conduction',
     position: Vector,
@@ -179,6 +200,10 @@ export class CombatScene extends Phaser.Scene {
   private bossRewardTier: BossRewardTier | null = null;
   private readonly corrosionFields = new CorrosionFieldState();
   private readonly corrosionVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly photonTrails = new PhotonTrailState();
+  private readonly photonTrailVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly nanoSeeds = new NanoSeedState();
+  private readonly nanoSeedVisuals = new Map<number, Phaser.GameObjects.Graphics>();
   private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
@@ -189,6 +214,7 @@ export class CombatScene extends Phaser.Scene {
   private levelUpOverlay?: LevelUpOverlay;
   private orbLoadoutOverlay?: OrbLoadoutOverlay;
   private orbUpgradeOverlay?: OrbUpgradeOverlay;
+  private orbFusionOverlay?: OrbFusionOverlay;
   private bossBuild?: BossBuild;
   private bossRewardOverlay?: BossRewardOverlay;
   private runCompleteOverlay?: RunCompleteOverlay;
@@ -235,6 +261,10 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardTier = null;
     this.corrosionFields.clear();
     this.corrosionVisuals.clear();
+    this.photonTrails.clear();
+    this.photonTrailVisuals.clear();
+    this.nanoSeeds.clear();
+    this.nanoSeedVisuals.clear();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
@@ -250,12 +280,16 @@ export class CombatScene extends Phaser.Scene {
       build,
       () => {
         const orbs = this.orbManager?.getSnapshot() ?? [];
-        return { orbs, coreTypes: orbs.map(({ coreType }) => coreType) };
+        return {
+          orbs,
+          coreTypes: orbs.map(({ coreType }) => coreType).filter(isBasicOrbCoreId),
+        };
       },
     );
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
     this.orbUpgradeOverlay = new OrbUpgradeOverlay(this);
+    this.orbFusionOverlay = new OrbFusionOverlay(this);
     this.bossRewardOverlay = new BossRewardOverlay(this);
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     this.createTextures();
@@ -295,6 +329,7 @@ export class CombatScene extends Phaser.Scene {
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
       getDamageMultiplier: () => build.temporaryDamageMultiplier(),
       getLifetimeMs: () => build.temporaryLifetimeMs(GAME_TUNING.temporaryOrbs.lifetimeMs),
+      onExpired: (event) => this.handleTemporaryOrbExpired(event),
     });
     this.encounterDirector = new EncounterDirector(runSeed);
     const initialFormation = createInitialFormation(runSeed).enemies;
@@ -382,6 +417,7 @@ export class CombatScene extends Phaser.Scene {
       this.debugPlaceTemporaryOrb = (id, position) => (
         this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
       );
+      this.debugAddOrb = (coreType) => this.orbManager?.addOrb(coreType) ?? false;
       this.debugShowCoreFeedback = (type, position) => {
         if (type === 'corrosion') {
           this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
@@ -464,6 +500,7 @@ export class CombatScene extends Phaser.Scene {
     this.drawAimGuide();
     this.orbManager.update(this.time.now, gameplayDelta, next, this.aim);
     this.temporaryOrbManager?.update(this.gameplayElapsedMs);
+    this.drainFusionEffects();
     this.enemyManager.update();
     this.activeBoss?.update();
     this.drainCorrosionFields();
@@ -540,6 +577,7 @@ export class CombatScene extends Phaser.Scene {
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       loadoutVisible: this.orbLoadoutOverlay?.isVisible() ?? false,
       orbUpgradeVisible: this.orbUpgradeOverlay?.isVisible() ?? false,
+      orbFusionVisible: this.orbFusionOverlay?.isVisible() ?? false,
       boss: this.activeBoss?.getSnapshot() ?? {
         ...inactiveBossSnapshot(this.activeBossKind ?? null),
         basicBullets: 0,
@@ -558,6 +596,8 @@ export class CombatScene extends Phaser.Scene {
         velocity: { ...orb.velocity },
       })) ?? [],
       corrosionFields: this.corrosionFields.getSnapshot(),
+      photonTrails: this.photonTrails.getSnapshot(),
+      nanoSeeds: this.nanoSeeds.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
     };
@@ -578,6 +618,17 @@ export class CombatScene extends Phaser.Scene {
         damage: spread.damagePerTick,
       },
     );
+    const nano = this.orbManager?.getSnapshot().find(({ coreType }) => (
+      coreType === 'nano-proliferator'
+    ));
+    if (
+      nano
+      && this.nanoSeeds.spreadOnDeath(
+        event.position,
+        this.gameplayElapsedMs,
+        nanoFusionProfile(nano.level),
+      )
+    ) this.syncNanoSeedVisuals();
     this.updateProgressionText();
   }
 
@@ -608,6 +659,7 @@ export class CombatScene extends Phaser.Scene {
       | 'precisionHit'
       | 'echoPath'
       | 'inheritedOutputScale'
+      | 'fusionSource'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -628,19 +680,43 @@ export class CombatScene extends Phaser.Scene {
     const split = this.build.split();
     const permanent = event.source === 'permanent';
     const coreLevel = event.coreLevel ?? 1;
-    const advancedCore = event.coreType
+    let fusionProcTriggered = false;
+    if (permanent && event.coreType === 'resonant-swarm') {
+      const profile = resonantSwarmProfile(coreLevel);
+      fusionProcTriggered = this.combatProcs?.tryProc(
+        'resonant-swarm',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        this.build.procChance(profile.chance),
+        profile.cooldownMs,
+      ) ?? false;
+    } else if (permanent && event.coreType === 'nano-proliferator') {
+      const profile = nanoFusionProfile(coreLevel);
+      fusionProcTriggered = this.combatProcs?.tryProc(
+        'nano-proliferator',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        this.build.procChance(profile.chance),
+        profile.cooldownMs,
+      ) ?? false;
+    }
+    const fusionPlan = planFusionDirectHitEffects(event, fusionProcTriggered);
+    const basicCoreType = event.coreType && isBasicOrbCoreId(event.coreType)
+      ? event.coreType
+      : undefined;
+    const advancedCore = basicCoreType
       ? coreDirectEffectProfile(
-        event.coreType,
+        basicCoreType,
         coreLevel,
         event.precisionHit === true,
         event.echoStacks ?? 0,
       )
       : null;
-    const mergedExplosion = permanent && event.coreType
-      ? explosionProfile(event.coreType, coreLevel, explosion, event.explosionFailures ?? 0)
+    const mergedExplosion = permanent && basicCoreType
+      ? explosionProfile(basicCoreType, coreLevel, explosion, event.explosionFailures ?? 0)
       : explosion ? { ...explosion, maximumFailures: 0 } : null;
-    const mergedSplit = permanent && event.coreType
-      ? splitProfile(event.coreType, coreLevel, split)
+    const mergedSplit = permanent && basicCoreType
+      ? splitProfile(basicCoreType, coreLevel, split)
       : split ? {
         ...split,
         extraBounces: 0,
@@ -742,6 +818,21 @@ export class CombatScene extends Phaser.Scene {
         } : null,
       },
     );
+    this.applyFusionDirectHit(
+      fusionPlan,
+      event,
+      excludedEnemyId,
+      excludedBossTargetId,
+    );
+    if (event.source === 'temporary' && event.fusionSource) {
+      this.applyResonantSwarmHit(
+        event.sourceOrbId,
+        event.position,
+        event.fusionSource,
+        excludedEnemyId,
+        excludedBossTargetId,
+      );
+    }
     if (permanent && event.coreType === 'explosion') {
       this.orbManager?.recordExplosionOutcome(event.sourceOrbId, decision.explosion);
     }
@@ -1002,8 +1093,33 @@ export class CombatScene extends Phaser.Scene {
     coreType: string;
     coreLevel: number;
     position: Vector;
+    segmentStart: Vector;
     echoStacks: number;
   }): void {
+    if (event.coreType === 'photon-orbit' && this.build) {
+      const profile = photonFusionProfile(event.coreLevel);
+      const intersections = this.photonTrails.add(
+        event.orbId,
+        event.segmentStart,
+        event.position,
+        this.gameplayElapsedMs,
+        profile,
+      );
+      for (const position of intersections) {
+        const blast = profile.intersectionBlast!;
+        const radius = this.build.circularRadius(blast.radius);
+        const damage = this.build.secondaryDamage(blast.damage);
+        this.applyAreaEffects(position, [{ radius, damage }]);
+        this.drawEffectRing(
+          position,
+          radius,
+          GAME_TUNING.orbFusions.photonOrbit.accent,
+          'fusion-feedback-photon-intersection',
+        );
+      }
+      this.syncPhotonTrailVisuals();
+      return;
+    }
     if (
       event.coreType !== 'echo'
       || event.coreLevel < GAME_TUNING.orbCores.echo.cutter.fromLevel
@@ -1055,6 +1171,219 @@ export class CombatScene extends Phaser.Scene {
     );
     this.activeBoss?.applyAreaDamage(event.position, radius, damage);
     this.drawConductionFeedback(event.position, targets.map(({ position }) => position));
+  }
+
+  private applyFusionDirectHit(
+    plan: ReturnType<typeof planFusionDirectHitEffects>,
+    event: {
+      sourceOrbId: number;
+      position: Vector;
+      direction: Vector;
+      coreLevel?: number;
+    },
+    excludedEnemyId: number,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
+    if (!this.build) return;
+    if (plan.photonBeam) {
+      const beam = plan.photonBeam;
+      const end = {
+        x: event.position.x + event.direction.x * beam.length,
+        y: event.position.y + event.direction.y * beam.length,
+      };
+      const thickness = this.build.cutterThickness(beam.thickness);
+      const damage = this.build.secondaryDamage(beam.damage);
+      this.enemyManager?.applySegmentDamage(
+        event.position,
+        end,
+        thickness,
+        damage,
+        excludedEnemyId,
+      );
+      this.activeBoss?.applySegmentDamage(
+        event.position,
+        end,
+        thickness,
+        damage,
+        excludedBossTargetId,
+      );
+      const line = this.add.graphics()
+        .lineStyle(thickness, GAME_TUNING.orbFusions.photonOrbit.accent, 0.85)
+        .lineBetween(event.position.x, event.position.y, end.x, end.y)
+        .setDepth(4)
+        .setName('fusion-feedback-photon-beam');
+      this.time.delayedCall(GAME_TUNING.visual.triggerFeedback.durationMs, () => line.destroy());
+    }
+    if (plan.resonantSwarm) {
+      this.temporaryOrbManager?.spawn(
+        event.position,
+        event.direction,
+        plan.resonantSwarm.count,
+        {
+          lifetimeMs: plan.resonantSwarm.lifetimeMs,
+          fusionSource: {
+            fusionType: 'resonant-swarm',
+            sourceOrbId: event.sourceOrbId,
+            level: event.coreLevel!,
+          },
+        },
+      );
+      this.drawEffectRing(
+        event.position,
+        20,
+        GAME_TUNING.orbFusions.resonantSwarm.accent,
+        'fusion-feedback-resonant-spawn',
+      );
+    }
+    if (plan.nanoSeeds) {
+      this.nanoSeeds.spawn(
+        event.sourceOrbId,
+        event.position,
+        event.direction,
+        this.gameplayElapsedMs,
+        plan.nanoSeeds,
+      );
+      this.syncNanoSeedVisuals();
+      this.drawEffectRing(
+        event.position,
+        plan.nanoSeeds.radius,
+        GAME_TUNING.orbFusions.nanoProliferator.accent,
+        'fusion-feedback-nano-spawn',
+      );
+    }
+  }
+
+  private applyResonantSwarmHit(
+    temporaryOrbId: number,
+    position: Vector,
+    source: ResonantSwarmSource,
+    excludedEnemyId: number,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
+    if (!this.build) return;
+    const profile = resonantSwarmProfile(source.level);
+    const siblings = Math.min(
+      profile.maximumSiblingBonus,
+      this.temporaryOrbManager?.nearbyFusionCount(
+        temporaryOrbId,
+        profile.siblingRadius,
+      ) ?? 0,
+    );
+    const radius = this.build.circularRadius(profile.radius);
+    const targets = this.build.conductionTargetCount(profile.targets);
+    const damage = this.build.secondaryDamage(profile.damage)
+      * (1 + siblings * profile.siblingDamageBonus);
+    const enemyTargets = this.enemyManager?.nearestSecondaryTargets(
+      position,
+      excludedEnemyId,
+      radius,
+      targets,
+    ) ?? [];
+    this.enemyManager?.applyNearestSecondaryDamage(
+      position,
+      excludedEnemyId,
+      radius,
+      targets,
+      damage,
+    );
+    const bossTargetIds = this.activeBoss?.applyAreaDamage(
+      position,
+      radius,
+      damage,
+      excludedBossTargetId,
+    ) ?? [];
+    const bossPositions = bossTargetIds
+      .map((targetId) => this.activeBoss?.getTargetPosition(targetId))
+      .filter((target): target is Vector => target !== null && target !== undefined);
+    this.drawConductionFeedback(
+      position,
+      [...enemyTargets.map(({ position: target }) => target), ...bossPositions],
+    );
+  }
+
+  private handleTemporaryOrbExpired(event: TemporaryOrbExpiredEvent): void {
+    if (!event.fusionSource || !this.build) return;
+    const pulse = resonantSwarmProfile(event.fusionSource.level).finalPulse;
+    const radius = this.build.circularRadius(pulse.radius);
+    const damage = this.build.secondaryDamage(pulse.damage);
+    this.applyAreaEffects(event.position, [{ radius, damage }]);
+    this.drawEffectRing(
+      event.position,
+      radius,
+      GAME_TUNING.orbFusions.resonantSwarm.accent,
+      'fusion-feedback-resonant-final',
+    );
+  }
+
+  private drainFusionEffects(): void {
+    for (const trail of this.photonTrails.drainDue(this.gameplayElapsedMs)) {
+      const damage = this.build?.secondaryDamage(trail.damage) ?? trail.damage;
+      this.enemyManager?.applySegmentDamage(
+        trail.start,
+        trail.end,
+        trail.thickness,
+        damage,
+      );
+      this.activeBoss?.applySegmentDamage(
+        trail.start,
+        trail.end,
+        trail.thickness,
+        damage,
+      );
+    }
+    for (const seed of this.nanoSeeds.drainDue(this.gameplayElapsedMs)) {
+      const radius = this.build?.circularRadius(seed.radius) ?? seed.radius;
+      const damage = this.build?.secondaryDamage(seed.damage) ?? seed.damage;
+      this.applyAreaEffects(seed.position, [{ radius, damage }]);
+      this.drawEffectRing(
+        seed.position,
+        radius * 0.75,
+        GAME_TUNING.orbFusions.nanoProliferator.accent,
+        'fusion-feedback-nano-tick',
+      );
+    }
+    this.syncPhotonTrailVisuals();
+    this.syncNanoSeedVisuals();
+  }
+
+  private syncPhotonTrailVisuals(): void {
+    const trails = this.photonTrails.getSnapshot();
+    const active = new Set(trails.map(({ trailId }) => trailId));
+    for (const [trailId, visual] of this.photonTrailVisuals) {
+      if (active.has(trailId)) continue;
+      visual.destroy();
+      this.photonTrailVisuals.delete(trailId);
+    }
+    for (const trail of trails) {
+      if (this.photonTrailVisuals.has(trail.trailId)) continue;
+      const visual = this.add.graphics()
+        .lineStyle(trail.thickness, GAME_TUNING.orbFusions.photonOrbit.fill, 0.42)
+        .lineBetween(trail.start.x, trail.start.y, trail.end.x, trail.end.y)
+        .setDepth(3)
+        .setName('fusion-feedback-photon-trail');
+      this.photonTrailVisuals.set(trail.trailId, visual);
+    }
+  }
+
+  private syncNanoSeedVisuals(): void {
+    const seeds = this.nanoSeeds.getSnapshot();
+    const active = new Set(seeds.map(({ seedId }) => seedId));
+    for (const [seedId, visual] of this.nanoSeedVisuals) {
+      if (active.has(seedId)) continue;
+      visual.destroy();
+      this.nanoSeedVisuals.delete(seedId);
+    }
+    for (const seed of seeds) {
+      if (this.nanoSeedVisuals.has(seed.seedId)) continue;
+      const visual = this.add.graphics()
+        .fillStyle(GAME_TUNING.orbFusions.nanoProliferator.fill, 0.18)
+        .fillCircle(seed.position.x, seed.position.y, seed.radius)
+        .lineStyle(2, GAME_TUNING.orbFusions.nanoProliferator.accent, 0.5)
+        .strokeCircle(seed.position.x, seed.position.y, seed.radius)
+        .setDepth(3)
+        .setName('fusion-feedback-nano-seed');
+      this.nanoSeedVisuals.set(seed.seedId, visual);
+    }
   }
 
   private applyEchoPathReplay(
@@ -1407,7 +1736,9 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = selectBossRewardOptions({
       ownedRewards: owned,
       ranks: this.build?.getRanks() ?? createEmptyAbilityRanks(),
-      coreTypes: this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
+      coreTypes: this.orbManager?.getSnapshot()
+        .map(({ coreType }) => coreType)
+        .filter(isBasicOrbCoreId) ?? [],
     },
       BOSS_REWARD_SEED,
     );
@@ -1482,6 +1813,12 @@ export class CombatScene extends Phaser.Scene {
     reason: Parameters<typeof finalizeCombatLifecycle>[0],
   ): void {
     this.corrosionFields.clear();
+    this.photonTrails.clear();
+    this.nanoSeeds.clear();
+    for (const visual of this.photonTrailVisuals.values()) visual.destroy();
+    for (const visual of this.nanoSeedVisuals.values()) visual.destroy();
+    this.photonTrailVisuals.clear();
+    this.nanoSeedVisuals.clear();
     const next = finalizeCombatLifecycle(reason, {
       activeBoss: this.activeBoss,
       activeBossKind: this.activeBossKind,
@@ -1531,7 +1868,8 @@ export class CombatScene extends Phaser.Scene {
     return (this.progression?.getSnapshot().pendingChoices ?? 0) > 0
       || (this.levelUpOverlay?.isVisible() ?? false)
       || (this.orbLoadoutOverlay?.isVisible() ?? false)
-      || (this.orbUpgradeOverlay?.isVisible() ?? false);
+      || (this.orbUpgradeOverlay?.isVisible() ?? false)
+      || (this.orbFusionOverlay?.isVisible() ?? false);
   }
 
   private chooseRunReward(choice: RunRewardChoice): boolean {
@@ -1553,6 +1891,27 @@ export class CombatScene extends Phaser.Scene {
       if (!this.orbManager.addOrb(choice.coreType)) return false;
       if (!this.progression.consume(choice)) return false;
       this.completeRunRewardChoice();
+      return true;
+    }
+
+    if (choice.kind === 'orb-fusion') {
+      this.levelUpOverlay.hide();
+      const reopen = () => this.openNextLevelUp();
+      this.orbFusionOverlay?.show(
+        choice.fusionType,
+        this.orbManager.getSnapshot(),
+        (firstId, secondId) => {
+          if (
+            !this.orbManager?.fuseOrbs(firstId, secondId, choice.fusionType)
+            || !this.progression?.consume(choice)
+          ) {
+            reopen();
+            return;
+          }
+          this.completeRunRewardChoice();
+        },
+        reopen,
+      );
       return true;
     }
 
@@ -1581,6 +1940,7 @@ export class CombatScene extends Phaser.Scene {
     this.updateProgressionText();
     this.levelUpOverlay?.hide();
     this.orbUpgradeOverlay?.hide();
+    this.orbFusionOverlay?.hide();
     this.pause.remove('levelUp');
     this.nextRunRewardAtMs =
       this.gameplayElapsedMs + GAME_TUNING.rewardFlow.resumeGameplayMs;
@@ -1720,6 +2080,7 @@ export class CombatScene extends Phaser.Scene {
     this.levelUpOverlay?.destroy();
     this.orbLoadoutOverlay?.destroy();
     this.orbUpgradeOverlay?.destroy();
+    this.orbFusionOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
     this.runCompleteOverlay?.destroy();
     this.bossDefeatPending = false;
@@ -1731,6 +2092,7 @@ export class CombatScene extends Phaser.Scene {
     this.levelUpOverlay = undefined;
     this.orbLoadoutOverlay = undefined;
     this.orbUpgradeOverlay = undefined;
+    this.orbFusionOverlay = undefined;
     this.bossRewardOverlay = undefined;
     this.runCompleteOverlay = undefined;
     this.progression = undefined;
@@ -1743,6 +2105,7 @@ export class CombatScene extends Phaser.Scene {
     this.debugSetBossPosition = undefined;
     this.debugAdvanceHiveCycle = undefined;
     this.debugPlaceTemporaryOrb = undefined;
+    this.debugAddOrb = undefined;
   };
 
   private createTextures(): void {
@@ -1876,6 +2239,21 @@ export class CombatScene extends Phaser.Scene {
                 .moveTo(centerX, centerY - 5).lineTo(centerX, centerY + 5)
                 .moveTo(centerX - 4, centerY - 4).lineTo(centerX + 4, centerY + 4)
                 .moveTo(centerX + 4, centerY - 4).lineTo(centerX - 4, centerY + 4);
+              break;
+            case 'beam':
+              graphics.moveTo(centerX - 5, centerY + 3).lineTo(centerX + 5, centerY - 3)
+                .moveTo(centerX - 4, centerY - 4).lineTo(centerX + 4, centerY + 4);
+              break;
+            case 'swarm':
+              graphics.moveTo(centerX - 5, centerY).lineTo(centerX, centerY - 4)
+                .lineTo(centerX + 5, centerY).lineTo(centerX, centerY + 4)
+                .lineTo(centerX - 5, centerY);
+              break;
+            case 'seed':
+              graphics.moveTo(centerX, centerY - 5).lineTo(centerX + 4, centerY)
+                .lineTo(centerX, centerY + 5).lineTo(centerX - 4, centerY)
+                .lineTo(centerX, centerY - 5)
+                .moveTo(centerX - 3, centerY).lineTo(centerX + 3, centerY);
               break;
           }
           graphics.strokePath();

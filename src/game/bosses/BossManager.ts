@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
-import { clamp, normalize, type Vector } from '../math/vector';
+import { clamp, distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
   OrbManager,
   OrbSprite,
@@ -348,6 +348,22 @@ export class BossManager implements BossEncounter {
     return targets;
   }
 
+  applySegmentDamage(
+    start: Vector,
+    end: Vector,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: string,
+  ): ManagedPartId[] {
+    const targets = this.exposedParts().filter((partId) => {
+      const sprite = this.spriteFor(partId);
+      return partId !== excludedTargetId
+        && distanceToSegment(sprite, start, end) <= thickness / 2;
+    });
+    for (const partId of targets) this.damagePart(partId, damage);
+    return targets;
+  }
+
   getTargetPosition(targetId: string): Vector | null {
     const partId = this.exposedParts().find((candidate) => candidate === targetId);
     const sprite = partId && this.spriteFor(partId);
@@ -588,6 +604,9 @@ export class BossManager implements BossEncounter {
       } : {}),
       ...(temporary?.inheritedOutputScale
         ? { inheritedOutputScale: temporary.inheritedOutputScale }
+        : {}),
+      ...(temporary?.fusionSource
+        ? { fusionSource: { ...temporary.fusionSource } }
         : {}),
     });
     if (defeated) this.reportDefeat();

@@ -2,6 +2,10 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { OrbSnapshot } from '../orbs/OrbManager';
 import { ORB_CORE_DEFINITIONS } from '../orbs/orbCoreRules';
+import {
+  ORB_FUSION_DEFINITIONS,
+  orbDefinition,
+} from '../orbs/orbFusionRules';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
 import type { RunRewardChoice } from '../progression/runRewardRules';
@@ -146,7 +150,10 @@ export class LevelUpOverlay {
       const rank = build.rank(choice.id);
       return `${ABILITY_DEFINITIONS[choice.id].label}  ${rank} → ${rank + 1}`;
     }
-    const label = ORB_CORE_DEFINITIONS[choice.coreType].label;
+    if (choice.kind === 'orb-fusion') {
+      return `${ORB_FUSION_DEFINITIONS[choice.fusionType].label} 융합`;
+    }
+    const label = orbDefinition(choice.coreType).label;
     return choice.kind === 'orb-add' ? `${label} Lv1` : `${label} 강화`;
   }
 
@@ -156,7 +163,12 @@ export class LevelUpOverlay {
     orbs: readonly OrbSnapshot[],
   ): string {
     if (choice.kind === 'ability') return this.nextEffect(choice.id, build);
-    const definition = ORB_CORE_DEFINITIONS[choice.coreType];
+    if (choice.kind === 'orb-fusion') {
+      const definition = ORB_FUSION_DEFINITIONS[choice.fusionType];
+      const [first, second] = definition.materials;
+      return `${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label} · ${definition.summary}`;
+    }
+    const definition = orbDefinition(choice.coreType);
     if (choice.kind === 'orb-add') return definition.summary;
     const levels = orbs
       .filter(({ coreType, level }) => (

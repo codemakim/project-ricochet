@@ -10,6 +10,7 @@ import {
 } from '../constants';
 import { GAME_TUNING } from '../config/gameTuning';
 import { normalize, type Vector } from '../math/vector';
+import { photonFusionProfile } from '../combat/FusionCombatState';
 import type { PermanentDirectHitContext } from '../progression/BuildState';
 import { LaunchQueue } from './launchQueue';
 import {
@@ -20,7 +21,6 @@ import {
   type RecoverySource,
 } from './orbRules';
 import {
-  ORB_CORE_DEFINITIONS,
   applyCoreWallBounce,
   conductionFlightProfile,
   coreDirectEffectProfile,
@@ -32,6 +32,14 @@ import {
   type OrbCoreId,
   type OrbCoreState,
 } from './orbCoreRules';
+import {
+  fusionLevel,
+  fusionMaterialPairs,
+  isBasicOrbCoreId,
+  orbMaximumLevel,
+  type FusionOrbId,
+  type OrbTypeId,
+} from './orbFusionRules';
 
 export { ORB_RADIUS } from '../constants';
 const ATTRACTION_DURATION_MS = 100;
@@ -41,7 +49,7 @@ const DEFAULT_RESTORED_CHARGES = 3;
 
 export interface OrbSnapshot {
   id: number;
-  coreType: OrbCoreId;
+  coreType: OrbTypeId;
   level: number;
   coreState: OrbCoreState;
   state: OrbState;
@@ -55,7 +63,7 @@ export interface OrbSnapshot {
 }
 
 export interface PermanentHitResult extends HitResult {
-  coreType: OrbCoreId;
+  coreType: OrbTypeId;
   coreLevel: number;
   conductionTriggered: boolean;
   explosionFailures: number;
@@ -71,10 +79,11 @@ export interface OrbCallbacks {
   onRecovery?: (orbId: number, source: RecoverySource) => void;
   onCoreWallBounce?: (event: {
     orbId: number;
-    coreType: OrbCoreId;
+    coreType: OrbTypeId;
     coreLevel: number;
     position: Vector;
     echoStacks: number;
+    segmentStart: Vector;
   }) => void;
   onConductionFlight?: (event: {
     orbId: number;
@@ -105,11 +114,13 @@ interface OrbRecord extends OrbSnapshot {
   nextFlightLinkAtMs: number;
   inertiaHoldUntilMs: number;
   inertiaHeldSpeed: number;
+  segmentStart: Vector;
 }
 
 export class OrbStore {
   private readonly records: OrbRecord[];
   private readonly launchQueue = new LaunchQueue(LAUNCH_INTERVAL_MS);
+  private nextId = STARTING_ORB_COUNT;
   private aimActivated = false;
   private startingCoresConfigured = false;
 
@@ -155,18 +166,19 @@ export class OrbStore {
 
   addOrb(coreType: OrbCoreId = 'echo'): boolean {
     if (this.records.length >= this.runtimeOrbLimit()) return false;
-    const record = this.createRecord(this.records.length, coreType);
+    const record = this.createRecord(this.nextId, coreType);
+    this.nextId += 1;
     this.records.push(record);
     if (this.aimActivated) this.enqueue(record);
     return true;
   }
 
-  upgradeOrb(id: number, expectedCoreType?: OrbCoreId): boolean {
+  upgradeOrb(id: number, expectedCoreType?: OrbTypeId): boolean {
     const record = this.records.find((candidate) => candidate.id === id);
     if (
       !record
       || (expectedCoreType !== undefined && record.coreType !== expectedCoreType)
-      || record.level >= ORB_CORE_DEFINITIONS[record.coreType].maximumLevel
+      || record.level >= orbMaximumLevel(record.coreType)
     ) {
       return false;
     }
@@ -174,7 +186,30 @@ export class OrbStore {
     return true;
   }
 
-  private createRecord(id: number, coreType: OrbCoreId): OrbRecord {
+  fuseOrbs(firstId: number, secondId: number, fusionType: FusionOrbId): boolean {
+    if (firstId === secondId) return false;
+    const first = this.records.find(({ id }) => id === firstId);
+    const second = this.records.find(({ id }) => id === secondId);
+    if (!first || !second) return false;
+    const valid = fusionMaterialPairs(this.getSnapshot(), fusionType).some((pair) => (
+      (pair.firstId === firstId && pair.secondId === secondId)
+      || (pair.firstId === secondId && pair.secondId === firstId)
+    ));
+    if (!valid) return false;
+
+    first.coreType = fusionType;
+    first.level = fusionLevel(first.level, second.level);
+    first.coreState = createOrbCoreState();
+    first.echoPath.length = 0;
+    first.nextFlightLinkAtMs = 0;
+    first.inertiaHoldUntilMs = 0;
+    first.inertiaHeldSpeed = 0;
+    const secondIndex = this.records.indexOf(second);
+    this.records.splice(secondIndex, 1);
+    return true;
+  }
+
+  private createRecord(id: number, coreType: OrbTypeId): OrbRecord {
     return {
       id,
       coreType,
@@ -204,6 +239,7 @@ export class OrbStore {
       nextFlightLinkAtMs: 0,
       inertiaHoldUntilMs: 0,
       inertiaHeldSpeed: 0,
+      segmentStart: { x: 0, y: 0 },
     };
   }
 
@@ -244,7 +280,9 @@ export class OrbStore {
       record.wallHits + 1,
     );
     record.directHitsSinceWall = 0;
-    record.coreState = applyCoreWallBounce(record.coreType, record.level, record.coreState);
+    if (isBasicOrbCoreId(record.coreType)) {
+      record.coreState = applyCoreWallBounce(record.coreType, record.level, record.coreState);
+    }
     if (record.coreType === 'echo') {
       record.echoPath.push({ ...record.position });
       if (record.echoPath.length > GAME_TUNING.orbCores.echo.replay.pointCap) {
@@ -257,7 +295,9 @@ export class OrbStore {
       coreLevel: record.level,
       position: { ...record.position },
       echoStacks: record.coreState.echoStacks,
+      segmentStart: { ...record.segmentStart },
     });
+    record.segmentStart = { ...record.position };
     this.normalizeActiveSpeed(record);
     return true;
   }
@@ -306,18 +346,23 @@ export class OrbStore {
     const echoPath = record.coreType === 'echo'
       ? record.echoPath.map((point) => ({ ...point }))
       : [];
-    const core = resolveCoreDirectHit(
-      record.coreType,
-      record.level,
-      record.coreState,
-      speed / ORB_SPEED,
-    );
-    const coreEffects = coreDirectEffectProfile(
-      record.coreType,
-      record.level,
-      precisionHit,
-      echoStacks,
-    );
+    const core = isBasicOrbCoreId(record.coreType)
+      ? resolveCoreDirectHit(record.coreType, record.level, record.coreState, speed / ORB_SPEED)
+      : {
+        directDamageBonus: 0,
+        conductionTriggered: false,
+        next: { ...record.coreState },
+      };
+    const coreEffects = isBasicOrbCoreId(record.coreType)
+      ? coreDirectEffectProfile(record.coreType, record.level, precisionHit, echoStacks)
+      : {
+        shockwave: null,
+        replayPath: false,
+        holdTopSpeedMs: 0,
+        pierce: false,
+        kineticExplosion: null,
+        chain: null,
+      };
     const conditionalBonus = Math.min(
       GAME_TUNING.build.conditionalDamageCap,
       core.directDamageBonus + this.getConditionalDirectDamageBonus({
@@ -379,7 +424,9 @@ export class OrbStore {
 
   recordExplosionOutcome(id: number, triggered: boolean): void {
     const record = this.requireRecord(id);
-    record.coreState = resolveExplosionOutcome(record.coreType, record.coreState, triggered);
+    if (isBasicOrbCoreId(record.coreType)) {
+      record.coreState = resolveExplosionOutcome(record.coreType, record.coreState, triggered);
+    }
   }
 
   refreshCombatModifiers(id?: number): void {
@@ -510,7 +557,9 @@ export class OrbStore {
     record.state = transitionOrb(record.state, 'stored');
     record.charges = DEFAULT_RESTORED_CHARGES;
     record.firstHitPending = source === 'proximity';
-    record.coreState = resolveCoreRecovery(record.coreType, record.coreState, source!);
+    record.coreState = isBasicOrbCoreId(record.coreType)
+      ? resolveCoreRecovery(record.coreType, record.coreState, source!)
+      : createOrbCoreState();
     record.velocity = { x: 0, y: 0 };
     this.callbacks.onRecovery?.(record.id, source!);
     this.enqueue(record);
@@ -540,6 +589,7 @@ export class OrbStore {
       x: playerPosition.x + direction.x * clearance,
       y: playerPosition.y + direction.y * clearance,
     };
+    record.segmentStart = { ...record.position };
     const speed = this.speedTarget(record);
     record.appliedFlightSpeedMultiplier = this.flightSpeedMultiplier(record);
     record.velocity = { x: direction.x * speed, y: direction.y * speed };
@@ -550,7 +600,7 @@ export class OrbStore {
   }
 
   private requireRecord(id: number): OrbRecord {
-    const record = this.records[id];
+    const record = this.records.find((candidate) => candidate.id === id);
     if (!record) throw new RangeError(`unknown orb id: ${id}`);
     return record;
   }
@@ -564,7 +614,11 @@ export class OrbStore {
 
   private speedTarget(record: OrbRecord): number {
     const base = this.getChargedSpeed()
-      * coreLaunchSpeedMultiplier(record.coreType, record.level)
+      * (isBasicOrbCoreId(record.coreType)
+        ? coreLaunchSpeedMultiplier(record.coreType, record.level)
+        : record.coreType === 'photon-orbit'
+          ? photonFusionProfile(record.level).speedMultiplier
+          : 1)
       * this.getWallSpeedMultiplier(record.wallHits)
       * this.flightSpeedMultiplier(record);
     return record.lastNowMs < record.inertiaHoldUntilMs
@@ -620,7 +674,7 @@ export class OrbManager {
   declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
 
   private readonly store: OrbStore;
-  private readonly sprites: OrbSprite[];
+  private sprites: OrbSprite[];
   private readonly spriteIds = new Map<OrbSprite, number>();
   private readonly world: Phaser.Physics.Arcade.World;
   private readonly scene: Phaser.Scene;
@@ -676,7 +730,7 @@ export class OrbManager {
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
       this.debugPlaceOrb = (id, position) => {
         const owned = this.resolveOwnedOrb(id);
-        const state = this.store.getSnapshot()[id];
+        const state = this.store.getSnapshot().find((candidate) => candidate.id === id);
         if (!owned || state?.state !== 'active') return false;
         const body = owned.sprite.body as Phaser.Physics.Arcade.Body;
         const velocity = { x: body.velocity.x, y: body.velocity.y };
@@ -705,7 +759,7 @@ export class OrbManager {
   addOrb(coreType: OrbCoreId = 'echo'): boolean {
     if (this.destroyed) return false;
     if (!this.store.addOrb(coreType)) return false;
-    const id = this.sprites.length;
+    const id = this.store.getSnapshot().at(-1)!.id;
     const sprite = this.createSprite(id);
     this.sprites.push(sprite);
     this.synchronizeSprites();
@@ -713,8 +767,20 @@ export class OrbManager {
     return true;
   }
 
-  upgradeOrb(id: number, expectedCoreType?: OrbCoreId): boolean {
+  upgradeOrb(id: number, expectedCoreType?: OrbTypeId): boolean {
     return !this.destroyed && this.store.upgradeOrb(id, expectedCoreType);
+  }
+
+  fuseOrbs(firstId: number, secondId: number, fusionType: FusionOrbId): boolean {
+    if (this.destroyed || !this.store.fuseOrbs(firstId, secondId, fusionType)) return false;
+    const removed = this.sprites.find((sprite) => this.spriteIds.get(sprite) === secondId);
+    if (removed) {
+      this.spriteIds.delete(removed);
+      this.sprites = this.sprites.filter((sprite) => sprite !== removed);
+      removed.destroy();
+    }
+    this.synchronizeSprites();
+    return true;
   }
 
   onOrbAdded(listener: (orb: OrbSprite) => void): () => void {
@@ -728,7 +794,7 @@ export class OrbManager {
     for (const sprite of this.sprites) {
       const id = this.spriteIds.get(sprite);
       if (id === undefined) continue;
-      const state = snapshot[id];
+      const state = snapshot.find((candidate) => candidate.id === id);
       if (state?.state === 'active') {
         this.synchronizeOwnedBody(sprite, id);
       }
@@ -808,7 +874,10 @@ export class OrbManager {
     const snapshot = this.store.getSnapshot();
     for (const sprite of this.sprites) {
       const id = this.spriteIds.get(sprite);
-      if (id === undefined || snapshot[id]?.state !== 'active') continue;
+      if (
+        id === undefined
+        || snapshot.find((candidate) => candidate.id === id)?.state !== 'active'
+      ) continue;
       this.synchronizeOwnedBody(sprite, id);
     }
     this.store.refreshCombatModifiers();
@@ -832,7 +901,7 @@ export class OrbManager {
 
   private synchronizeSprites(): void {
     for (const state of this.store.getSnapshot()) {
-      const sprite = this.sprites[state.id];
+      const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === state.id);
       if (!sprite) continue;
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
@@ -873,7 +942,7 @@ export class OrbManager {
   private resolveOwnedOrb(orb: OrbSprite | number): { id: number; sprite: OrbSprite } | null {
     if (typeof orb === 'number') {
       if (!Number.isInteger(orb)) return null;
-      const sprite = this.sprites[orb];
+      const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === orb);
       return sprite ? { id: orb, sprite } : null;
     }
     const id = this.spriteIds.get(orb);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrbSnapshot } from '../orbs/OrbManager';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import type { OrbTypeId } from '../orbs/orbFusionRules';
 import {
   ABILITY_MAX_RANKS,
   createEmptyAbilityRanks,
@@ -13,9 +12,9 @@ import {
   type RunRewardContext,
 } from './runRewardRules';
 
-type RewardOrb = Pick<OrbSnapshot, 'coreType' | 'level'>;
+type RewardOrb = { coreType: OrbTypeId; level: number };
 
-function orb(coreType: OrbCoreId, level = 1): RewardOrb {
+function orb(coreType: OrbTypeId, level = 1): RewardOrb {
   return { coreType, level };
 }
 
@@ -26,7 +25,14 @@ function context(
   return {
     orbs,
     abilityRanks,
-    abilityEligibility: { coreTypes: orbs.map(({ coreType }) => coreType) },
+    abilityEligibility: {
+      coreTypes: orbs.map(({ coreType }) => coreType)
+        .filter((coreType): coreType is Exclude<OrbTypeId, 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator'> => (
+          !coreType.includes('-orbit')
+          && coreType !== 'resonant-swarm'
+          && coreType !== 'nano-proliferator'
+        )),
+    },
   };
 }
 
@@ -62,7 +68,7 @@ describe('run reward rules', () => {
     expect(kinds(choices).filter((kind) => kind === 'ability')).toHaveLength(2);
   });
 
-  it('replaces additions with distinct eligible core upgrades at six orbs', () => {
+  it('mixes one fusion, one eligible core upgrade, and one ability at six orbs', () => {
     const choices = selectRunRewardOptions(context([
       orb('echo'),
       orb('echo'),
@@ -74,9 +80,22 @@ describe('run reward rules', () => {
     const upgrades = choices.filter((choice) => choice.kind === 'orb-upgrade');
 
     expect(choices.some((choice) => choice.kind === 'orb-add')).toBe(false);
-    expect(upgrades).toHaveLength(2);
-    expect(new Set(upgrades.map(({ coreType }) => coreType))).toHaveLength(2);
+    expect(choices).toContainEqual({ kind: 'orb-fusion', fusionType: 'photon-orbit' });
+    expect(upgrades).toHaveLength(1);
     expect(choices.filter((choice) => choice.kind === 'ability')).toHaveLength(1);
+  });
+
+  it('does not offer a fusion recipe already owned in the run', () => {
+    const choices = selectRunRewardOptions(context([
+      orb('inertia'),
+      orb('conduction'),
+      orb('split'),
+      orb('corrosion'),
+      orb('echo'),
+      { coreType: 'photon-orbit', level: 4 } as RewardOrb,
+    ]), 8, 0);
+
+    expect(choices).not.toContainEqual({ kind: 'orb-fusion', fusionType: 'photon-orbit' });
   });
 
   it('excludes a core type only when all physical copies are level five', () => {
@@ -94,7 +113,7 @@ describe('run reward rules', () => {
     expect(upgrades).not.toContainEqual({ kind: 'orb-upgrade', coreType: 'echo' });
   });
 
-  it('offers only abilities when all six physical orbs are level five', () => {
+  it('offers a fusion and abilities when all six basic orbs are level five', () => {
     const choices = selectRunRewardOptions(context([
       orb('echo', 5),
       orb('corrosion', 5),
@@ -104,8 +123,9 @@ describe('run reward rules', () => {
       orb('explosion', 5),
     ]), 12, 9);
 
-    expect(choices).toHaveLength(3);
-    expect(choices.every((choice) => choice.kind === 'ability')).toBe(true);
+    expect(choices.some((choice) => choice.kind === 'orb-fusion')).toBe(true);
+    expect(choices.some((choice) => choice.kind === 'orb-upgrade')).toBe(false);
+    expect(choices.some((choice) => choice.kind === 'ability')).toBe(true);
   });
 
   it('filters capped abilities from mixed choices', () => {
@@ -119,7 +139,7 @@ describe('run reward rules', () => {
       orb('explosion', 5),
     ], ranks), 20, 7);
 
-    expect(choices).toEqual([{ kind: 'ability', id: 'firepower' }]);
+    expect(choices).toContainEqual({ kind: 'ability', id: 'firepower' });
   });
 
   it('returns the same structural choices for the same run inputs', () => {
@@ -142,6 +162,9 @@ describe('run reward rules', () => {
       orb('explosion', 5),
     ], { ...ABILITY_MAX_RANKS }), 50, 3);
 
-    expect(choices).toEqual([{ kind: 'orb-upgrade', coreType: 'echo' }]);
+    expect(choices).toEqual([
+      { kind: 'orb-fusion', fusionType: 'nano-proliferator' },
+      { kind: 'orb-upgrade', coreType: 'echo' },
+    ]);
   });
 });

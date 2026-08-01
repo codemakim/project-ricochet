@@ -175,6 +175,65 @@ describe('OrbStore', () => {
     });
   });
 
+  it('atomically consumes two selected materials into one stable-id fusion orb', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.addOrb('inertia');
+    store.addOrb('conduction');
+    store.addOrb('split');
+    store.addOrb('corrosion');
+    store.addOrb('echo');
+    for (let level = 1; level < 4; level += 1) store.upgradeOrb(1, 'inertia');
+    store.upgradeOrb(2, 'conduction');
+
+    expect(store.fuseOrbs(1, 2, 'photon-orbit')).toBe(true);
+    expect(store.getSnapshot()).toHaveLength(5);
+    expect(store.getSnapshot()).toContainEqual(expect.objectContaining({
+      id: 1,
+      coreType: 'photon-orbit',
+      level: 5,
+      coreState: { echoStacks: 0, explosionFailures: 0 },
+    }));
+    expect(store.getSnapshot().some(({ id }) => id === 2)).toBe(false);
+  });
+
+  it('rejects stale, duplicate, wrong-material, and fusion-material recipes', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.addOrb('inertia');
+    store.addOrb('conduction');
+    store.addOrb('split');
+
+    expect(store.fuseOrbs(1, 1, 'photon-orbit')).toBe(false);
+    expect(store.fuseOrbs(0, 2, 'photon-orbit')).toBe(false);
+    expect(store.fuseOrbs(1, 99, 'photon-orbit')).toBe(false);
+    expect(store.fuseOrbs(1, 2, 'photon-orbit')).toBe(true);
+    expect(store.fuseOrbs(1, 3, 'resonant-swarm')).toBe(false);
+  });
+
+  it('uses photon speed and reports each reflected flight segment', () => {
+    const onCoreWallBounce = vi.fn();
+    const store = new OrbStore(EXPERIMENT_DEFAULTS, { onCoreWallBounce });
+    store.addOrb('inertia');
+    store.addOrb('conduction');
+    expect(store.fuseOrbs(1, 2, 'photon-orbit')).toBe(true);
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.update(100, 100, player, up);
+
+    expect(Math.hypot(
+      store.getSnapshot().find(({ id }) => id === 1)!.velocity.x,
+      store.getSnapshot().find(({ id }) => id === 1)!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED * 1.04);
+    const start = store.getSnapshot().find(({ id }) => id === 1)!.position;
+    store.synchronizeActive(1, { x: 160, y: 80 }, { x: 100, y: -300 });
+    store.handleWallBounce(1);
+    expect(onCoreWallBounce).toHaveBeenCalledWith(expect.objectContaining({
+      orbId: 1,
+      coreType: 'photon-orbit',
+      segmentStart: start,
+      position: { x: 160, y: 80 },
+    }));
+  });
+
   it('configures one starting core exactly once before aim', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 

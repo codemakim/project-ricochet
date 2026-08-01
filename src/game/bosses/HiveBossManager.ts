@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-import { normalize, type Vector } from '../math/vector';
+import { distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
   OrbManager,
   OrbSprite,
@@ -323,6 +323,23 @@ export class HiveBossManager implements BossEncounter {
     return targets;
   }
 
+  applySegmentDamage(
+    start: Vector,
+    end: Vector,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: string,
+  ): HivePartId[] {
+    const eligible = new Set(exposedHiveParts(this.state));
+    const targets = PART_ORDER.filter((partId) => (
+      eligible.has(partId)
+      && partId !== excludedTargetId
+      && distanceToSegment(this.parts[partId], start, end) <= thickness / 2
+    ));
+    for (const partId of targets) this.damagePart(partId, damage);
+    return targets;
+  }
+
   getTargetPosition(targetId: string): Vector | null {
     const partId = exposedHiveParts(this.state).find((candidate) => candidate === targetId);
     const sprite = partId && this.parts[partId];
@@ -524,6 +541,9 @@ export class HiveBossManager implements BossEncounter {
       } : {}),
       ...(temporary?.inheritedOutputScale
         ? { inheritedOutputScale: temporary.inheritedOutputScale }
+        : {}),
+      ...(temporary?.fusionSource
+        ? { fusionSource: { ...temporary.fusionSource } }
         : {}),
     });
   }

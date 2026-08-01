@@ -13,7 +13,9 @@ type TextureShape =
   | 'hiveShooter'
   | 'reflectorWall';
 
-export type OrbCoreSymbol = 'wave' | 'drop' | 'bolt' | 'arrow' | 'fork' | 'burst';
+export type OrbCoreSymbol =
+  | 'wave' | 'drop' | 'bolt' | 'arrow' | 'fork' | 'burst'
+  | 'beam' | 'swarm' | 'seed';
 
 export type CombatTextureDescriptor = ProjectileVisualTuning & {
   shape: TextureShape;
@@ -49,6 +51,35 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
       { ...descriptor, notches: level },
     ]),
   ));
+  const fusionTextures = {
+    'photon-orbit': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.photonOrbit.fill,
+      accent: GAME_TUNING.orbFusions.photonOrbit.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'beam' as const,
+    },
+    'resonant-swarm': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.resonantSwarm.fill,
+      accent: GAME_TUNING.orbFusions.resonantSwarm.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'swarm' as const,
+    },
+    'nano-proliferator': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.nanoProliferator.fill,
+      accent: GAME_TUNING.orbFusions.nanoProliferator.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'seed' as const,
+    },
+  };
+  const leveledFusions = Object.fromEntries(Object.entries(fusionTextures).flatMap(
+    ([fusion, descriptor]) => Array.from({ length: 9 }, (_, index) => [
+      `orb-${fusion}-lv${index + 1}`,
+      { ...descriptor, notches: index + 1 },
+    ]),
+  ));
   return {
     'orb-charged': { ...friendly.permanentOrb, shape: 'outlinedCircle' },
     'orb-echo': coreTextures.echo,
@@ -58,6 +89,7 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     'orb-split': coreTextures.split,
     'orb-explosion': coreTextures.explosion,
     ...leveledCores,
+    ...leveledFusions,
     'orb-temporary': { ...friendly.temporaryOrb, shape: 'outlinedCircle' },
     'enemy-bullet': { ...hostile.enemyBullet, shape: 'centeredCircle' },
     'boss-basic-bullet': { ...hostile.bossBasic, shape: 'centeredCircle' },
