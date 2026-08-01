@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y } from '../constants';
 export interface RangeTuning { minimum: number; maximum: number }
 export type BossKind = 'sentinel' | 'hive' | 'siege';
 type FiveLevelValues = readonly [number, number, number, number, number];
+type NineLevelValues = readonly [number, number, number, number, number, number, number, number, number];
 
 export interface ProjectileVisualTuning {
   fill: number;
@@ -67,7 +68,11 @@ export interface GameTuning {
       maximumCards: number;
       early: { maximumOrbs: number; orbCards: number; abilityCards: number };
       growing: { maximumOrbs: number; orbCards: number; abilityCards: number };
-      full: { orbUpgradeCards: number; minimumAbilityCards: number };
+      full: {
+        fusionCards: number;
+        orbUpgradeCards: number;
+        minimumAbilityCards: number;
+      };
     };
   };
   projectiles: {
@@ -270,6 +275,55 @@ export interface GameTuning {
       accent: number;
     };
   };
+  orbFusions: {
+    photonOrbit: {
+      speedMultiplierByLevel: NineLevelValues;
+      beamLengthByLevel: NineLevelValues;
+      beamThicknessByLevel: NineLevelValues;
+      beamDamageByLevel: NineLevelValues;
+      trail: {
+        fromLevel: number;
+        durationMsByLevel: NineLevelValues;
+        damageByLevel: NineLevelValues;
+        maximumSegmentsByLevel: NineLevelValues;
+        tickMs: number;
+        thickness: number;
+      };
+      intersection: { fromLevel: number; radius: number; damage: number };
+      fill: number;
+      accent: number;
+    };
+    resonantSwarm: {
+      chanceByLevel: NineLevelValues;
+      countByLevel: NineLevelValues;
+      lifetimeMsByLevel: NineLevelValues;
+      targetCountByLevel: NineLevelValues;
+      radiusByLevel: NineLevelValues;
+      damageByLevel: NineLevelValues;
+      finalRadiusByLevel: NineLevelValues;
+      finalDamageByLevel: NineLevelValues;
+      cooldownMs: number;
+      siblingRadius: number;
+      siblingDamageBonus: number;
+      maximumSiblingBonus: number;
+      fill: number;
+      accent: number;
+    };
+    nanoProliferator: {
+      chanceByLevel: NineLevelValues;
+      countByLevel: NineLevelValues;
+      radiusByLevel: NineLevelValues;
+      durationMsByLevel: NineLevelValues;
+      damageByLevel: NineLevelValues;
+      maximumGenerationByLevel: NineLevelValues;
+      cooldownMs: number;
+      tickMs: number;
+      maximumSeeds: number;
+      spreadRadius: number;
+      fill: number;
+      accent: number;
+    };
+  };
   temporaryOrbs: {
     radius: number;
     speed: number;
@@ -400,7 +454,7 @@ export const GAME_TUNING = {
       maximumCards: 3,
       early: { maximumOrbs: 2, orbCards: 2, abilityCards: 1 },
       growing: { maximumOrbs: 5, orbCards: 1, abilityCards: 2 },
-      full: { orbUpgradeCards: 2, minimumAbilityCards: 1 },
+      full: { fusionCards: 1, orbUpgradeCards: 2, minimumAbilityCards: 1 },
     },
   },
   projectiles: {
@@ -574,6 +628,55 @@ export const GAME_TUNING = {
       accent: 0xffe4ad,
     },
   },
+  orbFusions: {
+    photonOrbit: {
+      speedMultiplierByLevel: [1.04, 1.04, 1.08, 1.08, 1.08, 1.12, 1.12, 1.12, 1.16],
+      beamLengthByLevel: [260, 280, 300, 300, 320, 340, 340, 360, 380],
+      beamThicknessByLevel: [8, 8, 8, 10, 10, 12, 12, 14, 16],
+      beamDamageByLevel: [0.35, 0.4, 0.45, 0.45, 0.5, 0.55, 0.6, 0.65, 0.75],
+      trail: {
+        fromLevel: 4,
+        durationMsByLevel: [0, 0, 0, 900, 900, 1050, 1200, 1350, 1500],
+        damageByLevel: [0, 0, 0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.22],
+        maximumSegmentsByLevel: [0, 0, 0, 2, 2, 3, 4, 4, 5],
+        tickMs: 300,
+        thickness: 8,
+      },
+      intersection: { fromLevel: 9, radius: 42, damage: 0.8 },
+      fill: 0x70e8ff,
+      accent: 0xf1fdff,
+    },
+    resonantSwarm: {
+      chanceByLevel: [0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.36, 0.39, 0.42],
+      countByLevel: [2, 2, 2, 3, 3, 3, 3, 4, 4],
+      lifetimeMsByLevel: [1200, 1300, 1400, 1600, 1700, 1800, 1900, 2050, 2200],
+      targetCountByLevel: [1, 1, 1, 1, 1, 2, 2, 2, 3],
+      radiusByLevel: [100, 110, 120, 130, 140, 150, 160, 170, 180],
+      damageByLevel: [0.16, 0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.31, 0.35],
+      finalRadiusByLevel: [24, 24, 26, 28, 28, 30, 32, 34, 38],
+      finalDamageByLevel: [0.15, 0.17, 0.19, 0.21, 0.23, 0.25, 0.28, 0.32, 0.4],
+      cooldownMs: 160,
+      siblingRadius: 80,
+      siblingDamageBonus: 0.12,
+      maximumSiblingBonus: 3,
+      fill: 0x9d8cff,
+      accent: 0xf0eaff,
+    },
+    nanoProliferator: {
+      chanceByLevel: [0.22, 0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.37, 0.4],
+      countByLevel: [2, 2, 2, 3, 3, 3, 3, 4, 4],
+      radiusByLevel: [28, 30, 32, 34, 36, 38, 40, 42, 44],
+      durationMsByLevel: [2200, 2400, 2600, 2800, 3000, 3200, 3400, 3700, 4000],
+      damageByLevel: [0.1, 0.11, 0.12, 0.13, 0.14, 0.16, 0.18, 0.2, 0.24],
+      maximumGenerationByLevel: [0, 0, 0, 0, 0, 0, 1, 1, 2],
+      cooldownMs: 180,
+      tickMs: 500,
+      maximumSeeds: 14,
+      spreadRadius: 22,
+      fill: 0x72e69b,
+      accent: 0xe5ffec,
+    },
+  },
   temporaryOrbs: {
     radius: 6,
     speed: 440,
@@ -713,7 +816,7 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 
 export function validateGameTuning(tuning: GameTuning): void {
   const {
-    boss, enemies, encounter, rewardFlow, projectiles, build, orbCores, temporaryOrbs,
+    boss, enemies, encounter, rewardFlow, projectiles, build, orbCores, orbFusions, temporaryOrbs,
     bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
   finite(boss.y, 'boss.y');
@@ -793,6 +896,10 @@ export function validateGameTuning(tuning: GameTuning): void {
     }
   }
   nonNegativeInteger(
+    mixedCards.full.fusionCards,
+    'rewardFlow.mixedCards.full.fusionCards',
+  );
+  nonNegativeInteger(
     mixedCards.full.orbUpgradeCards,
     'rewardFlow.mixedCards.full.orbUpgradeCards',
   );
@@ -801,11 +908,45 @@ export function validateGameTuning(tuning: GameTuning): void {
     'rewardFlow.mixedCards.full.minimumAbilityCards',
   );
   if (
-    mixedCards.full.orbUpgradeCards + mixedCards.full.minimumAbilityCards
+    mixedCards.full.fusionCards + mixedCards.full.minimumAbilityCards
       > mixedCards.maximumCards
   ) {
     throw new RangeError('rewardFlow.mixedCards.full must fit maximumCards');
   }
+  const fusionCurves: Array<[string, NineLevelValues, 'positive' | 'nonNegative' | 'probability' | 'integer']> = [
+    ['photonOrbit.speedMultiplierByLevel', orbFusions.photonOrbit.speedMultiplierByLevel, 'positive'],
+    ['photonOrbit.beamLengthByLevel', orbFusions.photonOrbit.beamLengthByLevel, 'positive'],
+    ['photonOrbit.beamThicknessByLevel', orbFusions.photonOrbit.beamThicknessByLevel, 'positive'],
+    ['photonOrbit.beamDamageByLevel', orbFusions.photonOrbit.beamDamageByLevel, 'nonNegative'],
+    ['photonOrbit.trail.durationMsByLevel', orbFusions.photonOrbit.trail.durationMsByLevel, 'nonNegative'],
+    ['photonOrbit.trail.damageByLevel', orbFusions.photonOrbit.trail.damageByLevel, 'nonNegative'],
+    ['photonOrbit.trail.maximumSegmentsByLevel', orbFusions.photonOrbit.trail.maximumSegmentsByLevel, 'integer'],
+    ['resonantSwarm.chanceByLevel', orbFusions.resonantSwarm.chanceByLevel, 'probability'],
+    ['resonantSwarm.countByLevel', orbFusions.resonantSwarm.countByLevel, 'integer'],
+    ['resonantSwarm.lifetimeMsByLevel', orbFusions.resonantSwarm.lifetimeMsByLevel, 'positive'],
+    ['resonantSwarm.targetCountByLevel', orbFusions.resonantSwarm.targetCountByLevel, 'integer'],
+    ['resonantSwarm.radiusByLevel', orbFusions.resonantSwarm.radiusByLevel, 'positive'],
+    ['resonantSwarm.damageByLevel', orbFusions.resonantSwarm.damageByLevel, 'nonNegative'],
+    ['resonantSwarm.finalRadiusByLevel', orbFusions.resonantSwarm.finalRadiusByLevel, 'positive'],
+    ['resonantSwarm.finalDamageByLevel', orbFusions.resonantSwarm.finalDamageByLevel, 'nonNegative'],
+    ['nanoProliferator.chanceByLevel', orbFusions.nanoProliferator.chanceByLevel, 'probability'],
+    ['nanoProliferator.countByLevel', orbFusions.nanoProliferator.countByLevel, 'integer'],
+    ['nanoProliferator.radiusByLevel', orbFusions.nanoProliferator.radiusByLevel, 'positive'],
+    ['nanoProliferator.durationMsByLevel', orbFusions.nanoProliferator.durationMsByLevel, 'positive'],
+    ['nanoProliferator.damageByLevel', orbFusions.nanoProliferator.damageByLevel, 'nonNegative'],
+    ['nanoProliferator.maximumGenerationByLevel', orbFusions.nanoProliferator.maximumGenerationByLevel, 'integer'],
+  ];
+  const validators = { positive, nonNegative, probability, integer: nonNegativeInteger };
+  for (const [name, values, validator] of fusionCurves) {
+    if (values.length !== 9) throw new RangeError(`orbFusions.${name} must contain 9 values`);
+    values.forEach((value, index) => validators[validator](value, `orbFusions.${name}.${index + 1}`));
+  }
+  positive(orbFusions.photonOrbit.trail.tickMs, 'orbFusions.photonOrbit.trail.tickMs');
+  positive(orbFusions.photonOrbit.trail.thickness, 'orbFusions.photonOrbit.trail.thickness');
+  positive(orbFusions.resonantSwarm.cooldownMs, 'orbFusions.resonantSwarm.cooldownMs');
+  positive(orbFusions.nanoProliferator.cooldownMs, 'orbFusions.nanoProliferator.cooldownMs');
+  positive(orbFusions.nanoProliferator.tickMs, 'orbFusions.nanoProliferator.tickMs');
+  positiveInteger(orbFusions.nanoProliferator.maximumSeeds, 'orbFusions.nanoProliferator.maximumSeeds');
   if (
     mixedCards.early.maximumOrbs >= mixedCards.growing.maximumOrbs
     || mixedCards.growing.maximumOrbs >= build.basicGrowth.maximumOrbs

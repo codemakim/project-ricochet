@@ -1,6 +1,7 @@
 import type { BossKind } from '../config/gameTuning';
 import type { Vector } from '../math/vector';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import type { OrbTypeId } from '../orbs/orbFusionRules';
+import type { ResonantSwarmSource } from '../orbs/TemporaryOrbManager';
 
 export type BossTargetId = string;
 
@@ -12,7 +13,7 @@ export interface BossDirectHitEvent {
   position: Vector;
   charged: boolean;
   direction: Vector;
-  coreType?: OrbCoreId;
+  coreType?: OrbTypeId;
   coreLevel?: number;
   conductionTriggered?: boolean;
   explosionFailures?: number;
@@ -22,6 +23,7 @@ export interface BossDirectHitEvent {
   precisionHit?: boolean;
   echoPath?: readonly Vector[];
   inheritedOutputScale?: number;
+  fusionSource?: ResonantSwarmSource;
   killed: boolean;
 }
 
@@ -56,6 +58,13 @@ export interface BossEncounter {
   applyLineDamage(
     axis: 'horizontal' | 'vertical',
     coordinate: number,
+    thickness: number,
+    damage: number,
+    excludedTargetId?: BossTargetId,
+  ): BossTargetId[];
+  applySegmentDamage(
+    start: Vector,
+    end: Vector,
     thickness: number,
     damage: number,
     excludedTargetId?: BossTargetId,

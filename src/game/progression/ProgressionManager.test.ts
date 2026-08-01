@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OrbSnapshot } from '../orbs/OrbManager';
+import { isBasicOrbCoreId } from '../orbs/orbFusionRules';
 import { BuildState } from './BuildState';
 import { ProgressionManager, type ProgressionContext } from './ProgressionManager';
 import { ABILITY_MAX_RANKS } from './progressionRules';
@@ -9,7 +10,7 @@ type RewardOrb = Pick<OrbSnapshot, 'coreType' | 'level'>;
 function liveContext(orbs: RewardOrb[]): () => ProgressionContext {
   return () => ({
     orbs,
-    coreTypes: orbs.map(({ coreType }) => coreType),
+    coreTypes: orbs.map(({ coreType }) => coreType).filter(isBasicOrbCoreId),
   });
 }
 
@@ -74,7 +75,14 @@ describe('ProgressionManager', () => {
 
   it('stops gaining XP only when abilities and all physical orbs are complete', () => {
     const build = new BuildState({ ...ABILITY_MAX_RANKS });
-    const manager = new ProgressionManager(7, build, liveContext(fullMaxedOrbs()));
+    const manager = new ProgressionManager(7, build, liveContext([
+      { coreType: 'photon-orbit', level: 9 },
+      { coreType: 'resonant-swarm', level: 9 },
+      { coreType: 'nano-proliferator', level: 9 },
+      { coreType: 'echo', level: 5 },
+      { coreType: 'explosion', level: 5 },
+      { coreType: 'inertia', level: 5 },
+    ]));
     const startingLevel = manager.getSnapshot().level;
 
     manager.gainExperience(100);

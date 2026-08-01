@@ -1,15 +1,16 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
-import { clamp, normalize, type Vector } from '../math/vector';
+import { clamp, distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
   OrbManager,
   OrbSprite,
   PermanentHitResult,
 } from '../orbs/OrbManager';
-import type { OrbCoreId } from '../orbs/orbCoreRules';
+import type { OrbTypeId } from '../orbs/orbFusionRules';
 import type { HitResult } from '../orbs/orbRules';
 import type {
+  ResonantSwarmSource,
   TemporaryHitResult,
   TemporaryOrbManager,
   TemporaryOrbSprite,
@@ -67,7 +68,7 @@ export interface DirectHitEvent {
   position: Vector;
   charged: boolean;
   direction: Vector;
-  coreType?: OrbCoreId;
+  coreType?: OrbTypeId;
   coreLevel?: number;
   conductionTriggered?: boolean;
   explosionFailures?: number;
@@ -77,6 +78,7 @@ export interface DirectHitEvent {
   precisionHit?: boolean;
   echoPath?: readonly Vector[];
   inheritedOutputScale?: number;
+  fusionSource?: ResonantSwarmSource;
   killed: boolean;
 }
 
@@ -476,6 +478,28 @@ export class EnemyManager {
     return targets.map((enemy) => enemy.enemyId);
   }
 
+  applySegmentDamage(
+    start: Vector,
+    end: Vector,
+    thickness: number,
+    damage: number,
+    excludedEnemyId = -1,
+  ): number[] {
+    const targets = [...this.enemies.values()].filter((enemy) => (
+      enemy.active
+      && enemy.enemyId !== excludedEnemyId
+      && distanceToSegment(enemy, start, end) <= thickness / 2
+    ));
+    const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
+    for (const enemy of targets) {
+      const event = this.createKillEvent(enemy);
+      this.damageEnemy(enemy, damage);
+      if (enemy.hp <= 0) lethal.push({ enemy, event });
+    }
+    for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
+    return targets.map((enemy) => enemy.enemyId);
+  }
+
   applyDirectDamage(enemyId: number, damage: number): boolean {
     const enemy = this.enemies.get(enemyId);
     if (!enemy?.active) return false;
@@ -610,6 +634,9 @@ export class EnemyManager {
       } : {}),
       ...(temporary?.inheritedOutputScale
         ? { inheritedOutputScale: temporary.inheritedOutputScale }
+        : {}),
+      ...(temporary?.fusionSource
+        ? { fusionSource: { ...temporary.fusionSource } }
         : {}),
     });
     if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);

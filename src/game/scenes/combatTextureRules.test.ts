@@ -18,7 +18,7 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   expect(textures['boss-muzzle-flash']).toMatchObject({ shape: 'flash' });
 });
 
-it('defines six permanent orb colors, symbols, and five same-size level notches', () => {
+  it('defines six permanent orb colors, symbols, and five same-size level notches', () => {
   const textures = combatProjectileTextureDescriptors();
   const cores = [
     textures['orb-echo'],
@@ -53,12 +53,29 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   expect(textures['enemy-splitter']).toMatchObject({
     shape: 'crackedRoundedRect', width: 38, height: 30, deferred: true,
   });
+
   expect(textures['enemy-fragment-left']).toMatchObject({
     shape: 'fragmentLeft', width: 22, height: 18, deferred: true,
   });
   expect(textures['enemy-fragment-right']).toMatchObject({
     shape: 'fragmentRight', width: 22, height: 18, deferred: true,
   });
+});
+
+it('defines three distinct fusion silhouettes across all nine levels', () => {
+  const textures = combatProjectileTextureDescriptors();
+  const fusions = [
+    textures['orb-photon-orbit-lv1']!,
+    textures['orb-resonant-swarm-lv1']!,
+    textures['orb-nano-proliferator-lv1']!,
+  ];
+
+  expect(fusions.map(({ fill, symbol }) => ({ fill, symbol }))).toEqual([
+    { fill: 0x70e8ff, symbol: 'beam' },
+    { fill: 0x9d8cff, symbol: 'swarm' },
+    { fill: 0x72e69b, symbol: 'seed' },
+  ]);
+  expect(textures['orb-photon-orbit-lv9']).toMatchObject({ notches: 9 });
 });
 
 it('renders splitter and fragment prototype descriptors for runtime managers', () => {

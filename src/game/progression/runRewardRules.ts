@@ -1,10 +1,14 @@
-import type { OrbSnapshot } from '../orbs/OrbManager';
 import { GAME_TUNING } from '../config/gameTuning';
 import {
-  ORB_CORE_DEFINITIONS,
   ORB_CORE_IDS,
   type OrbCoreId,
 } from '../orbs/orbCoreRules';
+import {
+  availableFusionIds,
+  orbMaximumLevel,
+  type FusionOrbId,
+  type OrbTypeId,
+} from '../orbs/orbFusionRules';
 import {
   eligibleAbilityIds,
   selectAbilityOptions,
@@ -16,10 +20,11 @@ import {
 export type RunRewardChoice =
   | { kind: 'ability'; id: AbilityId }
   | { kind: 'orb-add'; coreType: OrbCoreId }
-  | { kind: 'orb-upgrade'; coreType: OrbCoreId };
+  | { kind: 'orb-upgrade'; coreType: OrbTypeId }
+  | { kind: 'orb-fusion'; fusionType: FusionOrbId };
 
 export interface RunRewardContext {
-  readonly orbs: readonly Pick<OrbSnapshot, 'coreType' | 'level'>[];
+  readonly orbs: readonly { coreType: OrbTypeId; level: number }[];
   readonly abilityRanks: Readonly<AbilityRanks>;
   readonly abilityEligibility: AbilityEligibilityContext;
 }
@@ -51,27 +56,37 @@ export function selectRunRewardOptions(
     ].slice(0, tuning.maximumCards);
   }
 
+  const fusionTypes = rotate(availableFusionIds(
+    context.orbs.map((orb, id) => ({ id, ...orb })),
+  ), choiceLevel, seed);
   const upgradeTypes = rotate(
-    ORB_CORE_IDS.filter((coreType) => context.orbs.some((orb) => (
-      orb.coreType === coreType
-      && orb.level < ORB_CORE_DEFINITIONS[coreType].maximumLevel
-    ))),
+    [...new Set(context.orbs
+      .filter(({ coreType, level }) => level < orbMaximumLevel(coreType))
+      .map(({ coreType }) => coreType))],
     choiceLevel,
     seed,
   );
-  if (upgradeTypes.length === 0) return abilityCards(tuning.maximumCards);
+  if (upgradeTypes.length === 0 && fusionTypes.length === 0) {
+    return abilityCards(tuning.maximumCards);
+  }
+
+  const fusions = fusionTypes.slice(0, tuning.full.fusionCards)
+    .map((fusionType) => ({ kind: 'orb-fusion', fusionType }) as const);
+  const abilities = abilityCards(tuning.full.minimumAbilityCards);
+  const upgradeSlots = Math.max(0, tuning.maximumCards - fusions.length - abilities.length);
 
   return [
-    ...upgradeTypes.slice(0, tuning.full.orbUpgradeCards)
+    ...fusions,
+    ...upgradeTypes.slice(0, Math.min(tuning.full.orbUpgradeCards, upgradeSlots))
       .map((coreType) => ({ kind: 'orb-upgrade', coreType }) as const),
-    ...abilityCards(tuning.full.minimumAbilityCards),
+    ...abilities,
   ].slice(0, tuning.maximumCards);
 }
 
 export function runRewardChoiceKey(choice: RunRewardChoice): string {
-  return choice.kind === 'ability'
-    ? `ability:${choice.id}`
-    : `${choice.kind}:${choice.coreType}`;
+  if (choice.kind === 'ability') return `ability:${choice.id}`;
+  if (choice.kind === 'orb-fusion') return `orb-fusion:${choice.fusionType}`;
+  return `${choice.kind}:${choice.coreType}`;
 }
 
 export function hasEligibleRunReward(context: RunRewardContext): boolean {
@@ -80,8 +95,11 @@ export function hasEligibleRunReward(context: RunRewardContext): boolean {
     context.abilityEligibility,
   ).length > 0) return true;
   if (context.orbs.length < GAME_TUNING.build.basicGrowth.maximumOrbs) return true;
+  if (availableFusionIds(context.orbs.map((orb, id) => ({ id, ...orb }))).length > 0) {
+    return true;
+  }
   return context.orbs.some(({ coreType, level }) => (
-    level < ORB_CORE_DEFINITIONS[coreType].maximumLevel
+    level < orbMaximumLevel(coreType)
   ));
 }
 

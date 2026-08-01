@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
 import { TemporaryOrbManager } from './TemporaryOrbManager';
 
@@ -72,6 +72,7 @@ function createManager(
   getGameplayElapsedMs?: () => number,
   getDamageMultiplier: () => number = () => 1,
   getLifetimeMs: () => number = () => GAME_TUNING.temporaryOrbs.lifetimeMs,
+  onExpired?: (event: unknown) => void,
 ) {
   const group = new FakeGroup();
   const scene = {
@@ -84,6 +85,7 @@ function createManager(
       getGameplayElapsedMs: getGameplayElapsedMs ?? (() => 0),
       getDamageMultiplier,
       getLifetimeMs,
+      onExpired,
     }),
     group,
     scene,
@@ -273,6 +275,41 @@ describe('TemporaryOrbManager', () => {
     ]);
     expect(manager.handleEnemyHit(group.children[0] as unknown as never, 1, 9, 100))
       .toMatchObject({ inheritedOutputScale: 0.35 });
+  });
+
+  it('preserves resonant-swarm provenance through hits and reports only natural expiry', () => {
+    const onExpired = vi.fn();
+    const { manager, group } = createManager(
+      () => 0,
+      () => 100,
+      () => 1,
+      () => 1_500,
+      onExpired,
+    );
+    const fusionSource = {
+      fusionType: 'resonant-swarm' as const,
+      sourceOrbId: 4,
+      level: 7,
+    };
+    manager.spawn({ x: 10, y: 20 }, { x: 1, y: 0 }, 1, {
+      lifetimeMs: 900,
+      fusionSource,
+    });
+
+    expect(manager.getSnapshot()[0]).toMatchObject({ fusionSource });
+    expect(manager.handleEnemyHit(group.children[0] as never, 1, 9, 200))
+      .toMatchObject({ fusionSource });
+    manager.update(999);
+    expect(onExpired).not.toHaveBeenCalled();
+    manager.update(1_000);
+    expect(onExpired).toHaveBeenCalledWith(expect.objectContaining({
+      position: { x: 10, y: 20 },
+      fusionSource,
+    }));
+
+    manager.spawn({ x: 0, y: 0 }, { x: 1, y: 0 }, 1, { fusionSource });
+    manager.destroy();
+    expect(onExpired).toHaveBeenCalledOnce();
   });
 
   it('synchronizes reflected velocity and destroys owned group and records', () => {

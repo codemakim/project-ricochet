@@ -8,6 +8,7 @@ import {
   inactiveBossSnapshot,
   pendingRunRewardKind,
   planDirectHitEffects,
+  planFusionDirectHitEffects,
   planOrbCoreEffects,
   rewardTierForBoss,
   settlePlannedAreaEffects,
@@ -44,6 +45,21 @@ describe('combat scene rules', () => {
       coreType: 'conduction',
       conductionTriggered: true,
     }, true)).toEqual({ spawnCorrosion: false, dischargeConduction: false });
+  });
+
+  it('plans only the selected permanent fusion effect and respects proc decisions', () => {
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'photon-orbit', coreLevel: 9,
+    }, false)).toMatchObject({ photonBeam: { damage: 0.75 } });
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'resonant-swarm', coreLevel: 7,
+    }, false).resonantSwarm).toBeNull();
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'resonant-swarm', coreLevel: 7,
+    }, true).resonantSwarm).toMatchObject({ count: 3, targets: 2 });
+    expect(planFusionDirectHitEffects({
+      source: 'temporary', coreType: 'nano-proliferator', coreLevel: 9,
+    }, true)).toEqual({ photonBeam: null, resonantSwarm: null, nanoSeeds: null });
   });
 
   it('plans approved explosion and split decisions without legacy effects', () => {

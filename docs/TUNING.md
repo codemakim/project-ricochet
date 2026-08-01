@@ -27,6 +27,7 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 레벨별 반향·부식·전도·관성·분열·폭발 수치 | `GAME_TUNING.orbCores.*.*ByLevel` |
 | 분열·폭발 공용 능력 결합 보정 | `GAME_TUNING.orbCores.split.genericSynergy`, `explosion.genericSynergy` |
 | 임시 구슬·부식장 전역 상한 | `GAME_TUNING.temporaryOrbs.cap`, `orbCores.corrosion.globalFieldLimit` |
+| 광자 궤도·공명 군체·나노 증식체 Lv1~Lv9 수치 | `GAME_TUNING.orbFusions` |
 | 코어 호환 보스 유물 | `GAME_TUNING.relics` |
 | 코어 해금 비용 | `META_TUNING.corePrices` |
 
@@ -34,6 +35,6 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 
 1. 공통 수치는 `GAME_TUNING`, 특정 스테이지만 다른 수치는 `STAGES`에 둔다.
 2. 새 값은 같은 파일의 검증 함수와 테스트를 함께 추가한다.
-3. 5단계 코어 배열은 정확히 다섯 값을 두고 같은 단계에서 감소하지 않게 한다.
+3. 기본 코어 배열은 5개, 융합 구슬 배열은 9개 값을 둔다.
 4. `expectedOrbCount`는 혼합 XP 보상의 목표 구슬 성장 속도를 반영한다.
 5. 수치 변경 뒤 단위 테스트, 빌드, 관련 E2E 순서로 검증한다.

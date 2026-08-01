@@ -227,4 +227,18 @@ describe('LevelUpOverlay', () => {
       !destroyed && text?.includes('비행 중 가까운 적을 지속 공격')
     ))).toBe(true);
   });
+
+  it('renders a concise fusion card and its material summary', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+
+    overlay.show([
+      { kind: 'orb-fusion', fusionType: 'photon-orbit' },
+    ], new BuildState(), [], vi.fn());
+
+    expect(objects.map(({ text }) => text)).toContain('1. 광자 궤도 융합');
+    const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
+    card.emit('pointerup');
+    expect(objects.some(({ text }) => text?.includes('관성 구슬 + 전도 구슬'))).toBe(true);
+  });
 });

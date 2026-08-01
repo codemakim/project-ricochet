@@ -522,6 +522,21 @@ describe('BossManager', () => {
     expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: 133, y: 120 });
   });
 
+  it('damages only exposed sentinel parts near a finite beam segment', () => {
+    const { manager } = createBoundary();
+
+    expect(manager.applySegmentDamage(
+      { x: 100, y: 120 },
+      { x: 170, y: 120 },
+      12,
+      1,
+    )).toEqual(['leftWeakpoint']);
+    expect(manager.getSnapshot().parts).toMatchObject({
+      leftWeakpoint: 13,
+      rightWeakpoint: 14,
+    });
+  });
+
   it('maps only vertically overlapping enemies to exact padded forbidden intervals', () => {
     const boundary = createBoundary();
     boundary.enemies.push(

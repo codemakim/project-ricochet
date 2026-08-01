@@ -585,6 +585,22 @@ describe('HiveBossManager', () => {
       .toEqual({ x: left.x, y: left.y });
   });
 
+  it('damages only exposed hive parts near a finite beam segment', () => {
+    const boundary = createBoundary();
+    const left = boundary.sprite('hive-left-shooter');
+
+    expect(boundary.manager.applySegmentDamage(
+      { x: left.x - 20, y: left.y },
+      { x: left.x + 20, y: left.y },
+      12,
+      1,
+    )).toEqual(['leftShooter']);
+    expect(boundary.manager.getSnapshot().parts).toMatchObject({
+      leftShooter: 19,
+      rightShooter: 20,
+    });
+  });
+
   it('registers future permanent orbs and one temporary collider per target, then fully cleans up', () => {
     const boundary = createBoundary();
     expect(boundary.colliders.filter((item) => item.first === boundary.temporaryGroup)).toHaveLength(5);

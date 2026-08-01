@@ -12,7 +12,9 @@ interface Vector {
 
 interface OrbSnapshot {
   id: number;
-  coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion';
+  coreType:
+    | 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion'
+    | 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator';
   level: number;
   coreState: {
     echoStacks: number;
@@ -77,12 +79,15 @@ interface CombatSnapshot {
       | { kind: 'ability'; id: AbilityId }
       | { kind: 'orb-add'; coreType: OrbSnapshot['coreType'] }
       | { kind: 'orb-upgrade'; coreType: OrbSnapshot['coreType'] }
+      | { kind: 'orb-fusion'; fusionType: 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator' }
     >;
   };
   buildRanks: Record<AbilityId, number>;
   pauseReasons: string[];
   levelUpVisible: boolean;
   loadoutVisible: boolean;
+  orbUpgradeVisible: boolean;
+  orbFusionVisible: boolean;
   boss: {
     kind?: 'sentinel' | 'hive';
     active: boolean;
@@ -120,6 +125,8 @@ interface CombatSnapshot {
     orbId: number;
     position: Vector;
   }>;
+  photonTrails: Array<{ trailId: number; orbId: number; start: Vector; end: Vector }>;
+  nanoSeeds: Array<{ seedId: number; orbId: number; position: Vector; generation: number }>;
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -169,6 +176,7 @@ interface DevelopmentScene {
   debugSetBossPosition(x: number): void;
   debugAdvanceHiveCycle(deltaMs: number): void;
   debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
+  debugAddOrb(coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion'): boolean;
   debugShowCoreFeedback(type: 'corrosion' | 'conduction', position: Vector): void;
 }
 
@@ -252,6 +260,42 @@ async function loadCanvas(page: Page, search = '') {
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
   return { canvas, box: box! };
+}
+
+async function preparePhotonFusion(page: Page) {
+  const loaded = await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    for (const coreType of ['inertia', 'conduction', 'echo', 'echo', 'explosion'] as const) {
+      if (!scene.debugAddOrb(coreType)) throw new Error(`failed to add ${coreType}`);
+    }
+    scene.debugGrantXp(8);
+  });
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
+  expect((await snapshot(page)).progression.choices[0]).toEqual({
+    kind: 'orb-fusion',
+    fusionType: 'photon-orbit',
+  });
+  return loaded;
+}
+
+async function choosePhotonFusionWithPointer(
+  page: Page,
+  box: { x: number; y: number; width: number; height: number },
+  mobile: boolean,
+): Promise<void> {
+  const activate = async (point: Vector) => {
+    const client = clientPoint(box, point);
+    if (mobile) await page.touchscreen.tap(client.x, client.y);
+    else await page.mouse.click(client.x, client.y);
+  };
+  await activate({ x: 225, y: 210 });
+  await page.waitForTimeout(32);
+  await activate({ x: 225, y: 625 });
+  await expect.poll(async () => (await snapshot(page)).orbFusionVisible).toBe(true);
+  await activate({ x: 225, y: 170 });
+  await page.waitForTimeout(32);
+  await activate({ x: 225, y: 660 });
+  await expect.poll(async () => (await snapshot(page)).orbFusionVisible).toBe(false);
 }
 
 async function chooseBossReward(
@@ -479,6 +523,37 @@ test('@desktop chooses permanent orb cores', async ({ page }) => {
 
 });
 
+test('@desktop fuses a selected orb pair and renders the fusion core', async ({ page }) => {
+  const { box } = await preparePhotonFusion(page);
+  await choosePhotonFusionWithPointer(page, box, false);
+
+  const fused = await snapshot(page);
+  expect(fused.orbs).toHaveLength(5);
+  const photon = fused.orbs.find((orb) => orb.coreType === 'photon-orbit')!;
+  expect(photon.level).toBe(1);
+  expect(fused.pauseReasons).not.toContain('levelUp');
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-photon-orbit-lv1',
+  ))).toBe(true);
+
+  const aim = clientPoint(box, { x: fused.player.x, y: fused.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find((orb) => orb.id === photon.id)?.state).toBe('active');
+  await sceneCall(page, (scene, orbId) => {
+    const current = scene.getDebugSnapshot();
+    const [target, ...others] = current.enemies;
+    scene.debugRemoveEnemies(others.map(({ id }) => id));
+    scene.debugFreezeEnemies();
+    scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 100);
+    scene.debugPlaceOrb(orbId, { x: 225, y: 320 });
+  }, photon.id);
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.name === 'fusion-feedback-photon-beam',
+  )), { intervals: [10], timeout: 500 }).toBe(true);
+});
+
 test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
   await loadCanvas(page);
   await sceneCall(page, (scene) => {
@@ -553,7 +628,7 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
   expect(rewarded.pauseReasons).not.toContain('levelUp');
   if (selectedChoice.kind === 'ability') {
     expect(rewarded.buildRanks[selectedChoice.id]).toBe(1);
-  } else {
+  } else if (selectedChoice.kind !== 'orb-fusion') {
     expect(rewarded.orbs).toHaveLength(2);
     expect(rewarded.orbs[1]?.coreType).toBe(selectedChoice.coreType);
   }
@@ -564,6 +639,16 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
     return current.gameplayElapsedMs > paused.gameplayElapsedMs
       && current.enemies[0]!.position.y > paused.enemies[0]!.position.y;
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
+});
+
+test('@mobile selects and confirms an orb fusion with touch', async ({ page }) => {
+  const { box } = await preparePhotonFusion(page);
+  await choosePhotonFusionWithPointer(page, box, true);
+
+  const fused = await snapshot(page);
+  expect(fused.orbs).toHaveLength(5);
+  expect(fused.orbs.some((orb) => orb.coreType === 'photon-orbit')).toBe(true);
+  expect(fused.pauseReasons).not.toContain('levelUp');
 });
 
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
@@ -948,7 +1033,7 @@ test('@desktop pauses for level-up until a mixed reward is chosen', async ({ pag
   expect(selected.pauseReasons).not.toContain('levelUp');
   if (selectedChoice.kind === 'ability') {
     expect(selected.buildRanks[selectedChoice.id]).toBe(1);
-  } else {
+  } else if (selectedChoice.kind !== 'orb-fusion') {
     expect(selected.orbs[1]?.coreType).toBe(selectedChoice.coreType);
   }
   await page.keyboard.up('KeyD');
@@ -973,7 +1058,9 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const rewarded = await snapshot(page);
   if (selectedChoice.kind === 'ability') expect(rewarded.buildRanks[selectedChoice.id]).toBe(1);
-  else expect(rewarded.orbs[1]?.coreType).toBe(selectedChoice.coreType);
+  else if (selectedChoice.kind !== 'orb-fusion') {
+    expect(rewarded.orbs[1]?.coreType).toBe(selectedChoice.coreType);
+  }
   const selected = await snapshot(page);
   expect(selected.aim).toEqual(aimed.aim);
   await expect.poll(async () => {

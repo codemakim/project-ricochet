@@ -8,6 +8,12 @@ export type TemporaryOrbSprite = Phaser.Physics.Arcade.Sprite & {
   expiresAt: number;
 };
 
+export interface ResonantSwarmSource {
+  fusionType: 'resonant-swarm';
+  sourceOrbId: number;
+  level: number;
+}
+
 export interface TemporaryOrbSnapshot {
   id: number;
   expiresAt: number;
@@ -17,16 +23,24 @@ export interface TemporaryOrbSnapshot {
   splitConsumed: boolean;
   remainingBonusBounces: number;
   inheritedOutputScale: number;
+  fusionSource?: ResonantSwarmSource;
 }
 
 export interface TemporaryOrbSpawnModifiers {
   lifetimeMs?: number;
   extraBounces?: number;
   inheritedOutputScale?: number;
+  fusionSource?: ResonantSwarmSource;
 }
 
 export interface TemporaryHitResult extends HitResult {
   inheritedOutputScale?: number;
+  fusionSource?: ResonantSwarmSource;
+}
+
+export interface TemporaryOrbExpiredEvent {
+  position: Vector;
+  fusionSource?: ResonantSwarmSource;
 }
 
 interface TemporaryOrbRecord extends TemporaryOrbSnapshot {
@@ -39,6 +53,7 @@ export interface TemporaryOrbManagerOptions {
   getGameplayElapsedMs(): number;
   getDamageMultiplier?(): number;
   getLifetimeMs?(): number;
+  onExpired?(event: TemporaryOrbExpiredEvent): void;
   textureKey?: string;
 }
 
@@ -138,6 +153,7 @@ export class TemporaryOrbManager {
       this.createOrb(position, rotate(incoming, angle), 1, {
         extraBounces: parent.remainingBonusBounces,
         inheritedOutputScale: parent.inheritedOutputScale,
+        fusionSource: parent.fusionSource,
       });
     }
     return angles.length;
@@ -171,6 +187,7 @@ export class TemporaryOrbManager {
       ...(record.inheritedOutputScale > 0
         ? { inheritedOutputScale: record.inheritedOutputScale }
         : {}),
+      ...(record.fusionSource ? { fusionSource: { ...record.fusionSource } } : {}),
     };
   }
 
@@ -187,11 +204,36 @@ export class TemporaryOrbManager {
   update(nowMs: number): void {
     if (this.destroyed) return;
     for (const [sprite, record] of this.records) {
-      if (!sprite.active || nowMs >= record.expiresAt) {
+      if (sprite.active) {
+        const body = sprite.body as Phaser.Physics.Arcade.Body;
+        record.position = { x: body.center.x, y: body.center.y };
+        record.velocity = { x: body.velocity.x, y: body.velocity.y };
+      }
+      if (sprite.active && nowMs >= record.expiresAt) {
+        this.options.onExpired?.({
+          position: { x: sprite.x, y: sprite.y },
+          ...(record.fusionSource ? { fusionSource: { ...record.fusionSource } } : {}),
+        });
+        sprite.destroy();
+        this.records.delete(sprite);
+      } else if (!sprite.active) {
         sprite.destroy();
         this.records.delete(sprite);
       }
     }
+  }
+
+  nearbyFusionCount(temporaryOrbId: number, radius: number): number {
+    const source = [...this.records.values()].find(({ id }) => id === temporaryOrbId);
+    if (!source?.fusionSource) return 0;
+    return [...this.records.values()].filter((candidate) => (
+      candidate.id !== temporaryOrbId
+      && candidate.fusionSource?.sourceOrbId === source.fusionSource?.sourceOrbId
+      && Math.hypot(
+        candidate.position.x - source.position.x,
+        candidate.position.y - source.position.y,
+      ) <= radius
+    )).length;
   }
 
   getSnapshot(): TemporaryOrbSnapshot[] {
@@ -204,6 +246,7 @@ export class TemporaryOrbManager {
       splitConsumed: record.splitConsumed,
       remainingBonusBounces: record.remainingBonusBounces,
       inheritedOutputScale: record.inheritedOutputScale,
+      ...(record.fusionSource ? { fusionSource: { ...record.fusionSource } } : {}),
     }));
   }
 
@@ -262,6 +305,9 @@ export class TemporaryOrbManager {
       splitConsumed: false,
       remainingBonusBounces: Math.max(0, Math.trunc(modifiers.extraBounces ?? 0)),
       inheritedOutputScale: Math.max(0, modifiers.inheritedOutputScale ?? 0),
+      ...(modifiers.fusionSource
+        ? { fusionSource: { ...modifiers.fusionSource } }
+        : {}),
       sprite,
       enemyHits: new Map(),
     });
