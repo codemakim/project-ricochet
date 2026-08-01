@@ -63,6 +63,12 @@ export interface GameTuning {
   };
   rewardFlow: {
     resumeGameplayMs: number;
+    mixedCards: {
+      maximumCards: number;
+      early: { maximumOrbs: number; orbCards: number; abilityCards: number };
+      growing: { maximumOrbs: number; orbCards: number; abilityCards: number };
+      full: { orbUpgradeCards: number; minimumAbilityCards: number };
+    };
   };
   projectiles: {
     hostileCap: number;
@@ -390,6 +396,12 @@ export const GAME_TUNING = {
   },
   rewardFlow: {
     resumeGameplayMs: 300,
+    mixedCards: {
+      maximumCards: 3,
+      early: { maximumOrbs: 2, orbCards: 2, abilityCards: 1 },
+      growing: { maximumOrbs: 5, orbCards: 1, abilityCards: 2 },
+      full: { orbUpgradeCards: 2, minimumAbilityCards: 1 },
+    },
   },
   projectiles: {
     hostileCap: 12,
@@ -763,6 +775,45 @@ export function validateGameTuning(tuning: GameTuning): void {
     throw new RangeError('encounter reinforcement release must be below PLAYER_MIN_Y');
   }
   nonNegative(rewardFlow.resumeGameplayMs, 'rewardFlow.resumeGameplayMs');
+  const mixedCards = rewardFlow.mixedCards;
+  positiveInteger(mixedCards.maximumCards, 'rewardFlow.mixedCards.maximumCards');
+  positiveInteger(mixedCards.early.maximumOrbs, 'rewardFlow.mixedCards.early.maximumOrbs');
+  positiveInteger(
+    mixedCards.growing.maximumOrbs,
+    'rewardFlow.mixedCards.growing.maximumOrbs',
+  );
+  for (const [name, row] of Object.entries({
+    early: mixedCards.early,
+    growing: mixedCards.growing,
+  })) {
+    nonNegativeInteger(row.orbCards, `rewardFlow.mixedCards.${name}.orbCards`);
+    nonNegativeInteger(row.abilityCards, `rewardFlow.mixedCards.${name}.abilityCards`);
+    if (row.orbCards + row.abilityCards > mixedCards.maximumCards) {
+      throw new RangeError(`rewardFlow.mixedCards.${name} must fit maximumCards`);
+    }
+  }
+  nonNegativeInteger(
+    mixedCards.full.orbUpgradeCards,
+    'rewardFlow.mixedCards.full.orbUpgradeCards',
+  );
+  positiveInteger(
+    mixedCards.full.minimumAbilityCards,
+    'rewardFlow.mixedCards.full.minimumAbilityCards',
+  );
+  if (
+    mixedCards.full.orbUpgradeCards + mixedCards.full.minimumAbilityCards
+      > mixedCards.maximumCards
+  ) {
+    throw new RangeError('rewardFlow.mixedCards.full must fit maximumCards');
+  }
+  if (
+    mixedCards.early.maximumOrbs >= mixedCards.growing.maximumOrbs
+    || mixedCards.growing.maximumOrbs >= build.basicGrowth.maximumOrbs
+  ) {
+    throw new RangeError(
+      'rewardFlow.mixedCards orb bands must increase below the orb cap',
+    );
+  }
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;
   const collisionWidth = 2 * (weakpointOffset + boss.weakpoint.hitbox.width / 2);

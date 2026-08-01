@@ -34,7 +34,15 @@ describe('GAME_TUNING', () => {
       cleanupMode: 'corridor',
       padding: 8,
     });
-    expect(GAME_TUNING.rewardFlow).toEqual({ resumeGameplayMs: 300 });
+    expect(GAME_TUNING.rewardFlow).toEqual({
+      resumeGameplayMs: 300,
+      mixedCards: {
+        maximumCards: 3,
+        early: { maximumOrbs: 2, orbCards: 2, abilityCards: 1 },
+        growing: { maximumOrbs: 5, orbCards: 1, abilityCards: 2 },
+        full: { orbUpgradeCards: 2, minimumAbilityCards: 1 },
+      },
+    });
     expect(GAME_TUNING.build).toEqual({
       conditionalDamageCap: 1.5,
       firepower: { damageBonusPerRank: 0.12 },
@@ -209,6 +217,24 @@ describe('GAME_TUNING', () => {
     tuning.rewardFlow.resumeGameplayMs = Number.NaN;
     expect(() => validateGameTuning(tuning)).toThrow(
       'rewardFlow.resumeGameplayMs must be finite',
+    );
+  });
+
+  it('rejects a mixed reward row wider than the card limit', () => {
+    const tuning = mutableTuning();
+    tuning.rewardFlow.mixedCards.early.orbCards = 3;
+
+    expect(() => validateGameTuning(tuning)).toThrow(
+      'rewardFlow.mixedCards.early must fit maximumCards',
+    );
+  });
+
+  it('rejects unordered mixed reward orb bands', () => {
+    const tuning = mutableTuning();
+    tuning.rewardFlow.mixedCards.growing.maximumOrbs = 2;
+
+    expect(() => validateGameTuning(tuning)).toThrow(
+      'rewardFlow.mixedCards orb bands must increase below the orb cap',
     );
   });
 
