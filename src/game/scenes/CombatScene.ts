@@ -51,6 +51,7 @@ import { movePlayer, resolveAim } from '../player/playerRules';
 import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
 import { ProgressionManager, type ProgressionSnapshot } from '../progression/ProgressionManager';
+import type { RunRewardChoice } from '../progression/runRewardRules';
 import {
   createEmptyAbilityRanks,
   type AbilityId,
@@ -65,6 +66,7 @@ import {
 import { BossRewardOverlay } from '../ui/BossRewardOverlay';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
+import { OrbUpgradeOverlay } from '../ui/OrbUpgradeOverlay';
 import { progressionHudState } from '../ui/progressionHud';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
@@ -119,6 +121,7 @@ export interface CombatDebugSnapshot {
   pauseReasons: PauseReason[];
   levelUpVisible: boolean;
   loadoutVisible: boolean;
+  orbUpgradeVisible: boolean;
   boss: BossEncounterSnapshot & Partial<Pick<
     BossManagerSnapshot,
     'basicBullets' | 'aimedBullets' | 'fallingHazards'
@@ -133,7 +136,6 @@ export interface CombatDebugSnapshot {
   corrosionFields: readonly CorrosionFieldSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
-  pendingCoreSupplies: number;
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -146,8 +148,7 @@ export class CombatScene extends Phaser.Scene {
   declare debugChooseAbility?: (id: AbilityId) => boolean;
   declare debugUpgradeAbility?: (id: AbilityId) => void;
   declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
-  declare debugAdvanceEncounter?: (deltaMs: number, resolveCoreSupplies?: boolean) => void;
-  declare debugGrantCoreSupply?: () => void;
+  declare debugAdvanceEncounter?: (deltaMs: number) => void;
   declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
   declare debugDamageBossPart?: (
     partId: BossPartId | HivePartId | 'defenseModule',
@@ -181,6 +182,7 @@ export class CombatScene extends Phaser.Scene {
   private progression?: ProgressionManager;
   private levelUpOverlay?: LevelUpOverlay;
   private orbLoadoutOverlay?: OrbLoadoutOverlay;
+  private orbUpgradeOverlay?: OrbUpgradeOverlay;
   private bossBuild?: BossBuild;
   private bossRewardOverlay?: BossRewardOverlay;
   private runCompleteOverlay?: RunCompleteOverlay;
@@ -195,7 +197,6 @@ export class CombatScene extends Phaser.Scene {
   private defeated = false;
   private pause = new CombatPauseController();
   private gameplayElapsedMs = 0;
-  private pendingCoreSupplies = 0;
   private nextRunRewardAtMs = 0;
   private runConfig?: RunConfig;
   private runResultEmitted = false;
@@ -231,7 +232,6 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
-    this.pendingCoreSupplies = 0;
     this.nextRunRewardAtMs = 0;
     this.runResultEmitted = false;
     this.defeatedBossIds = [];
@@ -242,12 +242,14 @@ export class CombatScene extends Phaser.Scene {
     this.progression = new ProgressionManager(
       PROGRESSION_SEED,
       build,
-      () => ({
-        coreTypes: this.orbManager?.getSnapshot().map(({ coreType }) => coreType) ?? [],
-      }),
+      () => {
+        const orbs = this.orbManager?.getSnapshot() ?? [];
+        return { orbs, coreTypes: orbs.map(({ coreType }) => coreType) };
+      },
     );
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
+    this.orbUpgradeOverlay = new OrbUpgradeOverlay(this);
     this.bossRewardOverlay = new BossRewardOverlay(this);
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     this.createTextures();
@@ -330,7 +332,12 @@ export class CombatScene extends Phaser.Scene {
         this.updateProgressionText();
         this.openPendingRunReward();
       };
-      this.debugChooseAbility = (id) => this.chooseAbility(id);
+      this.debugChooseAbility = (id) => {
+        const choice = this.progression?.getChoices().find((candidate) => (
+          candidate.kind === 'ability' && candidate.id === id
+        ));
+        return choice ? this.chooseRunReward(choice) : false;
+      };
       this.debugUpgradeAbility = (id) => {
         this.build?.upgrade(id);
         this.refreshCombatModifiers();
@@ -338,23 +345,12 @@ export class CombatScene extends Phaser.Scene {
       this.debugSetEnemy = (id, position, hp) => {
         return this.enemyManager?.debugSetEnemy?.(id, position, hp) ?? false;
       };
-      this.debugAdvanceEncounter = (deltaMs, resolveCoreSupplies = true) => {
+      this.debugAdvanceEncounter = (deltaMs) => {
         if (!Number.isFinite(deltaMs) || deltaMs < 0) {
           throw new RangeError('encounter delta must be finite and non-negative');
         }
         if (this.defeated || this.pause.isPaused()) return;
         this.advanceEncounter(deltaMs);
-        if (resolveCoreSupplies) {
-          while (this.pendingCoreSupplies > 0) {
-            if (!this.orbManager?.addOrb('echo')) {
-              throw new Error('debug core supply exceeded the permanent orb limit');
-            }
-            this.pendingCoreSupplies -= 1;
-          }
-        }
-      };
-      this.debugGrantCoreSupply = () => {
-        this.pendingCoreSupplies += 1;
       };
       this.debugRecordEnemyKill = (kind) => this.encounterDirector?.recordEnemyKill(kind);
       this.debugDamageBossPart = (partId, damage) => {
@@ -524,7 +520,6 @@ export class CombatScene extends Phaser.Scene {
         warningElapsedMs: 0,
         pendingBossKind: null,
         bossesDefeated: 0,
-        coreSuppliesClaimed: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
@@ -537,6 +532,7 @@ export class CombatScene extends Phaser.Scene {
       pauseReasons: PAUSE_REASONS.filter((reason) => this.pause.has(reason)),
       levelUpVisible: this.levelUpOverlay?.isVisible() ?? false,
       loadoutVisible: this.orbLoadoutOverlay?.isVisible() ?? false,
+      orbUpgradeVisible: this.orbUpgradeOverlay?.isVisible() ?? false,
       boss: this.activeBoss?.getSnapshot() ?? {
         ...inactiveBossSnapshot(this.activeBossKind ?? null),
         basicBullets: 0,
@@ -557,7 +553,6 @@ export class CombatScene extends Phaser.Scene {
       corrosionFields: this.corrosionFields.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
-      pendingCoreSupplies: this.pendingCoreSupplies,
     };
   }
 
@@ -1119,11 +1114,10 @@ export class CombatScene extends Phaser.Scene {
   private advanceEncounter(deltaMs: number): void {
     if (!this.encounterDirector || !this.enemyManager) return;
     const enemies = this.enemyManager.getSnapshot();
-    const { formation, transition, coreSuppliesDue } = this.encounterDirector.update(deltaMs, {
+    const { formation, transition } = this.encounterDirector.update(deltaMs, {
       activePopulation: enemies.activePopulation,
       topmostEnemyY: enemies.topmostEnemyY,
     });
-    this.pendingCoreSupplies += coreSuppliesDue;
     if (formation) this.enemyManager.spawnFormation(formation);
     if (transition) {
       this.activeBossKind = bossKindAfterTransition(
@@ -1314,53 +1308,77 @@ export class CombatScene extends Phaser.Scene {
 
     this.pause.add('levelUp');
     this.syncPauseState();
-    this.levelUpOverlay.show(snapshot.choices, this.build, (id) => this.chooseAbility(id));
+    this.levelUpOverlay.show(
+      snapshot.choices,
+      this.build,
+      this.orbManager?.getSnapshot() ?? [],
+      (choice) => this.chooseRunReward(choice),
+    );
   }
 
   private openPendingRunReward(): void {
     if (this.defeated || this.pause.isPaused() || !this.progression) return;
     const reward = pendingRunRewardKind(
-      this.pendingCoreSupplies,
       this.progression.getSnapshot().pendingChoices,
       this.gameplayElapsedMs >= this.nextRunRewardAtMs,
     );
-    if (reward === 'coreSupply') {
-      this.pause.add('loadout');
-      this.syncPauseState();
-      this.orbLoadoutOverlay?.showAdditional(ORB_CORE_IDS, (type) => {
-        if (!this.orbManager?.addOrb(type)) return false;
-        this.pendingCoreSupplies -= 1;
-        this.pause.remove('loadout');
-        this.nextRunRewardAtMs =
-          this.gameplayElapsedMs + GAME_TUNING.rewardFlow.resumeGameplayMs;
-        this.syncPauseState();
-        return true;
-      });
-    } else if (reward === 'levelUp') {
-      this.openNextLevelUp();
-    }
+    if (reward === 'levelUp') this.openNextLevelUp();
   }
 
   private hasPendingRunReward(): boolean {
-    return this.pendingCoreSupplies > 0
-      || (this.progression?.getSnapshot().pendingChoices ?? 0) > 0
+    return (this.progression?.getSnapshot().pendingChoices ?? 0) > 0
       || (this.levelUpOverlay?.isVisible() ?? false)
-      || (this.orbLoadoutOverlay?.isVisible() ?? false);
+      || (this.orbLoadoutOverlay?.isVisible() ?? false)
+      || (this.orbUpgradeOverlay?.isVisible() ?? false);
   }
 
-  private chooseAbility(id: AbilityId): boolean {
-    if (this.defeated || !this.progression || !this.levelUpOverlay?.isVisible()) return false;
-    if (!this.progression.choose(id)) return false;
+  private chooseRunReward(choice: RunRewardChoice): boolean {
+    if (
+      this.defeated
+      || !this.progression
+      || !this.orbManager
+      || !this.levelUpOverlay?.isVisible()
+      || !this.progression.canChoose(choice)
+    ) return false;
 
-    this.refreshCombatModifiers();
-    this.completeAbilityChoice();
+    if (choice.kind === 'ability') {
+      if (!this.progression.consume(choice)) return false;
+      this.refreshCombatModifiers();
+      this.completeRunRewardChoice();
+      return true;
+    }
+    if (choice.kind === 'orb-add') {
+      if (!this.orbManager.addOrb(choice.coreType)) return false;
+      if (!this.progression.consume(choice)) return false;
+      this.completeRunRewardChoice();
+      return true;
+    }
+
+    this.levelUpOverlay.hide();
+    const reopen = () => this.openNextLevelUp();
+    this.orbUpgradeOverlay?.show(
+      choice.coreType,
+      this.orbManager.getSnapshot(),
+      (orbId) => {
+        if (
+          !this.orbManager?.upgradeOrb(orbId, choice.coreType)
+          || !this.progression?.consume(choice)
+        ) {
+          reopen();
+          return;
+        }
+        this.completeRunRewardChoice();
+      },
+      reopen,
+    );
     return true;
   }
 
-  private completeAbilityChoice(): void {
+  private completeRunRewardChoice(): void {
     if (!this.progression) return;
     this.updateProgressionText();
     this.levelUpOverlay?.hide();
+    this.orbUpgradeOverlay?.hide();
     this.pause.remove('levelUp');
     this.nextRunRewardAtMs =
       this.gameplayElapsedMs + GAME_TUNING.rewardFlow.resumeGameplayMs;
@@ -1499,6 +1517,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerInput?.destroy();
     this.levelUpOverlay?.destroy();
     this.orbLoadoutOverlay?.destroy();
+    this.orbUpgradeOverlay?.destroy();
     this.bossRewardOverlay?.destroy();
     this.runCompleteOverlay?.destroy();
     this.bossDefeatPending = false;
@@ -1509,6 +1528,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerInput = undefined;
     this.levelUpOverlay = undefined;
     this.orbLoadoutOverlay = undefined;
+    this.orbUpgradeOverlay = undefined;
     this.bossRewardOverlay = undefined;
     this.runCompleteOverlay = undefined;
     this.progression = undefined;
@@ -1516,7 +1536,6 @@ export class CombatScene extends Phaser.Scene {
     this.bossBuild = undefined;
     this.combatProcs = undefined;
     this.debugAdvanceEncounter = undefined;
-    this.debugGrantCoreSupply = undefined;
     this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;
     this.debugSetBossPosition = undefined;

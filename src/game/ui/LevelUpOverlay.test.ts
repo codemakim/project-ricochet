@@ -106,7 +106,11 @@ describe('LevelUpOverlay', () => {
     const overlay = new LevelUpOverlay(scene as never);
     const onSelect = vi.fn();
 
-    overlay.show(['firepower', 'explosion', 'split'], new BuildState(), onSelect);
+    overlay.show([
+      { kind: 'ability', id: 'firepower' },
+      { kind: 'ability', id: 'explosion' },
+      { kind: 'ability', id: 'split' },
+    ], new BuildState(), [], onSelect);
 
     const cards = objects.filter((object) => object.kind === 'rectangle' && object.width === 360);
     expect(cards.map(({ y }) => y)).toEqual([210, 310, 410]);
@@ -121,7 +125,7 @@ describe('LevelUpOverlay', () => {
     keys.get(13)!.emit('down');
     keys.get(13)!.emit('down');
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(onSelect).toHaveBeenCalledWith('explosion');
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'ability', id: 'explosion' });
 
     overlay.hide();
     expect(objects.every((object) => object.destroyed)).toBe(true);
@@ -132,7 +136,7 @@ describe('LevelUpOverlay', () => {
     const { scene, objects } = makeScene();
     const overlay = new LevelUpOverlay(scene as never);
 
-    overlay.show(['kinetic'], new BuildState(), vi.fn());
+    overlay.show([{ kind: 'ability', id: 'kinetic' }], new BuildState(), [], vi.fn());
 
     expect(objects.some(({ text }) => text === '획득')).toBe(false);
     expect(objects.flatMap(({ text }) => text ?? []).join(' ')).not.toContain('px/s');
@@ -142,7 +146,7 @@ describe('LevelUpOverlay', () => {
     const { scene, objects } = makeScene();
     const overlay = new LevelUpOverlay(scene as never);
     const onSelect = vi.fn();
-    overlay.show(['firepower'], new BuildState(), onSelect);
+    overlay.show([{ kind: 'ability', id: 'firepower' }], new BuildState(), [], onSelect);
     const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
 
     card.emit('pointerup');
@@ -158,7 +162,12 @@ describe('LevelUpOverlay', () => {
     const { scene, objects } = makeScene();
     const overlay = new LevelUpOverlay(scene as never);
 
-    overlay.show(['kinetic'], new BuildState({ kinetic: 1 }), vi.fn());
+    overlay.show(
+      [{ kind: 'ability', id: 'kinetic' }],
+      new BuildState({ kinetic: 1 }),
+      [],
+      vi.fn(),
+    );
 
     const card = objects.find((object) => object.kind === 'rectangle' && object.width === 360)!;
     card.emit('pointerup');
@@ -173,8 +182,12 @@ describe('LevelUpOverlay', () => {
     const overlay = new LevelUpOverlay(scene as never);
 
     overlay.show(
-      ['reload-overcharge', 'effect-output'],
+      [
+        { kind: 'ability', id: 'reload-overcharge' },
+        { kind: 'ability', id: 'effect-output' },
+      ],
       new BuildState(),
+      [],
       vi.fn(),
     );
 
@@ -186,5 +199,32 @@ describe('LevelUpOverlay', () => {
       expect.stringContaining('근접 회수 첫타 피해 +20%'),
       expect.stringContaining('보조 효과 피해 +15%'),
     ]));
+  });
+
+  it('renders concrete orb add and upgrade cards with focused details', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+
+    overlay.show([
+      { kind: 'orb-add', coreType: 'conduction' },
+      { kind: 'orb-upgrade', coreType: 'conduction' },
+    ], new BuildState(), [{
+      id: 1,
+      coreType: 'conduction',
+      level: 2,
+    } as never], vi.fn());
+
+    const cards = objects.filter((object) => object.kind === 'rectangle' && object.width === 360);
+    expect(objects.map(({ text }) => text)).toEqual(expect.arrayContaining([
+      '1. 전도 구슬 Lv1',
+      '2. 전도 구슬 강화',
+    ]));
+    cards[0]!.emit('pointerup');
+    expect(objects.some(({ text }) => text?.includes('직격 에너지를 가까운 적에게 전달')))
+      .toBe(true);
+    cards[1]!.emit('pointerup');
+    expect(objects.some(({ destroyed, text }) => (
+      !destroyed && text?.includes('비행 중 가까운 적을 지속 공격')
+    ))).toBe(true);
   });
 });

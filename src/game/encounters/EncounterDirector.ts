@@ -4,8 +4,6 @@ import { canSpawnReinforcement, phaseAt } from './encounterRules';
 import {
   bossEntryReady,
   bossProgressForKill,
-  coreSupplyCountAt,
-  stageProgress,
   type EncounterState,
   type EncounterTransition,
   type BossDefeatAdvance,
@@ -37,13 +35,11 @@ interface PendingFormation {
 export interface EncounterUpdate {
   formation: EnemySpec[] | null;
   transition: EncounterTransition | null;
-  coreSuppliesDue: number;
 }
 
 const NO_UPDATE: EncounterUpdate = {
   formation: null,
   transition: null,
-  coreSuppliesDue: 0,
 };
 
 export class EncounterDirector {
@@ -60,7 +56,6 @@ export class EncounterDirector {
   private spawnSequence = 0;
   private lastFormationId: string | null = null;
   private pendingFormation: PendingFormation | null = null;
-  private coreSuppliesClaimed = 0;
 
   constructor(private readonly runSeed = 0) {}
 
@@ -80,7 +75,6 @@ export class EncounterDirector {
         return {
           formation: null,
           transition: { type: 'bossStarted', bossKind: this.pendingBossKind },
-          coreSuppliesDue: 0,
         };
       }
       return NO_UPDATE;
@@ -90,12 +84,6 @@ export class EncounterDirector {
     const stage = this.activeStage();
     this.stageElapsedMs += deltaMs;
     this.elapsedSinceSpawnMs += deltaMs;
-    const availableCoreSupplies = coreSupplyCountAt(
-      stageProgress(stage.boss, this.stageElapsedMs, this.bossScore),
-      stage.coreSupplyProgress,
-    );
-    const coreSuppliesDue = availableCoreSupplies - this.coreSuppliesClaimed;
-    this.coreSuppliesClaimed = availableCoreSupplies;
     if (bossEntryReady(stage.boss, this.stageElapsedMs, this.bossScore)) {
       this.state = 'bossWarning';
       this.pendingBossKind = stage.boss.kind;
@@ -105,14 +93,13 @@ export class EncounterDirector {
       return {
         formation: null,
         transition: { type: 'bossWarningStarted', bossKind: stage.boss.kind },
-        coreSuppliesDue,
       };
     }
 
     const phase = phaseAt(stage, this.stageElapsedMs);
     if (this.elapsedSinceSpawnMs < phase.definition.spawnIntervalMs
       || enemyState.topmostEnemyY < GAME_TUNING.encounter.reinforcementReleaseY) {
-      return { ...NO_UPDATE, coreSuppliesDue };
+      return NO_UPDATE;
     }
 
     if (this.pendingFormation?.phaseIndex !== phase.index
@@ -136,13 +123,13 @@ export class EncounterDirector {
       activeEnemies: enemyState.activePopulation,
       incomingEnemies: formation.populationCost,
       activeCap: phase.definition.activeCap,
-    })) return { ...NO_UPDATE, coreSuppliesDue };
+    })) return NO_UPDATE;
 
     this.elapsedSinceSpawnMs = 0;
     this.spawnSequence += 1;
     this.lastFormationId = formation.id;
     this.pendingFormation = null;
-    return { formation: formation.enemies, transition: null, coreSuppliesDue };
+    return { formation: formation.enemies, transition: null };
   }
 
   recordEnemyKill(kind: EnemyKind): void {
@@ -184,7 +171,6 @@ export class EncounterDirector {
     this.pendingBossKind = null;
     this.pendingBossWarningMs = 0;
     this.pendingFormation = null;
-    this.coreSuppliesClaimed = 0;
     const stage = this.activeStage();
     return { type: 'stageStarted', stageId: stage.id, stageNumber: stage.number };
   }
@@ -209,7 +195,6 @@ export class EncounterDirector {
       warningElapsedMs: this.warningElapsedMs,
       pendingBossKind: this.pendingBossKind,
       bossesDefeated: this.bossesDefeated,
-      coreSuppliesClaimed: this.coreSuppliesClaimed,
     } as const;
   }
 

@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
+import type { OrbSnapshot } from '../orbs/OrbManager';
+import { ORB_CORE_DEFINITIONS } from '../orbs/orbCoreRules';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
+import type { RunRewardChoice } from '../progression/runRewardRules';
 import { formatDisplayNumber } from './displayNumber';
 
 const CARD_Y = [210, 310, 410] as const;
@@ -18,17 +21,18 @@ export class LevelUpOverlay {
   private detailObjects: Phaser.GameObjects.GameObject[] = [];
   private cards: Phaser.GameObjects.Rectangle[] = [];
   private keyBindings: Array<{ key: Phaser.Input.Keyboard.Key; callback: () => void }> = [];
-  private selected?: AbilityId;
-  private onSelect?: (id: AbilityId) => void;
+  private selected?: RunRewardChoice;
+  private onSelect?: (choice: RunRewardChoice) => void;
   private visible = false;
   private consumed = false;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   show(
-    choices: readonly AbilityId[],
+    choices: readonly RunRewardChoice[],
     build: BuildState,
-    onSelect: (id: AbilityId) => void,
+    orbs: readonly OrbSnapshot[],
+    onSelect: (choice: RunRewardChoice) => void,
   ): void {
     this.hide();
     this.visible = true;
@@ -46,15 +50,14 @@ export class LevelUpOverlay {
       }).setOrigin(0.5).setDepth(32),
     );
 
-    choices.slice(0, 3).forEach((id, index) => {
+    choices.slice(0, 3).forEach((choice, index) => {
       const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 360, 76, 0x10213d, 0.98)
         .setDepth(31)
         .setInteractive({ useHandCursor: true });
-      const focus = () => this.focus(id, card, build);
+      const focus = () => this.focus(choice, card, build, orbs);
       card.on('pointerup', focus);
       this.cards.push(card);
-      const rank = build.rank(id);
-      const label = `${index + 1}. ${ABILITY_DEFINITIONS[id].label}  ${rank} → ${rank + 1}`;
+      const label = `${index + 1}. ${this.cardLabel(choice, build)}`;
       const text = this.scene.add.text(GAME_WIDTH / 2, CARD_Y[index]!, label, {
         align: 'center',
         color: '#dff7ff',
@@ -101,19 +104,20 @@ export class LevelUpOverlay {
   }
 
   private focus(
-    id: AbilityId,
+    choice: RunRewardChoice,
     card: Phaser.GameObjects.Rectangle,
     build: BuildState,
+    orbs: readonly OrbSnapshot[],
   ): void {
     if (this.consumed || !this.visible) return;
-    this.selected = id;
+    this.selected = choice;
     for (const candidate of this.cards) candidate.setFillStyle(0x10213d, 0.98);
     card.setFillStyle(0x1d6e88, 0.98);
     for (const object of this.detailObjects) object.destroy();
     this.detailObjects = [
       this.scene.add.rectangle(GAME_WIDTH / 2, DETAIL_Y, 380, 112, 0x09182c, 0.98)
         .setDepth(31),
-      this.scene.add.text(GAME_WIDTH / 2, DETAIL_Y, this.nextEffect(id, build), {
+      this.scene.add.text(GAME_WIDTH / 2, DETAIL_Y, this.choiceDetail(choice, build, orbs), {
         align: 'center',
         color: '#dff7ff',
         fontSize: '17px',
@@ -134,7 +138,33 @@ export class LevelUpOverlay {
   private confirm(): void {
     if (this.consumed || !this.visible || !this.selected || !this.onSelect) return;
     this.consumed = true;
-    this.onSelect(this.selected);
+    this.onSelect({ ...this.selected });
+  }
+
+  private cardLabel(choice: RunRewardChoice, build: BuildState): string {
+    if (choice.kind === 'ability') {
+      const rank = build.rank(choice.id);
+      return `${ABILITY_DEFINITIONS[choice.id].label}  ${rank} → ${rank + 1}`;
+    }
+    const label = ORB_CORE_DEFINITIONS[choice.coreType].label;
+    return choice.kind === 'orb-add' ? `${label} Lv1` : `${label} 강화`;
+  }
+
+  private choiceDetail(
+    choice: RunRewardChoice,
+    build: BuildState,
+    orbs: readonly OrbSnapshot[],
+  ): string {
+    if (choice.kind === 'ability') return this.nextEffect(choice.id, build);
+    const definition = ORB_CORE_DEFINITIONS[choice.coreType];
+    if (choice.kind === 'orb-add') return definition.summary;
+    const levels = orbs
+      .filter(({ coreType, level }) => (
+        coreType === choice.coreType && level < definition.maximumLevel
+      ))
+      .map(({ level }) => level);
+    const nextLevel = levels.length > 0 ? Math.min(...levels) + 1 : 2;
+    return `${definition.levelEffects[nextLevel - 1]} · 강화할 구슬 선택`;
   }
 
   private nextEffect(id: AbilityId, build: BuildState): string {

@@ -177,30 +177,4 @@ describe('OrbLoadoutOverlay', () => {
     expect(objects.every((object) => object.destroyed)).toBe(true);
   });
 
-  it('reuses the same overlay for one additional core', () => {
-    const { scene, objects } = makeScene();
-    const overlay = new OrbLoadoutOverlay(scene as never);
-    const confirm = vi.fn(() => true);
-
-    overlay.showAdditional(['echo', 'conduction'], confirm);
-    const coreCards = objects.filter((object) => object.kind === 'rectangle' && object.width === 180);
-    const confirmButton = objects.find(
-      (object) => object.kind === 'rectangle' && object.width === 220,
-    )!;
-    expect(objects.filter(({ kind }) => kind === 'text').map(({ text }) => text))
-      .toEqual(expect.arrayContaining(['1. 반향 구슬', '2. 전도 구슬']));
-    expect(objects.some(({ text }) => text?.includes('직격 에너지를 가까운 적에게 전달')))
-      .toBe(false);
-
-    coreCards[1]!.emit('pointerup');
-    expect(objects.some(
-      ({ destroyed, text }) => (
-        !destroyed && text?.includes('직격 에너지를 가까운 적에게 전달')
-      ),
-    )).toBe(true);
-    confirmButton.emit('pointerup');
-
-    expect(confirm).toHaveBeenCalledWith('conduction');
-    expect(overlay.getSelection()).toEqual([]);
-  });
 });

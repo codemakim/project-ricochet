@@ -65,13 +65,6 @@ export class OrbLoadoutOverlay {
     ));
   }
 
-  showAdditional(
-    availableTypes: readonly OrbCoreId[],
-    onConfirm: (type: OrbCoreId) => boolean,
-  ): void {
-    this.show(availableTypes, 1, '추가 코어 선택', (types) => onConfirm(types[0]!));
-  }
-
   hide(): void {
     for (const { key, event, callback } of this.keyBindings) {
       key.off(event, callback);

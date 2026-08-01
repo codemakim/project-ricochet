@@ -6,6 +6,7 @@ import {
   type OrbCoreId,
 } from '../orbs/orbCoreRules';
 import {
+  eligibleAbilityIds,
   selectAbilityOptions,
   type AbilityEligibilityContext,
   type AbilityId,
@@ -71,6 +72,17 @@ export function runRewardChoiceKey(choice: RunRewardChoice): string {
   return choice.kind === 'ability'
     ? `ability:${choice.id}`
     : `${choice.kind}:${choice.coreType}`;
+}
+
+export function hasEligibleRunReward(context: RunRewardContext): boolean {
+  if (eligibleAbilityIds(
+    context.abilityRanks,
+    context.abilityEligibility,
+  ).length > 0) return true;
+  if (context.orbs.length < GAME_TUNING.build.basicGrowth.maximumOrbs) return true;
+  return context.orbs.some(({ coreType, level }) => (
+    level < ORB_CORE_DEFINITIONS[coreType].maximumLevel
+  ));
 }
 
 function rotate<T>(values: readonly T[], level: number, seed: number): T[] {

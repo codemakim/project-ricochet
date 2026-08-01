@@ -3,8 +3,6 @@ import { STAGES } from './stageDefinitions';
 import {
   bossEntryReady,
   bossProgressForKill,
-  coreSupplyCountAt,
-  stageProgress,
 } from './encounterProgressionRules';
 
 describe('encounter progression rules', () => {
@@ -29,27 +27,4 @@ describe('encounter progression rules', () => {
     },
   );
 
-  it('combines active play and hard-time fallback into stage progress', () => {
-    const boss = {
-      kind: 'sentinel',
-      minimumMs: 120_000,
-      scoreTarget: 70,
-      hardMaximumMs: 210_000,
-      warningMs: 2_000,
-    } as const;
-
-    expect(stageProgress(boss, 0, 0)).toBe(0);
-    expect(stageProgress(boss, 60_000, 35)).toBeCloseTo(0.5);
-    expect(stageProgress(boss, 105_000, 0)).toBeCloseTo(0.5);
-    expect(stageProgress(boss, 120_000, 70)).toBe(1);
-    expect(stageProgress(boss, 210_000, 0)).toBe(1);
-  });
-
-  it('counts every crossed core-supply milestone', () => {
-    const milestones = [0.2, 0.55] as const;
-
-    expect(coreSupplyCountAt(0.19, milestones)).toBe(0);
-    expect(coreSupplyCountAt(0.2, milestones)).toBe(1);
-    expect(coreSupplyCountAt(0.8, milestones)).toBe(2);
-  });
 });
