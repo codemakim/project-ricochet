@@ -13,25 +13,51 @@ type TextureShape =
   | 'hiveShooter'
   | 'reflectorWall';
 
-export type CombatTextureDescriptor = ProjectileVisualTuning & { shape: TextureShape; deferred?: boolean };
+export type OrbCoreSymbol = 'wave' | 'drop' | 'bolt' | 'arrow' | 'fork' | 'burst';
+
+export type CombatTextureDescriptor = ProjectileVisualTuning & {
+  shape: TextureShape;
+  deferred?: boolean;
+  symbol?: OrbCoreSymbol;
+  notches?: number;
+};
 
 export function combatProjectileTextureDescriptors(): Record<string, CombatTextureDescriptor> {
   const { friendly, hostile } = GAME_TUNING.visual;
   const coreTexture = (
     core: keyof typeof GAME_TUNING.orbCores,
+    symbol: OrbCoreSymbol,
   ): CombatTextureDescriptor => ({
     fill: GAME_TUNING.orbCores[core].fill,
     accent: GAME_TUNING.orbCores[core].accent,
     width: friendly.permanentOrb.width,
     height: friendly.permanentOrb.height,
     shape: 'outlinedCircle',
+    symbol,
   });
+  const coreTextures = {
+    echo: coreTexture('echo', 'wave'),
+    corrosion: coreTexture('corrosion', 'drop'),
+    conduction: coreTexture('conduction', 'bolt'),
+    inertia: coreTexture('inertia', 'arrow'),
+    split: coreTexture('split', 'fork'),
+    explosion: coreTexture('explosion', 'burst'),
+  } as const;
+  const leveledCores = Object.fromEntries(Object.entries(coreTextures).flatMap(
+    ([core, descriptor]) => [1, 2, 3, 4, 5].map((level) => [
+      `orb-${core}-lv${level}`,
+      { ...descriptor, notches: level },
+    ]),
+  ));
   return {
     'orb-charged': { ...friendly.permanentOrb, shape: 'outlinedCircle' },
-    'orb-echo': coreTexture('echo'),
-    'orb-corrosion': coreTexture('corrosion'),
-    'orb-conduction': coreTexture('conduction'),
-    'orb-inertia': coreTexture('inertia'),
+    'orb-echo': coreTextures.echo,
+    'orb-corrosion': coreTextures.corrosion,
+    'orb-conduction': coreTextures.conduction,
+    'orb-inertia': coreTextures.inertia,
+    'orb-split': coreTextures.split,
+    'orb-explosion': coreTextures.explosion,
+    ...leveledCores,
     'orb-temporary': { ...friendly.temporaryOrb, shape: 'outlinedCircle' },
     'enemy-bullet': { ...hostile.enemyBullet, shape: 'centeredCircle' },
     'boss-basic-bullet': { ...hostile.bossBasic, shape: 'centeredCircle' },

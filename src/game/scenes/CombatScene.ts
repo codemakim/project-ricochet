@@ -947,6 +947,12 @@ export class CombatScene extends Phaser.Scene {
           inheritedOutputScale: mergedSplit?.inheritedOutputScale,
         },
       );
+      this.drawEffectRing(
+        event.position,
+        18,
+        GAME_TUNING.orbCores.split.accent,
+        'core-feedback-split',
+      );
     }
     const missile = this.build.microMissile();
     if (
@@ -1300,9 +1306,10 @@ export class CombatScene extends Phaser.Scene {
 
   private drawExplosion(position: Vector, radius: number): void {
     const ring = this.add.graphics()
-      .lineStyle(2, 0xffb45c, 0.85)
+      .lineStyle(2, GAME_TUNING.orbCores.explosion.accent, 0.85)
       .strokeCircle(position.x, position.y, radius)
-      .setDepth(4);
+      .setDepth(4)
+      .setName('core-feedback-explosion');
     this.time.delayedCall(120, () => ring.destroy());
   }
 
@@ -1837,6 +1844,53 @@ export class CombatScene extends Phaser.Scene {
       case 'outlinedCircle':
         graphics.fillStyle(descriptor.fill).fillCircle(centerX, centerY, radius);
         graphics.lineStyle(strokeWidth, descriptor.accent).strokeCircle(centerX, centerY, radius);
+        if (descriptor.symbol) {
+          graphics.lineStyle(1.5, descriptor.accent).beginPath();
+          switch (descriptor.symbol) {
+            case 'wave':
+              graphics.moveTo(centerX - 5, centerY).lineTo(centerX - 2, centerY - 3)
+                .lineTo(centerX + 1, centerY + 3).lineTo(centerX + 5, centerY);
+              break;
+            case 'drop':
+              graphics.moveTo(centerX, centerY - 5).lineTo(centerX - 4, centerY + 2)
+                .lineTo(centerX, centerY + 5).lineTo(centerX + 4, centerY + 2)
+                .lineTo(centerX, centerY - 5);
+              break;
+            case 'bolt':
+              graphics.moveTo(centerX + 1, centerY - 6).lineTo(centerX - 3, centerY)
+                .lineTo(centerX + 1, centerY).lineTo(centerX - 1, centerY + 6)
+                .lineTo(centerX + 4, centerY - 1).lineTo(centerX, centerY - 1);
+              break;
+            case 'arrow':
+              graphics.moveTo(centerX - 5, centerY + 4).lineTo(centerX + 4, centerY - 5)
+                .moveTo(centerX, centerY - 5).lineTo(centerX + 4, centerY - 5)
+                .lineTo(centerX + 4, centerY - 1);
+              break;
+            case 'fork':
+              graphics.moveTo(centerX, centerY + 5).lineTo(centerX, centerY)
+                .lineTo(centerX - 4, centerY - 4).moveTo(centerX, centerY)
+                .lineTo(centerX + 4, centerY - 4);
+              break;
+            case 'burst':
+              graphics.moveTo(centerX - 5, centerY).lineTo(centerX + 5, centerY)
+                .moveTo(centerX, centerY - 5).lineTo(centerX, centerY + 5)
+                .moveTo(centerX - 4, centerY - 4).lineTo(centerX + 4, centerY + 4)
+                .moveTo(centerX + 4, centerY - 4).lineTo(centerX - 4, centerY + 4);
+              break;
+          }
+          graphics.strokePath();
+        }
+        if (descriptor.notches) {
+          graphics.fillStyle(descriptor.accent);
+          for (let notch = 0; notch < descriptor.notches; notch += 1) {
+            const angle = Math.PI + notch * Math.PI / 4;
+            graphics.fillCircle(
+              centerX + Math.cos(angle) * (radius - 2),
+              centerY + Math.sin(angle) * (radius - 2),
+              0.8,
+            );
+          }
+        }
         break;
       case 'centeredCircle':
         graphics.fillStyle(descriptor.fill).fillCircle(centerX, centerY, radius);

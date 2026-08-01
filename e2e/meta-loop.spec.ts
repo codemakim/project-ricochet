@@ -123,36 +123,10 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
   await expect.poll(() => combatSceneReady(page)).toBe(true);
   await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(false);
 
-  await page.evaluate(() => {
-    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
-      scene: { getScene(key: string): {
-        debugGrantCoreSupply(): void;
-        update(time: number, delta: number): void;
-      } };
-    } }).__RICHOCHET_GAME__!;
-    const scene = game.scene.getScene('combat');
-    scene.debugGrantCoreSupply();
-    scene.update(0, 0);
-  });
-  await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
-  const coreCopy = await page.evaluate(() => {
-    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
-      scene: { getScene(key: string): {
-        children: { list: Array<{ text?: string; active?: boolean }> };
-      } };
-    } }).__RICHOCHET_GAME__!;
-    return game.scene.getScene('combat').children.list
-      .filter(({ active, text }) => active && text)
-      .map(({ text }) => text);
-  });
-  expect(coreCopy.some((text) => text?.includes('전도'))).toBe(true);
-  await page.keyboard.press('Digit2');
-  await page.keyboard.press('Enter');
-
   await page.reload();
   await expect(page.locator('[data-loadout-slot]')).toHaveValue('conduction');
   await page.getByRole('button', { name: '코어 작업장' }).click();
-  await expect(page.getByText('전도 코어').locator('..')).toContainText('해금됨');
+  await expect(page.getByText('전도 구슬').locator('..')).toContainText('해금됨');
 });
 
 test('@desktop migrates a schema 1 loadout without losing parts or unlocks', async ({ page }) => {

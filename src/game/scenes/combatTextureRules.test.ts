@@ -18,13 +18,15 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   expect(textures['boss-muzzle-flash']).toMatchObject({ shape: 'flash' });
 });
 
-it('defines four visually distinct permanent orb core textures', () => {
+it('defines six permanent orb colors, symbols, and five same-size level notches', () => {
   const textures = combatProjectileTextureDescriptors();
   const cores = [
     textures['orb-echo'],
     textures['orb-corrosion'],
     textures['orb-conduction'],
     textures['orb-inertia'],
+    textures['orb-split'],
+    textures['orb-explosion'],
   ];
 
   expect(cores).toEqual([
@@ -32,8 +34,17 @@ it('defines four visually distinct permanent orb core textures', () => {
     expect.objectContaining({ shape: 'outlinedCircle', fill: 0x9be564 }),
     expect.objectContaining({ shape: 'outlinedCircle', fill: 0xc58cff }),
     expect.objectContaining({ shape: 'outlinedCircle', fill: 0xffbd59 }),
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0x52d6b4 }),
+    expect.objectContaining({ shape: 'outlinedCircle', fill: 0xff8f3d }),
   ]);
-  expect(new Set(cores.map((core) => `${core?.fill}:${core?.accent}`)).size).toBe(4);
+  expect(new Set(cores.map((core) => `${core?.fill}:${core?.accent}`)).size).toBe(6);
+  expect(new Set(cores.map((core) => core?.symbol)).size).toBe(6);
+  expect([1, 2, 3, 4, 5].map((level) => textures[`orb-conduction-lv${level}`]))
+    .toEqual([1, 2, 3, 4, 5].map((notches) => expect.objectContaining({
+      notches,
+      width: cores[2]!.width,
+      height: cores[2]!.height,
+    })));
 });
 
 it('defines distinct prototype textures for a splitter and complementary fragments', () => {

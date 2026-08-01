@@ -701,7 +701,7 @@ describe('OrbManager Phaser adapter', () => {
     const { manager, sprites } = createManager();
 
     expect(manager.configureStartingCores(['inertia'])).toBe(true);
-    expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
+    expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia-lv1']);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {
@@ -713,7 +713,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites).toHaveLength(2);
     expect(manager.getSprites()).toHaveLength(2);
     expect(manager.getSnapshot()[1]).toMatchObject({ id: 1, state: 'queued' });
-    expect(sprites[1]?.textureKey).toBe('orb-conduction');
+    expect(sprites[1]?.textureKey).toBe('orb-conduction-lv1');
   });
 
   it('forwards an exact physical-orb upgrade and rejects it after destroy', () => {

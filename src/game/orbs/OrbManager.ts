@@ -837,7 +837,7 @@ export class OrbManager {
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
       sprite.setCircle(this.currentOrbRadius());
-      sprite.setTexture(`orb-${state.coreType}`);
+      sprite.setTexture(`orb-${state.coreType}-lv${state.level}`);
       const activeBodyOwnsPosition = state.state === 'active' && body.enable;
       sprite.setVisible(visible);
       if (!activeBodyOwnsPosition) sprite.setPosition(state.position.x, state.position.y);

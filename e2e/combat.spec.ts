@@ -12,13 +12,11 @@ interface Vector {
 
 interface OrbSnapshot {
   id: number;
-  coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia';
+  coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion';
   level: number;
   coreState: {
     echoStacks: number;
-    conductionHits: number;
-    inertiaStacks: number;
-    inertiaLaunchStacks: number;
+    explosionFailures: number;
   };
   state: string;
   charges: number;
@@ -75,7 +73,11 @@ interface CombatSnapshot {
     xp: number;
     xpRequired: number | null;
     pendingChoices: number;
-    choices: AbilityId[];
+    choices: Array<
+      | { kind: 'ability'; id: AbilityId }
+      | { kind: 'orb-add'; coreType: OrbSnapshot['coreType'] }
+      | { kind: 'orb-upgrade'; coreType: OrbSnapshot['coreType'] }
+    >;
   };
   buildRanks: Record<AbilityId, number>;
   pauseReasons: string[];
@@ -120,7 +122,6 @@ interface CombatSnapshot {
   }>;
   activePopulation: number;
   gameplayElapsedMs: number;
-  pendingCoreSupplies: number;
 }
 
 interface DevelopmentScene {
@@ -157,8 +158,7 @@ interface DevelopmentScene {
   debugChooseAbility(id: AbilityId): void;
   debugUpgradeAbility(id: AbilityId): void;
   debugSetEnemy(id: number, position: Vector, hp: number): boolean;
-  debugAdvanceEncounter(deltaMs: number, resolveCoreSupplies?: boolean): void;
-  debugGrantCoreSupply(): void;
+  debugAdvanceEncounter(deltaMs: number): void;
   debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment'): void;
   debugDamageBossPart(
     partId:
@@ -389,17 +389,6 @@ async function dispatchTouchPointers(
   }, events);
 }
 
-async function chooseFirstCoreSupply(page: Page): Promise<void> {
-  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(true);
-  const box = await page.locator('#game-root canvas').boundingBox();
-  expect(box).not.toBeNull();
-  const card = clientPoint(box!, { x: 120, y: 285 });
-  const confirm = clientPoint(box!, { x: 225, y: 575 });
-  await page.mouse.click(card.x, card.y);
-  await page.mouse.click(confirm.x, confirm.y);
-  await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
-}
-
 async function confirmFocusedLevelUp(page: Page): Promise<void> {
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
@@ -486,7 +475,7 @@ test('@desktop chooses permanent orb cores', async ({ page }) => {
   expect(await sceneCall(page, (scene) => scene.children.list
     .map((child) => child.texture?.key)
     .filter((key) => key?.startsWith('orb-'))))
-    .toContain('orb-inertia');
+    .toContain('orb-inertia-lv1');
 
 });
 
@@ -549,26 +538,25 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
   await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
-  const selectedAbility = paused.progression.choices[0]!;
+  const selectedChoice = paused.progression.choices[0]!;
   expect(paused.pauseReasons).toContain('levelUp');
 
   const card = clientPoint(box, { x: 225, y: 210 });
   await page.touchscreen.tap(card.x, card.y);
-  expect((await snapshot(page)).buildRanks[selectedAbility]).toBe(0);
   expect((await snapshot(page)).pauseReasons).toContain('levelUp');
 
   const confirm = clientPoint(box, { x: 225, y: 625 });
   await page.touchscreen.tap(confirm.x, confirm.y);
 
-  await expect.poll(async () => {
-    const current = await snapshot(page);
-    return {
-      rank: current.buildRanks[selectedAbility],
-      visible: current.levelUpVisible,
-      paused: current.pauseReasons.includes('levelUp'),
-    };
-  }).toEqual({ rank: 1, visible: false, paused: false });
-  expect((await snapshot(page)).orbs).toHaveLength(1);
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
+  const rewarded = await snapshot(page);
+  expect(rewarded.pauseReasons).not.toContain('levelUp');
+  if (selectedChoice.kind === 'ability') {
+    expect(rewarded.buildRanks[selectedChoice.id]).toBe(1);
+  } else {
+    expect(rewarded.orbs).toHaveLength(2);
+    expect(rewarded.orbs[1]?.coreType).toBe(selectedChoice.coreType);
+  }
 
   await expect.poll(async () => {
     await page.clock.runFor(16);
@@ -576,48 +564,6 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
     return current.gameplayElapsedMs > paused.gameplayElapsedMs
       && current.enemies[0]!.position.y > paused.enemies[0]!.position.y;
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
-});
-
-test('@desktop grants two stage-one core supplies before the first boss', async ({ page }) => {
-  await page.clock.install();
-  await loadCanvas(page);
-
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(42_000, false));
-  await page.clock.runFor(16);
-  await chooseFirstCoreSupply(page);
-  expect((await snapshot(page)).orbs).toHaveLength(2);
-
-  await page.clock.runFor(320);
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(73_500, false));
-  await page.clock.runFor(16);
-  await chooseFirstCoreSupply(page);
-
-  const current = await snapshot(page);
-  expect(current.orbs).toHaveLength(3);
-  expect(current.orbs.every(({ level }) => level === 1)).toBe(true);
-  expect(current.encounter.state).toBe('running');
-});
-
-test('@desktop gives core supply priority over a pending level-up', async ({ page }) => {
-  await page.clock.install();
-  await loadCanvas(page);
-
-  await sceneCall(page, (scene) => {
-    scene.debugGrantCoreSupply();
-    scene.debugGrantXp(8);
-  });
-  const coreReward = await snapshot(page);
-  expect(coreReward.loadoutVisible).toBe(true);
-  expect(coreReward.levelUpVisible).toBe(false);
-
-  await chooseFirstCoreSupply(page);
-  await page.clock.runFor(250);
-  const gap = await snapshot(page);
-  expect(gap.loadoutVisible).toBe(false);
-  expect(gap.levelUpVisible).toBe(false);
-
-  await page.clock.runFor(70);
-  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
 });
 
 test('@desktop recovers active orbs through proximity and bottom worldbounds', async ({ page }) => {
@@ -960,7 +906,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   await page.keyboard.up('KeyD');
 });
 
-test('@desktop pauses for level-up until an ability is chosen', async ({ page }) => {
+test('@desktop pauses for level-up until a mixed reward is chosen', async ({ page }) => {
   await page.clock.install();
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 4, 8, 12]));
@@ -976,6 +922,7 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
+  const selectedChoice = paused.progression.choices[0]!;
   const pausedBullets = await bulletState(page);
   expect(paused.pauseReasons).toContain('levelUp');
   expect(paused.orbs.some((orb) => orb.state === 'active' && Math.hypot(orb.velocity.x, orb.velocity.y) > 0)).toBe(true);
@@ -999,7 +946,11 @@ test('@desktop pauses for level-up until an ability is chosen', async ({ page })
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const selected = await snapshot(page);
   expect(selected.pauseReasons).not.toContain('levelUp');
-  expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(1);
+  if (selectedChoice.kind === 'ability') {
+    expect(selected.buildRanks[selectedChoice.id]).toBe(1);
+  } else {
+    expect(selected.orbs[1]?.coreType).toBe(selectedChoice.coreType);
+  }
   await page.keyboard.up('KeyD');
 });
 
@@ -1013,20 +964,16 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   await sceneCall(page, (scene) => scene.debugGrantXp(8));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
-  const selectedAbility = paused.progression.choices[0]!;
+  const selectedChoice = paused.progression.choices[0]!;
 
   const card = clientPoint(box, { x: 225, y: 210 });
   await page.mouse.click(card.x, card.y);
   await confirmFocusedLevelUp(page);
 
-  await expect.poll(async () => {
-    const current = await snapshot(page);
-    return {
-      rank: current.buildRanks[selectedAbility],
-      visible: current.levelUpVisible,
-      paused: current.pauseReasons.includes('levelUp'),
-    };
-  }).toEqual({ rank: 1, visible: false, paused: false });
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
+  const rewarded = await snapshot(page);
+  if (selectedChoice.kind === 'ability') expect(rewarded.buildRanks[selectedChoice.id]).toBe(1);
+  else expect(rewarded.orbs[1]?.coreType).toBe(selectedChoice.coreType);
   const selected = await snapshot(page);
   expect(selected.aim).toEqual(aimed.aim);
   await expect.poll(async () => {
@@ -1051,8 +998,8 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   expect(hidden.pauseReasons).toEqual(['visibility', 'levelUp']);
 
   await sceneCall(page, (scene) => {
-    const choice = scene.getDebugSnapshot().progression.choices[0]!;
-    scene.debugChooseAbility(choice);
+    const choice = scene.getDebugSnapshot().progression.choices.find(({ kind }) => kind === 'ability');
+    if (choice?.kind === 'ability') scene.debugChooseAbility(choice.id);
   });
 
   const selected = await snapshot(page);
@@ -1090,8 +1037,8 @@ test('@desktop resumes briefly between queued level-up choices', async ({ page }
   await expect.poll(async () => (await snapshot(page)).progression.pendingChoices).toBe(2);
 
   await sceneCall(page, (scene) => {
-    const choice = scene.getDebugSnapshot().progression.choices[0]!;
-    scene.debugChooseAbility(choice);
+    const choice = scene.getDebugSnapshot().progression.choices.find(({ kind }) => kind === 'ability');
+    if (choice?.kind === 'ability') scene.debugChooseAbility(choice.id);
   });
 
   const between = await snapshot(page);
@@ -1103,8 +1050,8 @@ test('@desktop resumes briefly between queued level-up choices', async ({ page }
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
 
   await sceneCall(page, (scene) => {
-    const choice = scene.getDebugSnapshot().progression.choices[0]!;
-    scene.debugChooseAbility(choice);
+    const choice = scene.getDebugSnapshot().progression.choices.find(({ kind }) => kind === 'ability');
+    if (choice?.kind === 'ability') scene.debugChooseAbility(choice.id);
   });
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
@@ -1114,7 +1061,7 @@ test('@desktop resumes briefly between queued level-up choices', async ({ page }
   expect(selected.pauseReasons).not.toContain('levelUp');
 });
 
-test('@desktop stops XP and keeps level-up closed when all abilities reach their caps', async ({ page }) => {
+test('@desktop keeps orb growth available after all abilities reach their caps', async ({ page }) => {
   await loadCanvas(page);
   await sceneCall(page, (scene, maximumRanks) => {
     for (const [ability, maximum] of Object.entries(maximumRanks) as Array<[AbilityId, number]>) {
@@ -1126,9 +1073,11 @@ test('@desktop stops XP and keeps level-up closed when all abilities reach their
   const completed = await snapshot(page);
   expect(ABILITY_IDS).toHaveLength(32);
   expect(completed.buildRanks).toEqual(ABILITY_MAX_RANKS);
-  expect(completed.progression).toMatchObject({ xp: 0, pendingChoices: 0, choices: [] });
-  expect(completed.levelUpVisible).toBe(false);
-  expect(completed.pauseReasons).not.toContain('levelUp');
+  expect(completed.progression.pendingChoices).toBeGreaterThan(0);
+  expect(completed.progression.choices.length).toBeGreaterThan(0);
+  expect(completed.progression.choices.every(({ kind }) => kind !== 'ability')).toBe(true);
+  expect(completed.levelUpVisible).toBe(true);
+  expect(completed.pauseReasons).toContain('levelUp');
 });
 
 test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
