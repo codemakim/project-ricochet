@@ -230,18 +230,14 @@ describe('OrbStore', () => {
     });
   });
 
-  it('reports every fourth conduction hit', () => {
+  it('reports conduction on every direct hit', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.configureStartingCores(['conduction']);
     store.activateAim();
     store.update(0, 0, player, up);
 
-    for (let hit = 0; hit < 3; hit += 1) {
-      expect(store.handleEnemyHit(0, hit, 99, 1_000, false))
-        .toMatchObject({ conductionTriggered: false });
-    }
     expect(store.handleEnemyHit(0, 4, 99, 1_000, false))
-      .toMatchObject({ coreType: 'conduction', conductionTriggered: true });
+      .toMatchObject({ coreType: 'conduction', coreLevel: 1, conductionTriggered: true });
   });
 
   it('passes flight context into permanent direct-hit damage', () => {
@@ -307,29 +303,18 @@ describe('OrbStore', () => {
     )).toBeCloseTo(ORB_SPEED);
   });
 
-  it('uses proximity-built inertia for one launch and clears it on the first hit', () => {
+  it('uses the inertia level base-speed multiplier', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.configureStartingCores(['inertia']);
     store.activateAim();
     store.update(0, 0, player, up);
-    for (let hit = 0; hit < 3; hit += 1) {
-      store.handleEnemyHit(0, hit, 99, 1_000, false);
-    }
-    store.beginProximityRecovery(0);
-    store.update(100, 100, player, up);
-    store.update(200, 100, player, up);
-    store.update(300, 100, player, up);
+    store.upgradeOrb(0, 'inertia');
+    store.refreshCombatModifiers(0);
 
     expect(Math.hypot(
       store.getSnapshot()[0]!.velocity.x,
       store.getSnapshot()[0]!.velocity.y,
-    )).toBeCloseTo(ORB_SPEED * 1.3);
-
-    store.handleEnemyHit(0, 9, 99, 2_000, false);
-    expect(Math.hypot(
-      store.getSnapshot()[0]!.velocity.x,
-      store.getSnapshot()[0]!.velocity.y,
-    )).toBeCloseTo(ORB_SPEED);
+    )).toBeCloseTo(ORB_SPEED * 1.08);
   });
 
   it('honors a runtime build orb-limit provider up to the central cap', () => {

@@ -1,4 +1,5 @@
 import { GAME_TUNING } from '../config/gameTuning';
+import type { ExplosionSpec, SplitSpec } from '../progression/BuildState';
 import type { RecoverySource } from './orbRules';
 
 export const ORB_CORE_IDS = [
@@ -100,9 +101,7 @@ export const ORB_CORE_DEFINITIONS = {
 
 export interface OrbCoreState {
   echoStacks: number;
-  conductionHits: number;
-  inertiaStacks: number;
-  inertiaLaunchStacks: number;
+  explosionFailures: number;
 }
 
 export interface CoreHitResolution {
@@ -111,24 +110,49 @@ export interface CoreHitResolution {
   next: OrbCoreState;
 }
 
+export interface SplitProfile {
+  chance: number;
+  cooldownMs: number;
+  count: number;
+  extraBounces: number;
+  lifetimeMs: number;
+  inheritedOutputScale: number;
+}
+
+export interface ExplosionProfile {
+  chance: number;
+  cooldownMs: number;
+  damage: number;
+  radius: number;
+  maximumFailures: number;
+  centerBlast?: { radius: number; damage: number };
+}
+
 export function createOrbCoreState(): OrbCoreState {
   return {
     echoStacks: 0,
-    conductionHits: 0,
-    inertiaStacks: 0,
-    inertiaLaunchStacks: 0,
+    explosionFailures: 0,
   };
+}
+
+function levelIndex(level: number): 0 | 1 | 2 | 3 | 4 {
+  if (!Number.isInteger(level) || level < 1 || level > 5) {
+    throw new RangeError('core level must be an integer from 1 through 5');
+  }
+  return level - 1 as 0 | 1 | 2 | 3 | 4;
 }
 
 export function applyCoreWallBounce(
   type: OrbCoreId,
+  level: number,
   state: Readonly<OrbCoreState>,
 ): OrbCoreState {
+  const index = levelIndex(level);
   if (type !== 'echo') return { ...state };
   return {
     ...state,
     echoStacks: Math.min(
-      GAME_TUNING.orbCores.echo.maxStacks,
+      GAME_TUNING.orbCores.echo.maxStacksByLevel[index],
       state.echoStacks + 1,
     ),
   };
@@ -136,32 +160,30 @@ export function applyCoreWallBounce(
 
 export function resolveCoreDirectHit(
   type: OrbCoreId,
+  level: number,
   state: Readonly<OrbCoreState>,
-  conductionHitsRequired: number = GAME_TUNING.orbCores.conduction.hitsRequired,
+  speedRatio = 1,
 ): CoreHitResolution {
+  const index = levelIndex(level);
   const next = { ...state };
   let directDamageBonus = 0;
-  let conductionTriggered = false;
 
   if (type === 'echo') {
     directDamageBonus = state.echoStacks
-      * GAME_TUNING.orbCores.echo.damageBonusPerStack;
+      * GAME_TUNING.orbCores.echo.damageBonusPerStackByLevel[index];
     next.echoStacks = 0;
-  } else if (type === 'conduction') {
-    next.conductionHits += 1;
-    if (next.conductionHits >= conductionHitsRequired) {
-      next.conductionHits = 0;
-      conductionTriggered = true;
-    }
   } else if (type === 'inertia') {
-    next.inertiaStacks = Math.min(
-      GAME_TUNING.orbCores.inertia.maxStacks,
-      next.inertiaStacks + 1,
+    const steps = Math.floor(
+      Math.max(0, speedRatio - 1 + Number.EPSILON)
+      / GAME_TUNING.orbCores.inertia.speedStep,
     );
-    next.inertiaLaunchStacks = 0;
+    directDamageBonus = Math.min(
+      GAME_TUNING.orbCores.inertia.maximumDamageBonusByLevel[index],
+      steps * GAME_TUNING.orbCores.inertia.damagePerSpeedStepByLevel[index],
+    );
   }
 
-  return { directDamageBonus, conductionTriggered, next };
+  return { directDamageBonus, conductionTriggered: type === 'conduction', next };
 }
 
 export function resolveCoreRecovery(
@@ -171,18 +193,101 @@ export function resolveCoreRecovery(
 ): OrbCoreState {
   const next = { ...state };
   if (type === 'echo') next.echoStacks = 0;
-  if (type === 'inertia') {
-    next.inertiaLaunchStacks = source === 'proximity' ? next.inertiaStacks : 0;
-    next.inertiaStacks = 0;
-  }
+  void source;
   return next;
 }
 
 export function coreLaunchSpeedMultiplier(
   type: OrbCoreId,
-  state: Readonly<OrbCoreState>,
+  level: number,
 ): number {
+  const index = levelIndex(level);
   if (type !== 'inertia') return 1;
-  return 1 + state.inertiaLaunchStacks
-    * GAME_TUNING.orbCores.inertia.speedBonusPerStack;
+  return GAME_TUNING.orbCores.inertia.baseSpeedMultiplierByLevel[index];
+}
+
+export function splitProfile(
+  coreType: OrbCoreId,
+  level: number,
+  generic: SplitSpec | null,
+): SplitProfile | null {
+  const index = levelIndex(level);
+  if (coreType !== 'split') {
+    return generic ? {
+      ...generic,
+      extraBounces: 0,
+      lifetimeMs: GAME_TUNING.temporaryOrbs.lifetimeMs,
+      inheritedOutputScale: 0,
+    } : null;
+  }
+  const tuning = GAME_TUNING.orbCores.split;
+  return {
+    chance: Math.min(1, Math.max(
+      tuning.chanceByLevel[index] + (generic ? tuning.genericSynergy.chanceBonus : 0),
+      generic?.chance ?? 0,
+    )),
+    cooldownMs: generic?.cooldownMs ?? GAME_TUNING.build.split.cooldownMs,
+    count: tuning.countByLevel[index]
+      + (generic ? tuning.genericSynergy.countBonus : 0),
+    extraBounces: tuning.extraBouncesByLevel[index],
+    lifetimeMs: tuning.lifetimeMsByLevel[index],
+    inheritedOutputScale: level >= tuning.inheritedEffects.fromLevel
+      ? tuning.inheritedEffects.outputScale
+      : 0,
+  };
+}
+
+export function explosionProfile(
+  coreType: OrbCoreId,
+  level: number,
+  generic: ExplosionSpec | null,
+  failures: number,
+): ExplosionProfile | null {
+  const index = levelIndex(level);
+  if (coreType !== 'explosion') {
+    return generic ? { ...generic, maximumFailures: 0 } : null;
+  }
+  const tuning = GAME_TUNING.orbCores.explosion;
+  const pityFailures = level >= tuning.pity.fromLevel
+    ? Math.min(tuning.pity.maximumFailures, Math.max(0, Math.trunc(failures)))
+    : 0;
+  const damage = tuning.damageByLevel[index]
+    * (generic ? tuning.genericSynergy.damageMultiplier : 1);
+  return {
+    chance: Math.min(1, Math.max(
+      tuning.chanceByLevel[index]
+        + pityFailures * tuning.pity.chancePerFailure
+        + (generic ? tuning.genericSynergy.chanceBonus : 0),
+      generic?.chance ?? 0,
+    )),
+    cooldownMs: generic?.cooldownMs ?? GAME_TUNING.build.explosion.cooldownMs,
+    damage,
+    radius: tuning.radiusByLevel[index],
+    maximumFailures: level >= tuning.pity.fromLevel ? tuning.pity.maximumFailures : 0,
+    ...(level >= tuning.centerBlast.fromLevel && pityFailures >= tuning.pity.maximumFailures
+      ? {
+        centerBlast: {
+          radius: tuning.centerBlast.radius,
+          damage: damage * tuning.centerBlast.damageMultiplier,
+        },
+      }
+      : {}),
+  };
+}
+
+export function resolveExplosionOutcome(
+  coreType: OrbCoreId,
+  state: Readonly<OrbCoreState>,
+  triggered: boolean,
+): OrbCoreState {
+  if (coreType !== 'explosion') return { ...state };
+  return {
+    ...state,
+    explosionFailures: triggered
+      ? 0
+      : Math.min(
+        GAME_TUNING.orbCores.explosion.pity.maximumFailures,
+        state.explosionFailures + 1,
+      ),
+  };
 }

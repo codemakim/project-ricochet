@@ -64,7 +64,9 @@ export interface DirectHitEvent {
   charged: boolean;
   direction: Vector;
   coreType?: OrbCoreId;
+  coreLevel?: number;
   conductionTriggered?: boolean;
+  explosionFailures?: number;
   speedRatio?: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;
@@ -570,7 +572,9 @@ export class EnemyManager {
       killed: enemy.hp <= 0,
       ...(core ? {
         coreType: core.coreType,
+        coreLevel: core.coreLevel,
         conductionTriggered: core.conductionTriggered,
+        explosionFailures: core.explosionFailures,
         speedRatio: core.speedRatio,
         firstHitAfterProximity: core.firstHitAfterProximity,
         echoStacks: core.echoStacks,

@@ -214,7 +214,6 @@ export interface GameTuning {
       accent: number;
     };
     conduction: {
-      hitsRequired: number;
       targetCount: number;
       radius: number;
       damage: number;
@@ -303,7 +302,7 @@ export interface GameTuning {
     recursiveSplit: { chance: number; childCount: number };
     inertiaRetention: { directHits: number };
     directLink: { overchargeScale: number };
-    superconductingCircuit: { hitReduction: number; damageBonus: number };
+    superconductingCircuit: { targetBonus: number; damageBonus: number };
     resonanceRupture: { radius: number; damage: number };
   };
   visual: {
@@ -528,7 +527,6 @@ export const GAME_TUNING = {
       targetCountByLevel: ORB_CORE_LEVEL_TUNING.conduction.targetCountByLevel,
       radiusByLevel: ORB_CORE_LEVEL_TUNING.conduction.radiusByLevel,
       directDamageByLevel: ORB_CORE_LEVEL_TUNING.conduction.directDamageByLevel,
-      hitsRequired: 4,
       targetCount: 2,
       radius: 150,
       damage: 0.45,
@@ -607,7 +605,7 @@ export const GAME_TUNING = {
     recursiveSplit: { chance: 0.2, childCount: 1 },
     inertiaRetention: { directHits: 2 },
     directLink: { overchargeScale: 0.3 },
-    superconductingCircuit: { hitReduction: 1, damageBonus: 0.2 },
+    superconductingCircuit: { targetBonus: 1, damageBonus: 0.2 },
     resonanceRupture: { radius: 44, damage: 0.65 },
   },
   visual: {
@@ -968,7 +966,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   positive(orbCores.corrosion.damagePerTick, 'orbCores.corrosion.damagePerTick');
   positiveInteger(orbCores.corrosion.fieldLimitPerOrb, 'orbCores.corrosion.fieldLimitPerOrb');
-  positiveInteger(orbCores.conduction.hitsRequired, 'orbCores.conduction.hitsRequired');
   positiveInteger(orbCores.conduction.targetCount, 'orbCores.conduction.targetCount');
   positive(orbCores.conduction.radius, 'orbCores.conduction.radius');
   positive(orbCores.conduction.damage, 'orbCores.conduction.damage');
@@ -1378,7 +1375,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   positiveInteger(relics.recursiveSplit.childCount, 'relics.recursiveSplit.childCount');
   positiveInteger(relics.inertiaRetention.directHits, 'relics.inertiaRetention.directHits');
   probability(relics.directLink.overchargeScale, 'relics.directLink.overchargeScale');
-  positiveInteger(relics.superconductingCircuit.hitReduction, 'relics.superconductingCircuit.hitReduction');
+  positiveInteger(relics.superconductingCircuit.targetBonus, 'relics.superconductingCircuit.targetBonus');
   positive(relics.superconductingCircuit.damageBonus, 'relics.superconductingCircuit.damageBonus');
   positive(relics.resonanceRupture.radius, 'relics.resonanceRupture.radius');
   positive(relics.resonanceRupture.damage, 'relics.resonanceRupture.damage');

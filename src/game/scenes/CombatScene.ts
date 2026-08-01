@@ -44,7 +44,7 @@ import {
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
-import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
+import { ORB_CORE_IDS, explosionProfile, splitProfile } from '../orbs/orbCoreRules';
 import type { RecoverySource } from '../orbs/orbRules';
 import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
@@ -275,7 +275,6 @@ export class CombatScene extends Phaser.Scene {
       ),
       getTrackingRadiusBonus: (active) => build.trackingRadiusBonus(active),
       getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
-      getConductionHitsRequired: (base) => this.bossBuild?.conductionHitsRequired(base) ?? base,
       getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
       getOrbLimit: () => GAME_TUNING.build.basicGrowth.maximumOrbs,
       onRecovery: (orbId, source) => {
@@ -580,7 +579,9 @@ export class CombatScene extends Phaser.Scene {
       | 'charged'
       | 'direction'
       | 'coreType'
+      | 'coreLevel'
       | 'conductionTriggered'
+      | 'explosionFailures'
       | 'killed'
       | 'speedRatio'
       | 'firstHitAfterProximity'
@@ -597,6 +598,18 @@ export class CombatScene extends Phaser.Scene {
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
+    const coreLevel = event.coreLevel ?? 1;
+    const mergedExplosion = permanent && event.coreType
+      ? explosionProfile(event.coreType, coreLevel, explosion, event.explosionFailures ?? 0)
+      : explosion ? { ...explosion, maximumFailures: 0 } : null;
+    const mergedSplit = permanent && event.coreType
+      ? splitProfile(event.coreType, coreLevel, split)
+      : split ? {
+        ...split,
+        extraBounces: 0,
+        lifetimeMs: GAME_TUNING.temporaryOrbs.lifetimeMs,
+        inheritedOutputScale: 0,
+      } : null;
     const horizontalCutter = this.build.horizontalCutter();
     const verticalCutter = this.build.verticalCutter();
     const destructionReaction = this.build.destructionReaction();
@@ -619,20 +632,20 @@ export class CombatScene extends Phaser.Scene {
     const corePlan = planOrbCoreEffects(event, corrosionTriggered);
     const recursiveSplit = permanent ? null : this.bossBuild.recursiveSplit();
     const decision = {
-      explosion: Boolean(explosion && chanceFor(explosion.chance) > 0 && this.combatProcs?.tryProc(
+      explosion: Boolean(mergedExplosion && chanceFor(mergedExplosion.chance) > 0 && this.combatProcs?.tryProc(
         'explosion',
         procOrbId,
         this.gameplayElapsedMs,
-        chanceFor(explosion.chance),
-        explosion.cooldownMs,
+        chanceFor(mergedExplosion.chance),
+        mergedExplosion.cooldownMs,
       )),
       split: Boolean(
         permanent
-          ? split && this.combatProcs?.trySplit(
+          ? mergedSplit && this.combatProcs?.trySplit(
             event.sourceOrbId,
             this.gameplayElapsedMs,
-            split.chance,
-            split.cooldownMs,
+            mergedSplit.chance,
+            mergedSplit.cooldownMs,
           )
           : recursiveSplit && this.combatProcs?.trySplit(
             procOrbId,
@@ -674,7 +687,22 @@ export class CombatScene extends Phaser.Scene {
       event,
       this.build,
       decision,
+      {
+        explosion: mergedExplosion ? {
+          ...mergedExplosion,
+          damage: this.build.secondaryDamage(mergedExplosion.damage),
+          radius: this.build.circularRadius(mergedExplosion.radius),
+        } : null,
+        split: mergedSplit ? {
+          ...mergedSplit,
+          count: this.build.splitCount(mergedSplit.count),
+          lifetimeMs: this.build.temporaryLifetimeMs(mergedSplit.lifetimeMs),
+        } : null,
+      },
     );
+    if (permanent && event.coreType === 'explosion') {
+      this.orbManager?.recordExplosionOutcome(event.sourceOrbId, decision.explosion);
+    }
     if (plan.spawnChildren) {
       this.temporaryOrbManager?.spawnChildren(
         event.sourceOrbId,
@@ -699,7 +727,8 @@ export class CombatScene extends Phaser.Scene {
     if (corePlan.dischargeConduction) {
       const conduction = GAME_TUNING.orbCores.conduction;
       const radius = this.build.circularRadius(conduction.radius);
-      const targetCount = this.build.conductionTargetCount(conduction.targetCount);
+      const targetCount = this.build.conductionTargetCount(conduction.targetCount)
+        + this.bossBuild.conductionTargetBonus();
       const damage = this.build.secondaryDamage(
         this.bossBuild.conductionDamage(conduction.damage),
       ) * (1 + linkedBonus);

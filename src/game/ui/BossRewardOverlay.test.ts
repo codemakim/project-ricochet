@@ -88,6 +88,18 @@ describe('BossRewardOverlay', () => {
     ]));
   });
 
+  it('describes superconducting circuit as target and damage growth', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new BossRewardOverlay(scene as never);
+    overlay.show([
+      { kind: 'relic', id: 'superconducting-circuit' },
+      { kind: 'relic', id: 'recursive-split' },
+      { kind: 'ability-rank', id: 'kinetic' },
+    ], () => true);
+
+    expect(objects.some(({ text }) => text?.includes('전도 대상·피해 증가'))).toBe(true);
+  });
+
   it('consumes touch or keyboard selection exactly once', () => {
     const { scene, objects, keys } = makeScene();
     const overlay = new BossRewardOverlay(scene as never);

@@ -139,7 +139,7 @@ describe('GAME_TUNING', () => {
       recursiveSplit: { chance: 0.2, childCount: 1 },
       inertiaRetention: { directHits: 2 },
       directLink: { overchargeScale: 0.3 },
-      superconductingCircuit: { hitReduction: 1, damageBonus: 0.2 },
+      superconductingCircuit: { targetBonus: 1, damageBonus: 0.2 },
       resonanceRupture: { radius: 44, damage: 0.65 },
     });
   });

@@ -10,6 +10,7 @@ import type {
 import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
+import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
 
 export function pendingRunRewardKind(
   pendingLevelUps: number,
@@ -98,15 +99,17 @@ export function planDirectHitEffects(
   event: { source: 'permanent' | 'temporary'; charged: boolean },
   build: Pick<BuildState, 'explosion' | 'split'>,
   decision: ProcDecision,
+  profiles?: { explosion: ExplosionProfile | null; split: SplitProfile | null },
 ): DirectHitEffectPlan {
-  const explosion = build.explosion();
+  const explosion = profiles?.explosion ?? build.explosion();
+  const split = profiles?.split ?? build.split();
   return {
     immediateAreas: explosion && decision.explosion
       ? [{ kind: 'explosion', radius: explosion.radius, damage: explosion.damage }]
       : [],
     spawnChildren: event.source === 'temporary' && decision.split,
     splitCount: event.source === 'permanent' && decision.split
-      ? build.split()?.count ?? 0
+      ? split?.count ?? 0
       : 0,
   };
 }

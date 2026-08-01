@@ -574,7 +574,9 @@ export class BossManager implements BossEncounter {
       killed: previousHp > 0 && this.partHp(pending.partId) === 0,
       ...(core ? {
         coreType: core.coreType,
+        coreLevel: core.coreLevel,
         conductionTriggered: core.conductionTriggered,
+        explosionFailures: core.explosionFailures,
         speedRatio: core.speedRatio,
         firstHitAfterProximity: core.firstHitAfterProximity,
         echoStacks: core.echoStacks,

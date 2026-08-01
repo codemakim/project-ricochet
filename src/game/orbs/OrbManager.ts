@@ -24,6 +24,7 @@ import {
   applyCoreWallBounce,
   coreLaunchSpeedMultiplier,
   createOrbCoreState,
+  resolveExplosionOutcome,
   resolveCoreDirectHit,
   resolveCoreRecovery,
   type OrbCoreId,
@@ -53,7 +54,9 @@ export interface OrbSnapshot {
 
 export interface PermanentHitResult extends HitResult {
   coreType: OrbCoreId;
+  coreLevel: number;
   conductionTriggered: boolean;
+  explosionFailures: number;
   speedRatio: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;
@@ -106,7 +109,6 @@ export class OrbStore {
     ) => number = () => 1,
     private readonly getTrackingRadiusBonus: (active: boolean) => number = () => 0,
     private readonly getTimedDurationMs: (baseMs: number) => number = (baseMs) => baseMs,
-    private readonly getConductionHitsRequired: (base: number) => number = (base) => base,
     private readonly getInertiaHitLimit: () => number = () => 1,
   ) {
     this.records = Array.from(
@@ -215,7 +217,7 @@ export class OrbStore {
       record.wallHits + 1,
     );
     record.directHitsSinceWall = 0;
-    record.coreState = applyCoreWallBounce(record.coreType, record.coreState);
+    record.coreState = applyCoreWallBounce(record.coreType, record.level, record.coreState);
     this.normalizeActiveSpeed(record);
     return true;
   }
@@ -256,18 +258,13 @@ export class OrbStore {
     const source = record.lastRecoverySource;
     const firstHitAfterProximity = source === 'proximity' && record.firstHitPending;
     const echoStacks = record.coreState.echoStacks;
-    const inertiaLaunchStacks = record.coreState.inertiaLaunchStacks;
-    const retainInertia = record.coreType === 'inertia'
-      && inertiaLaunchStacks > 0
-      && !record.hasDirectHit
-      && this.getInertiaHitLimit() > 1;
+    const speed = Math.hypot(record.velocity.x, record.velocity.y);
     const core = resolveCoreDirectHit(
       record.coreType,
+      record.level,
       record.coreState,
-      this.getConductionHitsRequired(GAME_TUNING.orbCores.conduction.hitsRequired),
+      speed / ORB_SPEED,
     );
-    if (retainInertia) core.next.inertiaLaunchStacks = inertiaLaunchStacks;
-    const speed = Math.hypot(record.velocity.x, record.velocity.y);
     const conditionalBonus = Math.min(
       GAME_TUNING.build.conditionalDamageCap,
       core.directDamageBonus + this.getConditionalDirectDamageBonus({
@@ -311,11 +308,18 @@ export class OrbStore {
     return {
       ...result,
       coreType: record.coreType,
+      coreLevel: record.level,
       conductionTriggered: core.conductionTriggered,
+      explosionFailures: record.coreState.explosionFailures,
       speedRatio: speed / ORB_SPEED,
       firstHitAfterProximity,
       echoStacks,
     };
+  }
+
+  recordExplosionOutcome(id: number, triggered: boolean): void {
+    const record = this.requireRecord(id);
+    record.coreState = resolveExplosionOutcome(record.coreType, record.coreState, triggered);
   }
 
   refreshCombatModifiers(id?: number): void {
@@ -478,7 +482,7 @@ export class OrbStore {
 
   private speedTarget(record: OrbRecord): number {
     return this.getChargedSpeed()
-      * coreLaunchSpeedMultiplier(record.coreType, record.coreState)
+      * coreLaunchSpeedMultiplier(record.coreType, record.level)
       * this.getWallSpeedMultiplier(record.wallHits)
       * this.flightSpeedMultiplier(record);
   }
@@ -522,7 +526,6 @@ export interface OrbManagerOptions extends OrbCallbacks {
   ): number;
   getTrackingRadiusBonus?(active: boolean): number;
   getTimedDurationMs?(baseMs: number): number;
-  getConductionHitsRequired?(base: number): number;
   getInertiaHitLimit?(): number;
   startingCoreTypes?: readonly [OrbCoreId];
   textureKey?: string;
@@ -576,7 +579,6 @@ export class OrbManager {
       options.getFlightSpeedMultiplier,
       options.getTrackingRadiusBonus,
       options.getTimedDurationMs,
-      options.getConductionHitsRequired,
       options.getInertiaHitLimit,
     );
     if (options.startingCoreTypes) {
@@ -726,6 +728,11 @@ export class OrbManager {
     }
     this.store.refreshCombatModifiers();
     this.synchronizeSprites();
+  }
+
+  recordExplosionOutcome(orb: OrbSprite | number, triggered: boolean): void {
+    const owned = this.resolveOwnedOrb(orb);
+    if (owned) this.store.recordExplosionOutcome(owned.id, triggered);
   }
 
   destroy(): void {

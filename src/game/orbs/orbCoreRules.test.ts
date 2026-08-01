@@ -5,8 +5,11 @@ import {
   applyCoreWallBounce,
   coreLaunchSpeedMultiplier,
   createOrbCoreState,
+  explosionProfile,
+  resolveExplosionOutcome,
   resolveCoreDirectHit,
   resolveCoreRecovery,
+  splitProfile,
 } from './orbCoreRules';
 
 describe('orb core rules', () => {
@@ -28,67 +31,76 @@ describe('orb core rules', () => {
     );
   });
 
-  it('uses an overridden conduction hit requirement', () => {
-    let state = createOrbCoreState();
-    state = resolveCoreDirectHit('conduction', state, 3).next;
-    state = resolveCoreDirectHit('conduction', state, 3).next;
-    const third = resolveCoreDirectHit('conduction', state, 3);
-
-    expect(third.conductionTriggered).toBe(true);
-    expect(third.next.conductionHits).toBe(0);
+  it('chains conduction on every direct hit', () => {
+    expect(resolveCoreDirectHit('conduction', 1, createOrbCoreState()).conductionTriggered)
+      .toBe(true);
   });
+
   it('caps and spends echo stacks on the next direct hit', () => {
     let state = createOrbCoreState();
     for (let bounce = 0; bounce < 7; bounce += 1) {
-      state = applyCoreWallBounce('echo', state);
+      state = applyCoreWallBounce('echo', 1, state);
     }
 
-    expect(resolveCoreDirectHit('echo', state)).toMatchObject({
+    expect(resolveCoreDirectHit('echo', 1, state)).toMatchObject({
       directDamageBonus: 0.4,
       conductionTriggered: false,
       next: { echoStacks: 0 },
     });
   });
 
-  it('discharges conduction every fourth direct hit', () => {
-    let state = createOrbCoreState();
-    for (let hit = 0; hit < 3; hit += 1) {
-      const result = resolveCoreDirectHit('conduction', state);
-      expect(result.conductionTriggered).toBe(false);
-      state = result.next;
+  it('uses level-two echo and inertia values', () => {
+    let echo = createOrbCoreState();
+    for (let bounce = 0; bounce < 9; bounce += 1) {
+      echo = applyCoreWallBounce('echo', 2, echo);
     }
-
-    expect(resolveCoreDirectHit('conduction', state)).toMatchObject({
-      conductionTriggered: true,
-      next: { conductionHits: 0 },
-    });
+    expect(resolveCoreDirectHit('echo', 2, echo).directDamageBonus).toBeCloseTo(0.7);
+    expect(resolveCoreDirectHit('inertia', 2, createOrbCoreState(), 2).directDamageBonus)
+      .toBeCloseTo(0.32);
   });
 
-  it('converts inertia into launch speed only after proximity recovery', () => {
-    let state = createOrbCoreState();
-    for (let hit = 0; hit < 4; hit += 1) {
-      state = resolveCoreDirectHit('inertia', state).next;
-    }
-
-    const proximity = resolveCoreRecovery('inertia', state, 'proximity');
-    expect(proximity).toMatchObject({ inertiaStacks: 0, inertiaLaunchStacks: 3 });
-    expect(coreLaunchSpeedMultiplier('inertia', proximity)).toBe(1.3);
-
-    const floor = resolveCoreRecovery('inertia', state, 'floorRecall');
-    expect(floor).toMatchObject({ inertiaStacks: 0, inertiaLaunchStacks: 0 });
-    expect(coreLaunchSpeedMultiplier('inertia', floor)).toBe(1);
+  it('applies the inertia base speed by level', () => {
+    expect(coreLaunchSpeedMultiplier('inertia', 1)).toBe(1);
+    expect(coreLaunchSpeedMultiplier('inertia', 2)).toBe(1.08);
+    expect(coreLaunchSpeedMultiplier('echo', 5)).toBe(1);
   });
 
-  it('ends inertia launch speed after the first direct hit and starts a new stack', () => {
-    const launched = {
-      ...createOrbCoreState(),
-      inertiaLaunchStacks: 3,
-    };
+  it('builds native and generic split profiles through one merged roll', () => {
+    expect(splitProfile('split', 1, null)).toMatchObject({ chance: 0.22, count: 2 });
+    expect(splitProfile('echo', 1, { chance: 0.25, cooldownMs: 120, count: 2 }))
+      .toMatchObject({ chance: 0.25, count: 2 });
+    expect(splitProfile('split', 2, { chance: 0.25, cooldownMs: 120, count: 2 }))
+      .toMatchObject({ chance: 0.38, count: 3 });
+    expect(splitProfile('echo', 1, null)).toBeNull();
+  });
 
-    expect(resolveCoreDirectHit('inertia', launched).next).toMatchObject({
-      inertiaStacks: 1,
-      inertiaLaunchStacks: 0,
+  it('builds native and generic explosion profiles through one clamped roll', () => {
+    expect(explosionProfile('explosion', 1, null, 0)).toMatchObject({
+      chance: 0.2,
+      damage: 0.45,
+      radius: 48,
     });
+    expect(explosionProfile('echo', 1, {
+      chance: 0.3, cooldownMs: 120, damage: 0.5, radius: 50,
+    }, 0)).toMatchObject({ chance: 0.3, damage: 0.5, radius: 50 });
+    expect(explosionProfile('explosion', 2, {
+      chance: 0.99, cooldownMs: 120, damage: 0.5, radius: 50,
+    }, 0)).toMatchObject({ chance: 0.99, damage: 0.72, radius: 48 });
+  });
+
+  it('tracks explosion pity only on its physical dedicated orb', () => {
+    const state = createOrbCoreState();
+    const failed = resolveExplosionOutcome('explosion', state, false);
+    expect(failed.explosionFailures).toBe(1);
+    expect(explosionProfile('explosion', 3, null, failed.explosionFailures)?.chance)
+      .toBeCloseTo(0.25);
+    expect(resolveExplosionOutcome('explosion', failed, true).explosionFailures).toBe(0);
+    expect(resolveExplosionOutcome('echo', state, false).explosionFailures).toBe(0);
+  });
+
+  it('rejects core levels outside one through five', () => {
+    expect(() => splitProfile('split', 0, null)).toThrow('core level');
+    expect(() => explosionProfile('explosion', 6, null, 0)).toThrow('core level');
   });
 
   it('clears echo resonance on every recovery source', () => {

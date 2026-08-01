@@ -59,10 +59,10 @@ export class BossBuild {
       : 0;
   }
 
-  conductionHitsRequired(base: number): number {
+  conductionTargetBonus(): number {
     return this.owns('superconducting-circuit')
-      ? Math.max(1, base - GAME_TUNING.relics.superconductingCircuit.hitReduction)
-      : base;
+      ? GAME_TUNING.relics.superconductingCircuit.targetBonus
+      : 0;
   }
 
   conductionDamage(base: number): number {

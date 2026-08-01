@@ -13,7 +13,9 @@ export interface BossDirectHitEvent {
   charged: boolean;
   direction: Vector;
   coreType?: OrbCoreId;
+  coreLevel?: number;
   conductionTriggered?: boolean;
+  explosionFailures?: number;
   speedRatio?: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;

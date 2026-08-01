@@ -36,7 +36,7 @@ describe('BossBuild', () => {
     expect(build.inertiaHitLimit()).toBe(1);
     expect(build.completeCycleEnabled()).toBe(false);
     expect(build.reloadSecondaryBonus(0.6)).toBe(0);
-    expect(build.conductionHitsRequired(4)).toBe(4);
+    expect(build.conductionTargetBonus()).toBe(0);
     expect(build.conductionDamage(0.45)).toBe(0.45);
     expect(build.resonanceRupture(5, 5)).toBeNull();
 
@@ -49,7 +49,7 @@ describe('BossBuild', () => {
     expect(build.inertiaHitLimit()).toBe(2);
     expect(build.completeCycleEnabled()).toBe(true);
     expect(build.reloadSecondaryBonus(0.6)).toBeCloseTo(0.18);
-    expect(build.conductionHitsRequired(4)).toBe(3);
+    expect(build.conductionTargetBonus()).toBe(1);
     expect(build.conductionDamage(0.45)).toBeCloseTo(0.54);
     expect(build.resonanceRupture(5, 4)).toBeNull();
     expect(build.resonanceRupture(5, 5)).toEqual({ radius: 44, damage: 0.65 });

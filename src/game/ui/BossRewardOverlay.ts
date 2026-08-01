@@ -17,7 +17,7 @@ const REWARD_COPY: Record<
   'inertia-retention': { label: '관성 보존', effect: '관성 속도 보너스가 두 번째 직접 타격까지 유지' },
   'complete-cycle': { label: '완전 순환', effect: '과충전 첫 타격 처치 시 즉시 귀환' },
   'direct-link': { label: '직격 연동', effect: '재장전 과충전 일부를 보조 피해에도 적용' },
-  'superconducting-circuit': { label: '초전도 회로', effect: '전도 요구 타격 감소 · 피해 증가' },
+  'superconducting-circuit': { label: '초전도 회로', effect: '전도 대상·피해 증가' },
   'resonance-rupture': { label: '공명 파열', effect: '최대 공명 직접 타격에 확정 충격파' },
 };
 

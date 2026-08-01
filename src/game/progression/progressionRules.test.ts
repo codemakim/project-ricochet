@@ -110,4 +110,15 @@ describe('progression rules', () => {
     expect(eligibleAbilityIds(empty, { coreTypes: ['conduction'] }))
       .toContain('conduction-expansion');
   });
+
+  it('offers modifiers that can change each owned dedicated core', () => {
+    expect(eligibleAbilityIds(empty, { coreTypes: ['split'] }))
+      .toEqual(expect.arrayContaining(['proc-optimization', 'effect-output', 'duration-module', 'fragment-expansion']));
+    expect(eligibleAbilityIds(empty, { coreTypes: ['explosion'] }))
+      .toEqual(expect.arrayContaining(['proc-optimization', 'effect-output', 'area-expansion']));
+    expect(eligibleAbilityIds(empty, { coreTypes: ['echo'] }))
+      .toEqual(expect.arrayContaining(['proc-optimization', 'effect-output', 'area-expansion', 'focusing-lens']));
+    expect(eligibleAbilityIds(empty, { coreTypes: ['inertia'] }))
+      .toEqual(expect.arrayContaining(['effect-output', 'area-expansion', 'duration-module']));
+  });
 });

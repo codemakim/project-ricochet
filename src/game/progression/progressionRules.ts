@@ -31,9 +31,9 @@ export const ABILITY_DEFINITIONS = {
   'area-expansion': { label: '영향권 확장', summary: '원형 보조 효과 반경 증가', maxRank: 3, requires: [] },
   'duration-module': { label: '잔류 장치', summary: '가스와 시간제 효과 지속시간 증가', maxRank: 2, requires: [] },
   'focusing-lens': { label: '집속 렌즈', summary: '수평·수직 레이저 두께 증가', maxRank: 2, requires: [] },
-  'fragment-expansion': { label: '파편 증설', summary: '분열 임시 구슬 수 증가', maxRank: 2, requires: ['split'] },
-  'fragment-output': { label: '파편 출력', summary: '임시 구슬 직접 피해 증가', maxRank: 3, requires: ['split'] },
-  'fragment-stabilization': { label: '파편 안정화', summary: '임시 구슬 수명 증가', maxRank: 2, requires: ['split'] },
+  'fragment-expansion': { label: '파편 증설', summary: '분열 임시 구슬 수 증가', maxRank: 2, requires: [] },
+  'fragment-output': { label: '파편 출력', summary: '임시 구슬 직접 피해 증가', maxRank: 3, requires: [] },
+  'fragment-stabilization': { label: '파편 안정화', summary: '임시 구슬 수명 증가', maxRank: 2, requires: [] },
   'conduction-expansion': { label: '전도 확장', summary: '전도 연쇄 대상 수 증가', maxRank: 2, requires: [] },
 } as const;
 
@@ -52,7 +52,7 @@ const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
 }>> = {
   'proc-optimization': {
     anyAbility: ['explosion', 'split', 'horizontal-cutter', 'vertical-cutter', 'destruction-reaction'],
-    anyCore: ['corrosion'],
+    anyCore: ['corrosion', 'split', 'explosion', 'echo'],
   },
   'effect-output': {
     anyAbility: [
@@ -64,17 +64,20 @@ const ABILITY_RELEVANCE: Partial<Record<AbilityId, {
       'recovery-shockwave',
       'high-speed-impact',
     ],
-    anyCore: ['corrosion', 'conduction'],
+    anyCore: ['corrosion', 'conduction', 'split', 'explosion', 'echo', 'inertia'],
   },
   'area-expansion': {
     anyAbility: ['explosion', 'destruction-reaction', 'recovery-shockwave', 'high-speed-impact'],
-    anyCore: ['corrosion', 'conduction'],
+    anyCore: ['corrosion', 'conduction', 'explosion', 'echo', 'inertia'],
   },
   'duration-module': {
     anyAbility: ['kill-overclock', 'collision-acceleration', 'tracking-magnet'],
-    anyCore: ['corrosion'],
+    anyCore: ['corrosion', 'split', 'inertia'],
   },
-  'focusing-lens': { anyAbility: ['horizontal-cutter', 'vertical-cutter'] },
+  'focusing-lens': { anyAbility: ['horizontal-cutter', 'vertical-cutter'], anyCore: ['echo'] },
+  'fragment-expansion': { anyAbility: ['split'], anyCore: ['split'] },
+  'fragment-output': { anyAbility: ['split'], anyCore: ['split'] },
+  'fragment-stabilization': { anyAbility: ['split'], anyCore: ['split'] },
   'conduction-expansion': { anyCore: ['conduction'] },
 };
 
