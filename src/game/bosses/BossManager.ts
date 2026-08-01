@@ -9,7 +9,7 @@ import type {
   PermanentHitResult,
 } from '../orbs/OrbManager';
 import type { HitResult } from '../orbs/orbRules';
-import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
+import type { TemporaryHitResult, TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
 import type {
   BossDirectHitEvent,
   BossEncounter,
@@ -563,6 +563,9 @@ export class BossManager implements BossEncounter {
     const core = pending.source === 'permanent'
       ? pending.result as PermanentHitResult
       : null;
+    const temporary = pending.source === 'temporary'
+      ? pending.result as TemporaryHitResult
+      : null;
     this.options.onDirectHit({
       bossKind: this.kind(),
       targetId: pending.partId,
@@ -580,7 +583,12 @@ export class BossManager implements BossEncounter {
         speedRatio: core.speedRatio,
         firstHitAfterProximity: core.firstHitAfterProximity,
         echoStacks: core.echoStacks,
+        precisionHit: core.precisionHit,
+        echoPath: core.echoPath,
       } : {}),
+      ...(temporary?.inheritedOutputScale
+        ? { inheritedOutputScale: temporary.inheritedOutputScale }
+        : {}),
     });
     if (defeated) this.reportDefeat();
   }

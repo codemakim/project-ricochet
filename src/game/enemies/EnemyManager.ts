@@ -9,7 +9,11 @@ import type {
 } from '../orbs/OrbManager';
 import type { OrbCoreId } from '../orbs/orbCoreRules';
 import type { HitResult } from '../orbs/orbRules';
-import type { TemporaryOrbManager, TemporaryOrbSprite } from '../orbs/TemporaryOrbManager';
+import type {
+  TemporaryHitResult,
+  TemporaryOrbManager,
+  TemporaryOrbSprite,
+} from '../orbs/TemporaryOrbManager';
 import { createInitialFormation } from '../encounters/formationRules';
 import {
   canFire,
@@ -70,6 +74,9 @@ export interface DirectHitEvent {
   speedRatio?: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;
+  precisionHit?: boolean;
+  echoPath?: readonly Vector[];
+  inheritedOutputScale?: number;
   killed: boolean;
 }
 
@@ -110,6 +117,7 @@ export class EnemyManager {
   private readonly bulletGroup: Phaser.Physics.Arcade.Group;
   private readonly colliders: Phaser.Physics.Arcade.Collider[] = [];
   private readonly enemies = new Map<number, EnemySprite>();
+  private readonly vulnerabilityStacks = new Map<number, number>();
   private readonly activeShooters = new Set<number>();
   private readonly warningTimers = new Map<number, Phaser.Time.TimerEvent>();
   private readonly pendingReflections = new Map<string, {
@@ -369,7 +377,7 @@ export class EnemyManager {
           enemy.enemyId !== effect.excludedEnemyId
           && Math.hypot(enemy.x - effect.center.x, enemy.y - effect.center.y) <= effect.radius
         ) {
-          enemy.hp -= effect.damage;
+          this.damageEnemy(enemy, effect.damage);
         }
       }
       if (enemy.hp <= 0) lethal.push({ enemy, event: killEvent });
@@ -393,7 +401,7 @@ export class EnemyManager {
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
-      enemy.hp -= damage;
+      this.damageEnemy(enemy, damage);
       if (enemy.hp <= 0) lethal.push({ enemy, event });
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
@@ -428,6 +436,24 @@ export class EnemyManager {
       }));
   }
 
+  getEnemyPosition(enemyId: number): Vector | null {
+    const enemy = this.enemies.get(enemyId);
+    return enemy?.active ? { x: enemy.x, y: enemy.y } : null;
+  }
+
+  applyVulnerability(
+    enemyIds: readonly number[],
+    maximumStacks: number,
+  ): void {
+    for (const enemyId of new Set(enemyIds)) {
+      if (!this.enemies.get(enemyId)?.active) continue;
+      this.vulnerabilityStacks.set(
+        enemyId,
+        Math.min(maximumStacks, (this.vulnerabilityStacks.get(enemyId) ?? 0) + 1),
+      );
+    }
+  }
+
   applyLineDamage(
     axis: 'horizontal' | 'vertical',
     coordinate: number,
@@ -443,7 +469,7 @@ export class EnemyManager {
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
-      enemy.hp -= damage;
+      this.damageEnemy(enemy, damage);
       if (enemy.hp <= 0) lethal.push({ enemy, event });
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
@@ -454,7 +480,7 @@ export class EnemyManager {
     const enemy = this.enemies.get(enemyId);
     if (!enemy?.active) return false;
     const event = this.createKillEvent(enemy);
-    enemy.hp -= damage;
+    this.damageEnemy(enemy, damage);
     if (enemy.hp <= 0) this.killEnemy(enemy, event);
     return true;
   }
@@ -558,10 +584,11 @@ export class EnemyManager {
   ): void {
     if (!enemy.active) return;
     const killEvent = this.createKillEvent(enemy);
-    enemy.hp -= result.damage;
+    this.damageEnemy(enemy, result.damage);
     const core = source === 'permanent'
       ? result as PermanentHitResult
       : null;
+    const temporary = source === 'temporary' ? result as TemporaryHitResult : null;
     this.options.onDirectHit?.({
       source,
       sourceOrbId,
@@ -578,7 +605,12 @@ export class EnemyManager {
         speedRatio: core.speedRatio,
         firstHitAfterProximity: core.firstHitAfterProximity,
         echoStacks: core.echoStacks,
+        precisionHit: core.precisionHit,
+        echoPath: core.echoPath,
       } : {}),
+      ...(temporary?.inheritedOutputScale
+        ? { inheritedOutputScale: temporary.inheritedOutputScale }
+        : {}),
     });
     if (enemy.active && enemy.hp <= 0) this.killEnemy(enemy, killEvent);
   }
@@ -664,6 +696,7 @@ export class EnemyManager {
     enemy.clearTint();
     enemy.destroy();
     this.enemies.delete(enemy.enemyId);
+    this.vulnerabilityStacks.delete(enemy.enemyId);
   }
 
   private removeMatchingEnemies(
@@ -698,5 +731,11 @@ export class EnemyManager {
     this.destroyEnemy(enemy);
     this.options.onEnemyKilled?.(event);
     if (!this.destroyed) this.spawnFormation(fragments);
+  }
+
+  private damageEnemy(enemy: EnemySprite, damage: number): void {
+    const vulnerability = GAME_TUNING.orbCores.corrosion.vulnerability;
+    const stacks = this.vulnerabilityStacks.get(enemy.enemyId) ?? 0;
+    enemy.hp -= damage * (1 + stacks * vulnerability.damageBonusPerStack);
   }
 }

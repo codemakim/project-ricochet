@@ -259,6 +259,22 @@ describe('TemporaryOrbManager', () => {
       .toBeCloseTo(0.725);
   });
 
+  it('stores level-specific lifetime, bounce budget, and inherited output only on spawned children', () => {
+    const { manager, group } = createManager(() => 0, () => 100);
+    manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 2, {
+      lifetimeMs: 1_900,
+      extraBounces: 1,
+      inheritedOutputScale: 0.35,
+    });
+
+    expect(manager.getSnapshot()).toEqual([
+      expect.objectContaining({ expiresAt: 2_000, remainingBonusBounces: 1, inheritedOutputScale: 0.35 }),
+      expect.objectContaining({ expiresAt: 2_000, remainingBonusBounces: 1, inheritedOutputScale: 0.35 }),
+    ]);
+    expect(manager.handleEnemyHit(group.children[0] as unknown as never, 1, 9, 100))
+      .toMatchObject({ inheritedOutputScale: 0.35 });
+  });
+
   it('synchronizes reflected velocity and destroys owned group and records', () => {
     const { manager, group } = createManager();
     manager.spawn({ x: 0, y: 0 }, { x: 0, y: -1 }, 1);

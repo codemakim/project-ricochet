@@ -9,6 +9,9 @@ export interface CorrosionFieldSnapshot {
   nextTickAtMs: number;
   radius: number;
   damage: number;
+  attachedEnemyId?: number;
+  spreadsOnDeath?: boolean;
+  vulnerabilityEnabled?: boolean;
 }
 
 export interface CorrosionTick {
@@ -16,6 +19,8 @@ export interface CorrosionTick {
   position: Vector;
   radius: number;
   damage: number;
+  attachedEnemyId?: number;
+  vulnerabilityEnabled?: boolean;
 }
 
 interface DueTick extends CorrosionTick {
@@ -31,7 +36,12 @@ export class CorrosionFieldState {
     position: Vector,
     nowMs: number,
     modifiers: Partial<Pick<CorrosionTick, 'radius' | 'damage'>>
-      & { durationMs?: number } = {},
+      & {
+        durationMs?: number;
+        attachedEnemyId?: number;
+        spreadsOnDeath?: boolean;
+        vulnerabilityEnabled?: boolean;
+      } = {},
   ): void {
     const tuning = GAME_TUNING.orbCores.corrosion;
     const owned = this.fields.filter((field) => field.orbId === orbId);
@@ -49,14 +59,30 @@ export class CorrosionFieldState {
       nextTickAtMs: nowMs + tuning.tickMs,
       radius: modifiers.radius ?? tuning.radius,
       damage: modifiers.damage ?? tuning.damagePerTick,
+      attachedEnemyId: modifiers.attachedEnemyId,
+      spreadsOnDeath: modifiers.spreadsOnDeath,
+      vulnerabilityEnabled: modifiers.vulnerabilityEnabled,
     });
     this.nextFieldId += 1;
+    while (this.fields.length > tuning.globalFieldLimit) this.fields.shift();
   }
 
-  drainDue(nowMs: number): CorrosionTick[] {
+  drainDue(
+    nowMs: number,
+    resolveAttachedPosition: (enemyId: number) => Vector | null = () => null,
+  ): CorrosionTick[] {
     const tuning = GAME_TUNING.orbCores.corrosion;
     const due: DueTick[] = [];
-    for (const field of this.fields) {
+    for (let index = this.fields.length - 1; index >= 0; index -= 1) {
+      const field = this.fields[index]!;
+      if (field.attachedEnemyId !== undefined) {
+        const position = resolveAttachedPosition(field.attachedEnemyId);
+        if (!position) {
+          this.fields.splice(index, 1);
+          continue;
+        }
+        field.position = { ...position };
+      }
       while (
         field.nextTickAtMs <= nowMs
         && field.nextTickAtMs <= field.expiresAtMs
@@ -66,6 +92,8 @@ export class CorrosionFieldState {
           position: { ...field.position },
           radius: field.radius,
           damage: field.damage,
+          attachedEnemyId: field.attachedEnemyId,
+          vulnerabilityEnabled: field.vulnerabilityEnabled,
           dueAtMs: field.nextTickAtMs,
         });
         field.nextTickAtMs += tuning.tickMs;
@@ -77,6 +105,21 @@ export class CorrosionFieldState {
     return due
       .sort((left, right) => left.dueAtMs - right.dueAtMs || left.fieldId - right.fieldId)
       .map(({ dueAtMs: _dueAtMs, ...tick }) => tick);
+  }
+
+  spreadAttachedOnDeath(
+    enemyId: number,
+    position: Vector,
+    nowMs: number,
+    spread: { radius: number; durationMs: number; damage: number },
+  ): boolean {
+    const attached = this.fields.filter((field) => (
+      field.attachedEnemyId === enemyId && field.spreadsOnDeath
+    ));
+    if (attached.length === 0) return false;
+    for (const field of attached) this.fields.splice(this.fields.indexOf(field), 1);
+    this.spawn(attached[0]!.orbId, position, nowMs, spread);
+    return true;
   }
 
   igniteOverlapping(

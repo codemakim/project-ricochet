@@ -22,6 +22,8 @@ import {
 import {
   ORB_CORE_DEFINITIONS,
   applyCoreWallBounce,
+  conductionFlightProfile,
+  coreDirectEffectProfile,
   coreLaunchSpeedMultiplier,
   createOrbCoreState,
   resolveExplosionOutcome,
@@ -60,11 +62,28 @@ export interface PermanentHitResult extends HitResult {
   speedRatio: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;
+  precisionHit?: boolean;
+  echoPath?: readonly Vector[];
 }
 
 export interface OrbCallbacks {
   onEnemyDamage?: (enemyId: number, damage: number, reflect: boolean) => void;
   onRecovery?: (orbId: number, source: RecoverySource) => void;
+  onCoreWallBounce?: (event: {
+    orbId: number;
+    coreType: OrbCoreId;
+    coreLevel: number;
+    position: Vector;
+    echoStacks: number;
+  }) => void;
+  onConductionFlight?: (event: {
+    orbId: number;
+    position: Vector;
+    level: number;
+    targets: number;
+    radius: number;
+    damage: number;
+  }) => void;
 }
 
 export type FixedTerrainLineOfSight = (orbPosition: Vector, playerPosition: Vector) => boolean;
@@ -82,6 +101,10 @@ interface OrbRecord extends OrbSnapshot {
   trackingUntilMs: number;
   lastNowMs: number;
   appliedFlightSpeedMultiplier: number;
+  echoPath: Vector[];
+  nextFlightLinkAtMs: number;
+  inertiaHoldUntilMs: number;
+  inertiaHeldSpeed: number;
 }
 
 export class OrbStore {
@@ -177,6 +200,10 @@ export class OrbStore {
       trackingUntilMs: 0,
       lastNowMs: 0,
       appliedFlightSpeedMultiplier: 1,
+      echoPath: [],
+      nextFlightLinkAtMs: 0,
+      inertiaHoldUntilMs: 0,
+      inertiaHeldSpeed: 0,
     };
   }
 
@@ -218,6 +245,19 @@ export class OrbStore {
     );
     record.directHitsSinceWall = 0;
     record.coreState = applyCoreWallBounce(record.coreType, record.level, record.coreState);
+    if (record.coreType === 'echo') {
+      record.echoPath.push({ ...record.position });
+      if (record.echoPath.length > GAME_TUNING.orbCores.echo.replay.pointCap) {
+        record.echoPath.shift();
+      }
+    }
+    this.callbacks.onCoreWallBounce?.({
+      orbId: record.id,
+      coreType: record.coreType,
+      coreLevel: record.level,
+      position: { ...record.position },
+      echoStacks: record.coreState.echoStacks,
+    });
     this.normalizeActiveSpeed(record);
     return true;
   }
@@ -259,11 +299,24 @@ export class OrbStore {
     const firstHitAfterProximity = source === 'proximity' && record.firstHitPending;
     const echoStacks = record.coreState.echoStacks;
     const speed = Math.hypot(record.velocity.x, record.velocity.y);
+    const precisionHit = record.wallHits === 0
+      && record.directHitsSinceWall < (
+        record.coreType === 'inertia' ? this.getInertiaHitLimit() : 1
+      );
+    const echoPath = record.coreType === 'echo'
+      ? record.echoPath.map((point) => ({ ...point }))
+      : [];
     const core = resolveCoreDirectHit(
       record.coreType,
       record.level,
       record.coreState,
       speed / ORB_SPEED,
+    );
+    const coreEffects = coreDirectEffectProfile(
+      record.coreType,
+      record.level,
+      precisionHit,
+      echoStacks,
     );
     const conditionalBonus = Math.min(
       GAME_TUNING.build.conditionalDamageCap,
@@ -280,7 +333,7 @@ export class OrbStore {
       record.charges,
       enemyHp,
       this.settings,
-      piercing,
+      piercing || coreEffects.pierce,
       this.getDirectDamageBonus(),
       conditionalBonus,
     );
@@ -303,6 +356,11 @@ export class OrbStore {
     }
     record.charges = result.charges;
     record.coreState = core.next;
+    if (record.coreType === 'echo') record.echoPath.length = 0;
+    if (coreEffects.holdTopSpeedMs > 0) {
+      record.inertiaHoldUntilMs = nowMs + this.getTimedDurationMs(coreEffects.holdTopSpeedMs);
+      record.inertiaHeldSpeed = speed;
+    }
     if (!result.preserveChargedKinetics) this.normalizeActiveSpeed(record);
     this.callbacks.onEnemyDamage?.(enemyId, result.damage, result.reflect);
     return {
@@ -314,6 +372,8 @@ export class OrbStore {
       speedRatio: speed / ORB_SPEED,
       firstHitAfterProximity,
       echoStacks,
+      precisionHit,
+      echoPath,
     };
   }
 
@@ -359,6 +419,24 @@ export class OrbStore {
   }
 
   private updateActive(record: OrbRecord, nowMs: number, playerPosition: Vector): void {
+    if (record.inertiaHeldSpeed > 0 && nowMs >= record.inertiaHoldUntilMs) {
+      record.inertiaHeldSpeed = 0;
+      this.normalizeActiveSpeed(record);
+    }
+    const flight = record.coreType === 'conduction'
+      ? conductionFlightProfile(record.level)
+      : null;
+    if (flight && nowMs >= record.nextFlightLinkAtMs) {
+      record.nextFlightLinkAtMs = nowMs + flight.tickMs;
+      this.callbacks.onConductionFlight?.({
+        orbId: record.id,
+        position: { ...record.position },
+        level: record.level,
+        targets: flight.targets,
+        radius: flight.radius,
+        damage: flight.damage,
+      });
+    }
     if (this.flightSpeedMultiplier(record) !== record.appliedFlightSpeedMultiplier) {
       this.normalizeActiveSpeed(record);
     }
@@ -450,6 +528,10 @@ export class OrbStore {
     record.wallHits = 0;
     record.directHitsSinceWall = 0;
     record.hasDirectHit = false;
+    record.echoPath.length = 0;
+    record.nextFlightLinkAtMs = nowMs;
+    record.inertiaHoldUntilMs = 0;
+    record.inertiaHeldSpeed = 0;
     const clearance = Math.max(
       PLAYER_RADIUS + this.getOrbRadius() + 4,
       this.getRecoveryRadius() + 1,
@@ -481,10 +563,13 @@ export class OrbStore {
   }
 
   private speedTarget(record: OrbRecord): number {
-    return this.getChargedSpeed()
+    const base = this.getChargedSpeed()
       * coreLaunchSpeedMultiplier(record.coreType, record.level)
       * this.getWallSpeedMultiplier(record.wallHits)
       * this.flightSpeedMultiplier(record);
+    return record.lastNowMs < record.inertiaHoldUntilMs
+      ? Math.max(base, record.inertiaHeldSpeed)
+      : base;
   }
 
   private flightSpeedMultiplier(record: OrbRecord): number {

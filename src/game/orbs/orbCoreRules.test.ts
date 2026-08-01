@@ -4,6 +4,8 @@ import {
   ORB_CORE_IDS,
   applyCoreWallBounce,
   coreLaunchSpeedMultiplier,
+  coreDirectEffectProfile,
+  conductionFlightProfile,
   createOrbCoreState,
   explosionProfile,
   resolveExplosionOutcome,
@@ -101,6 +103,51 @@ describe('orb core rules', () => {
   it('rejects core levels outside one through five', () => {
     expect(() => splitProfile('split', 0, null)).toThrow('core level');
     expect(() => explosionProfile('explosion', 6, null, 0)).toThrow('core level');
+  });
+
+  it('unlocks echo shockwave, cutter, and bounded path replay by level', () => {
+    expect(coreDirectEffectProfile('echo', 2, true, 7)).toMatchObject({
+      shockwave: null,
+      replayPath: false,
+    });
+    expect(coreDirectEffectProfile('echo', 3, true, 7).shockwave).toEqual({
+      radius: 44,
+      damage: 0.5,
+    });
+    expect(coreDirectEffectProfile('echo', 5, true, 9)).toMatchObject({
+      replayPath: true,
+    });
+  });
+
+  it('unlocks inertia precision effects without wall-hit ambiguity', () => {
+    expect(coreDirectEffectProfile('inertia', 3, false, 0).shockwave).toBeNull();
+    expect(coreDirectEffectProfile('inertia', 3, true, 0).shockwave).toEqual({
+      radius: 42,
+      damage: 0.5,
+    });
+    expect(coreDirectEffectProfile('inertia', 5, true, 0)).toMatchObject({
+      holdTopSpeedMs: 800,
+      pierce: true,
+      kineticExplosion: { radius: 40, damage: 0.6 },
+    });
+  });
+
+  it('scales conduction direct and flight links by level', () => {
+    expect(coreDirectEffectProfile('conduction', 1, false, 0).chain).toEqual({
+      targets: 1,
+      radius: 120,
+      damage: 0.25,
+      overchargeDamage: 0,
+    });
+    expect(coreDirectEffectProfile('conduction', 5, false, 0).chain).toEqual({
+      targets: 3,
+      radius: 180,
+      damage: 0.35,
+      overchargeDamage: 0.35,
+    });
+    expect(conductionFlightProfile(2)).toBeNull();
+    expect(conductionFlightProfile(3)).toEqual({ targets: 1, radius: 150, tickMs: 600, damage: 0.08 });
+    expect(conductionFlightProfile(4)).toEqual({ targets: 2, radius: 180, tickMs: 400, damage: 0.1 });
   });
 
   it('clears echo resonance on every recovery source', () => {

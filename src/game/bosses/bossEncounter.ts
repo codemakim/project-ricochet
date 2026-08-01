@@ -19,6 +19,9 @@ export interface BossDirectHitEvent {
   speedRatio?: number;
   firstHitAfterProximity?: boolean;
   echoStacks?: number;
+  precisionHit?: boolean;
+  echoPath?: readonly Vector[];
+  inheritedOutputScale?: number;
   killed: boolean;
 }
 

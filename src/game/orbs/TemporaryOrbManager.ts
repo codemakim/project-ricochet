@@ -15,6 +15,18 @@ export interface TemporaryOrbSnapshot {
   velocity: Vector;
   generation: 0 | 1;
   splitConsumed: boolean;
+  remainingBonusBounces: number;
+  inheritedOutputScale: number;
+}
+
+export interface TemporaryOrbSpawnModifiers {
+  lifetimeMs?: number;
+  extraBounces?: number;
+  inheritedOutputScale?: number;
+}
+
+export interface TemporaryHitResult extends HitResult {
+  inheritedOutputScale?: number;
 }
 
 interface TemporaryOrbRecord extends TemporaryOrbSnapshot {
@@ -75,7 +87,12 @@ export class TemporaryOrbManager {
     }
   }
 
-  spawn(position: Vector, direction: Vector, count: number): number {
+  spawn(
+    position: Vector,
+    direction: Vector,
+    count: number,
+    modifiers: TemporaryOrbSpawnModifiers = {},
+  ): number {
     if (this.destroyed || count <= 0) return 0;
     const angles = this.spawnAngles(count);
     const available = GAME_TUNING.temporaryOrbs.cap - this.records.size;
@@ -84,7 +101,7 @@ export class TemporaryOrbManager {
 
     const incoming = normalize(direction);
     for (const angle of angles.slice(0, spawnCount)) {
-      this.createOrb(position, rotate(incoming, angle), 0);
+      this.createOrb(position, rotate(incoming, angle), 0, modifiers);
     }
     return spawnCount;
   }
@@ -118,7 +135,10 @@ export class TemporaryOrbManager {
     const angles = configuredAngles.slice(0, Math.min(childCount, available));
     const incoming = normalize(direction);
     for (const angle of angles) {
-      this.createOrb(position, rotate(incoming, angle), 1);
+      this.createOrb(position, rotate(incoming, angle), 1, {
+        extraBounces: parent.remainingBonusBounces,
+        inheritedOutputScale: parent.inheritedOutputScale,
+      });
     }
     return angles.length;
   }
@@ -132,7 +152,7 @@ export class TemporaryOrbManager {
     enemyId: number,
     enemyHp: number,
     nowMs: number,
-  ): HitResult | null {
+  ): TemporaryHitResult | null {
     const record = this.records.get(orb);
     if (!record || !orb.active) return null;
     const lastHitMs = record.enemyHits.get(enemyId);
@@ -148,6 +168,9 @@ export class TemporaryOrbManager {
       killed: enemyHp <= damage,
       reflect: true,
       preserveChargedKinetics: false,
+      ...(record.inheritedOutputScale > 0
+        ? { inheritedOutputScale: record.inheritedOutputScale }
+        : {}),
     };
   }
 
@@ -179,6 +202,8 @@ export class TemporaryOrbManager {
       velocity: { ...record.velocity },
       generation: record.generation,
       splitConsumed: record.splitConsumed,
+      remainingBonusBounces: record.remainingBonusBounces,
+      inheritedOutputScale: record.inheritedOutputScale,
     }));
   }
 
@@ -201,9 +226,16 @@ export class TemporaryOrbManager {
     throw new RangeError('temporary orb count must be from 1 through 4');
   }
 
-  private createOrb(position: Vector, direction: Vector, generation: 0 | 1): void {
+  private createOrb(
+    position: Vector,
+    direction: Vector,
+    generation: 0 | 1,
+    modifiers: TemporaryOrbSpawnModifiers = {},
+  ): void {
     const expiresAt = this.options.getGameplayElapsedMs()
-      + (this.options.getLifetimeMs?.() ?? GAME_TUNING.temporaryOrbs.lifetimeMs);
+      + (modifiers.lifetimeMs
+        ?? this.options.getLifetimeMs?.()
+        ?? GAME_TUNING.temporaryOrbs.lifetimeMs);
     const velocity = {
       x: direction.x * GAME_TUNING.temporaryOrbs.speed,
       y: direction.y * GAME_TUNING.temporaryOrbs.speed,
@@ -228,6 +260,8 @@ export class TemporaryOrbManager {
       velocity,
       generation,
       splitConsumed: false,
+      remainingBonusBounces: Math.max(0, Math.trunc(modifiers.extraBounces ?? 0)),
+      inheritedOutputScale: Math.max(0, modifiers.inheritedOutputScale ?? 0),
       sprite,
       enemyHits: new Map(),
     });

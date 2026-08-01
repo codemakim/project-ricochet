@@ -103,9 +103,15 @@ export function planDirectHitEffects(
 ): DirectHitEffectPlan {
   const explosion = profiles?.explosion ?? build.explosion();
   const split = profiles?.split ?? build.split();
+  const centerBlast = profiles?.explosion?.centerBlast;
   return {
     immediateAreas: explosion && decision.explosion
-      ? [{ kind: 'explosion', radius: explosion.radius, damage: explosion.damage }]
+      ? [
+        { kind: 'explosion', radius: explosion.radius, damage: explosion.damage },
+        ...(centerBlast
+          ? [{ kind: 'explosion' as const, radius: centerBlast.radius, damage: centerBlast.damage }]
+          : []),
+      ]
       : [],
     spawnChildren: event.source === 'temporary' && decision.split,
     splitCount: event.source === 'permanent' && decision.split

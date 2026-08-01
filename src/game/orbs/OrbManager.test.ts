@@ -317,6 +317,73 @@ describe('OrbStore', () => {
     )).toBeCloseTo(ORB_SPEED * 1.08);
   });
 
+  it('holds level-five inertia speed and pierces only precision hits', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.configureStartingCores(['inertia']);
+    for (let level = 1; level < 5; level += 1) store.upgradeOrb(0, 'inertia');
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.synchronizeActive(0, { x: 100, y: 120 }, { x: 0, y: -700 });
+
+    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)).toMatchObject({
+      precisionHit: true,
+      reflect: false,
+    });
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(700);
+    store.update(1_801, 1, player, up);
+    expect(Math.hypot(
+      store.getSnapshot()[0]!.velocity.x,
+      store.getSnapshot()[0]!.velocity.y,
+    )).toBeCloseTo(ORB_SPEED * 1.15);
+
+    store.handleWallBounce(0);
+    expect(store.handleEnemyHit(0, 2, 99, 2_000, false)).toMatchObject({
+      precisionHit: false,
+      reflect: true,
+    });
+  });
+
+  it('caps echo path storage and reports wall effects', () => {
+    const onCoreWallBounce = vi.fn();
+    const store = new OrbStore(EXPERIMENT_DEFAULTS, { onCoreWallBounce });
+    store.configureStartingCores(['echo']);
+    for (let level = 1; level < 5; level += 1) store.upgradeOrb(0, 'echo');
+    store.activateAim();
+    store.update(0, 0, player, up);
+    for (let bounce = 0; bounce < 12; bounce += 1) {
+      store.synchronizeActive(0, { x: bounce, y: 100 }, { x: 0, y: -400 });
+      store.handleWallBounce(0);
+    }
+
+    expect(onCoreWallBounce).toHaveBeenCalledTimes(12);
+    expect(store.handleEnemyHit(0, 1, 99, 1_000, false)?.echoPath)
+      .toHaveLength(GAME_TUNING.orbCores.echo.replay.pointCap);
+  });
+
+  it('ticks level-three conduction links on gameplay time', () => {
+    const onConductionFlight = vi.fn();
+    const store = new OrbStore(EXPERIMENT_DEFAULTS, { onConductionFlight });
+    store.configureStartingCores(['conduction']);
+    store.upgradeOrb(0, 'conduction');
+    store.upgradeOrb(0, 'conduction');
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.update(1, 1, player, up);
+    store.update(500, 499, player, up);
+    store.update(601, 101, player, up);
+
+    expect(onConductionFlight).toHaveBeenCalledTimes(2);
+    expect(onConductionFlight).toHaveBeenLastCalledWith(expect.objectContaining({
+      level: 3,
+      targets: 1,
+      radius: 150,
+      damage: 0.08,
+    }));
+  });
+
   it('honors a runtime build orb-limit provider up to the central cap', () => {
     let orbLimit = 1;
     const store = new OrbStore(

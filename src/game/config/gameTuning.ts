@@ -183,7 +183,7 @@ export interface GameTuning {
         thickness: number;
         cooldownMs: number;
       };
-      replay: { fromLevel: number; damage: number; thickness: number };
+      replay: { fromLevel: number; damage: number; thickness: number; pointCap: number };
       fill: number;
       accent: number;
     };
@@ -195,6 +195,7 @@ export interface GameTuning {
       tickMs: number;
       damagePerTick: number;
       fieldLimitPerOrb: number;
+      globalFieldLimit: number;
       chanceByLevel: FiveLevelValues;
       radiusByLevel: FiveLevelValues;
       durationMsByLevel: FiveLevelValues;
@@ -504,7 +505,7 @@ export const GAME_TUNING = {
         thickness: 10,
         cooldownMs: 120,
       },
-      replay: { fromLevel: 5, damage: 0.65, thickness: 12 },
+      replay: { fromLevel: 5, damage: 0.65, thickness: 12, pointCap: 8 },
       fill: 0x74c8ff,
       accent: 0xeaf8ff,
     },
@@ -517,6 +518,7 @@ export const GAME_TUNING = {
       tickMs: 500,
       damagePerTick: 0.2,
       fieldLimitPerOrb: 2,
+      globalFieldLimit: 12,
       attachedFromLevel: 3,
       vulnerability: { fromLevel: 4, damageBonusPerStack: 0.05, maximumStacks: 3 },
       deathSpread: { fromLevel: 5, radius: 32, durationMs: 1500, damagePerTick: 0.15 },
@@ -966,6 +968,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   positive(orbCores.corrosion.damagePerTick, 'orbCores.corrosion.damagePerTick');
   positiveInteger(orbCores.corrosion.fieldLimitPerOrb, 'orbCores.corrosion.fieldLimitPerOrb');
+  positiveInteger(orbCores.corrosion.globalFieldLimit, 'orbCores.corrosion.globalFieldLimit');
   positiveInteger(orbCores.conduction.targetCount, 'orbCores.conduction.targetCount');
   positive(orbCores.conduction.radius, 'orbCores.conduction.radius');
   positive(orbCores.conduction.damage, 'orbCores.conduction.damage');
@@ -992,6 +995,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   coreLevel(orbCores.echo.replay.fromLevel, 'orbCores.echo.replay.fromLevel');
   nonNegative(orbCores.echo.replay.damage, 'orbCores.echo.replay.damage');
   positive(orbCores.echo.replay.thickness, 'orbCores.echo.replay.thickness');
+  positiveInteger(orbCores.echo.replay.pointCap, 'orbCores.echo.replay.pointCap');
   levelCurve(
     orbCores.corrosion.chanceByLevel,
     'orbCores.corrosion.chanceByLevel',

@@ -128,6 +128,27 @@ export interface ExplosionProfile {
   centerBlast?: { radius: number; damage: number };
 }
 
+export interface CoreDirectEffectProfile {
+  shockwave: { radius: number; damage: number } | null;
+  replayPath: boolean;
+  holdTopSpeedMs: number;
+  pierce: boolean;
+  kineticExplosion: { radius: number; damage: number } | null;
+  chain: {
+    targets: number;
+    radius: number;
+    damage: number;
+    overchargeDamage: number;
+  } | null;
+}
+
+export interface ConductionFlightProfile {
+  targets: number;
+  radius: number;
+  tickMs: number;
+  damage: number;
+}
+
 export function createOrbCoreState(): OrbCoreState {
   return {
     echoStacks: 0,
@@ -289,5 +310,69 @@ export function resolveExplosionOutcome(
         GAME_TUNING.orbCores.explosion.pity.maximumFailures,
         state.explosionFailures + 1,
       ),
+  };
+}
+
+export function coreDirectEffectProfile(
+  coreType: OrbCoreId,
+  level: number,
+  precisionHit: boolean,
+  echoStacks: number,
+): CoreDirectEffectProfile {
+  const index = levelIndex(level);
+  const echo = GAME_TUNING.orbCores.echo;
+  const inertia = GAME_TUNING.orbCores.inertia;
+  const conduction = GAME_TUNING.orbCores.conduction;
+  const echoShockwave = coreType === 'echo'
+    && level >= echo.shockwave.fromLevel
+    && echoStacks > 0;
+  const inertiaShockwave = coreType === 'inertia'
+    && level >= inertia.shockwave.fromLevel
+    && precisionHit;
+  return {
+    shockwave: echoShockwave
+      ? { radius: echo.shockwave.radius, damage: echo.shockwave.damage }
+      : inertiaShockwave
+        ? { radius: inertia.shockwave.radius, damage: inertia.shockwave.damage }
+        : null,
+    replayPath: coreType === 'echo'
+      && level >= echo.replay.fromLevel
+      && echoStacks >= echo.maxStacksByLevel[index],
+    holdTopSpeedMs: coreType === 'inertia'
+      && level >= inertia.topSpeedHold.fromLevel
+      && precisionHit
+      ? inertia.topSpeedHold.durationMs
+      : 0,
+    pierce: coreType === 'inertia'
+      && level >= inertia.pierce.fromLevel
+      && precisionHit,
+    kineticExplosion: coreType === 'inertia'
+      && level >= inertia.pierce.fromLevel
+      && precisionHit
+      ? {
+        radius: inertia.pierce.explosionRadius,
+        damage: inertia.pierce.explosionDamage,
+      }
+      : null,
+    chain: coreType === 'conduction' ? {
+      targets: conduction.targetCountByLevel[index],
+      radius: conduction.radiusByLevel[index],
+      damage: conduction.directDamageByLevel[index],
+      overchargeDamage: level >= conduction.overcharge.fromLevel
+        ? conduction.overcharge.damage
+        : 0,
+    } : null,
+  };
+}
+
+export function conductionFlightProfile(level: number): ConductionFlightProfile | null {
+  const index = levelIndex(level);
+  const flight = GAME_TUNING.orbCores.conduction.flight;
+  if (level < flight.fromLevel) return null;
+  return {
+    targets: flight.targetCountByLevel[index],
+    radius: GAME_TUNING.orbCores.conduction.radiusByLevel[index],
+    tickMs: flight.tickMsByLevel[index],
+    damage: flight.damageByLevel[index],
   };
 }

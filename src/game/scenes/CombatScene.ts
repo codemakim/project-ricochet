@@ -39,12 +39,18 @@ import {
   EnemyManager,
   type DirectHitEvent,
   type EnemyAreaDamageEffect,
+  type EnemyKilledEvent,
   type EnemyManagerSnapshot,
 } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
 import type { Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
-import { ORB_CORE_IDS, explosionProfile, splitProfile } from '../orbs/orbCoreRules';
+import {
+  ORB_CORE_IDS,
+  coreDirectEffectProfile,
+  explosionProfile,
+  splitProfile,
+} from '../orbs/orbCoreRules';
 import type { RecoverySource } from '../orbs/orbRules';
 import { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { movePlayer, resolveAim } from '../player/playerRules';
@@ -281,6 +287,8 @@ export class CombatScene extends Phaser.Scene {
         this.combatProcs?.resetOrbFlight(orbId);
         this.handleOrbRecovery(source);
       },
+      onCoreWallBounce: (event) => this.handleCoreWallBounce(event),
+      onConductionFlight: (event) => this.handleConductionFlight(event),
     });
     this.temporaryOrbManager = new TemporaryOrbManager(this, {
       getDirectDamageBonus: () => build.directDamageBonus(),
@@ -299,7 +307,7 @@ export class CombatScene extends Phaser.Scene {
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
-      onEnemyKilled: ({ kind }) => this.handleEnemyKilled(kind),
+      onEnemyKilled: (event) => this.handleEnemyKilled(event),
       onDirectHit: (event) => this.handleDirectHit(event),
       getExternalBulletCount: () => this.activeBoss?.getBulletCount() ?? 0,
       textureKeys: {
@@ -555,10 +563,21 @@ export class CombatScene extends Phaser.Scene {
     };
   }
 
-  private handleEnemyKilled(kind: Parameters<ProgressionManager['gainEnemyKill']>[0]): void {
+  private handleEnemyKilled(event: EnemyKilledEvent): void {
     if (this.defeated) return;
-    this.encounterDirector?.recordEnemyKill(kind);
-    this.progression?.gainEnemyKill(kind);
+    this.encounterDirector?.recordEnemyKill(event.kind);
+    this.progression?.gainEnemyKill(event.kind);
+    const spread = GAME_TUNING.orbCores.corrosion.deathSpread;
+    this.corrosionFields.spreadAttachedOnDeath(
+      event.enemyId,
+      event.position,
+      this.gameplayElapsedMs,
+      {
+        radius: spread.radius,
+        durationMs: spread.durationMs,
+        damage: spread.damagePerTick,
+      },
+    );
     this.updateProgressionText();
   }
 
@@ -586,6 +605,9 @@ export class CombatScene extends Phaser.Scene {
       | 'speedRatio'
       | 'firstHitAfterProximity'
       | 'echoStacks'
+      | 'precisionHit'
+      | 'echoPath'
+      | 'inheritedOutputScale'
     >,
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -594,11 +616,26 @@ export class CombatScene extends Phaser.Scene {
     const linkedBonus = event.firstHitAfterProximity
       ? this.bossBuild.reloadSecondaryBonus(this.build.reloadOverchargeBonus())
       : 0;
-    const linkedDamage = (damage: number) => damage * (1 + linkedBonus);
+    const inheritedOutputScale = event.source === 'temporary'
+      ? event.inheritedOutputScale ?? 0
+      : 1;
+    const linkedDamage = (damage: number) => damage
+      * (1 + linkedBonus)
+      * (event.source === 'temporary' && inheritedOutputScale > 0
+        ? inheritedOutputScale
+        : 1);
     const explosion = this.build.explosion();
     const split = this.build.split();
     const permanent = event.source === 'permanent';
     const coreLevel = event.coreLevel ?? 1;
+    const advancedCore = event.coreType
+      ? coreDirectEffectProfile(
+        event.coreType,
+        coreLevel,
+        event.precisionHit === true,
+        event.echoStacks ?? 0,
+      )
+      : null;
     const mergedExplosion = permanent && event.coreType
       ? explosionProfile(event.coreType, coreLevel, explosion, event.explosionFailures ?? 0)
       : explosion ? { ...explosion, maximumFailures: 0 } : null;
@@ -614,6 +651,7 @@ export class CombatScene extends Phaser.Scene {
     const verticalCutter = this.build.verticalCutter();
     const destructionReaction = this.build.destructionReaction();
     const corrosion = GAME_TUNING.orbCores.corrosion;
+    const corrosionLevelIndex = Math.max(0, Math.min(4, coreLevel - 1));
     const corrosionTriggered = Boolean(
       permanent
       && event.coreType === 'corrosion'
@@ -621,13 +659,17 @@ export class CombatScene extends Phaser.Scene {
         'corrosion',
         event.sourceOrbId,
         this.gameplayElapsedMs,
-        this.build.procChance(corrosion.chance),
+        this.build.procChance(corrosion.chanceByLevel[corrosionLevelIndex]!),
         corrosion.cooldownMs,
       )
     );
     const procOrbId = permanent ? event.sourceOrbId : event.sourceOrbId + 1_000_000;
     const chanceFor = (chance: number) => (
-      permanent ? chance : this.bossBuild!.temporaryProcChance(chance)
+      permanent
+        ? chance
+        : inheritedOutputScale > 0
+          ? chance
+          : this.bossBuild!.temporaryProcChance(chance)
     );
     const corePlan = planOrbCoreEffects(event, corrosionTriggered);
     const recursiveSplit = permanent ? null : this.bossBuild.recursiveSplit();
@@ -717,20 +759,29 @@ export class CombatScene extends Phaser.Scene {
         event.position,
         this.gameplayElapsedMs,
         {
-          durationMs: this.build.durationMs(corrosion.durationMs),
-          radius: this.build.circularRadius(corrosion.radius),
+          durationMs: this.build.durationMs(corrosion.durationMsByLevel[corrosionLevelIndex]!),
+          radius: this.build.circularRadius(corrosion.radiusByLevel[corrosionLevelIndex]!),
           damage: this.build.secondaryDamage(corrosion.damagePerTick),
+          ...(coreLevel >= corrosion.attachedFromLevel
+            && event.precisionHit
+            && excludedBossTargetId === undefined
+            ? { attachedEnemyId: excludedEnemyId }
+            : {}),
+          spreadsOnDeath: coreLevel >= corrosion.deathSpread.fromLevel,
+          vulnerabilityEnabled: coreLevel >= corrosion.vulnerability.fromLevel,
         },
       );
       this.syncCorrosionVisuals();
     }
     if (corePlan.dischargeConduction) {
-      const conduction = GAME_TUNING.orbCores.conduction;
-      const radius = this.build.circularRadius(conduction.radius);
-      const targetCount = this.build.conductionTargetCount(conduction.targetCount)
+      const chain = advancedCore?.chain;
+      const radius = this.build.circularRadius(chain?.radius ?? 0);
+      const targetCount = this.build.conductionTargetCount(chain?.targets ?? 0)
         + this.bossBuild.conductionTargetBonus();
       const damage = this.build.secondaryDamage(
-        this.bossBuild.conductionDamage(conduction.damage),
+        this.bossBuild.conductionDamage(
+          (chain?.damage ?? 0) + (chain?.overchargeDamage ?? 0),
+        ),
       ) * (1 + linkedBonus);
       let targetPositions: Vector[] = [];
       if (excludedBossTargetId === undefined) {
@@ -759,6 +810,43 @@ export class CombatScene extends Phaser.Scene {
           .filter((position): position is Vector => position !== null && position !== undefined);
       }
       this.drawConductionFeedback(event.position, targetPositions);
+    }
+    if (advancedCore?.shockwave) {
+      const rupture = event.coreType === 'echo'
+        ? this.bossBuild.resonanceRupture(
+          GAME_TUNING.orbCores.echo.maxStacksByLevel[coreLevel - 1]!,
+          event.echoStacks ?? 0,
+        )
+        : null;
+      const radius = this.build.circularRadius(Math.max(
+        advancedCore.shockwave.radius,
+        rupture?.radius ?? 0,
+      ));
+      const damage = linkedDamage(this.build.secondaryDamage(
+        advancedCore.shockwave.damage + (rupture?.damage ?? 0),
+      ));
+      this.applyAreaEffects(event.position, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+      this.drawEffectRing(
+        event.position,
+        radius,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+        `core-feedback-${event.coreType}-shockwave`,
+      );
+    }
+    if (advancedCore?.kineticExplosion) {
+      const effect = advancedCore.kineticExplosion;
+      const radius = this.build.circularRadius(effect.radius);
+      const damage = linkedDamage(this.build.secondaryDamage(effect.damage));
+      this.applyAreaEffects(event.position, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+      this.drawEffectRing(
+        event.position,
+        radius,
+        GAME_TUNING.orbCores.inertia.accent,
+        'core-feedback-inertia-explosion',
+      );
+    }
+    if (advancedCore?.replayPath && event.echoPath && event.echoPath.length > 0) {
+      this.applyEchoPathReplay(event.echoPath, excludedEnemyId, excludedBossTargetId);
     }
     if (decision.horizontalCutter) {
       this.applyCutter(
@@ -853,6 +941,11 @@ export class CombatScene extends Phaser.Scene {
         event.position,
         event.direction,
         plan.splitCount,
+        {
+          lifetimeMs: mergedSplit?.lifetimeMs,
+          extraBounces: mergedSplit?.extraBounces,
+          inheritedOutputScale: mergedSplit?.inheritedOutputScale,
+        },
       );
     }
     const missile = this.build.microMissile();
@@ -888,26 +981,6 @@ export class CombatScene extends Phaser.Scene {
         'trigger-feedback-high-speed-impact',
       );
     }
-    const rupture = event.coreType === 'echo'
-      ? this.bossBuild.resonanceRupture(
-        GAME_TUNING.orbCores.echo.maxStacks,
-        event.echoStacks ?? 0,
-      )
-      : null;
-    if (rupture) {
-      this.applyAreaEffects(
-        event.position,
-        [{ radius: rupture.radius, damage: linkedDamage(rupture.damage) }],
-        excludedEnemyId,
-        excludedBossTargetId,
-      );
-      this.drawEffectRing(
-        event.position,
-        rupture.radius,
-        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
-        'trigger-feedback-resonance-rupture',
-      );
-    }
     if (
       permanent
       && event.killed
@@ -916,6 +989,89 @@ export class CombatScene extends Phaser.Scene {
     ) {
       this.orbManager?.beginImmediateRecall(event.sourceOrbId);
     }
+  }
+
+  private handleCoreWallBounce(event: {
+    orbId: number;
+    coreType: string;
+    coreLevel: number;
+    position: Vector;
+    echoStacks: number;
+  }): void {
+    if (
+      event.coreType !== 'echo'
+      || event.coreLevel < GAME_TUNING.orbCores.echo.cutter.fromLevel
+      || !this.build
+      || !this.combatProcs
+    ) return;
+    const cutter = GAME_TUNING.orbCores.echo.cutter;
+    const axis = event.echoStacks % 2 === 0 ? 'horizontal' : 'vertical';
+    if (!this.combatProcs.tryProc(
+      axis === 'horizontal' ? 'horizontal-cutter' : 'vertical-cutter',
+      event.orbId,
+      this.gameplayElapsedMs,
+      this.build.procChance(cutter.chance),
+      cutter.cooldownMs,
+    )) return;
+    this.applyCutter(axis, axis === 'horizontal' ? event.position.y : event.position.x, {
+      chance: cutter.chance,
+      cooldownMs: cutter.cooldownMs,
+      thickness: this.build.cutterThickness(cutter.thickness),
+      damage: this.build.secondaryDamage(cutter.damage),
+    }, -1);
+  }
+
+  private handleConductionFlight(event: {
+    position: Vector;
+    targets: number;
+    radius: number;
+    damage: number;
+  }): void {
+    if (!this.build || !this.bossBuild) return;
+    const radius = this.build.circularRadius(event.radius);
+    const targetCount = this.build.conductionTargetCount(event.targets)
+      + this.bossBuild.conductionTargetBonus();
+    const damage = this.build.secondaryDamage(
+      this.bossBuild.conductionDamage(event.damage),
+    );
+    const targets = this.enemyManager?.nearestSecondaryTargets(
+      event.position,
+      -1,
+      radius,
+      targetCount,
+    ) ?? [];
+    this.enemyManager?.applyNearestSecondaryDamage(
+      event.position,
+      -1,
+      radius,
+      targetCount,
+      damage,
+    );
+    this.activeBoss?.applyAreaDamage(event.position, radius, damage);
+    this.drawConductionFeedback(event.position, targets.map(({ position }) => position));
+  }
+
+  private applyEchoPathReplay(
+    points: readonly Vector[],
+    excludedEnemyId: number,
+    excludedBossTargetId?: BossTargetId,
+  ): void {
+    if (!this.build) return;
+    const replay = GAME_TUNING.orbCores.echo.replay;
+    const radius = this.build.cutterThickness(replay.thickness);
+    const damage = this.build.secondaryDamage(replay.damage);
+    for (const point of points) {
+      this.applyAreaEffects(point, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+    }
+    const line = this.add.graphics()
+      .lineStyle(radius, GAME_TUNING.orbCores.echo.accent, 0.65)
+      .setDepth(4)
+      .setName('core-feedback-echo-path-replay');
+    line.beginPath();
+    line.moveTo(points[0]!.x, points[0]!.y);
+    for (const point of points.slice(1)) line.lineTo(point.x, point.y);
+    line.strokePath();
+    this.time.delayedCall(GAME_TUNING.visual.triggerFeedback.durationMs, () => line.destroy());
   }
 
   private applyCutter(
@@ -965,13 +1121,23 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private drainCorrosionFields(): void {
-    for (const tick of this.corrosionFields.drainDue(this.gameplayElapsedMs)) {
+    for (const tick of this.corrosionFields.drainDue(
+      this.gameplayElapsedMs,
+      (enemyId) => this.enemyManager?.getEnemyPosition(enemyId) ?? null,
+    )) {
       const targets = this.enemyManager?.nearestSecondaryTargets(
         tick.position,
         -1,
         tick.radius,
         Number.MAX_SAFE_INTEGER,
       ) ?? [];
+      if (tick.vulnerabilityEnabled) {
+        const vulnerability = GAME_TUNING.orbCores.corrosion.vulnerability;
+        this.enemyManager?.applyVulnerability(
+          targets.map(({ id }) => id),
+          vulnerability.maximumStacks,
+        );
+      }
       this.applyAreaEffects(tick.position, [tick]);
       this.drawCorrosionTick(tick.position, tick.radius);
       for (const target of targets) this.drawCorrosionDamage(target.position, tick.damage);

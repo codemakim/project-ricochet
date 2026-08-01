@@ -69,6 +69,29 @@ describe('combat scene rules', () => {
     });
   });
 
+  it('adds one level-five center blast to the merged explosion', () => {
+    const build = new BuildState();
+    expect(planDirectHitEffects(
+      { source: 'permanent', charged: true },
+      build,
+      { explosion: true, split: false },
+      {
+        explosion: {
+          chance: 0.4,
+          cooldownMs: 120,
+          radius: 58,
+          damage: 0.75,
+          maximumFailures: 4,
+          centerBlast: { radius: 24, damage: 1.5 },
+        },
+        split: null,
+      },
+    ).immediateAreas).toEqual([
+      { kind: 'explosion', radius: 58, damage: 0.75 },
+      { kind: 'explosion', radius: 24, damage: 1.5 },
+    ]);
+  });
+
   it('batches enemies and applies each area to the boss with exclusions', () => {
     const applyEnemyBatch = vi.fn();
     const applyBossArea = vi.fn();
