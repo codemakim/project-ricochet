@@ -1,10 +1,16 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import type { OrbSnapshot } from '../orbs/OrbManager';
-import { ORB_CORE_DEFINITIONS } from '../orbs/orbCoreRules';
 import {
+  ORB_CORE_DEFINITIONS,
+  ORB_CORE_IDS,
+  type OrbCoreId,
+} from '../orbs/orbCoreRules';
+import {
+  FUSION_ORB_IDS,
   ORB_FUSION_DEFINITIONS,
   orbDefinition,
+  type FusionOrbId,
 } from '../orbs/orbFusionRules';
 import { BuildState } from '../progression/BuildState';
 import { ABILITY_DEFINITIONS, type AbilityId } from '../progression/progressionRules';
@@ -37,6 +43,8 @@ export class LevelUpOverlay {
     build: BuildState,
     orbs: readonly OrbSnapshot[],
     onSelect: (choice: RunRewardChoice) => void,
+    discoveredCoreTypes: readonly OrbCoreId[] = ORB_CORE_IDS,
+    discoveredFusionTypes: readonly FusionOrbId[] = FUSION_ORB_IDS,
   ): void {
     this.hide();
     this.visible = true;
@@ -58,10 +66,22 @@ export class LevelUpOverlay {
       const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 360, 76, 0x10213d, 0.98)
         .setDepth(31)
         .setInteractive({ useHandCursor: true });
-      const focus = () => this.focus(choice, card, build, orbs);
+      const focus = () => this.focus(
+        choice,
+        card,
+        build,
+        orbs,
+        discoveredCoreTypes,
+        discoveredFusionTypes,
+      );
       card.on('pointerup', focus);
       this.cards.push(card);
-      const label = `${index + 1}. ${this.cardLabel(choice, build)}`;
+      const label = `${index + 1}. ${this.cardLabel(
+        choice,
+        build,
+        discoveredCoreTypes,
+        discoveredFusionTypes,
+      )}`;
       const text = this.scene.add.text(GAME_WIDTH / 2, CARD_Y[index]!, label, {
         align: 'center',
         color: '#dff7ff',
@@ -112,6 +132,8 @@ export class LevelUpOverlay {
     card: Phaser.GameObjects.Rectangle,
     build: BuildState,
     orbs: readonly OrbSnapshot[],
+    discoveredCoreTypes: readonly OrbCoreId[],
+    discoveredFusionTypes: readonly FusionOrbId[],
   ): void {
     if (this.consumed || !this.visible) return;
     this.selected = choice;
@@ -121,7 +143,13 @@ export class LevelUpOverlay {
     this.detailObjects = [
       this.scene.add.rectangle(GAME_WIDTH / 2, DETAIL_Y, 380, 112, 0x09182c, 0.98)
         .setDepth(31),
-      this.scene.add.text(GAME_WIDTH / 2, DETAIL_Y, this.choiceDetail(choice, build, orbs), {
+      this.scene.add.text(GAME_WIDTH / 2, DETAIL_Y, this.choiceDetail(
+        choice,
+        build,
+        orbs,
+        discoveredCoreTypes,
+        discoveredFusionTypes,
+      ), {
         align: 'center',
         color: '#dff7ff',
         fontSize: '17px',
@@ -145,13 +173,22 @@ export class LevelUpOverlay {
     this.onSelect({ ...this.selected });
   }
 
-  private cardLabel(choice: RunRewardChoice, build: BuildState): string {
+  private cardLabel(
+    choice: RunRewardChoice,
+    build: BuildState,
+    discoveredCoreTypes: readonly OrbCoreId[],
+    discoveredFusionTypes: readonly FusionOrbId[],
+  ): string {
     if (choice.kind === 'ability') {
       const rank = build.rank(choice.id);
       return `${ABILITY_DEFINITIONS[choice.id].label}  ${rank} → ${rank + 1}`;
     }
     if (choice.kind === 'orb-fusion') {
+      if (!discoveredFusionTypes.includes(choice.fusionType)) return '??? 융합';
       return `${ORB_FUSION_DEFINITIONS[choice.fusionType].label} 융합`;
+    }
+    if (choice.kind === 'orb-add' && !discoveredCoreTypes.includes(choice.coreType)) {
+      return '??? Lv1';
     }
     const label = orbDefinition(choice.coreType).label;
     return choice.kind === 'orb-add' ? `${label} Lv1` : `${label} 강화`;
@@ -161,15 +198,24 @@ export class LevelUpOverlay {
     choice: RunRewardChoice,
     build: BuildState,
     orbs: readonly OrbSnapshot[],
+    discoveredCoreTypes: readonly OrbCoreId[],
+    discoveredFusionTypes: readonly FusionOrbId[],
   ): string {
     if (choice.kind === 'ability') return this.nextEffect(choice.id, build);
     if (choice.kind === 'orb-fusion') {
       const definition = ORB_FUSION_DEFINITIONS[choice.fusionType];
       const [first, second] = definition.materials;
+      if (!discoveredFusionTypes.includes(choice.fusionType)) {
+        return `${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label} · ${definition.roleHint}`;
+      }
       return `${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label} · ${definition.summary}`;
     }
     const definition = orbDefinition(choice.coreType);
-    if (choice.kind === 'orb-add') return definition.summary;
+    if (choice.kind === 'orb-add') {
+      return discoveredCoreTypes.includes(choice.coreType)
+        ? definition.summary
+        : definition.roleHint;
+    }
     const levels = orbs
       .filter(({ coreType, level }) => (
         coreType === choice.coreType && level < definition.maximumLevel

@@ -95,4 +95,24 @@ describe('OrbFusionOverlay', () => {
     expect(cancel).toHaveBeenCalledOnce();
     expect(overlay.isVisible()).toBe(false);
   });
+
+  it('masks an undiscovered fusion result while preserving material costs', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new OrbFusionOverlay(scene as never);
+
+    overlay.show(
+      'photon-orbit',
+      [orb(0, 'inertia', 4), orb(1, 'conduction', 2)],
+      vi.fn(),
+      vi.fn(),
+      false,
+    );
+
+    const text = objects.map((object) => object.text ?? '').join(' ');
+    expect(text).toContain('??? 재료 선택');
+    expect(text).toContain('관성 구슬 Lv4');
+    expect(text).toContain('전도 구슬 Lv2');
+    expect(text).toContain('→ ??? Lv5');
+    expect(text).not.toContain('광자 궤도');
+  });
 });
