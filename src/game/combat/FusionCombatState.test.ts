@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ClusterFieldState,
+  MassCollapseState,
   NanoSeedState,
   PhotonTrailState,
+  ReactorChargeState,
+  clusterBombardmentProfile,
+  massCollapseProfile,
   nanoFusionProfile,
   photonFusionProfile,
+  reactorOrbProfile,
   resonantSwarmProfile,
 } from './FusionCombatState';
 
@@ -17,11 +23,71 @@ describe('fusion combat profiles', () => {
     expect(nanoFusionProfile(6).maximumGeneration).toBe(0);
     expect(nanoFusionProfile(7).maximumGeneration).toBe(1);
     expect(nanoFusionProfile(9).maximumGeneration).toBe(2);
+    expect(massCollapseProfile(9)).toMatchObject({
+      precisionBonusStacks: 2,
+      threshold: 3,
+    });
+    expect(reactorOrbProfile(9)).toMatchObject({ maximumCharges: 7 });
+    expect(clusterBombardmentProfile(1)).toMatchObject({
+      projectileCount: 6,
+      lingering: null,
+    });
+    expect(clusterBombardmentProfile(9).lingering).not.toBeNull();
   });
 
   it('rejects fusion levels outside one through nine', () => {
     expect(() => photonFusionProfile(0)).toThrow('fusion level');
     expect(() => resonantSwarmProfile(10)).toThrow('fusion level');
+    expect(() => massCollapseProfile(10)).toThrow('fusion level');
+  });
+});
+
+describe('second fusion state', () => {
+  it('collapses at threshold, resets that target, and evicts the oldest target at cap', () => {
+    const state = new MassCollapseState();
+    const profile = { ...massCollapseProfile(9), threshold: 3, maximumTrackedTargets: 2 };
+
+    expect(state.record('enemy:7', 2, profile)).toEqual({ collapsed: false, stacks: 2 });
+    expect(state.record('enemy:7', 1, profile)).toEqual({ collapsed: true, stacks: 0 });
+    state.record('enemy:8', 1, profile);
+    state.record('enemy:9', 1, profile);
+    state.record('enemy:10', 1, profile);
+    expect(state.getSnapshot()).toEqual([
+      { targetKey: 'enemy:9', stacks: 1 },
+      { targetKey: 'enemy:10', stacks: 1 },
+    ]);
+  });
+
+  it('caps and consumes reactor charges per orb', () => {
+    const state = new ReactorChargeState();
+    const profile = { ...reactorOrbProfile(1), maximumCharges: 2 };
+
+    expect(state.add(4, profile)).toBe(1);
+    expect(state.add(4, profile)).toBe(2);
+    expect(state.add(4, profile)).toBe(2);
+    expect(state.consume(4)).toBe(2);
+    expect(state.consume(4)).toBe(0);
+  });
+
+  it('ticks bounded cluster fields and expires them on gameplay time', () => {
+    const state = new ClusterFieldState();
+    const profile = {
+      ...clusterBombardmentProfile(9),
+      maximumFields: 2,
+      lingering: { durationMs: 1_000, tickMs: 200, damage: 0.1 },
+    };
+
+    state.add({ x: 10, y: 10 }, 0, profile);
+    state.add({ x: 20, y: 20 }, 0, profile);
+    state.add({ x: 30, y: 30 }, 0, profile);
+    expect(state.getSnapshot().map(({ position }) => position)).toEqual([
+      { x: 20, y: 20 },
+      { x: 30, y: 30 },
+    ]);
+    expect(state.drainDue(0)).toHaveLength(2);
+    expect(state.drainDue(199)).toEqual([]);
+    expect(state.drainDue(200)).toHaveLength(2);
+    expect(state.drainDue(1_000)).toEqual([]);
   });
 });
 

@@ -88,6 +88,15 @@ describe('CombatProcState', () => {
     expect(interleaved.tryProc('horizontal-cutter', 0, 0, 0.15, 120)).toBe(expected);
   });
 
+  it('keeps cluster bombardment on its own deterministic proc stream', () => {
+    const baseline = new CombatProcState(88);
+    const interleaved = new CombatProcState(88);
+    const expected = baseline.tryProc('cluster-bombardment', 0, 0, 0.25, 120);
+
+    interleaved.tryProc('explosion', 0, 0, 0.25, 120);
+    expect(interleaved.tryProc('cluster-bombardment', 0, 0, 0.25, 120)).toBe(expected);
+  });
+
   it('triggers missiles every six permanent hits and shockwaves every four recoveries', () => {
     const state = new CombatProcState(0);
 
