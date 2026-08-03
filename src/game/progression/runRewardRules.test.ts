@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrbTypeId } from '../orbs/orbFusionRules';
+import { isBasicOrbCoreId, type OrbTypeId } from '../orbs/orbFusionRules';
 import {
   ABILITY_MAX_RANKS,
   createEmptyAbilityRanks,
@@ -27,11 +27,7 @@ function context(
     abilityRanks,
     abilityEligibility: {
       coreTypes: orbs.map(({ coreType }) => coreType)
-        .filter((coreType): coreType is Exclude<OrbTypeId, 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator'> => (
-          !coreType.includes('-orbit')
-          && coreType !== 'resonant-swarm'
-          && coreType !== 'nano-proliferator'
-        )),
+        .filter(isBasicOrbCoreId),
     },
   };
 }
@@ -80,7 +76,7 @@ describe('run reward rules', () => {
     const upgrades = choices.filter((choice) => choice.kind === 'orb-upgrade');
 
     expect(choices.some((choice) => choice.kind === 'orb-add')).toBe(false);
-    expect(choices).toContainEqual({ kind: 'orb-fusion', fusionType: 'photon-orbit' });
+    expect(choices.filter((choice) => choice.kind === 'orb-fusion')).toHaveLength(1);
     expect(upgrades).toHaveLength(1);
     expect(choices.filter((choice) => choice.kind === 'ability')).toHaveLength(1);
   });
@@ -162,9 +158,8 @@ describe('run reward rules', () => {
       orb('explosion', 5),
     ], { ...ABILITY_MAX_RANKS }), 50, 3);
 
-    expect(choices).toEqual([
-      { kind: 'orb-fusion', fusionType: 'nano-proliferator' },
-      { kind: 'orb-upgrade', coreType: 'echo' },
-    ]);
+    expect(choices).toHaveLength(2);
+    expect(choices.filter((choice) => choice.kind === 'orb-fusion')).toHaveLength(1);
+    expect(choices).toContainEqual({ kind: 'orb-upgrade', coreType: 'echo' });
   });
 });

@@ -4,6 +4,7 @@ export type ProcId =
   | 'corrosion'
   | 'resonant-swarm'
   | 'nano-proliferator'
+  | 'cluster-bombardment'
   | 'horizontal-cutter'
   | 'vertical-cutter'
   | 'destruction-reaction';
@@ -19,6 +20,7 @@ const PROC_SALTS: Record<ProcId, number> = {
   corrosion: 0x434f_5252,
   'resonant-swarm': 0x5253_574d,
   'nano-proliferator': 0x4e41_4e4f,
+  'cluster-bombardment': 0x434c_5354,
   'horizontal-cutter': 0x484f_5249,
   'vertical-cutter': 0x5645_5254,
   'destruction-reaction': 0x4445_5354,
@@ -95,6 +97,11 @@ export class CombatProcState {
       },
       'nano-proliferator': {
         random: (seed ^ PROC_SALTS['nano-proliferator']) >>> 0,
+        failures: 0,
+        lastTriggeredByOrb: new Map(),
+      },
+      'cluster-bombardment': {
+        random: (seed ^ PROC_SALTS['cluster-bombardment']) >>> 0,
         failures: 0,
         lastTriggeredByOrb: new Map(),
       },

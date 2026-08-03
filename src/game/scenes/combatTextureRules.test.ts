@@ -62,20 +62,28 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   });
 });
 
-it('defines three distinct fusion silhouettes across all nine levels', () => {
+it('defines six distinct fusion silhouettes across all nine levels', () => {
   const textures = combatProjectileTextureDescriptors();
   const fusions = [
     textures['orb-photon-orbit-lv1']!,
     textures['orb-resonant-swarm-lv1']!,
     textures['orb-nano-proliferator-lv1']!,
+    textures['orb-mass-collapse-lv1']!,
+    textures['orb-reactor-orb-lv1']!,
+    textures['orb-cluster-bombardment-lv1']!,
   ];
 
   expect(fusions.map(({ fill, symbol }) => ({ fill, symbol }))).toEqual([
     { fill: 0x70e8ff, symbol: 'beam' },
     { fill: 0x9d8cff, symbol: 'swarm' },
     { fill: 0x72e69b, symbol: 'seed' },
+    { fill: 0x59647a, symbol: 'collapse' },
+    { fill: 0xff4f57, symbol: 'reactor' },
+    { fill: 0xffb347, symbol: 'cluster' },
   ]);
   expect(textures['orb-photon-orbit-lv9']).toMatchObject({ notches: 9 });
+  expect(textures['orb-reactor-orb-lv9']).toMatchObject({ notches: 9 });
+  expect(textures['orb-cluster-bombardment-lv4']).toMatchObject({ notches: 4 });
 });
 
 it('renders splitter and fragment prototype descriptors for runtime managers', () => {

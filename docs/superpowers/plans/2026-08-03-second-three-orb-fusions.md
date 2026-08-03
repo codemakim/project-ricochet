@@ -1,6 +1,6 @@
 # Second Three Orb Fusions Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add 질량 붕괴탄, 반응로 구슬, and 성단 폭격체 as complete discoverable fusion orbs in the existing mixed reward loop.
 
@@ -37,7 +37,7 @@
 - Extends `ORB_FUSION_DEFINITIONS` and `GAME_TUNING.orbFusions` with the same three identities.
 - Existing `availableFusionIds()`, `fusionMaterialPairs()`, reward selection, discovery validation, and texture generation consume the registry automatically.
 
-- [ ] **Step 1: Write failing registry and eligibility tests**
+- [x] **Step 1: Write failing registry and eligibility tests**
 
 ```ts
 expect(FUSION_ORB_IDS).toEqual([
@@ -63,13 +63,13 @@ expect(availableFusionIds([
 
 Add a reward-rule assertion that a valid new recipe can occupy the existing single fusion-card slot. Add texture assertions for `orb-mass-collapse-lv1`, `orb-reactor-orb-lv9`, and `orb-cluster-bombardment-lv4`.
 
-- [ ] **Step 2: Run focused tests red**
+- [x] **Step 2: Run focused tests red**
 
 Run: `rtk npm test -- src/game/orbs/orbFusionRules.test.ts src/game/progression/runRewardRules.test.ts src/game/config/gameTuning.test.ts src/game/scenes/combatTextureRules.test.ts`
 
 Expected: new IDs and tuning keys are absent.
 
-- [ ] **Step 3: Add the three explicit definitions**
+- [x] **Step 3: Add the three explicit definitions**
 
 ```ts
 'mass-collapse': {
@@ -97,7 +97,7 @@ Expected: new IDs and tuning keys are absent.
 
 Give each definition nine concise `levelEffects` entries and a distinct fill/accent pair. Extend procedural texture symbols using the existing per-fusion registry; do not add image assets.
 
-- [ ] **Step 4: Add tuning profiles and startup validation**
+- [x] **Step 4: Add tuning profiles and startup validation**
 
 Add only these knobs:
 
@@ -145,7 +145,7 @@ clusterBombardment: {
 
 Validate probability, integer, non-negative, positive, and nine-entry constraints with the existing helpers in `gameTuning.ts`.
 
-- [ ] **Step 5: Run focused tests green and commit**
+- [x] **Step 5: Run focused tests green and commit**
 
 Run: `rtk npm test -- src/game/orbs/orbFusionRules.test.ts src/game/progression/runRewardRules.test.ts src/game/config/gameTuning.test.ts src/game/scenes/combatTextureRules.test.ts`
 
@@ -169,7 +169,7 @@ rtk git commit -m "feat: register second fusion batch"
 - Produces bounded `ClusterFieldState` snapshots and due ticks using gameplay elapsed milliseconds.
 - Adds `'cluster-bombardment'` to the existing deterministic `ProcId` registry.
 
-- [ ] **Step 1: Write failing profile and state tests**
+- [x] **Step 1: Write failing profile and state tests**
 
 ```ts
 const mass = massCollapseProfile(9);
@@ -196,19 +196,19 @@ expect(reactor.consume(4)).toBe(0);
 Cover invalid levels, non-positive stack increments, stable target reset after collapse, target-cap eviction, charge cap, `clear()`, and seeded cluster proc behavior.
 Also cover cluster-field duration, tick cadence, and global-cap eviction with fake gameplay timestamps.
 
-- [ ] **Step 2: Run focused tests red**
+- [x] **Step 2: Run focused tests red**
 
 Run: `rtk npm test -- src/game/combat/FusionCombatState.test.ts src/game/combat/CombatProcState.test.ts src/game/config/gameTuning.test.ts`
 
 Expected: new profiles/state/proc ID are absent.
 
-- [ ] **Step 3: Implement minimal bounded state**
+- [x] **Step 3: Implement minimal bounded state**
 
 `MassCollapseState` stores insertion-ordered target stacks in one `Map<string, number>`. When the cap is reached, remove the oldest key before adding a new one. A collapse resets that target to zero. `ReactorChargeState` stores one capped integer per permanent orb ID. Both expose `clear()`; no generic status-effect container is introduced.
 
 `clusterBombardmentProfile()` returns six fixed angles `[210, 270, 330, 30, 90, 150]` in degrees so the runtime only applies distance and timing. It includes lingering-field data only at or above `lingeringFromLevel`. `ClusterFieldState` follows the existing bounded `NanoSeedState` timing pattern but stores only landing position, radius, damage, expiry, and next tick.
 
-- [ ] **Step 4: Run focused tests green and commit**
+- [x] **Step 4: Run focused tests green and commit**
 
 Run: `rtk npm test -- src/game/combat/FusionCombatState.test.ts src/game/combat/CombatProcState.test.ts src/game/config/gameTuning.test.ts`
 
@@ -231,7 +231,7 @@ rtk git commit -m "feat: add second fusion combat state"
 - Extends the wall-bounce callback path with reactor charge feedback.
 - Reuses `applyAreaEffects()`, `drawEffectRing()`, enemy/boss target IDs, gameplay elapsed time, and existing direct-hit event fields.
 
-- [ ] **Step 1: Write failing effect-planning and speed tests**
+- [x] **Step 1: Write failing effect-planning and speed tests**
 
 ```ts
 expect(planFusionDirectHitEffects({
@@ -257,24 +257,24 @@ expect(planFusionDirectHitEffects({
 
 Add an `OrbManager` assertion that these three fusions keep normal launch speed unless their own profile explicitly changes it. This prevents accidental inheritance from their material cores.
 
-- [ ] **Step 2: Run focused tests red**
+- [x] **Step 2: Run focused tests red**
 
 Run: `rtk npm test -- src/game/scenes/combatSceneRules.test.ts src/game/orbs/OrbManager.test.ts`
 
-- [ ] **Step 3: Wire 질량 붕괴탄 and 반응로 구슬**
+- [x] **Step 3: Wire 질량 붕괴탄 and 반응로 구슬**
 
 - 질량 붕괴탄: only permanent hits at or above `minimumSpeedRatio` add stacks. Precision adds the configured bonus. Key enemies as `enemy:<id>` and boss parts as `boss:<targetId>`. On threshold, apply the configured center damage and one existing bounded secondary area effect, reset stacks, and draw an inward two-ring collapse graphic.
 - 반응로 구슬: every wall bounce increments that orb's charge up to its level cap and updates one small orb-centered charge flash. The next permanent enemy/boss hit consumes all charges. Zero charge does nothing. Non-zero charge produces one radius/damage-scaled blast; at `outerWaveFromLevel`, also emit one weaker outer ring.
 
-- [ ] **Step 4: Wire 성단 폭격체**
+- [x] **Step 4: Wire 성단 폭격체**
 
 Use `CombatProcState.tryProc('cluster-bombardment', ...)` on permanent direct hits. A success creates exactly six lightweight Phaser graphics moving to clamped landing points around the impact. Each delayed landing calls existing area damage once and destroys its graphic. Track active graphics/timers in one bounded collection; if `maximumActiveProjectiles` is reached, skip excess creation. At `lingeringFromLevel`, add the landing to the distinct `ClusterFieldState` from Task 2; do not label or count these as nano seeds.
 
-- [ ] **Step 5: Clear state and visuals on restart/shutdown**
+- [x] **Step 5: Clear state and visuals on restart/shutdown**
 
 Call `clear()` on mass stacks, reactor charges, and cluster fields. Destroy pending cluster graphics and cancel their timers through the same cleanup path already used by photon trails and nano seed visuals.
 
-- [ ] **Step 6: Run focused tests green and commit**
+- [x] **Step 6: Run focused tests green and commit**
 
 Run: `rtk npm test -- src/game/combat/FusionCombatState.test.ts src/game/combat/CombatProcState.test.ts src/game/scenes/combatSceneRules.test.ts src/game/orbs/OrbManager.test.ts`
 
@@ -295,7 +295,7 @@ rtk git commit -m "feat: activate second fusion batch"
 - Consumes existing development-only orb/reward helpers and `CombatScene.debugSnapshot()`.
 - Verifies production fusion selection, one deterministic named feedback object per new fusion, and schema-3 persistence of a new fusion ID.
 
-- [ ] **Step 1: Add focused browser coverage**
+- [x] **Step 1: Add focused browser coverage**
 
 Extend the existing fusion E2E setup, not a new harness:
 
@@ -314,17 +314,17 @@ Cover all three result textures and one runtime feedback name each:
 
 Extend the existing meta-loop settlement fixture with one new discovered fusion and assert its real name appears after reload. Keep mobile coverage to the existing generic material-picker flow because all six recipes use the same UI.
 
-- [ ] **Step 2: Run only changed browser paths**
+- [x] **Step 2: Run only changed browser paths**
 
 Run: `rtk npm run test:e2e -- --grep "orb fusion|settles, unlocks"`
 
 Expected: matched desktop/mobile tests pass.
 
-- [ ] **Step 3: Update tuning and work records**
+- [x] **Step 3: Update tuning and work records**
 
 Add the three recipes and their `GAME_TUNING.orbFusions` keys to `docs/TUNING.md`. Add a `2026-08-03 — 두 번째 구슬 융합 3종` worklog entry with behavior, caps, verification counts, and the deferred final three fusions/art/sound.
 
-- [ ] **Step 4: Run final verification**
+- [x] **Step 4: Run final verification**
 
 Run: `rtk npm test`
 
@@ -334,7 +334,7 @@ Run once: `rtk npm run test:e2e`
 
 Expected: zero failures. The existing Vite chunk-size warning may remain.
 
-- [ ] **Step 5: Review and commit**
+- [x] **Step 5: Review and commit**
 
 Run: `rtk git diff --check`
 
@@ -343,6 +343,6 @@ rtk git add e2e/combat.spec.ts e2e/meta-loop.spec.ts docs/TUNING.md docs/WORKLOG
 rtk git commit -m "test: verify second fusion batch"
 ```
 
-- [ ] **Step 6: Integrate after user-approved delivery**
+- [x] **Step 6: Integrate after user-approved delivery**
 
 Expected feature branch: `codex/second-three-orb-fusions`.

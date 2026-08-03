@@ -15,7 +15,7 @@ type TextureShape =
 
 export type OrbCoreSymbol =
   | 'wave' | 'drop' | 'bolt' | 'arrow' | 'fork' | 'burst'
-  | 'beam' | 'swarm' | 'seed';
+  | 'beam' | 'swarm' | 'seed' | 'collapse' | 'reactor' | 'cluster';
 
 export type CombatTextureDescriptor = ProjectileVisualTuning & {
   shape: TextureShape;
@@ -72,6 +72,27 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
       accent: GAME_TUNING.orbFusions.nanoProliferator.accent,
       shape: 'outlinedCircle' as const,
       symbol: 'seed' as const,
+    },
+    'mass-collapse': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.massCollapse.fill,
+      accent: GAME_TUNING.orbFusions.massCollapse.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'collapse' as const,
+    },
+    'reactor-orb': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.reactorOrb.fill,
+      accent: GAME_TUNING.orbFusions.reactorOrb.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'reactor' as const,
+    },
+    'cluster-bombardment': {
+      ...friendly.permanentOrb,
+      fill: GAME_TUNING.orbFusions.clusterBombardment.fill,
+      accent: GAME_TUNING.orbFusions.clusterBombardment.accent,
+      shape: 'outlinedCircle' as const,
+      symbol: 'cluster' as const,
     },
   };
   const leveledFusions = Object.fromEntries(Object.entries(fusionTextures).flatMap(

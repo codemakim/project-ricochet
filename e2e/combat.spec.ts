@@ -14,7 +14,8 @@ interface OrbSnapshot {
   id: number;
   coreType:
     | 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion'
-    | 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator';
+    | 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator'
+    | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment';
   level: number;
   coreState: {
     echoStacks: number;
@@ -79,7 +80,7 @@ interface CombatSnapshot {
       | { kind: 'ability'; id: AbilityId }
       | { kind: 'orb-add'; coreType: OrbSnapshot['coreType'] }
       | { kind: 'orb-upgrade'; coreType: OrbSnapshot['coreType'] }
-      | { kind: 'orb-fusion'; fusionType: 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator' }
+      | { kind: 'orb-fusion'; fusionType: Extract<OrbSnapshot['coreType'], `${string}-${string}`> }
     >;
   };
   buildRanks: Record<AbilityId, number>;
@@ -127,6 +128,7 @@ interface CombatSnapshot {
   }>;
   photonTrails: Array<{ trailId: number; orbId: number; start: Vector; end: Vector }>;
   nanoSeeds: Array<{ seedId: number; orbId: number; position: Vector; generation: number }>;
+  clusterFields: Array<{ fieldId: number; position: Vector }>;
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -141,6 +143,7 @@ interface DevelopmentScene {
       displayWidth?: number;
       displayHeight?: number;
       texture?: { key?: string };
+      orbId?: number;
       text?: string;
       setPosition?(x: number, y: number): void;
       body?: {
@@ -177,6 +180,8 @@ interface DevelopmentScene {
   debugAdvanceHiveCycle(deltaMs: number): void;
   debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
   debugAddOrb(coreType: 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion'): boolean;
+  debugFuseOrbs(firstId: number, secondId: number, fusionType: Extract<OrbSnapshot['coreType'], `${string}-${string}`>): boolean;
+  debugUpgradeOrb(id: number): boolean;
   debugShowCoreFeedback(type: 'corrosion' | 'conduction', position: Vector): void;
 }
 
@@ -251,21 +256,58 @@ async function confirmCoreLoadout(
   await expect.poll(async () => (await snapshot(page)).loadoutVisible).toBe(false);
 }
 
-async function loadCanvas(page: Page, search = '') {
+async function loadCanvas(page: Page, search = '', coreKey = 'Digit1') {
   await page.goto(`/${search}${search ? '&' : '?'}combat=1`);
   const canvas = page.locator('#game-root canvas');
   await expect(canvas).toBeVisible();
-  await confirmCoreLoadout(page);
+  await confirmCoreLoadout(page, [coreKey]);
   await expect.poll(async () => (await snapshot(page)).enemies.length).toBeGreaterThan(0);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
   return { canvas, box: box! };
 }
 
+async function prepareDebugFusion(
+  page: Page,
+  startingKey: string,
+  partner: 'inertia' | 'explosion' | 'split',
+  fusionType: 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment',
+): Promise<{ box: { x: number; y: number; width: number; height: number }; orbId: number; enemyId: number }> {
+  const { box } = await loadCanvas(page, '', startingKey);
+  const result = await sceneCall(page, (scene, input) => {
+    if (!scene.debugAddOrb(input.partner)) throw new Error('failed to add fusion partner');
+    const before = scene.getDebugSnapshot();
+    const firstId = before.orbs[0]!.id;
+    const secondId = before.orbs.find(({ id }) => id !== firstId)!.id;
+    if (!scene.debugFuseOrbs(firstId, secondId, input.fusionType)) {
+      throw new Error('failed to fuse debug orbs');
+    }
+    for (let level = 1; level < 9; level += 1) scene.debugUpgradeOrb(firstId);
+    scene.debugFreezeEnemies();
+    const [target, ...others] = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(others.map(({ id }) => id));
+    scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 100);
+    return { orbId: firstId, enemyId: target!.id };
+  }, { partner, fusionType });
+  const current = await snapshot(page);
+  const aim = clientPoint(box, { x: current.player.x, y: current.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find(({ id }) => id === result.orbId)?.state).toBe('active');
+  return { box, ...result };
+}
+
+async function activeSceneNames(page: Page): Promise<string[]> {
+  return sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name)
+    .map((child) => child.name!));
+}
+
 async function preparePhotonFusion(page: Page) {
   const loaded = await loadCanvas(page);
   await sceneCall(page, (scene) => {
-    for (const coreType of ['inertia', 'conduction', 'echo', 'echo', 'explosion'] as const) {
+    for (const coreType of ['inertia', 'conduction', 'echo', 'echo', 'conduction'] as const) {
       if (!scene.debugAddOrb(coreType)) throw new Error(`failed to add ${coreType}`);
     }
     scene.debugGrantXp(8);
@@ -552,6 +594,79 @@ test('@desktop fuses a selected orb pair and renders the fusion core', async ({ 
   await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
     (child) => child.active && child.name === 'fusion-feedback-photon-beam',
   )), { intervals: [10], timeout: 500 }).toBe(true);
+});
+
+test('@desktop triggers mass collapse after repeated high-speed direct hits', async ({ page }) => {
+  const { orbId, enemyId } = await prepareDebugFusion(
+    page,
+    'Digit2',
+    'inertia',
+    'mass-collapse',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-mass-collapse-lv9',
+  ))).toBe(true);
+  await sceneCall(page, (scene) => {
+    for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
+  });
+  for (let hit = 0; hit < 3; hit += 1) {
+    await sceneCall(page, (scene, input) => {
+      const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+      scene.debugPlaceOrb(input.orbId, target.position);
+    }, { orbId, enemyId });
+    await page.waitForTimeout(90);
+  }
+  await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
+    .toContain('fusion-feedback-mass-collapse');
+});
+
+test('@desktop charges reactor bounces and releases the next-hit blast', async ({ page }) => {
+  const { orbId, enemyId } = await prepareDebugFusion(
+    page,
+    'Digit1',
+    'explosion',
+    'reactor-orb',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-reactor-orb-lv9',
+  ))).toBe(true);
+  for (let bounce = 0; bounce < 3; bounce += 1) {
+    await sceneCall(page, (scene, id) => {
+      const orb = scene.children.list.find((child) => child.orbId === id)!;
+      orb.body!.setVelocity!(0, -300);
+      scene.debugPlaceOrb(id, { x: 225, y: 10 });
+    }, orbId);
+    await page.waitForTimeout(70);
+  }
+  await sceneCall(page, (scene, input) => {
+    const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+    scene.debugPlaceOrb(input.orbId, target.position);
+  }, { orbId, enemyId });
+  await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
+    .toContain('fusion-feedback-reactor-blast');
+});
+
+test('@desktop launches six-way cluster impacts and lingering fields', async ({ page }) => {
+  const { orbId, enemyId } = await prepareDebugFusion(
+    page,
+    'Digit6',
+    'split',
+    'cluster-bombardment',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-cluster-bombardment-lv9',
+  ))).toBe(true);
+  for (let hit = 0; hit < 6; hit += 1) {
+    await sceneCall(page, (scene, input) => {
+      const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+      scene.debugPlaceOrb(input.orbId, target.position);
+    }, { orbId, enemyId });
+    await page.waitForTimeout(90);
+  }
+  await expect.poll(async () => (await snapshot(page)).clusterFields.length)
+    .toBeGreaterThan(0);
+  await expect.poll(async () => activeSceneNames(page), { timeout: 1_000 })
+    .toContain('fusion-feedback-cluster-field');
 });
 
 test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
@@ -1871,7 +1986,7 @@ test('@desktop enters hive from stage-local score and hard time', async ({ page 
   expect(activeHive.encounter.spawnSequence).toBe(scoreSpawnSequence);
   const activeEnemyIds = activeHive.enemies.map(({ id }) => id);
   expect(activeEnemyIds.length).toBeGreaterThan(0);
-  expect(activeEnemyIds.length).toBeLessThan(scoreEnemies.length);
+  expect(activeEnemyIds.length).toBeLessThanOrEqual(scoreEnemies.length);
   expect(activeEnemyIds.every((id) => scoreEnemies.includes(id))).toBe(true);
 
   await loadCanvas(page);

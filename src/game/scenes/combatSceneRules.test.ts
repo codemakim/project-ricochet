@@ -69,7 +69,40 @@ describe('combat scene rules', () => {
     }, true).resonantSwarm).toMatchObject({ count: 3, targets: 2 });
     expect(planFusionDirectHitEffects({
       source: 'temporary', coreType: 'nano-proliferator', coreLevel: 9,
-    }, true)).toEqual({ photonBeam: null, resonantSwarm: null, nanoSeeds: null });
+    }, true)).toEqual({
+      photonBeam: null,
+      resonantSwarm: null,
+      nanoSeeds: null,
+      massCollapse: null,
+      clusterBombardment: null,
+    });
+  });
+
+  it('plans only eligible mass collapse and cluster bombardment hits', () => {
+    expect(planFusionDirectHitEffects({
+      source: 'permanent',
+      coreType: 'mass-collapse',
+      coreLevel: 4,
+      speedRatio: 1.5,
+      precisionHit: true,
+    }, false).massCollapse).toMatchObject({ addedStacks: 2 });
+    expect(planFusionDirectHitEffects({
+      source: 'permanent',
+      coreType: 'mass-collapse',
+      coreLevel: 4,
+      speedRatio: 1,
+      precisionHit: true,
+    }, false).massCollapse).toBeNull();
+    expect(planFusionDirectHitEffects({
+      source: 'permanent',
+      coreType: 'cluster-bombardment',
+      coreLevel: 5,
+    }, true).clusterBombardment).toMatchObject({ projectileCount: 6 });
+    expect(planFusionDirectHitEffects({
+      source: 'permanent',
+      coreType: 'cluster-bombardment',
+      coreLevel: 5,
+    }, false).clusterBombardment).toBeNull();
   });
 
   it('plans approved explosion and split decisions without legacy effects', () => {

@@ -14,11 +14,17 @@ import type { HivePartId } from '../bosses/hiveBossRules';
 import { CombatPauseController, type PauseReason } from '../combat/CombatPauseController';
 import { CombatProcState } from '../combat/CombatProcState';
 import {
+  ClusterFieldState,
+  MassCollapseState,
   NanoSeedState,
   PhotonTrailState,
+  ReactorChargeState,
+  clusterBombardmentProfile,
   nanoFusionProfile,
   photonFusionProfile,
+  reactorOrbProfile,
   resonantSwarmProfile,
+  type ClusterFieldSnapshot,
   type NanoSeedSnapshot,
   type PhotonTrailSnapshot,
 } from '../combat/FusionCombatState';
@@ -52,7 +58,7 @@ import {
   type EnemyManagerSnapshot,
 } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
-import type { Vector } from '../math/vector';
+import { clamp, type Vector } from '../math/vector';
 import { OrbManager, ORB_RADIUS } from '../orbs/OrbManager';
 import {
   ORB_CORE_IDS,
@@ -165,6 +171,7 @@ export interface CombatDebugSnapshot {
   corrosionFields: readonly CorrosionFieldSnapshot[];
   photonTrails: readonly PhotonTrailSnapshot[];
   nanoSeeds: readonly NanoSeedSnapshot[];
+  clusterFields: readonly ClusterFieldSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
   discoveredCoreTypes: OrbCoreId[];
@@ -191,6 +198,12 @@ export class CombatScene extends Phaser.Scene {
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
   declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
   declare debugAddOrb?: (coreType: OrbCoreId) => boolean;
+  declare debugFuseOrbs?: (
+    firstId: number,
+    secondId: number,
+    fusionType: FusionOrbId,
+  ) => boolean;
+  declare debugUpgradeOrb?: (id: number) => boolean;
   declare debugShowCoreFeedback?: (
     type: 'corrosion' | 'conduction',
     position: Vector,
@@ -211,6 +224,12 @@ export class CombatScene extends Phaser.Scene {
   private readonly photonTrailVisuals = new Map<number, Phaser.GameObjects.Graphics>();
   private readonly nanoSeeds = new NanoSeedState();
   private readonly nanoSeedVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly massCollapse = new MassCollapseState();
+  private readonly reactorCharges = new ReactorChargeState();
+  private readonly clusterFields = new ClusterFieldState();
+  private readonly clusterFieldVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly clusterProjectiles = new Set<Phaser.GameObjects.Graphics>();
+  private readonly clusterTimers = new Set<Phaser.Time.TimerEvent>();
   private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
@@ -276,6 +295,11 @@ export class CombatScene extends Phaser.Scene {
     this.photonTrailVisuals.clear();
     this.nanoSeeds.clear();
     this.nanoSeedVisuals.clear();
+    this.massCollapse.clear();
+    this.reactorCharges.clear();
+    this.clusterFields.clear();
+    this.clusterFieldVisuals.clear();
+    this.clearClusterProjectiles();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
@@ -435,6 +459,10 @@ export class CombatScene extends Phaser.Scene {
         this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
       );
       this.debugAddOrb = (coreType) => this.orbManager?.addOrb(coreType) ?? false;
+      this.debugFuseOrbs = (firstId, secondId, fusionType) => (
+        this.orbManager?.fuseOrbs(firstId, secondId, fusionType) ?? false
+      );
+      this.debugUpgradeOrb = (id) => this.orbManager?.upgradeOrb(id) ?? false;
       this.debugShowCoreFeedback = (type, position) => {
         if (type === 'corrosion') {
           this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
@@ -615,6 +643,7 @@ export class CombatScene extends Phaser.Scene {
       corrosionFields: this.corrosionFields.getSnapshot(),
       photonTrails: this.photonTrails.getSnapshot(),
       nanoSeeds: this.nanoSeeds.getSnapshot(),
+      clusterFields: this.clusterFields.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
       discoveredCoreTypes: [...this.discoveredCoreTypes],
@@ -713,6 +742,15 @@ export class CombatScene extends Phaser.Scene {
       const profile = nanoFusionProfile(coreLevel);
       fusionProcTriggered = this.combatProcs?.tryProc(
         'nano-proliferator',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        this.build.procChance(profile.chance),
+        profile.cooldownMs,
+      ) ?? false;
+    } else if (permanent && event.coreType === 'cluster-bombardment') {
+      const profile = clusterBombardmentProfile(coreLevel);
+      fusionProcTriggered = this.combatProcs?.tryProc(
+        'cluster-bombardment',
         event.sourceOrbId,
         this.gameplayElapsedMs,
         this.build.procChance(profile.chance),
@@ -1115,6 +1153,16 @@ export class CombatScene extends Phaser.Scene {
     segmentStart: Vector;
     echoStacks: number;
   }): void {
+    if (event.coreType === 'reactor-orb') {
+      const charge = this.reactorCharges.add(event.orbId, reactorOrbProfile(event.coreLevel));
+      this.drawEffectRing(
+        event.position,
+        8 + charge * 2,
+        GAME_TUNING.orbFusions.reactorOrb.accent,
+        'fusion-feedback-reactor-charge',
+      );
+      return;
+    }
     if (event.coreType === 'photon-orbit' && this.build) {
       const profile = photonFusionProfile(event.coreLevel);
       const intersections = this.photonTrails.add(
@@ -1199,11 +1247,59 @@ export class CombatScene extends Phaser.Scene {
       position: Vector;
       direction: Vector;
       coreLevel?: number;
+      coreType?: string;
     },
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
   ): void {
     if (!this.build) return;
+    if (plan.massCollapse) {
+      const targetKey = excludedBossTargetId === undefined
+        ? `enemy:${excludedEnemyId}`
+        : `boss:${excludedBossTargetId}`;
+      const result = this.massCollapse.record(
+        targetKey,
+        plan.massCollapse.addedStacks,
+        plan.massCollapse,
+      );
+      if (result.collapsed) {
+        const radius = this.build.circularRadius(plan.massCollapse.radius);
+        const damage = this.build.secondaryDamage(plan.massCollapse.damage);
+        this.applyAreaEffects(event.position, [
+          { radius: radius * 0.45, damage },
+          { radius, damage: damage * plan.massCollapse.secondaryScale },
+        ]);
+        this.drawCollapseFeedback(event.position, radius);
+      }
+    }
+    if (event.coreType === 'reactor-orb' && event.coreLevel !== undefined) {
+      const charges = this.reactorCharges.consume(event.sourceOrbId);
+      if (charges > 0) {
+        const profile = reactorOrbProfile(event.coreLevel);
+        const radius = this.build.circularRadius(
+          profile.baseRadius + charges * profile.radiusPerCharge,
+        );
+        const damage = this.build.secondaryDamage(charges * profile.damagePerCharge);
+        this.applyAreaEffects(
+          event.position,
+          [
+            { radius, damage },
+            ...(profile.outerWave && charges === profile.maximumCharges ? [{
+              radius: radius * profile.outerWave.radiusScale,
+              damage: damage * profile.outerWave.damageScale,
+            }] : []),
+          ],
+          excludedEnemyId,
+          excludedBossTargetId,
+        );
+        this.drawEffectRing(
+          event.position,
+          radius,
+          GAME_TUNING.orbFusions.reactorOrb.accent,
+          'fusion-feedback-reactor-blast',
+        );
+      }
+    }
     if (plan.photonBeam) {
       const beam = plan.photonBeam;
       const end = {
@@ -1270,6 +1366,9 @@ export class CombatScene extends Phaser.Scene {
         'fusion-feedback-nano-spawn',
       );
     }
+    if (plan.clusterBombardment) {
+      this.launchClusterBombardment(event.position, plan.clusterBombardment);
+    }
   }
 
   private applyResonantSwarmHit(
@@ -1320,6 +1419,69 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
+  private launchClusterBombardment(
+    origin: Vector,
+    profile: ReturnType<typeof clusterBombardmentProfile>,
+  ): void {
+    const available = Math.max(
+      0,
+      profile.maximumActiveProjectiles - this.clusterProjectiles.size,
+    );
+    for (const degrees of profile.angles.slice(0, available)) {
+      const radians = degrees * Math.PI / 180;
+      const landing = {
+        x: clamp(origin.x + Math.cos(radians) * profile.distance, profile.radius, GAME_WIDTH - profile.radius),
+        y: clamp(origin.y + Math.sin(radians) * profile.distance, profile.radius, GAME_HEIGHT - profile.radius),
+      };
+      const projectile = this.add.graphics()
+        .fillStyle(GAME_TUNING.orbFusions.clusterBombardment.fill, 0.95)
+        .fillCircle(origin.x, origin.y, 4)
+        .setDepth(5)
+        .setName('fusion-feedback-cluster-projectile');
+      this.clusterProjectiles.add(projectile);
+      this.tweens.add({
+        targets: projectile,
+        x: landing.x - origin.x,
+        y: landing.y - origin.y,
+        duration: profile.travelMs,
+        ease: 'Quad.easeOut',
+      });
+      let timer!: Phaser.Time.TimerEvent;
+      timer = this.time.delayedCall(profile.travelMs, () => {
+        this.clusterTimers.delete(timer);
+        this.clusterProjectiles.delete(projectile);
+        projectile.destroy();
+        const radius = this.build?.circularRadius(profile.radius) ?? profile.radius;
+        const damage = this.build?.secondaryDamage(profile.damage) ?? profile.damage;
+        this.applyAreaEffects(landing, [{ radius, damage }]);
+        this.drawEffectRing(
+          landing,
+          radius,
+          GAME_TUNING.orbFusions.clusterBombardment.accent,
+          'fusion-feedback-cluster-impact',
+        );
+        if (this.clusterFields.add(landing, this.gameplayElapsedMs, profile)) {
+          this.syncClusterFieldVisuals();
+        }
+      });
+      this.clusterTimers.add(timer);
+    }
+  }
+
+  private drawCollapseFeedback(position: Vector, radius: number): void {
+    const graphic = this.add.graphics()
+      .lineStyle(4, GAME_TUNING.orbFusions.massCollapse.accent, 0.9)
+      .strokeCircle(position.x, position.y, radius)
+      .lineStyle(2, GAME_TUNING.orbFusions.massCollapse.fill, 0.9)
+      .strokeCircle(position.x, position.y, radius * 0.45)
+      .setDepth(5)
+      .setName('fusion-feedback-mass-collapse');
+    this.time.delayedCall(
+      GAME_TUNING.visual.triggerFeedback.durationMs,
+      () => graphic.destroy(),
+    );
+  }
+
   private handleTemporaryOrbExpired(event: TemporaryOrbExpiredEvent): void {
     if (!event.fusionSource || !this.build) return;
     const pulse = resonantSwarmProfile(event.fusionSource.level).finalPulse;
@@ -1361,8 +1523,20 @@ export class CombatScene extends Phaser.Scene {
         'fusion-feedback-nano-tick',
       );
     }
+    for (const field of this.clusterFields.drainDue(this.gameplayElapsedMs)) {
+      const radius = this.build?.circularRadius(field.radius) ?? field.radius;
+      const damage = this.build?.secondaryDamage(field.damage) ?? field.damage;
+      this.applyAreaEffects(field.position, [{ radius, damage }]);
+      this.drawEffectRing(
+        field.position,
+        radius * 0.75,
+        GAME_TUNING.orbFusions.clusterBombardment.fill,
+        'fusion-feedback-cluster-field-tick',
+      );
+    }
     this.syncPhotonTrailVisuals();
     this.syncNanoSeedVisuals();
+    this.syncClusterFieldVisuals();
   }
 
   private syncPhotonTrailVisuals(): void {
@@ -1403,6 +1577,34 @@ export class CombatScene extends Phaser.Scene {
         .setName('fusion-feedback-nano-seed');
       this.nanoSeedVisuals.set(seed.seedId, visual);
     }
+  }
+
+  private syncClusterFieldVisuals(): void {
+    const fields = this.clusterFields.getSnapshot();
+    const active = new Set(fields.map(({ fieldId }) => fieldId));
+    for (const [fieldId, visual] of this.clusterFieldVisuals) {
+      if (active.has(fieldId)) continue;
+      visual.destroy();
+      this.clusterFieldVisuals.delete(fieldId);
+    }
+    for (const field of fields) {
+      if (this.clusterFieldVisuals.has(field.fieldId)) continue;
+      const visual = this.add.graphics()
+        .fillStyle(GAME_TUNING.orbFusions.clusterBombardment.fill, 0.14)
+        .fillCircle(field.position.x, field.position.y, field.radius)
+        .lineStyle(2, GAME_TUNING.orbFusions.clusterBombardment.accent, 0.45)
+        .strokeCircle(field.position.x, field.position.y, field.radius)
+        .setDepth(3)
+        .setName('fusion-feedback-cluster-field');
+      this.clusterFieldVisuals.set(field.fieldId, visual);
+    }
+  }
+
+  private clearClusterProjectiles(): void {
+    for (const timer of this.clusterTimers) timer.remove(false);
+    this.clusterTimers.clear();
+    for (const projectile of this.clusterProjectiles) projectile.destroy();
+    this.clusterProjectiles.clear();
   }
 
   private applyEchoPathReplay(
@@ -2104,6 +2306,10 @@ export class CombatScene extends Phaser.Scene {
 
   private readonly handleShutdown = (): void => {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    this.massCollapse.clear();
+    this.reactorCharges.clear();
+    this.clusterFields.clear();
+    this.clearClusterProjectiles();
     this.applyLifecycle('shutdown');
     this.enemyManager?.destroy();
     this.temporaryOrbManager?.destroy();
@@ -2138,6 +2344,8 @@ export class CombatScene extends Phaser.Scene {
     this.debugAdvanceHiveCycle = undefined;
     this.debugPlaceTemporaryOrb = undefined;
     this.debugAddOrb = undefined;
+    this.debugFuseOrbs = undefined;
+    this.debugUpgradeOrb = undefined;
   };
 
   private createTextures(): void {
@@ -2286,6 +2494,23 @@ export class CombatScene extends Phaser.Scene {
                 .lineTo(centerX, centerY + 5).lineTo(centerX - 4, centerY)
                 .lineTo(centerX, centerY - 5)
                 .moveTo(centerX - 3, centerY).lineTo(centerX + 3, centerY);
+              break;
+            case 'collapse':
+              graphics.strokeCircle(centerX, centerY, 4)
+                .moveTo(centerX - 6, centerY).lineTo(centerX - 2, centerY)
+                .moveTo(centerX + 6, centerY).lineTo(centerX + 2, centerY);
+              break;
+            case 'reactor':
+              graphics.strokeCircle(centerX, centerY, 4)
+                .moveTo(centerX, centerY - 6).lineTo(centerX, centerY - 3)
+                .moveTo(centerX, centerY + 6).lineTo(centerX, centerY + 3);
+              break;
+            case 'cluster':
+              graphics.strokeCircle(centerX, centerY, 2)
+                .moveTo(centerX - 5, centerY).lineTo(centerX - 3, centerY)
+                .moveTo(centerX + 5, centerY).lineTo(centerX + 3, centerY)
+                .moveTo(centerX, centerY - 5).lineTo(centerX, centerY - 3)
+                .moveTo(centerX, centerY + 5).lineTo(centerX, centerY + 3);
               break;
           }
           graphics.strokePath();
