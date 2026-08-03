@@ -5,6 +5,10 @@ import {
   ORB_CORE_IDS,
   type OrbCoreId,
 } from '../orbs/orbCoreRules';
+import {
+  FUSION_ORB_IDS,
+  ORB_FUSION_DEFINITIONS,
+} from '../orbs/orbFusionRules';
 import { createRunConfig, type RunConfig, type RunResult } from '../run/runContract';
 import { CombatScene, RUN_ENDED_EVENT } from '../scenes/CombatScene';
 import { MetaStore } from './MetaStore';
@@ -88,6 +92,8 @@ export class AppController {
       undefined,
       undefined,
       this.progress.unlockedCores,
+      this.progress.discoveredCores,
+      this.progress.discoveredFusions,
     );
     this.root.innerHTML = '<main id="game-root" aria-label="Project Ricochet game"></main>';
     this.game = createCombatGame('game-root', config);
@@ -131,15 +137,41 @@ export class AppController {
         <h1>코어 작업장</h1>
         <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
         ${message ? `<p role="status">${message}</p>` : ''}
+        <h2>기본 구슬</h2>
         <div class="core-list">
           ${ORB_CORE_IDS.map((id) => {
+            const discovered = this.progress.discoveredCores.includes(id);
             const unlocked = this.progress.unlockedCores.includes(id);
+            if (!discovered) {
+              return `
+                <article>
+                  <strong>???</strong>
+                  <span>${ORB_CORE_DEFINITIONS[id].roleHint} · 미발견</span>
+                </article>
+              `;
+            }
             return `
               <article>
                 <strong>${ORB_CORE_DEFINITIONS[id].label}</strong>
+                <span>${ORB_CORE_DEFINITIONS[id].summary}</span>
                 ${unlocked
                   ? '<span>해금됨</span>'
                   : `<button data-buy-core="${id}" ${price === undefined || this.progress.parts < price ? 'disabled' : ''}>${price ?? '-'} 부품</button>`}
+              </article>
+            `;
+          }).join('')}
+        </div>
+        <h2>융합 기록</h2>
+        <div class="core-list">
+          ${FUSION_ORB_IDS.map((id) => {
+            const definition = ORB_FUSION_DEFINITIONS[id];
+            const discovered = this.progress.discoveredFusions.includes(id);
+            const [first, second] = definition.materials;
+            return `
+              <article>
+                <strong>${discovered ? definition.label : '???'}</strong>
+                <span>${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label}</span>
+                <span>${discovered ? definition.summary : `${definition.roleHint} · 미발견`}</span>
               </article>
             `;
           }).join('')}

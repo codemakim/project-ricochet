@@ -1,12 +1,15 @@
 import type { BossKind } from '../config/gameTuning';
 import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
+import type { FusionOrbId } from '../orbs/orbFusionRules';
 import type { RunResult, CoreLoadout } from '../run/runContract';
 import { META_TUNING } from './metaTuning';
 
 export interface MetaProgress {
-  schemaVersion: 2;
+  schemaVersion: 3;
   parts: number;
   unlockedCores: OrbCoreId[];
+  discoveredCores: OrbCoreId[];
+  discoveredFusions: FusionOrbId[];
   loadout: CoreLoadout;
   claimedRunIds: string[];
   firstBossKills: BossKind[];
@@ -27,9 +30,11 @@ export interface Settlement {
 
 export function createDefaultMetaProgress(): MetaProgress {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     parts: 0,
     unlockedCores: ['echo'],
+    discoveredCores: ['echo'],
+    discoveredFusions: [],
     loadout: ['echo'],
     claimedRunIds: [],
     firstBossKills: [],
@@ -65,6 +70,8 @@ export function settleRun(progress: Readonly<MetaProgress>, result: RunResult): 
       claimedRunIds: [...progress.claimedRunIds, result.identity.runId],
       firstBossKills: [...progress.firstBossKills, ...newBossKills],
       firstValidRunClaimed: progress.firstValidRunClaimed || valid,
+      discoveredCores: union(progress.discoveredCores, result.discoveredCoreTypes),
+      discoveredFusions: union(progress.discoveredFusions, result.discoveredFusionTypes),
     },
   };
 }
@@ -72,6 +79,9 @@ export function settleRun(progress: Readonly<MetaProgress>, result: RunResult): 
 export function purchaseCore(progress: Readonly<MetaProgress>, core: OrbCoreId): MetaProgress {
   if (!ORB_CORE_IDS.includes(core)) throw new Error('unknown core');
   if (progress.unlockedCores.includes(core)) throw new Error('core already unlocked');
+  if (!progress.discoveredCores.includes(core)) {
+    throw new Error('core must be discovered before unlock');
+  }
   const price = META_TUNING.corePrices[progress.unlockedCores.length - 1];
   if (price === undefined) throw new Error('all core unlocks purchased');
   if (progress.parts < price) throw new Error('insufficient parts');
@@ -98,10 +108,16 @@ function copy(progress: Readonly<MetaProgress>): MetaProgress {
   return {
     ...progress,
     unlockedCores: [...progress.unlockedCores],
+    discoveredCores: [...progress.discoveredCores],
+    discoveredFusions: [...progress.discoveredFusions],
     loadout: [...progress.loadout],
     claimedRunIds: [...progress.claimedRunIds],
     firstBossKills: [...progress.firstBossKills],
   };
+}
+
+function union<T>(left: readonly T[], right: readonly T[]): T[] {
+  return [...new Set([...left, ...right])];
 }
 
 function emptyBreakdown(): Settlement['breakdown'] {

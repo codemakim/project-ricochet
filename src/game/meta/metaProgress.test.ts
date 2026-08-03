@@ -6,6 +6,7 @@ import {
   purchaseCore,
   setLoadout,
   settleRun,
+  type MetaProgress,
 } from './metaProgress';
 
 const result = (
@@ -22,6 +23,14 @@ const result = (
 );
 
 describe('meta progress', () => {
+  it('starts with only the echo core discovered', () => {
+    expect(createDefaultMetaProgress()).toMatchObject({
+      schemaVersion: 3,
+      discoveredCores: ['echo'],
+      discoveredFusions: [],
+    });
+  });
+
   it('pays at least 40 parts for the first valid run and settles it once', () => {
     const first = settleRun(createDefaultMetaProgress(), result('run-1', 180_000));
     expect(first.earned).toBe(40);
@@ -52,11 +61,51 @@ describe('meta progress', () => {
     ).earned).toBe(62);
   });
 
+  it('settles new discoveries once for defeat and victory', () => {
+    const failedDiscovery = createRunResult(
+      createRunConfig(['echo'], 1, 'discover-fail'),
+      false,
+      10_000,
+      [],
+      createEmptyAbilityRanks(),
+      ['echo', 'conduction'],
+      ['photon-orbit'],
+    );
+    const failed = settleRun(createDefaultMetaProgress(), failedDiscovery);
+    expect(failed.progress).toMatchObject({
+      discoveredCores: ['echo', 'conduction'],
+      discoveredFusions: ['photon-orbit'],
+    });
+    expect(settleRun(failed.progress, failedDiscovery).progress).toEqual(failed.progress);
+
+    const victory = createRunResult(
+      createRunConfig(['echo'], 1, 'discover-win'),
+      true,
+      180_000,
+      ['sentinel', 'hive', 'siege'],
+      createEmptyAbilityRanks(),
+      ['echo', 'split'],
+      ['nano-proliferator'],
+    );
+    expect(settleRun(createDefaultMetaProgress(), victory).progress).toMatchObject({
+      discoveredCores: ['echo', 'split'],
+      discoveredFusions: ['nano-proliferator'],
+    });
+  });
+
   it('purchases locked cores in price order and equips one unlocked core', () => {
     const earned = settleRun(createDefaultMetaProgress(), result('run-1', 180_000)).progress;
-    const bought = purchaseCore(earned, 'conduction');
+    expect(() => purchaseCore(earned, 'conduction'))
+      .toThrow('core must be discovered before unlock');
+    const bought = purchaseCore({
+      ...earned,
+      discoveredCores: ['echo', 'conduction'],
+    }, 'conduction');
     expect(bought.parts).toBe(0);
-    expect(() => purchaseCore(bought, 'corrosion')).toThrow('insufficient parts');
+    expect(() => purchaseCore({
+      ...bought,
+      discoveredCores: [...bought.discoveredCores, 'corrosion'],
+    }, 'corrosion')).toThrow('insufficient parts');
     expect(setLoadout(bought, ['conduction']).loadout).toEqual(['conduction']);
     expect(() => setLoadout(bought, ['echo', 'conduction']))
       .toThrow('exactly one core');
@@ -65,7 +114,18 @@ describe('meta progress', () => {
   });
 
   it('can purchase all five cores after the default echo core', () => {
-    let progress = { ...createDefaultMetaProgress(), parts: 800 };
+    let progress: MetaProgress = {
+      ...createDefaultMetaProgress(),
+      parts: 800,
+      discoveredCores: [
+        'echo',
+        'corrosion',
+        'conduction',
+        'inertia',
+        'split',
+        'explosion',
+      ],
+    };
 
     for (const core of [
       'corrosion',

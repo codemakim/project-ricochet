@@ -17,6 +17,7 @@ export type OrbTypeId = OrbCoreId | FusionOrbId;
 export const ORB_FUSION_DEFINITIONS = {
   'photon-orbit': {
     label: '광자 궤도',
+    roleHint: '관통 궤적형',
     summary: '정밀 직격과 반사 궤적을 관통 광선으로 전환',
     color: GAME_TUNING.orbFusions.photonOrbit.fill,
     accent: GAME_TUNING.orbFusions.photonOrbit.accent,
@@ -36,6 +37,7 @@ export const ORB_FUSION_DEFINITIONS = {
   },
   'resonant-swarm': {
     label: '공명 군체',
+    roleHint: '군체 연쇄형',
     summary: '분화한 공명체가 적 사이로 에너지를 왕복 전달',
     color: GAME_TUNING.orbFusions.resonantSwarm.fill,
     accent: GAME_TUNING.orbFusions.resonantSwarm.accent,
@@ -55,6 +57,7 @@ export const ORB_FUSION_DEFINITIONS = {
   },
   'nano-proliferator': {
     label: '나노 증식체',
+    roleHint: '지역 증식형',
     summary: '고정 피해 씨앗을 산개하고 처치 지점에서 증식',
     color: GAME_TUNING.orbFusions.nanoProliferator.fill,
     accent: GAME_TUNING.orbFusions.nanoProliferator.accent,
@@ -74,6 +77,7 @@ export const ORB_FUSION_DEFINITIONS = {
   },
 } as const satisfies Record<FusionOrbId, {
   label: string;
+  roleHint: string;
   summary: string;
   color: number;
   accent: number;

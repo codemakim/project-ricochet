@@ -19,6 +19,13 @@ import {
 } from '../combat/FusionCombatState';
 import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
 
+export function recordDiscovery<T extends string>(
+  current: ReadonlySet<T>,
+  value: T,
+): Set<T> {
+  return new Set([...current, value]);
+}
+
 export function pendingRunRewardKind(
   pendingLevelUps: number,
   cooldownReady: boolean,

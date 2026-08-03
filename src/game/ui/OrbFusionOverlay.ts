@@ -33,6 +33,7 @@ export class OrbFusionOverlay {
     orbs: readonly OrbSnapshot[],
     onConfirm: (firstId: number, secondId: number) => void,
     onCancel: () => void,
+    discovered = true,
   ): void {
     this.hide();
     const pairs = fusionMaterialPairs(orbs, fusionType);
@@ -42,6 +43,7 @@ export class OrbFusionOverlay {
     }
 
     const fusion = ORB_FUSION_DEFINITIONS[fusionType];
+    const resultLabel = discovered ? fusion.label : '???';
     const byId = new Map(orbs.map((orb) => [orb.id, orb]));
     this.visible = true;
     this.onConfirm = onConfirm;
@@ -54,7 +56,7 @@ export class OrbFusionOverlay {
         0x02050d,
         0.92,
       ).setDepth(40).setInteractive(),
-      this.scene.add.text(GAME_WIDTH / 2, 116, `${fusion.label} 재료 선택`, {
+      this.scene.add.text(GAME_WIDTH / 2, 116, `${resultLabel} 재료 선택`, {
         color: '#dff7ff', fontSize: '28px', fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(42),
     );
@@ -74,7 +76,7 @@ export class OrbFusionOverlay {
         this.scene.add.text(GAME_WIDTH / 2, y, [
           `슬롯 ${first.id + 1} · ${ORB_CORE_DEFINITIONS[first.coreType as keyof typeof ORB_CORE_DEFINITIONS].label} Lv${first.level}`,
           ` + 슬롯 ${second.id + 1} · ${ORB_CORE_DEFINITIONS[second.coreType as keyof typeof ORB_CORE_DEFINITIONS].label} Lv${second.level}`,
-          ` → ${fusion.label} Lv${pair.resultLevel}`,
+          ` → ${resultLabel} Lv${pair.resultLevel}`,
         ].join(''), { color: '#f4fbff', fontSize: '14px' }).setOrigin(0.5).setDepth(42),
       );
       const keyCode = KEY_CODES[index];

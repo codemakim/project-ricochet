@@ -15,6 +15,7 @@ export type OrbCoreId = typeof ORB_CORE_IDS[number];
 export const ORB_CORE_DEFINITIONS = {
   echo: {
     label: '반향 구슬',
+    roleHint: '반사 축적형',
     summary: '벽 반사 공명을 다음 직격에 방출',
     color: GAME_TUNING.orbCores.echo.fill,
     maximumLevel: 5,
@@ -28,6 +29,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
   corrosion: {
     label: '부식 구슬',
+    roleHint: '지속 영역형',
     summary: '충돌 지점에 지속 피해 영역 생성',
     color: GAME_TUNING.orbCores.corrosion.fill,
     maximumLevel: 5,
@@ -41,6 +43,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
   conduction: {
     label: '전도 구슬',
+    roleHint: '연쇄 전도형',
     summary: '직격 에너지를 가까운 적에게 전달',
     color: GAME_TUNING.orbCores.conduction.fill,
     maximumLevel: 5,
@@ -54,6 +57,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
   inertia: {
     label: '관성 구슬',
+    roleHint: '고속 직격형',
     summary: '빠를수록 강해지는 정밀 직격',
     color: GAME_TUNING.orbCores.inertia.fill,
     maximumLevel: 5,
@@ -67,6 +71,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
   split: {
     label: '분열 구슬',
+    roleHint: '분열 생성형',
     summary: '확률로 임시 구슬을 산개',
     color: GAME_TUNING.orbCores.split.fill,
     maximumLevel: 5,
@@ -80,6 +85,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
   explosion: {
     label: '폭발 구슬',
+    roleHint: '확률 폭발형',
     summary: '실패할수록 강해지는 충격 폭발',
     color: GAME_TUNING.orbCores.explosion.fill,
     maximumLevel: 5,
@@ -93,6 +99,7 @@ export const ORB_CORE_DEFINITIONS = {
   },
 } as const satisfies Record<OrbCoreId, {
   label: string;
+  roleHint: string;
   summary: string;
   color: number;
   maximumLevel: 5;

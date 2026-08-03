@@ -241,4 +241,36 @@ describe('LevelUpOverlay', () => {
     card.emit('pointerup');
     expect(objects.some(({ text }) => text?.includes('관성 구슬 + 전도 구슬'))).toBe(true);
   });
+
+  it('masks undiscovered orb names and details until acquisition', () => {
+    const { scene, objects } = makeScene();
+    const overlay = new LevelUpOverlay(scene as never);
+
+    overlay.show([
+      { kind: 'orb-add', coreType: 'conduction' },
+      { kind: 'orb-fusion', fusionType: 'photon-orbit' },
+    ], new BuildState(), [], vi.fn(), ['echo'], []);
+
+    const cards = objects.filter((object) => object.kind === 'rectangle' && object.width === 360);
+    const initialText = objects.flatMap(({ text }) => text ?? []).join(' ');
+    expect(initialText).toContain('1. ??? Lv1');
+    expect(initialText).toContain('2. ??? 융합');
+    expect(initialText).not.toContain('전도 구슬');
+    expect(initialText).not.toContain('광자 궤도');
+
+    cards[0]!.emit('pointerup');
+    expect(objects.some(({ destroyed, text }) => !destroyed && text === '연쇄 전도형'))
+      .toBe(true);
+    expect(objects.some(({ destroyed, text }) => (
+      !destroyed && text?.includes('직격 에너지를 가까운 적에게 전달')
+    ))).toBe(false);
+
+    cards[1]!.emit('pointerup');
+    expect(objects.some(({ destroyed, text }) => (
+      !destroyed && text?.includes('관성 구슬 + 전도 구슬 · 관통 궤적형')
+    ))).toBe(true);
+    expect(objects.some(({ destroyed, text }) => (
+      !destroyed && text?.includes('정밀 직격과 반사 궤적')
+    ))).toBe(false);
+  });
 });

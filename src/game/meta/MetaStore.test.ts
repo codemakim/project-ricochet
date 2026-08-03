@@ -13,7 +13,7 @@ class MemoryStorage implements Storage {
 }
 
 describe('MetaStore', () => {
-  it('migrates schema 1 loadouts to the first core and writes schema 2 back', () => {
+  it('migrates schema 1 loadouts and unlocked discoveries to schema 3', () => {
     const storage = new MemoryStorage();
     storage.setItem('project-ricochet.meta', JSON.stringify({
       schemaVersion: 1,
@@ -28,15 +28,36 @@ describe('MetaStore', () => {
     const progress = new MetaStore(storage).load();
 
     expect(progress).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       parts: 40,
       unlockedCores: ['echo', 'inertia'],
+      discoveredCores: ['echo', 'inertia'],
+      discoveredFusions: [],
       loadout: ['inertia'],
       claimedRunIds: [],
       firstBossKills: [],
       firstValidRunClaimed: true,
     });
     expect(JSON.parse(storage.getItem('project-ricochet.meta')!)).toEqual(progress);
+  });
+
+  it('migrates schema 2 unlocked cores as discovered', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('project-ricochet.meta', JSON.stringify({
+      schemaVersion: 2,
+      parts: 10,
+      unlockedCores: ['echo', 'conduction'],
+      loadout: ['conduction'],
+      claimedRunIds: [],
+      firstBossKills: [],
+      firstValidRunClaimed: false,
+    }));
+
+    expect(new MetaStore(storage).load()).toMatchObject({
+      schemaVersion: 3,
+      discoveredCores: ['echo', 'conduction'],
+      discoveredFusions: [],
+    });
   });
 
   it('round trips valid progress and ignores unknown fields', () => {
@@ -70,5 +91,19 @@ describe('MetaStore', () => {
       ...createDefaultMetaProgress(),
       parts: -1,
     })).toThrow('invalid meta progress');
+  });
+
+  it('recovers schema 3 saves containing unknown discoveries', () => {
+    for (const invalid of [
+      { discoveredCores: ['echo', 'unknown'], discoveredFusions: [] },
+      { discoveredCores: ['echo'], discoveredFusions: ['unknown'] },
+    ]) {
+      const storage = new MemoryStorage();
+      storage.setItem('project-ricochet.meta', JSON.stringify({
+        ...createDefaultMetaProgress(),
+        ...invalid,
+      }));
+      expect(new MetaStore(storage).load()).toEqual(createDefaultMetaProgress());
+    }
   });
 });

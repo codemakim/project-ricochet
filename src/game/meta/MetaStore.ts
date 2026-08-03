@@ -1,4 +1,5 @@
 import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
+import { FUSION_ORB_IDS, type FusionOrbId } from '../orbs/orbFusionRules';
 import type { BossKind } from '../config/gameTuning';
 import { createDefaultMetaProgress, type MetaProgress } from './metaProgress';
 
@@ -21,7 +22,7 @@ export class MetaStore {
     try {
       const value: unknown = JSON.parse(raw);
       const progress = parseProgress(value);
-      if (isRecord(value) && value.schemaVersion === 1) this.save(progress);
+      if (isRecord(value) && value.schemaVersion !== 3) this.save(progress);
       return progress;
     } catch {
       this.storage.setItem(`${KEY}.corrupt.${this.now()}`, raw);
@@ -48,7 +49,7 @@ export class MetaStore {
 
 function parseProgress(value: unknown): MetaProgress {
   if (!isRecord(value)
-    || (value.schemaVersion !== 1 && value.schemaVersion !== 2)
+    || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3)
     || !Number.isFinite(value.parts)
     || !Number.isInteger(value.parts)
     || (value.parts as number) < 0
@@ -56,22 +57,40 @@ function parseProgress(value: unknown): MetaProgress {
   ) throw new Error('invalid meta progress');
 
   const unlockedCores = coreArray(value.unlockedCores);
+  const discoveredCores = value.schemaVersion === 3
+    ? coreArray(value.discoveredCores)
+    : unlockedCores;
+  const discoveredFusions = value.schemaVersion === 3
+    ? fusionArray(value.discoveredFusions)
+    : [];
   const loadout = coreArray(value.loadout);
   const expectedLength = value.schemaVersion === 1 ? 3 : 1;
   if (loadout.length !== expectedLength || loadout.some((core) => !unlockedCores.includes(core))) {
     throw new Error('invalid loadout');
   }
+  if (unlockedCores.some((core) => !discoveredCores.includes(core))) {
+    throw new Error('unlocked core is not discovered');
+  }
   const claimedRunIds = stringArray(value.claimedRunIds);
   const firstBossKills = bossArray(value.firstBossKills);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     parts: value.parts as number,
     unlockedCores,
+    discoveredCores,
+    discoveredFusions,
     loadout: [loadout[0]!],
     claimedRunIds,
     firstBossKills,
     firstValidRunClaimed: value.firstValidRunClaimed,
   };
+}
+
+function fusionArray(value: unknown): FusionOrbId[] {
+  if (!Array.isArray(value) || value.some((item) => !FUSION_ORB_IDS.includes(item))) {
+    throw new Error('invalid fusion array');
+  }
+  return [...value] as FusionOrbId[];
 }
 
 function coreArray(value: unknown): OrbCoreId[] {
