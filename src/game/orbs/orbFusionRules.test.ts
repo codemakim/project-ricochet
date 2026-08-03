@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FUSION_ORB_IDS,
   availableFusionIds,
   fusionLevel,
   fusionMaterialPairs,
@@ -35,5 +36,32 @@ describe('orb fusion rules', () => {
 
     expect(availableFusionIds(orbs)).toEqual([]);
     expect(fusionMaterialPairs(orbs, 'photon-orbit')).toEqual([]);
+  });
+
+  it('offers the second fusion batch from its three material pairs', () => {
+    const orbs = [
+      { id: 0, coreType: 'corrosion' as const, level: 3 },
+      { id: 1, coreType: 'inertia' as const, level: 4 },
+      { id: 2, coreType: 'echo' as const, level: 2 },
+      { id: 3, coreType: 'explosion' as const, level: 5 },
+      { id: 4, coreType: 'split' as const, level: 3 },
+    ];
+
+    expect(FUSION_ORB_IDS).toEqual([
+      'photon-orbit',
+      'resonant-swarm',
+      'nano-proliferator',
+      'mass-collapse',
+      'reactor-orb',
+      'cluster-bombardment',
+    ]);
+    expect(availableFusionIds(orbs)).toEqual(expect.arrayContaining([
+      'mass-collapse',
+      'reactor-orb',
+      'cluster-bombardment',
+    ]));
+    expect(fusionMaterialPairs(orbs, 'mass-collapse')).toEqual([
+      { firstId: 0, secondId: 1, resultLevel: 6 },
+    ]);
   });
 });

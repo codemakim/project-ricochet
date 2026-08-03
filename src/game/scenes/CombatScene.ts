@@ -2287,6 +2287,23 @@ export class CombatScene extends Phaser.Scene {
                 .lineTo(centerX, centerY - 5)
                 .moveTo(centerX - 3, centerY).lineTo(centerX + 3, centerY);
               break;
+            case 'collapse':
+              graphics.strokeCircle(centerX, centerY, 4)
+                .moveTo(centerX - 6, centerY).lineTo(centerX - 2, centerY)
+                .moveTo(centerX + 6, centerY).lineTo(centerX + 2, centerY);
+              break;
+            case 'reactor':
+              graphics.strokeCircle(centerX, centerY, 4)
+                .moveTo(centerX, centerY - 6).lineTo(centerX, centerY - 3)
+                .moveTo(centerX, centerY + 6).lineTo(centerX, centerY + 3);
+              break;
+            case 'cluster':
+              graphics.strokeCircle(centerX, centerY, 2)
+                .moveTo(centerX - 5, centerY).lineTo(centerX - 3, centerY)
+                .moveTo(centerX + 5, centerY).lineTo(centerX + 3, centerY)
+                .moveTo(centerX, centerY - 5).lineTo(centerX, centerY - 3)
+                .moveTo(centerX, centerY + 5).lineTo(centerX, centerY + 3);
+              break;
           }
           graphics.strokePath();
         }

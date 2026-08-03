@@ -323,6 +323,45 @@ export interface GameTuning {
       fill: number;
       accent: number;
     };
+    massCollapse: {
+      minimumSpeedRatioByLevel: NineLevelValues;
+      stacksPerHitByLevel: NineLevelValues;
+      precisionBonusStacksByLevel: NineLevelValues;
+      thresholdByLevel: NineLevelValues;
+      collapseDamageByLevel: NineLevelValues;
+      radiusByLevel: NineLevelValues;
+      secondaryScale: number;
+      maximumTrackedTargets: number;
+      fill: number;
+      accent: number;
+    };
+    reactorOrb: {
+      maximumChargesByLevel: NineLevelValues;
+      damagePerChargeByLevel: NineLevelValues;
+      radiusPerChargeByLevel: NineLevelValues;
+      baseRadius: number;
+      outerWaveFromLevel: number;
+      outerWaveDamageScale: number;
+      outerWaveRadiusScale: number;
+      fill: number;
+      accent: number;
+    };
+    clusterBombardment: {
+      chanceByLevel: NineLevelValues;
+      damageByLevel: NineLevelValues;
+      radiusByLevel: NineLevelValues;
+      travelMsByLevel: NineLevelValues;
+      distanceByLevel: NineLevelValues;
+      lingeringFromLevel: number;
+      lingeringDurationMsByLevel: NineLevelValues;
+      lingeringTickMs: number;
+      lingeringDamageByLevel: NineLevelValues;
+      cooldownMs: number;
+      projectileCount: 6;
+      maximumActiveProjectiles: number;
+      fill: number;
+      accent: number;
+    };
   };
   temporaryOrbs: {
     radius: number;
@@ -676,6 +715,45 @@ export const GAME_TUNING = {
       fill: 0x72e69b,
       accent: 0xe5ffec,
     },
+    massCollapse: {
+      minimumSpeedRatioByLevel: [1.2, 1.2, 1.15, 1.15, 1.12, 1.12, 1.1, 1.08, 1.05],
+      stacksPerHitByLevel: [1, 1, 1, 1, 1, 1, 1, 1, 1],
+      precisionBonusStacksByLevel: [0, 0, 0, 1, 1, 1, 1, 1, 2],
+      thresholdByLevel: [5, 5, 5, 5, 4, 4, 4, 3, 3],
+      collapseDamageByLevel: [0.75, 0.85, 0.95, 1.05, 1.2, 1.35, 1.55, 1.8, 2.2],
+      radiusByLevel: [34, 36, 38, 40, 44, 48, 52, 58, 64],
+      secondaryScale: 0.5,
+      maximumTrackedTargets: 48,
+      fill: 0x59647a,
+      accent: 0xdde7ff,
+    },
+    reactorOrb: {
+      maximumChargesByLevel: [3, 3, 4, 4, 5, 5, 6, 6, 7],
+      damagePerChargeByLevel: [0.18, 0.2, 0.22, 0.24, 0.27, 0.3, 0.32, 0.35, 0.4],
+      radiusPerChargeByLevel: [5, 5, 6, 6, 7, 7, 8, 9, 10],
+      baseRadius: 28,
+      outerWaveFromLevel: 7,
+      outerWaveDamageScale: 0.45,
+      outerWaveRadiusScale: 1.55,
+      fill: 0xff4f57,
+      accent: 0xfff1a8,
+    },
+    clusterBombardment: {
+      chanceByLevel: [0.16, 0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.34],
+      damageByLevel: [0.28, 0.31, 0.34, 0.37, 0.4, 0.44, 0.48, 0.53, 0.6],
+      radiusByLevel: [22, 22, 24, 24, 26, 26, 28, 30, 32],
+      travelMsByLevel: [420, 410, 400, 390, 380, 370, 350, 330, 310],
+      distanceByLevel: [52, 54, 56, 60, 64, 68, 72, 76, 82],
+      lingeringFromLevel: 7,
+      lingeringDurationMsByLevel: [0, 0, 0, 0, 0, 0, 900, 1100, 1400],
+      lingeringTickMs: 350,
+      lingeringDamageByLevel: [0, 0, 0, 0, 0, 0, 0.08, 0.1, 0.13],
+      cooldownMs: 220,
+      projectileCount: 6,
+      maximumActiveProjectiles: 18,
+      fill: 0xffb347,
+      accent: 0xfff0c2,
+    },
   },
   temporaryOrbs: {
     radius: 6,
@@ -935,6 +1013,22 @@ export function validateGameTuning(tuning: GameTuning): void {
     ['nanoProliferator.durationMsByLevel', orbFusions.nanoProliferator.durationMsByLevel, 'positive'],
     ['nanoProliferator.damageByLevel', orbFusions.nanoProliferator.damageByLevel, 'nonNegative'],
     ['nanoProliferator.maximumGenerationByLevel', orbFusions.nanoProliferator.maximumGenerationByLevel, 'integer'],
+    ['massCollapse.minimumSpeedRatioByLevel', orbFusions.massCollapse.minimumSpeedRatioByLevel, 'positive'],
+    ['massCollapse.stacksPerHitByLevel', orbFusions.massCollapse.stacksPerHitByLevel, 'integer'],
+    ['massCollapse.precisionBonusStacksByLevel', orbFusions.massCollapse.precisionBonusStacksByLevel, 'integer'],
+    ['massCollapse.thresholdByLevel', orbFusions.massCollapse.thresholdByLevel, 'integer'],
+    ['massCollapse.collapseDamageByLevel', orbFusions.massCollapse.collapseDamageByLevel, 'nonNegative'],
+    ['massCollapse.radiusByLevel', orbFusions.massCollapse.radiusByLevel, 'positive'],
+    ['reactorOrb.maximumChargesByLevel', orbFusions.reactorOrb.maximumChargesByLevel, 'integer'],
+    ['reactorOrb.damagePerChargeByLevel', orbFusions.reactorOrb.damagePerChargeByLevel, 'nonNegative'],
+    ['reactorOrb.radiusPerChargeByLevel', orbFusions.reactorOrb.radiusPerChargeByLevel, 'nonNegative'],
+    ['clusterBombardment.chanceByLevel', orbFusions.clusterBombardment.chanceByLevel, 'probability'],
+    ['clusterBombardment.damageByLevel', orbFusions.clusterBombardment.damageByLevel, 'nonNegative'],
+    ['clusterBombardment.radiusByLevel', orbFusions.clusterBombardment.radiusByLevel, 'positive'],
+    ['clusterBombardment.travelMsByLevel', orbFusions.clusterBombardment.travelMsByLevel, 'positive'],
+    ['clusterBombardment.distanceByLevel', orbFusions.clusterBombardment.distanceByLevel, 'positive'],
+    ['clusterBombardment.lingeringDurationMsByLevel', orbFusions.clusterBombardment.lingeringDurationMsByLevel, 'nonNegative'],
+    ['clusterBombardment.lingeringDamageByLevel', orbFusions.clusterBombardment.lingeringDamageByLevel, 'nonNegative'],
   ];
   const validators = { positive, nonNegative, probability, integer: nonNegativeInteger };
   for (const [name, values, validator] of fusionCurves) {
@@ -947,6 +1041,17 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(orbFusions.nanoProliferator.cooldownMs, 'orbFusions.nanoProliferator.cooldownMs');
   positive(orbFusions.nanoProliferator.tickMs, 'orbFusions.nanoProliferator.tickMs');
   positiveInteger(orbFusions.nanoProliferator.maximumSeeds, 'orbFusions.nanoProliferator.maximumSeeds');
+  positive(orbFusions.massCollapse.secondaryScale, 'orbFusions.massCollapse.secondaryScale');
+  positiveInteger(orbFusions.massCollapse.maximumTrackedTargets, 'orbFusions.massCollapse.maximumTrackedTargets');
+  positive(orbFusions.reactorOrb.baseRadius, 'orbFusions.reactorOrb.baseRadius');
+  positiveInteger(orbFusions.reactorOrb.outerWaveFromLevel, 'orbFusions.reactorOrb.outerWaveFromLevel');
+  positive(orbFusions.reactorOrb.outerWaveDamageScale, 'orbFusions.reactorOrb.outerWaveDamageScale');
+  positive(orbFusions.reactorOrb.outerWaveRadiusScale, 'orbFusions.reactorOrb.outerWaveRadiusScale');
+  positiveInteger(orbFusions.clusterBombardment.lingeringFromLevel, 'orbFusions.clusterBombardment.lingeringFromLevel');
+  positive(orbFusions.clusterBombardment.lingeringTickMs, 'orbFusions.clusterBombardment.lingeringTickMs');
+  positive(orbFusions.clusterBombardment.cooldownMs, 'orbFusions.clusterBombardment.cooldownMs');
+  positiveInteger(orbFusions.clusterBombardment.projectileCount, 'orbFusions.clusterBombardment.projectileCount');
+  positiveInteger(orbFusions.clusterBombardment.maximumActiveProjectiles, 'orbFusions.clusterBombardment.maximumActiveProjectiles');
   if (
     mixedCards.early.maximumOrbs >= mixedCards.growing.maximumOrbs
     || mixedCards.growing.maximumOrbs >= build.basicGrowth.maximumOrbs

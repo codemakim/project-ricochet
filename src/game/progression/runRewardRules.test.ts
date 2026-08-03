@@ -80,7 +80,7 @@ describe('run reward rules', () => {
     const upgrades = choices.filter((choice) => choice.kind === 'orb-upgrade');
 
     expect(choices.some((choice) => choice.kind === 'orb-add')).toBe(false);
-    expect(choices).toContainEqual({ kind: 'orb-fusion', fusionType: 'photon-orbit' });
+    expect(choices.filter((choice) => choice.kind === 'orb-fusion')).toHaveLength(1);
     expect(upgrades).toHaveLength(1);
     expect(choices.filter((choice) => choice.kind === 'ability')).toHaveLength(1);
   });
@@ -162,9 +162,8 @@ describe('run reward rules', () => {
       orb('explosion', 5),
     ], { ...ABILITY_MAX_RANKS }), 50, 3);
 
-    expect(choices).toEqual([
-      { kind: 'orb-fusion', fusionType: 'nano-proliferator' },
-      { kind: 'orb-upgrade', coreType: 'echo' },
-    ]);
+    expect(choices).toHaveLength(2);
+    expect(choices.filter((choice) => choice.kind === 'orb-fusion')).toHaveLength(1);
+    expect(choices).toContainEqual({ kind: 'orb-upgrade', coreType: 'echo' });
   });
 });
