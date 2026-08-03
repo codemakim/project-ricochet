@@ -343,6 +343,6 @@ rtk git add e2e/combat.spec.ts e2e/meta-loop.spec.ts docs/TUNING.md docs/WORKLOG
 rtk git commit -m "test: verify second fusion batch"
 ```
 
-- [ ] **Step 6: Integrate after user-approved delivery**
+- [x] **Step 6: Integrate after user-approved delivery**
 
 Expected feature branch: `codex/second-three-orb-fusions`.
