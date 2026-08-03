@@ -2,15 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   ClusterFieldState,
   MassCollapseState,
+  MeltdownZoneState,
+  MirrorCircuitState,
   NanoSeedState,
   PhotonTrailState,
   ReactorChargeState,
+  VectorBladeState,
   clusterBombardmentProfile,
   massCollapseProfile,
+  meltdownCoreProfile,
+  mirrorCircuitProfile,
   nanoFusionProfile,
   photonFusionProfile,
   reactorOrbProfile,
   resonantSwarmProfile,
+  vectorBladeProfile,
 } from './FusionCombatState';
 
 describe('fusion combat profiles', () => {
@@ -33,12 +39,73 @@ describe('fusion combat profiles', () => {
       lingering: null,
     });
     expect(clusterBombardmentProfile(9).lingering).not.toBeNull();
+    expect(mirrorCircuitProfile(9)).toMatchObject({ maximumMirrors: 5 });
+    expect(meltdownCoreProfile(9)).toMatchObject({ heatThreshold: 3 });
+    expect(vectorBladeProfile(9)).toMatchObject({ replayCount: 2 });
   });
 
   it('rejects fusion levels outside one through nine', () => {
     expect(() => photonFusionProfile(0)).toThrow('fusion level');
     expect(() => resonantSwarmProfile(10)).toThrow('fusion level');
     expect(() => massCollapseProfile(10)).toThrow('fusion level');
+    expect(() => mirrorCircuitProfile(0)).toThrow('fusion level');
+  });
+});
+
+describe('final fusion state', () => {
+  it('connects, ticks, expires, and bounds mirror segments', () => {
+    const state = new MirrorCircuitState();
+    const profile = { ...mirrorCircuitProfile(9), maximumMirrors: 2 };
+
+    expect(state.add(1, { x: 0, y: 0 }, 0, profile).segment).toBeNull();
+    expect(state.add(1, { x: 10, y: 10 }, 10, profile).segment).not.toBeNull();
+    expect(state.add(1, { x: 0, y: 10 }, 20, profile).intersections).toEqual([]);
+    expect(state.add(1, { x: 10, y: 0 }, 30, profile).intersections).toEqual([
+      { x: 5, y: 5 },
+    ]);
+    expect(state.getSnapshot()).toHaveLength(2);
+    expect(state.drainDue(30)).toHaveLength(2);
+    expect(state.drainDue(31)).toEqual([]);
+    state.update(10_000);
+    expect(state.getSnapshot()).toEqual([]);
+    state.clear();
+  });
+
+  it('heats overlapping zones, caps boss heat, erupts, ticks, and expires', () => {
+    const state = new MeltdownZoneState();
+    const profile = {
+      ...meltdownCoreProfile(9), maximumZones: 1, heatThreshold: 3, bossHeatCap: 2,
+    };
+
+    expect(state.addHeat({ x: 10, y: 10 }, true, 0, profile).erupted).toBe(false);
+    expect(state.addHeat({ x: 11, y: 11 }, true, 1, profile).zone?.heat).toBe(2);
+    expect(state.addHeat({ x: 10, y: 10 }, false, 2, profile).erupted).toBe(true);
+    expect(state.getSnapshot()).toEqual([]);
+    state.addHeat({ x: 20, y: 20 }, false, 10, profile);
+    expect(state.drainDue(10)[0]?.damage).toBe(profile.damage * profile.heatPerHit);
+    expect(state.drainDue(11)).toEqual([]);
+    state.update(10_000);
+    expect(state.getSnapshot()).toEqual([]);
+    state.clear();
+  });
+
+  it('stores normalized bounded vectors per orb and consumes clones', () => {
+    const state = new VectorBladeState();
+    const profile = { ...vectorBladeProfile(9), maximumVectors: 2 };
+    state.recordBounce(1, { x: 2, y: 0 }, 120, profile);
+    state.recordBounce(1, { x: 0, y: -3 }, 180, profile);
+    state.recordBounce(1, { x: -4, y: 0 }, 240, profile);
+
+    const vectors = state.consume(1);
+    expect(vectors).toEqual([
+      { direction: { x: 0, y: -1 }, pathLength: 180 },
+      { direction: { x: -1, y: 0 }, pathLength: 240 },
+    ]);
+    vectors[0]!.direction.x = 99;
+    expect(state.consume(1)).toEqual([]);
+    state.recordBounce(2, { x: 1, y: 1 }, 10, profile);
+    state.clear();
+    expect(state.consume(2)).toEqual([]);
   });
 });
 

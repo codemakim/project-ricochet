@@ -198,6 +198,86 @@ export function clusterBombardmentProfile(level: number): ClusterBombardmentProf
   };
 }
 
+export interface MirrorCircuitProfile {
+  durationMs: number;
+  tickMs: number;
+  damage: number;
+  maximumMirrors: number;
+  thickness: number;
+  intersectionBlast: { radius: number; damage: number } | null;
+}
+
+export function mirrorCircuitProfile(level: number): MirrorCircuitProfile {
+  const index = levelIndex(level);
+  const tuning = GAME_TUNING.orbFusions.mirrorCircuit;
+  return {
+    durationMs: tuning.durationMsByLevel[index]!,
+    tickMs: tuning.tickMs,
+    damage: tuning.damageByLevel[index]!,
+    maximumMirrors: tuning.maximumMirrorsByLevel[index]!,
+    thickness: tuning.thicknessByLevel[index]!,
+    intersectionBlast: level >= tuning.intersectionFromLevel
+      ? { radius: tuning.intersectionRadius, damage: tuning.intersectionDamage }
+      : null,
+  };
+}
+
+export interface MeltdownCoreProfile {
+  chance: number;
+  cooldownMs: number;
+  radius: number;
+  durationMs: number;
+  tickMs: number;
+  damage: number;
+  heatPerHit: number;
+  heatThreshold: number;
+  meltdownDamage: number;
+  maximumZones: number;
+  bossHeatCap: number;
+}
+
+export function meltdownCoreProfile(level: number): MeltdownCoreProfile {
+  const index = levelIndex(level);
+  const tuning = GAME_TUNING.orbFusions.meltdownCore;
+  return {
+    chance: tuning.chanceByLevel[index]!,
+    cooldownMs: tuning.cooldownMs,
+    radius: tuning.radiusByLevel[index]!,
+    durationMs: tuning.durationMsByLevel[index]!,
+    tickMs: tuning.tickMs,
+    damage: tuning.damageByLevel[index]!,
+    heatPerHit: tuning.heatPerHitByLevel[index]!,
+    heatThreshold: tuning.thresholdByLevel[index]!,
+    meltdownDamage: tuning.meltdownDamageByLevel[index]!,
+    maximumZones: tuning.maximumZones,
+    bossHeatCap: tuning.bossHeatCap,
+  };
+}
+
+export interface VectorBladeProfile {
+  length: number;
+  damage: number;
+  thickness: number;
+  maximumVectors: number;
+  speedScale: number;
+  pathScale: number;
+  replayCount: number;
+}
+
+export function vectorBladeProfile(level: number): VectorBladeProfile {
+  const index = levelIndex(level);
+  const tuning = GAME_TUNING.orbFusions.vectorBlade;
+  return {
+    length: tuning.lengthByLevel[index]!,
+    damage: tuning.damageByLevel[index]!,
+    thickness: tuning.thicknessByLevel[index]!,
+    maximumVectors: tuning.maximumVectorsByLevel[index]!,
+    speedScale: tuning.speedScale,
+    pathScale: tuning.pathScale,
+    replayCount: level >= tuning.replayFromLevel ? 2 : 1,
+  };
+}
+
 export interface MassCollapseResult {
   collapsed: boolean;
   stacks: number;
@@ -500,4 +580,222 @@ export class NanoSeedState {
       expiresAt: seed.expiresAt,
     };
   }
+}
+
+export interface MirrorCircuitSnapshot {
+  mirrorId: number;
+  orbId: number;
+  start: Vector;
+  end: Vector;
+  thickness: number;
+  damage: number;
+  expiresAt: number;
+}
+
+interface MirrorCircuitRecord extends MirrorCircuitSnapshot {
+  tickMs: number;
+  nextTickAt: number;
+}
+
+export class MirrorCircuitState {
+  private readonly mirrors: MirrorCircuitRecord[] = [];
+  private readonly lastPoints = new Map<number, { position: Vector; expiresAt: number }>();
+  private nextId = 0;
+
+  add(
+    orbId: number,
+    position: Vector,
+    nowMs: number,
+    profile: MirrorCircuitProfile,
+  ): { segment: MirrorCircuitSnapshot | null; intersections: Vector[] } {
+    this.update(nowMs);
+    const previous = this.lastPoints.get(orbId);
+    this.lastPoints.set(orbId, {
+      position: { ...position },
+      expiresAt: nowMs + profile.durationMs,
+    });
+    if (!previous || Math.hypot(position.x - previous.position.x, position.y - previous.position.y) === 0) {
+      return { segment: null, intersections: [] };
+    }
+
+    const intersections = profile.intersectionBlast ? this.mirrors
+      .map((mirror) => segmentIntersection(previous.position, position, mirror.start, mirror.end))
+      .filter((point): point is Vector => point !== null)
+      .filter((point) => [previous.position, position].every((endpoint) => (
+        Math.hypot(point.x - endpoint.x, point.y - endpoint.y) > ENDPOINT_EPSILON
+      ))) : [];
+    const owned = this.mirrors.filter((mirror) => mirror.orbId === orbId);
+    while (owned.length >= profile.maximumMirrors) {
+      const oldest = owned.shift()!;
+      this.mirrors.splice(this.mirrors.indexOf(oldest), 1);
+    }
+    const record: MirrorCircuitRecord = {
+      mirrorId: this.nextId++,
+      orbId,
+      start: { ...previous.position },
+      end: { ...position },
+      thickness: profile.thickness,
+      damage: profile.damage,
+      expiresAt: nowMs + profile.durationMs,
+      tickMs: profile.tickMs,
+      nextTickAt: nowMs,
+    };
+    this.mirrors.push(record);
+    return { segment: this.snapshot(record), intersections };
+  }
+
+  drainDue(nowMs: number): MirrorCircuitSnapshot[] {
+    this.update(nowMs);
+    const due = this.mirrors.filter((mirror) => nowMs >= mirror.nextTickAt);
+    for (const mirror of due) mirror.nextTickAt = nowMs + mirror.tickMs;
+    return due.map((mirror) => this.snapshot(mirror));
+  }
+
+  update(nowMs: number): void {
+    for (let index = this.mirrors.length - 1; index >= 0; index -= 1) {
+      if (nowMs >= this.mirrors[index]!.expiresAt) this.mirrors.splice(index, 1);
+    }
+    for (const [orbId, point] of this.lastPoints) {
+      if (nowMs >= point.expiresAt) this.lastPoints.delete(orbId);
+    }
+  }
+
+  getSnapshot(): MirrorCircuitSnapshot[] {
+    return this.mirrors.map((mirror) => this.snapshot(mirror));
+  }
+
+  clear(): void {
+    this.mirrors.length = 0;
+    this.lastPoints.clear();
+  }
+
+  private snapshot(mirror: MirrorCircuitRecord): MirrorCircuitSnapshot {
+    return {
+      mirrorId: mirror.mirrorId,
+      orbId: mirror.orbId,
+      start: { ...mirror.start },
+      end: { ...mirror.end },
+      thickness: mirror.thickness,
+      damage: mirror.damage,
+      expiresAt: mirror.expiresAt,
+    };
+  }
+}
+
+export interface MeltdownZoneSnapshot {
+  zoneId: number;
+  position: Vector;
+  radius: number;
+  heat: number;
+  damage: number;
+  expiresAt: number;
+}
+
+interface MeltdownZoneRecord extends MeltdownZoneSnapshot {
+  baseDamage: number;
+  tickMs: number;
+  nextTickAt: number;
+}
+
+export class MeltdownZoneState {
+  private readonly zones: MeltdownZoneRecord[] = [];
+  private nextId = 0;
+
+  addHeat(
+    position: Vector,
+    boss: boolean,
+    nowMs: number,
+    profile: MeltdownCoreProfile,
+  ): { erupted: boolean; zone: MeltdownZoneSnapshot | null } {
+    this.update(nowMs);
+    let zone = this.zones.find((candidate) => (
+      Math.hypot(candidate.position.x - position.x, candidate.position.y - position.y)
+      <= candidate.radius
+    ));
+    if (!zone) {
+      while (this.zones.length >= profile.maximumZones) this.zones.shift();
+      zone = {
+        zoneId: this.nextId++,
+        position: { ...position },
+        radius: profile.radius,
+        heat: 0,
+        damage: 0,
+        baseDamage: profile.damage,
+        expiresAt: nowMs + profile.durationMs,
+        tickMs: profile.tickMs,
+        nextTickAt: nowMs,
+      };
+      this.zones.push(zone);
+    }
+    const cap = boss ? profile.bossHeatCap : profile.heatThreshold;
+    zone.heat = Math.min(cap, zone.heat + profile.heatPerHit);
+    zone.damage = zone.baseDamage * zone.heat;
+    zone.expiresAt = nowMs + profile.durationMs;
+    const snapshot = this.snapshot(zone);
+    if (zone.heat < profile.heatThreshold) return { erupted: false, zone: snapshot };
+    this.zones.splice(this.zones.indexOf(zone), 1);
+    return { erupted: true, zone: snapshot };
+  }
+
+  drainDue(nowMs: number): MeltdownZoneSnapshot[] {
+    this.update(nowMs);
+    const due = this.zones.filter((zone) => nowMs >= zone.nextTickAt);
+    for (const zone of due) zone.nextTickAt = nowMs + zone.tickMs;
+    return due.map((zone) => this.snapshot(zone));
+  }
+
+  update(nowMs: number): void {
+    for (let index = this.zones.length - 1; index >= 0; index -= 1) {
+      if (nowMs >= this.zones[index]!.expiresAt) this.zones.splice(index, 1);
+    }
+  }
+
+  getSnapshot(): MeltdownZoneSnapshot[] {
+    return this.zones.map((zone) => this.snapshot(zone));
+  }
+
+  clear(): void { this.zones.length = 0; }
+
+  private snapshot(zone: MeltdownZoneRecord): MeltdownZoneSnapshot {
+    return {
+      zoneId: zone.zoneId,
+      position: { ...zone.position },
+      radius: zone.radius,
+      heat: zone.heat,
+      damage: zone.damage,
+      expiresAt: zone.expiresAt,
+    };
+  }
+}
+
+export interface StoredBladeVector {
+  direction: Vector;
+  pathLength: number;
+}
+
+export class VectorBladeState {
+  private readonly vectors = new Map<number, StoredBladeVector[]>();
+
+  recordBounce(
+    orbId: number,
+    vector: Vector,
+    pathLength: number,
+    profile: VectorBladeProfile,
+  ): void {
+    const records = this.vectors.get(orbId) ?? [];
+    records.push({ direction: normalize(vector), pathLength });
+    while (records.length > profile.maximumVectors) records.shift();
+    this.vectors.set(orbId, records);
+  }
+
+  consume(orbId: number): StoredBladeVector[] {
+    const records = this.vectors.get(orbId) ?? [];
+    this.vectors.delete(orbId);
+    return records.map((record) => ({
+      direction: { ...record.direction },
+      pathLength: record.pathLength,
+    }));
+  }
+
+  clear(): void { this.vectors.clear(); }
 }

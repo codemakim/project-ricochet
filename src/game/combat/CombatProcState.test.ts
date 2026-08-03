@@ -97,6 +97,15 @@ describe('CombatProcState', () => {
     expect(interleaved.tryProc('cluster-bombardment', 0, 0, 0.25, 120)).toBe(expected);
   });
 
+  it('keeps meltdown core on its own deterministic proc stream', () => {
+    const baseline = new CombatProcState(89);
+    const interleaved = new CombatProcState(89);
+    const expected = baseline.tryProc('meltdown-core', 0, 0, 0.25, 120);
+
+    interleaved.tryProc('corrosion', 0, 0, 0.25, 120);
+    expect(interleaved.tryProc('meltdown-core', 0, 0, 0.25, 120)).toBe(expected);
+  });
+
   it('triggers missiles every six permanent hits and shockwaves every four recoveries', () => {
     const state = new CombatProcState(0);
 
