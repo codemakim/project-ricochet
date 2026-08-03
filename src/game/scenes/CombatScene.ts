@@ -16,15 +16,23 @@ import { CombatProcState } from '../combat/CombatProcState';
 import {
   ClusterFieldState,
   MassCollapseState,
+  MeltdownZoneState,
+  MirrorCircuitState,
   NanoSeedState,
   PhotonTrailState,
   ReactorChargeState,
+  VectorBladeState,
   clusterBombardmentProfile,
+  meltdownCoreProfile,
+  mirrorCircuitProfile,
   nanoFusionProfile,
   photonFusionProfile,
   reactorOrbProfile,
   resonantSwarmProfile,
+  vectorBladeProfile,
   type ClusterFieldSnapshot,
+  type MeltdownZoneSnapshot,
+  type MirrorCircuitSnapshot,
   type NanoSeedSnapshot,
   type PhotonTrailSnapshot,
 } from '../combat/FusionCombatState';
@@ -172,6 +180,8 @@ export interface CombatDebugSnapshot {
   photonTrails: readonly PhotonTrailSnapshot[];
   nanoSeeds: readonly NanoSeedSnapshot[];
   clusterFields: readonly ClusterFieldSnapshot[];
+  mirrors: readonly MirrorCircuitSnapshot[];
+  meltdownZones: readonly MeltdownZoneSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
   discoveredCoreTypes: OrbCoreId[];
@@ -228,6 +238,11 @@ export class CombatScene extends Phaser.Scene {
   private readonly reactorCharges = new ReactorChargeState();
   private readonly clusterFields = new ClusterFieldState();
   private readonly clusterFieldVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly mirrors = new MirrorCircuitState();
+  private readonly mirrorVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly meltdownZones = new MeltdownZoneState();
+  private readonly meltdownVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly vectorBlades = new VectorBladeState();
   private readonly clusterProjectiles = new Set<Phaser.GameObjects.Graphics>();
   private readonly clusterTimers = new Set<Phaser.Time.TimerEvent>();
   private combatProcs?: CombatProcState;
@@ -299,6 +314,11 @@ export class CombatScene extends Phaser.Scene {
     this.reactorCharges.clear();
     this.clusterFields.clear();
     this.clusterFieldVisuals.clear();
+    this.mirrors.clear();
+    this.mirrorVisuals.clear();
+    this.meltdownZones.clear();
+    this.meltdownVisuals.clear();
+    this.vectorBlades.clear();
     this.clearClusterProjectiles();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
@@ -644,6 +664,8 @@ export class CombatScene extends Phaser.Scene {
       photonTrails: this.photonTrails.getSnapshot(),
       nanoSeeds: this.nanoSeeds.getSnapshot(),
       clusterFields: this.clusterFields.getSnapshot(),
+      mirrors: this.mirrors.getSnapshot(),
+      meltdownZones: this.meltdownZones.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
       discoveredCoreTypes: [...this.discoveredCoreTypes],
@@ -751,6 +773,15 @@ export class CombatScene extends Phaser.Scene {
       const profile = clusterBombardmentProfile(coreLevel);
       fusionProcTriggered = this.combatProcs?.tryProc(
         'cluster-bombardment',
+        event.sourceOrbId,
+        this.gameplayElapsedMs,
+        this.build.procChance(profile.chance),
+        profile.cooldownMs,
+      ) ?? false;
+    } else if (permanent && event.coreType === 'meltdown-core') {
+      const profile = meltdownCoreProfile(coreLevel);
+      fusionProcTriggered = this.combatProcs?.tryProc(
+        'meltdown-core',
         event.sourceOrbId,
         this.gameplayElapsedMs,
         this.build.procChance(profile.chance),
@@ -1153,6 +1184,54 @@ export class CombatScene extends Phaser.Scene {
     segmentStart: Vector;
     echoStacks: number;
   }): void {
+    if (event.coreType === 'mirror-circuit' && this.build) {
+      const profile = mirrorCircuitProfile(event.coreLevel);
+      const result = this.mirrors.add(
+        event.orbId,
+        event.position,
+        this.gameplayElapsedMs,
+        profile,
+      );
+      for (const position of result.intersections) {
+        const blast = profile.intersectionBlast!;
+        const radius = this.build.circularRadius(blast.radius);
+        const damage = this.build.secondaryDamage(blast.damage);
+        this.applyAreaEffects(position, [{ radius, damage }]);
+        this.drawEffectRing(
+          position,
+          radius,
+          GAME_TUNING.orbFusions.mirrorCircuit.accent,
+          'fusion-feedback-mirror-intersection',
+        );
+      }
+      this.drawEffectRing(
+        event.position,
+        7,
+        GAME_TUNING.orbFusions.mirrorCircuit.accent,
+        'fusion-feedback-mirror-node',
+      );
+      this.syncMirrorVisuals();
+      return;
+    }
+    if (event.coreType === 'vector-blade') {
+      const vector = {
+        x: event.position.x - event.segmentStart.x,
+        y: event.position.y - event.segmentStart.y,
+      };
+      this.vectorBlades.recordBounce(
+        event.orbId,
+        vector,
+        Math.hypot(vector.x, vector.y),
+        vectorBladeProfile(event.coreLevel),
+      );
+      this.drawEffectRing(
+        event.position,
+        7,
+        GAME_TUNING.orbFusions.vectorBlade.accent,
+        'fusion-feedback-vector-charge',
+      );
+      return;
+    }
     if (event.coreType === 'reactor-orb') {
       const charge = this.reactorCharges.add(event.orbId, reactorOrbProfile(event.coreLevel));
       this.drawEffectRing(
@@ -1248,6 +1327,7 @@ export class CombatScene extends Phaser.Scene {
       direction: Vector;
       coreLevel?: number;
       coreType?: string;
+      speedRatio?: number;
     },
     excludedEnemyId: number,
     excludedBossTargetId?: BossTargetId,
@@ -1368,6 +1448,64 @@ export class CombatScene extends Phaser.Scene {
     }
     if (plan.clusterBombardment) {
       this.launchClusterBombardment(event.position, plan.clusterBombardment);
+    }
+    if (plan.meltdownCore) {
+      const result = this.meltdownZones.addHeat(
+        event.position,
+        excludedBossTargetId !== undefined,
+        this.gameplayElapsedMs,
+        plan.meltdownCore,
+      );
+      if (result.erupted && result.zone) {
+        const radius = this.build.circularRadius(result.zone.radius);
+        const damage = this.build.secondaryDamage(plan.meltdownCore.meltdownDamage);
+        this.applyAreaEffects(event.position, [{ radius, damage }]);
+        this.drawEffectRing(
+          event.position,
+          radius,
+          GAME_TUNING.orbFusions.meltdownCore.accent,
+          'fusion-feedback-meltdown-eruption',
+        );
+      }
+      this.syncMeltdownVisuals();
+    }
+    if (plan.vectorBlade) {
+      const stored = this.vectorBlades.consume(event.sourceOrbId)
+        .slice(-plan.vectorBlade.replayCount);
+      for (const vector of stored) {
+        const end = {
+          x: event.position.x + vector.direction.x * plan.vectorBlade.length,
+          y: event.position.y + vector.direction.y * plan.vectorBlade.length,
+        };
+        const thickness = this.build.cutterThickness(plan.vectorBlade.thickness);
+        const scale = 1
+          + Math.max(0, (event.speedRatio ?? 1) - 1) * plan.vectorBlade.speedScale
+          + vector.pathLength * plan.vectorBlade.pathScale;
+        const damage = this.build.secondaryDamage(plan.vectorBlade.damage * scale);
+        this.enemyManager?.applySegmentDamage(
+          event.position,
+          end,
+          thickness,
+          damage,
+          excludedEnemyId,
+        );
+        this.activeBoss?.applySegmentDamage(
+          event.position,
+          end,
+          thickness,
+          damage,
+          excludedBossTargetId,
+        );
+        const line = this.add.graphics()
+          .lineStyle(thickness, GAME_TUNING.orbFusions.vectorBlade.accent, 0.9)
+          .lineBetween(event.position.x, event.position.y, end.x, end.y)
+          .setDepth(4)
+          .setName('fusion-feedback-vector-blade');
+        this.time.delayedCall(
+          GAME_TUNING.visual.triggerFeedback.durationMs,
+          () => line.destroy(),
+        );
+      }
     }
   }
 
@@ -1534,9 +1672,38 @@ export class CombatScene extends Phaser.Scene {
         'fusion-feedback-cluster-field-tick',
       );
     }
+    for (const mirror of this.mirrors.drainDue(this.gameplayElapsedMs)) {
+      const thickness = this.build?.cutterThickness(mirror.thickness) ?? mirror.thickness;
+      const damage = this.build?.secondaryDamage(mirror.damage) ?? mirror.damage;
+      this.enemyManager?.applySegmentDamage(
+        mirror.start,
+        mirror.end,
+        thickness,
+        damage,
+      );
+      this.activeBoss?.applySegmentDamage(
+        mirror.start,
+        mirror.end,
+        thickness,
+        damage,
+      );
+    }
+    for (const zone of this.meltdownZones.drainDue(this.gameplayElapsedMs)) {
+      const radius = this.build?.circularRadius(zone.radius) ?? zone.radius;
+      const damage = this.build?.secondaryDamage(zone.damage) ?? zone.damage;
+      this.applyAreaEffects(zone.position, [{ radius, damage }]);
+      this.drawEffectRing(
+        zone.position,
+        radius * 0.75,
+        GAME_TUNING.orbFusions.meltdownCore.fill,
+        'fusion-feedback-meltdown-tick',
+      );
+    }
     this.syncPhotonTrailVisuals();
     this.syncNanoSeedVisuals();
     this.syncClusterFieldVisuals();
+    this.syncMirrorVisuals();
+    this.syncMeltdownVisuals();
   }
 
   private syncPhotonTrailVisuals(): void {
@@ -1597,6 +1764,46 @@ export class CombatScene extends Phaser.Scene {
         .setDepth(3)
         .setName('fusion-feedback-cluster-field');
       this.clusterFieldVisuals.set(field.fieldId, visual);
+    }
+  }
+
+  private syncMirrorVisuals(): void {
+    const mirrors = this.mirrors.getSnapshot();
+    const active = new Set(mirrors.map(({ mirrorId }) => mirrorId));
+    for (const [mirrorId, visual] of this.mirrorVisuals) {
+      if (active.has(mirrorId)) continue;
+      visual.destroy();
+      this.mirrorVisuals.delete(mirrorId);
+    }
+    for (const mirror of mirrors) {
+      if (this.mirrorVisuals.has(mirror.mirrorId)) continue;
+      const visual = this.add.graphics()
+        .lineStyle(mirror.thickness, GAME_TUNING.orbFusions.mirrorCircuit.fill, 0.48)
+        .lineBetween(mirror.start.x, mirror.start.y, mirror.end.x, mirror.end.y)
+        .setDepth(3)
+        .setName('fusion-feedback-mirror-beam');
+      this.mirrorVisuals.set(mirror.mirrorId, visual);
+    }
+  }
+
+  private syncMeltdownVisuals(): void {
+    const zones = this.meltdownZones.getSnapshot();
+    const active = new Set(zones.map(({ zoneId }) => zoneId));
+    for (const [zoneId, visual] of this.meltdownVisuals) {
+      if (active.has(zoneId)) continue;
+      visual.destroy();
+      this.meltdownVisuals.delete(zoneId);
+    }
+    for (const zone of zones) {
+      if (this.meltdownVisuals.has(zone.zoneId)) continue;
+      const visual = this.add.graphics()
+        .fillStyle(GAME_TUNING.orbFusions.meltdownCore.fill, 0.18)
+        .fillCircle(zone.position.x, zone.position.y, zone.radius)
+        .lineStyle(2, GAME_TUNING.orbFusions.meltdownCore.accent, 0.6)
+        .strokeCircle(zone.position.x, zone.position.y, zone.radius)
+        .setDepth(3)
+        .setName('fusion-feedback-meltdown-zone');
+      this.meltdownVisuals.set(zone.zoneId, visual);
     }
   }
 
@@ -2036,10 +2243,17 @@ export class CombatScene extends Phaser.Scene {
     this.corrosionFields.clear();
     this.photonTrails.clear();
     this.nanoSeeds.clear();
+    this.mirrors.clear();
+    this.meltdownZones.clear();
+    this.vectorBlades.clear();
     for (const visual of this.photonTrailVisuals.values()) visual.destroy();
     for (const visual of this.nanoSeedVisuals.values()) visual.destroy();
+    for (const visual of this.mirrorVisuals.values()) visual.destroy();
+    for (const visual of this.meltdownVisuals.values()) visual.destroy();
     this.photonTrailVisuals.clear();
     this.nanoSeedVisuals.clear();
+    this.mirrorVisuals.clear();
+    this.meltdownVisuals.clear();
     const next = finalizeCombatLifecycle(reason, {
       activeBoss: this.activeBoss,
       activeBossKind: this.activeBossKind,
@@ -2309,6 +2523,9 @@ export class CombatScene extends Phaser.Scene {
     this.massCollapse.clear();
     this.reactorCharges.clear();
     this.clusterFields.clear();
+    this.mirrors.clear();
+    this.meltdownZones.clear();
+    this.vectorBlades.clear();
     this.clearClusterProjectiles();
     this.applyLifecycle('shutdown');
     this.enemyManager?.destroy();

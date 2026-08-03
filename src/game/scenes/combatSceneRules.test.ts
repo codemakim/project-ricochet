@@ -75,6 +75,8 @@ describe('combat scene rules', () => {
       nanoSeeds: null,
       massCollapse: null,
       clusterBombardment: null,
+      meltdownCore: null,
+      vectorBlade: null,
     });
   });
 
@@ -103,6 +105,21 @@ describe('combat scene rules', () => {
       coreType: 'cluster-bombardment',
       coreLevel: 5,
     }, false).clusterBombardment).toBeNull();
+  });
+
+  it('plans meltdown procs and vector blades only for matching permanent hits', () => {
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'meltdown-core', coreLevel: 7,
+    }, true).meltdownCore).toMatchObject({ heatPerHit: 2 });
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'meltdown-core', coreLevel: 7,
+    }, false).meltdownCore).toBeNull();
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'vector-blade', coreLevel: 9,
+    }, false).vectorBlade).toMatchObject({ replayCount: 2 });
+    expect(planFusionDirectHitEffects({
+      source: 'temporary', coreType: 'vector-blade', coreLevel: 9,
+    }, true).vectorBlade).toBeNull();
   });
 
   it('plans approved explosion and split decisions without legacy effects', () => {

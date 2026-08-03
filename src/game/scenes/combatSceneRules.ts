@@ -13,13 +13,17 @@ import type { OrbTypeId } from '../orbs/orbFusionRules';
 import {
   clusterBombardmentProfile,
   massCollapseProfile,
+  meltdownCoreProfile,
   nanoFusionProfile,
   photonFusionProfile,
   resonantSwarmProfile,
+  vectorBladeProfile,
   type NanoFusionProfile,
   type ClusterBombardmentProfile,
   type MassCollapseProfile,
+  type MeltdownCoreProfile,
   type ResonantSwarmProfile,
+  type VectorBladeProfile,
 } from '../combat/FusionCombatState';
 import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
 
@@ -119,6 +123,8 @@ export interface FusionDirectHitPlan {
   nanoSeeds: NanoFusionProfile | null;
   massCollapse: (MassCollapseProfile & { addedStacks: number }) | null;
   clusterBombardment: ClusterBombardmentProfile | null;
+  meltdownCore: MeltdownCoreProfile | null;
+  vectorBlade: VectorBladeProfile | null;
 }
 
 export function planFusionDirectHitEffects(
@@ -137,6 +143,8 @@ export function planFusionDirectHitEffects(
     nanoSeeds: null,
     massCollapse: null,
     clusterBombardment: null,
+    meltdownCore: null,
+    vectorBlade: null,
   };
   if (event.source !== 'permanent' || event.coreLevel === undefined) return empty;
   if (event.coreType === 'photon-orbit') {
@@ -162,6 +170,12 @@ export function planFusionDirectHitEffects(
   }
   if (event.coreType === 'cluster-bombardment' && procTriggered) {
     return { ...empty, clusterBombardment: clusterBombardmentProfile(event.coreLevel) };
+  }
+  if (event.coreType === 'meltdown-core' && procTriggered) {
+    return { ...empty, meltdownCore: meltdownCoreProfile(event.coreLevel) };
+  }
+  if (event.coreType === 'vector-blade') {
+    return { ...empty, vectorBlade: vectorBladeProfile(event.coreLevel) };
   }
   return empty;
 }
