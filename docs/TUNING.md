@@ -27,7 +27,7 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 레벨별 반향·부식·전도·관성·분열·폭발 수치 | `GAME_TUNING.orbCores.*.*ByLevel` |
 | 분열·폭발 공용 능력 결합 보정 | `GAME_TUNING.orbCores.split.genericSynergy`, `explosion.genericSynergy` |
 | 임시 구슬·부식장 전역 상한 | `GAME_TUNING.temporaryOrbs.cap`, `orbCores.corrosion.globalFieldLimit` |
-| 융합 구슬 6종 Lv1~Lv9 수치 | `GAME_TUNING.orbFusions` |
+| 융합 구슬 9종 Lv1~Lv9 수치 | `GAME_TUNING.orbFusions` |
 | 코어 호환 보스 유물 | `GAME_TUNING.relics` |
 | 코어 해금 비용 | `META_TUNING.corePrices` |
 
@@ -38,3 +38,17 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 3. 기본 코어 배열은 5개, 융합 구슬 배열은 9개 값을 둔다.
 4. `expectedOrbCount`는 혼합 XP 보상의 목표 구슬 성장 속도를 반영한다.
 5. 수치 변경 뒤 단위 테스트, 빌드, 관련 E2E 순서로 검증한다.
+
+## 융합 레시피
+
+| 재료 | 결과 |
+| --- | --- |
+| 관성 + 전도 | 광자 궤도 |
+| 전도 + 분열 | 공명 군체 |
+| 부식 + 분열 | 나노 증식체 |
+| 부식 + 관성 | 질량 붕괴탄 |
+| 반향 + 폭발 | 반응로 구슬 |
+| 폭발 + 분열 | 성단 폭격체 |
+| 반향 + 전도 | 거울 회로 |
+| 폭발 + 부식 | 융해 코어 |
+| 관성 + 반향 | 벡터 블레이드 |

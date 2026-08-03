@@ -15,7 +15,8 @@ interface OrbSnapshot {
   coreType:
     | 'echo' | 'corrosion' | 'conduction' | 'inertia' | 'split' | 'explosion'
     | 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator'
-    | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment';
+    | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment'
+    | 'mirror-circuit' | 'meltdown-core' | 'vector-blade';
   level: number;
   coreState: {
     echoStacks: number;
@@ -129,6 +130,8 @@ interface CombatSnapshot {
   photonTrails: Array<{ trailId: number; orbId: number; start: Vector; end: Vector }>;
   nanoSeeds: Array<{ seedId: number; orbId: number; position: Vector; generation: number }>;
   clusterFields: Array<{ fieldId: number; position: Vector }>;
+  mirrors: Array<{ mirrorId: number; start: Vector; end: Vector }>;
+  meltdownZones: Array<{ zoneId: number; position: Vector; heat: number }>;
   activePopulation: number;
   gameplayElapsedMs: number;
 }
@@ -270,8 +273,10 @@ async function loadCanvas(page: Page, search = '', coreKey = 'Digit1') {
 async function prepareDebugFusion(
   page: Page,
   startingKey: string,
-  partner: 'inertia' | 'explosion' | 'split',
-  fusionType: 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment',
+  partner: 'inertia' | 'explosion' | 'split' | 'conduction' | 'corrosion' | 'echo',
+  fusionType:
+    | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment'
+    | 'mirror-circuit' | 'meltdown-core' | 'vector-blade',
 ): Promise<{ box: { x: number; y: number; width: number; height: number }; orbId: number; enemyId: number }> {
   const { box } = await loadCanvas(page, '', startingKey);
   const result = await sceneCall(page, (scene, input) => {
@@ -305,9 +310,9 @@ async function activeSceneNames(page: Page): Promise<string[]> {
 }
 
 async function preparePhotonFusion(page: Page) {
-  const loaded = await loadCanvas(page);
+  const loaded = await loadCanvas(page, '', 'Digit4');
   await sceneCall(page, (scene) => {
-    for (const coreType of ['inertia', 'conduction', 'echo', 'echo', 'conduction'] as const) {
+    for (const coreType of ['conduction', 'inertia', 'inertia', 'conduction', 'inertia'] as const) {
       if (!scene.debugAddOrb(coreType)) throw new Error(`failed to add ${coreType}`);
     }
     scene.debugGrantXp(8);
@@ -667,6 +672,73 @@ test('@desktop launches six-way cluster impacts and lingering fields', async ({ 
     .toBeGreaterThan(0);
   await expect.poll(async () => activeSceneNames(page), { timeout: 1_000 })
     .toContain('fusion-feedback-cluster-field');
+});
+
+test('@desktop connects mirror circuit wall nodes into a live beam', async ({ page }) => {
+  const { orbId } = await prepareDebugFusion(
+    page,
+    'Digit1',
+    'conduction',
+    'mirror-circuit',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-mirror-circuit-lv9',
+  ))).toBe(true);
+  for (const x of [120, 330]) {
+    await sceneCall(page, (scene, input) => {
+      const orb = scene.children.list.find((child) => child.orbId === input.orbId)!;
+      orb.body!.setVelocity!(0, -300);
+      scene.debugPlaceOrb(input.orbId, { x: input.x, y: 10 });
+    }, { orbId, x });
+    await page.waitForTimeout(70);
+  }
+  await expect.poll(async () => (await snapshot(page)).mirrors.length).toBeGreaterThan(0);
+  expect(await activeSceneNames(page)).toContain('fusion-feedback-mirror-beam');
+});
+
+test('@desktop heats a persistent meltdown core zone', async ({ page }) => {
+  const { orbId, enemyId } = await prepareDebugFusion(
+    page,
+    'Digit6',
+    'corrosion',
+    'meltdown-core',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-meltdown-core-lv9',
+  ))).toBe(true);
+  for (let hit = 0; hit < 6 && (await snapshot(page)).meltdownZones.length === 0; hit += 1) {
+    await sceneCall(page, (scene, input) => {
+      const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+      scene.debugPlaceOrb(input.orbId, target.position);
+    }, { orbId, enemyId });
+    await page.waitForTimeout(90);
+  }
+  await expect.poll(async () => (await snapshot(page)).meltdownZones.length).toBeGreaterThan(0);
+  expect(await activeSceneNames(page)).toContain('fusion-feedback-meltdown-zone');
+});
+
+test('@desktop replays stored wall vectors as vector blades', async ({ page }) => {
+  const { orbId, enemyId } = await prepareDebugFusion(
+    page,
+    'Digit4',
+    'echo',
+    'vector-blade',
+  );
+  expect(await sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'orb-vector-blade-lv9',
+  ))).toBe(true);
+  await sceneCall(page, (scene, id) => {
+    const orb = scene.children.list.find((child) => child.orbId === id)!;
+    orb.body!.setVelocity!(0, -300);
+    scene.debugPlaceOrb(id, { x: 225, y: 10 });
+  }, orbId);
+  await page.waitForTimeout(70);
+  await sceneCall(page, (scene, input) => {
+    const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+    scene.debugPlaceOrb(input.orbId, target.position);
+  }, { orbId, enemyId });
+  await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
+    .toContain('fusion-feedback-vector-blade');
 });
 
 test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
