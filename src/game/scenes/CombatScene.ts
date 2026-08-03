@@ -198,6 +198,12 @@ export class CombatScene extends Phaser.Scene {
   declare debugAdvanceHiveCycle?: (deltaMs: number) => void;
   declare debugPlaceTemporaryOrb?: (id: number, position: Vector) => boolean;
   declare debugAddOrb?: (coreType: OrbCoreId) => boolean;
+  declare debugFuseOrbs?: (
+    firstId: number,
+    secondId: number,
+    fusionType: FusionOrbId,
+  ) => boolean;
+  declare debugUpgradeOrb?: (id: number) => boolean;
   declare debugShowCoreFeedback?: (
     type: 'corrosion' | 'conduction',
     position: Vector,
@@ -453,6 +459,10 @@ export class CombatScene extends Phaser.Scene {
         this.temporaryOrbManager?.debugPlaceOrb?.(id, position) ?? false
       );
       this.debugAddOrb = (coreType) => this.orbManager?.addOrb(coreType) ?? false;
+      this.debugFuseOrbs = (firstId, secondId, fusionType) => (
+        this.orbManager?.fuseOrbs(firstId, secondId, fusionType) ?? false
+      );
+      this.debugUpgradeOrb = (id) => this.orbManager?.upgradeOrb(id) ?? false;
       this.debugShowCoreFeedback = (type, position) => {
         if (type === 'corrosion') {
           this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
@@ -2334,6 +2344,8 @@ export class CombatScene extends Phaser.Scene {
     this.debugAdvanceHiveCycle = undefined;
     this.debugPlaceTemporaryOrb = undefined;
     this.debugAddOrb = undefined;
+    this.debugFuseOrbs = undefined;
+    this.debugUpgradeOrb = undefined;
   };
 
   private createTextures(): void {

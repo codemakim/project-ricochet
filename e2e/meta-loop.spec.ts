@@ -147,7 +147,7 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
       loadout: ['echo'],
       unlockedCoreTypes: ['echo'],
       discoveredCoreTypes: ['echo', acquiredCoreType],
-      discoveredFusionTypes: ['photon-orbit'],
+      discoveredFusionTypes: ['photon-orbit', 'mass-collapse'],
       success: false,
       durationMs: 180_000,
       defeatedBossIds: [],
@@ -164,7 +164,9 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
   )).toBeVisible();
   await expect(page.locator(`[data-buy-core="${acquiredCoreType}"]`)).toBeEnabled();
   await expect(page.getByText('광자 궤도')).toBeVisible();
+  await expect(page.getByText('질량 붕괴탄')).toBeVisible();
   await expect(page.getByText('공명 군체')).toHaveCount(0);
+  await expect(page.getByText('반응로 구슬')).toHaveCount(0);
   await page.locator(`[data-buy-core="${acquiredCoreType}"]`).click();
   await expect(page.getByText('코어 해금 완료')).toBeVisible();
   await page.getByRole('button', { name: '돌아가기' }).click();
