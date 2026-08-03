@@ -21,7 +21,7 @@
 
 ## 3. 런 데이터 흐름
 
-`RunConfig`는 영구 `discoveredCores`와 `discoveredFusions`를 `CombatScene`에 전달한다. 전투는 두 목록을 복사한 런 로컬 발견 집합을 가진다.
+`RunConfig`는 영구 `discoveredCoreTypes`와 `discoveredFusionTypes`를 `CombatScene`에 전달한다. 전투는 두 목록을 복사한 런 로컬 발견 집합을 가진다.
 
 - 시작 구슬은 이미 발견한 구슬만 장착 가능하므로 추가 발견을 만들지 않는다.
 - 기본 구슬 획득이 확정되면 해당 종류를 런 로컬 집합에 추가한다.

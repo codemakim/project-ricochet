@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { ORB_CORE_DEFINITIONS, type OrbCoreId } from '../src/game/orbs/orbCoreRules';
 
 async function combatSnapshot(page: Page) {
   return page.evaluate(() => {
@@ -12,7 +13,31 @@ async function combatSnapshot(page: Page) {
       runCompleteVisible: boolean;
       encounter: { state: string; stageId: string };
       boss: { kind: string; active: boolean };
+      progression: {
+        choices: Array<
+          | { kind: 'ability'; id: string }
+          | { kind: 'orb-add'; coreType: OrbCoreId }
+          | { kind: 'orb-upgrade'; coreType: string }
+          | { kind: 'orb-fusion'; fusionType: string }
+        >;
+      };
+      levelUpVisible: boolean;
+      discoveredCoreTypes: OrbCoreId[];
+      discoveredFusionTypes: string[];
     };
+  });
+}
+
+async function activeSceneTexts(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      scene: { getScene(key: string): {
+        children: { list: Array<{ active?: boolean; text?: string }> };
+      } };
+    } }).__RICHOCHET_GAME__!;
+    return game.scene.getScene('combat').children.list
+      .filter((child) => child.active && child.text)
+      .map((child) => child.text!);
   });
 }
 
@@ -95,38 +120,71 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
 
   await page.evaluate(() => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      scene: { getScene(key: string): { debugGrantXp(amount: number): void } };
+    } }).__RICHOCHET_GAME__!;
+    game.scene.getScene('combat').debugGrantXp(8);
+  });
+  await expect.poll(async () => (await combatSnapshot(page)).levelUpVisible).toBe(true);
+  const reward = (await combatSnapshot(page)).progression.choices[0]!;
+  expect(reward.kind).toBe('orb-add');
+  const acquiredCoreType = (reward as { kind: 'orb-add'; coreType: OrbCoreId }).coreType;
+  await expect.poll(async () => (await activeSceneTexts(page)).some((text) => (
+    text.includes('1. ??? Lv1')
+  ))).toBe(true);
+  await page.keyboard.press('Digit1');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await combatSnapshot(page)).levelUpVisible).toBe(false);
+  await expect.poll(async () => (
+    await combatSnapshot(page)
+  ).discoveredCoreTypes).toEqual(['echo', acquiredCoreType]);
+
+  await page.evaluate(({ acquiredCoreType }) => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
       events: { emit(event: string, result: unknown): void };
     } }).__RICHOCHET_GAME__!;
     game.events.emit('ricochet:run-ended', {
       identity: { runId: 'meta-e2e-1', battlefieldId: 'default', threatId: 'normal', seed: 1 },
       loadout: ['echo'],
       unlockedCoreTypes: ['echo'],
+      discoveredCoreTypes: ['echo', acquiredCoreType],
+      discoveredFusionTypes: ['photon-orbit'],
       success: false,
       durationMs: 180_000,
       defeatedBossIds: [],
       buildRanks: {},
     });
-  });
+  }, { acquiredCoreType });
   await expect(page.getByText('획득 부품')).toBeVisible();
   await expect(page.getByText('+40')).toBeVisible();
   await page.getByRole('button', { name: '계속' }).click();
   await page.getByRole('button', { name: '코어 작업장' }).click();
-  await page.locator('[data-buy-core="conduction"]').click();
+  await expect(page.getByText(
+    ORB_CORE_DEFINITIONS[acquiredCoreType].label,
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.locator(`[data-buy-core="${acquiredCoreType}"]`)).toBeEnabled();
+  await expect(page.getByText('광자 궤도')).toBeVisible();
+  await expect(page.getByText('공명 군체')).toHaveCount(0);
+  await page.locator(`[data-buy-core="${acquiredCoreType}"]`).click();
   await expect(page.getByText('코어 해금 완료')).toBeVisible();
   await page.getByRole('button', { name: '돌아가기' }).click();
 
   const slots = page.locator('[data-loadout-slot]');
   await expect(slots).toHaveCount(1);
-  await slots.selectOption('conduction');
+  await slots.selectOption(acquiredCoreType);
   await page.getByRole('button', { name: '출격', exact: true }).click();
   await expect(page.locator('#game-root canvas')).toBeVisible();
   await expect.poll(() => combatSceneReady(page)).toBe(true);
   await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(false);
 
   await page.reload();
-  await expect(page.locator('[data-loadout-slot]')).toHaveValue('conduction');
+  await expect(page.locator('[data-loadout-slot]')).toHaveValue(acquiredCoreType);
   await page.getByRole('button', { name: '코어 작업장' }).click();
-  await expect(page.getByText('전도 구슬').locator('..')).toContainText('해금됨');
+  await expect(page.getByText(
+    ORB_CORE_DEFINITIONS[acquiredCoreType].label,
+    { exact: true },
+  ).locator('..'))
+    .toContainText('해금됨');
 });
 
 test('@desktop migrates a schema 1 loadout without losing parts or unlocks', async ({ page }) => {
@@ -150,9 +208,11 @@ test('@desktop migrates a schema 1 loadout without losing parts or unlocks', asy
     localStorage.getItem('project-ricochet.meta')!,
   ));
   expect(saved).toMatchObject({
-    schemaVersion: 2,
+    schemaVersion: 3,
     parts: 40,
     unlockedCores: ['echo', 'inertia'],
+    discoveredCores: ['echo', 'inertia'],
+    discoveredFusions: [],
     loadout: ['inertia'],
   });
 });

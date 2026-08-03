@@ -1,6 +1,6 @@
 # Orb Discovery Codex Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Persist basic-orb and fusion discovery at run settlement, mask undiscovered rewards, and expose discovered entries and basic-core purchases in the existing workshop.
 
@@ -60,7 +60,7 @@ createRunResult(
 ): RunResult
 ```
 
-- [ ] **Step 1: Write failing run-contract tests**
+- [x] **Step 1: Write failing run-contract tests**
 
 Add cases that copy and validate discovery arrays:
 
@@ -96,13 +96,13 @@ expect(() => createRunConfig(
 )).toThrow('unlocked cores must be discovered');
 ```
 
-- [ ] **Step 2: Run the focused test and confirm failure**
+- [x] **Step 2: Run the focused test and confirm failure**
 
 Run: `rtk npm test -- src/game/run/runContract.test.ts`
 
 Expected: TypeScript or assertion failures because discovery fields and arguments do not exist.
 
-- [ ] **Step 3: Add role hints and minimal contract validation**
+- [x] **Step 3: Add role hints and minimal contract validation**
 
 Use these exact role hints:
 
@@ -123,13 +123,13 @@ explosion: '확률 폭발형'
 
 Default `discoveredCoreTypes` to `unlockedCoreTypes` and `discoveredFusionTypes` to `[]`. Validate with `ORB_CORE_IDS` and `FUSION_ORB_IDS`, require every unlocked core to be discovered, and clone all arrays. Default final discoveries in `createRunResult()` to the config lists.
 
-- [ ] **Step 4: Run the focused test green**
+- [x] **Step 4: Run the focused test green**
 
 Run: `rtk npm test -- src/game/run/runContract.test.ts`
 
 Expected: all run-contract tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/game/orbs/orbCoreRules.ts src/game/orbs/orbFusionRules.ts src/game/run/runContract.ts src/game/run/runContract.test.ts
@@ -150,7 +150,7 @@ rtk git commit -m "feat: add orb discovery run contract"
 - Produces: settlement union through existing `settleRun()`.
 - Changes: `purchaseCore()` rejects a core absent from `progress.discoveredCores` with `core must be discovered before unlock`.
 
-- [ ] **Step 1: Write failing meta-domain tests**
+- [x] **Step 1: Write failing meta-domain tests**
 
 Update default expectations and add settlement coverage:
 
@@ -202,17 +202,17 @@ expect(purchaseCore({
 }, 'conduction').unlockedCores).toContain('conduction');
 ```
 
-- [ ] **Step 2: Write failing migration and corruption tests**
+- [x] **Step 2: Write failing migration and corruption tests**
 
 Change the schema 1 expected result to schema 3 with `discoveredCores` equal to its unlocked cores and no fusions. Add the same assertion for a schema 2 fixture. Add invalid schema 3 fixtures containing unknown basic and fusion IDs and expect recovery to `createDefaultMetaProgress()`.
 
-- [ ] **Step 3: Run focused tests and confirm failure**
+- [x] **Step 3: Run focused tests and confirm failure**
 
 Run: `rtk npm test -- src/game/meta/metaProgress.test.ts src/game/meta/MetaStore.test.ts`
 
 Expected: failures for schema 3 and missing discovery behavior.
 
-- [ ] **Step 4: Implement schema 3 and settlement union**
+- [x] **Step 4: Implement schema 3 and settlement union**
 
 Use insertion-order unique arrays:
 
@@ -240,13 +240,13 @@ if (unlockedCores.some((core) => !discoveredCores.includes(core))) {
 
 Accept schema versions 1, 2, and 3; save migrated values whenever the loaded version is not 3. `fusionArray()` validates through `FUSION_ORB_IDS`.
 
-- [ ] **Step 5: Run focused tests green**
+- [x] **Step 5: Run focused tests green**
 
 Run: `rtk npm test -- src/game/meta/metaProgress.test.ts src/game/meta/MetaStore.test.ts`
 
 Expected: all meta tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rtk git add src/game/meta/metaProgress.ts src/game/meta/metaProgress.test.ts src/game/meta/MetaStore.ts src/game/meta/MetaStore.test.ts
@@ -278,7 +278,7 @@ show(
 
 - Changes `OrbFusionOverlay.show()` to accept final `discovered = true`.
 
-- [ ] **Step 1: Write failing level-up masking tests**
+- [x] **Step 1: Write failing level-up masking tests**
 
 Render an undiscovered basic add and fusion card:
 
@@ -303,7 +303,7 @@ expect(text).not.toContain('광자 궤도');
 
 Focus each card and assert its detail shows only `연쇄 전도형` or the fusion material labels plus `관통 궤적형`, never the hidden result summary.
 
-- [ ] **Step 2: Write failing fusion-picker masking test**
+- [x] **Step 2: Write failing fusion-picker masking test**
 
 ```ts
 overlay.show(
@@ -319,23 +319,23 @@ expect(text).toContain('→ ??? Lv5');
 expect(text).not.toContain('광자 궤도');
 ```
 
-- [ ] **Step 3: Run UI tests and confirm failure**
+- [x] **Step 3: Run UI tests and confirm failure**
 
 Run: `rtk npm test -- src/game/ui/LevelUpOverlay.test.ts src/game/ui/OrbFusionOverlay.test.ts`
 
 Expected: missing arguments or exposed labels make the new assertions fail.
 
-- [ ] **Step 4: Implement display-only masking**
+- [x] **Step 4: Implement display-only masking**
 
 Keep the original choice object and callbacks unchanged. Only card labels and details branch on discovery arrays. Basic upgrade cards are already owned and therefore use the actual label. Fusion material labels remain visible; the result label and summary remain hidden until discovered.
 
-- [ ] **Step 5: Run UI tests green**
+- [x] **Step 5: Run UI tests green**
 
 Run: `rtk npm test -- src/game/ui/LevelUpOverlay.test.ts src/game/ui/OrbFusionOverlay.test.ts`
 
 Expected: all overlay tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rtk git add src/game/ui/LevelUpOverlay.ts src/game/ui/LevelUpOverlay.test.ts src/game/ui/OrbFusionOverlay.ts src/game/ui/OrbFusionOverlay.test.ts
@@ -362,7 +362,7 @@ export function recordDiscovery<T extends string>(
 ): Set<T>
 ```
 
-- [ ] **Step 1: Write failing immutable discovery helper test**
+- [x] **Step 1: Write failing immutable discovery helper test**
 
 ```ts
 const current = new Set(['echo']);
@@ -372,13 +372,13 @@ expect([...current]).toEqual(['echo']);
 expect(recordDiscovery(next, 'conduction')).toEqual(next);
 ```
 
-- [ ] **Step 2: Run the rule test and confirm failure**
+- [x] **Step 2: Run the rule test and confirm failure**
 
 Run: `rtk npm test -- src/game/scenes/combatSceneRules.test.ts`
 
 Expected: `recordDiscovery` is not exported.
 
-- [ ] **Step 3: Implement the helper and scene-local sets**
+- [x] **Step 3: Implement the helper and scene-local sets**
 
 Initialize production runs from `runConfig.discoveredCoreTypes` and `runConfig.discoveredFusionTypes`. For direct development combat without a run config, initialize all current basic and fusion IDs as discovered to preserve existing prototype behavior.
 
@@ -400,7 +400,7 @@ this.discoveredFusionTypes = recordDiscovery(
 
 Pass current arrays to `LevelUpOverlay.show()`. Pass the pre-confirmation fusion discovery boolean to `OrbFusionOverlay.show()`. Pass final arrays into `createRunResult()` for both victory and defeat. Clone them in `setRunConfig()` and clear them on a fresh `create()`.
 
-- [ ] **Step 4: Extend the existing workshop template**
+- [x] **Step 4: Extend the existing workshop template**
 
 `AppController.deploy()` passes `progress.discoveredCores` and `progress.discoveredFusions` to `createRunConfig()`.
 
@@ -424,7 +424,7 @@ Fusion entry rules:
 - undiscovered: `???`, material labels, role hint, `미발견`
 - discovered: real label, summary, and material labels
 
-- [ ] **Step 5: Run focused unit tests and build**
+- [x] **Step 5: Run focused unit tests and build**
 
 Run: `rtk npm test -- src/game/scenes/combatSceneRules.test.ts src/game/run/runContract.test.ts src/game/meta/metaProgress.test.ts src/game/ui/LevelUpOverlay.test.ts src/game/ui/OrbFusionOverlay.test.ts`
 
@@ -432,7 +432,7 @@ Run: `rtk npm run build`
 
 Expected: all focused tests pass and TypeScript/Vite build succeeds.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 rtk git add src/game/scenes/CombatScene.ts src/game/scenes/combatSceneRules.ts src/game/scenes/combatSceneRules.test.ts src/game/meta/AppController.ts
@@ -449,7 +449,7 @@ rtk git commit -m "feat: connect orb discovery to combat and workshop"
 - Consumes: debug discovery snapshot fields and workshop markup from Task 4.
 - Updates all handwritten E2E `RunResult` fixtures with discovery arrays.
 
-- [ ] **Step 1: Add one production-run masking/reveal check**
+- [x] **Step 1: Add one production-run masking/reveal check**
 
 Extend `combatSnapshot()` with `levelUpVisible`, `progression.choices`, `discoveredCoreTypes`, and `discoveredFusionTypes`. In the existing AppController settlement test, deploy with the default `echo` discovery, call `debugGrantXp(8)`, and inspect active scene text:
 
@@ -470,7 +470,7 @@ await expect.poll(async () => (await combatSnapshot(page)).discoveredCoreTypes.l
 
 Read the acquired core type from the chosen reward/snapshot and use that exact type in the terminal result and workshop assertions. Keep existing mobile input tests unchanged.
 
-- [ ] **Step 2: Extend the meta-loop settlement test**
+- [x] **Step 2: Extend the meta-loop settlement test**
 
 The manual terminal result must include the acquired basic type and:
 
@@ -491,17 +491,17 @@ await expect(page.getByText('공명 군체')).toHaveCount(0);
 
 Purchase the acquired core, redeploy, reload, and retain the existing persistence assertion. Update schema migration E2E to expect version 3 and discovery fields.
 
-- [ ] **Step 3: Run only the new/changed browser paths**
+- [x] **Step 3: Run only the new/changed browser paths**
 
 Run: `rtk npm run test:e2e -- --grep "discovery|settles, unlocks|migrates"`
 
 Expected: all matched desktop tests pass.
 
-- [ ] **Step 4: Update worklog**
+- [x] **Step 4: Update worklog**
 
 Add a `2026-08-03 — 구슬 발견·도감 기반` entry documenting schema 3, run-end persistence, reward masking, discovery-gated core purchase, fusion records, verification counts, and deferred remaining six fusions/balance/art/sound.
 
-- [ ] **Step 5: Run final verification**
+- [x] **Step 5: Run final verification**
 
 Run: `rtk npm test`
 
@@ -511,7 +511,7 @@ Run: `rtk npm run test:e2e`
 
 Expected: zero failures. The existing Vite chunk-size warning may remain.
 
-- [ ] **Step 6: Review and commit**
+- [x] **Step 6: Review and commit**
 
 Run: `rtk git diff --check`
 
@@ -520,6 +520,6 @@ rtk git add e2e/meta-loop.spec.ts docs/WORKLOG.md
 rtk git commit -m "test: verify orb discovery loop"
 ```
 
-- [ ] **Step 7: Merge, push, and clean up after user-approved integration**
+- [x] **Step 7: Merge, push, and clean up after user-approved integration**
 
 Expected feature branch: `codex/orb-discovery-codex`.
