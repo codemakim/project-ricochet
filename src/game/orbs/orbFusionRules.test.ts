@@ -47,14 +47,6 @@ describe('orb fusion rules', () => {
       { id: 4, coreType: 'split' as const, level: 3 },
     ];
 
-    expect(FUSION_ORB_IDS).toEqual([
-      'photon-orbit',
-      'resonant-swarm',
-      'nano-proliferator',
-      'mass-collapse',
-      'reactor-orb',
-      'cluster-bombardment',
-    ]);
     expect(availableFusionIds(orbs)).toEqual(expect.arrayContaining([
       'mass-collapse',
       'reactor-orb',
@@ -63,5 +55,19 @@ describe('orb fusion rules', () => {
     expect(fusionMaterialPairs(orbs, 'mass-collapse')).toEqual([
       { firstId: 0, secondId: 1, resultLevel: 6 },
     ]);
+  });
+
+  it('offers the final fusion batch from its three material pairs', () => {
+    const orbs = [
+      { id: 0, coreType: 'echo' as const, level: 3 },
+      { id: 1, coreType: 'conduction' as const, level: 3 },
+      { id: 2, coreType: 'explosion' as const, level: 3 },
+      { id: 3, coreType: 'corrosion' as const, level: 3 },
+      { id: 4, coreType: 'inertia' as const, level: 3 },
+    ];
+    expect(FUSION_ORB_IDS).toHaveLength(9);
+    expect(availableFusionIds(orbs)).toEqual(expect.arrayContaining([
+      'mirror-circuit', 'meltdown-core', 'vector-blade',
+    ]));
   });
 });

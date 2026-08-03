@@ -15,7 +15,8 @@ type TextureShape =
 
 export type OrbCoreSymbol =
   | 'wave' | 'drop' | 'bolt' | 'arrow' | 'fork' | 'burst'
-  | 'beam' | 'swarm' | 'seed' | 'collapse' | 'reactor' | 'cluster';
+  | 'beam' | 'swarm' | 'seed' | 'collapse' | 'reactor' | 'cluster'
+  | 'mirror' | 'melt' | 'blade';
 
 export type CombatTextureDescriptor = ProjectileVisualTuning & {
   shape: TextureShape;
@@ -93,6 +94,21 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
       accent: GAME_TUNING.orbFusions.clusterBombardment.accent,
       shape: 'outlinedCircle' as const,
       symbol: 'cluster' as const,
+    },
+    'mirror-circuit': {
+      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.mirrorCircuit.fill,
+      accent: GAME_TUNING.orbFusions.mirrorCircuit.accent,
+      shape: 'outlinedCircle' as const, symbol: 'mirror' as const,
+    },
+    'meltdown-core': {
+      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.meltdownCore.fill,
+      accent: GAME_TUNING.orbFusions.meltdownCore.accent,
+      shape: 'outlinedCircle' as const, symbol: 'melt' as const,
+    },
+    'vector-blade': {
+      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.vectorBlade.fill,
+      accent: GAME_TUNING.orbFusions.vectorBlade.accent,
+      shape: 'outlinedCircle' as const, symbol: 'blade' as const,
     },
   };
   const leveledFusions = Object.fromEntries(Object.entries(fusionTextures).flatMap(

@@ -62,7 +62,7 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   });
 });
 
-it('defines six distinct fusion silhouettes across all nine levels', () => {
+it('defines nine distinct fusion silhouettes across all nine levels', () => {
   const textures = combatProjectileTextureDescriptors();
   const fusions = [
     textures['orb-photon-orbit-lv1']!,
@@ -71,6 +71,9 @@ it('defines six distinct fusion silhouettes across all nine levels', () => {
     textures['orb-mass-collapse-lv1']!,
     textures['orb-reactor-orb-lv1']!,
     textures['orb-cluster-bombardment-lv1']!,
+    textures['orb-mirror-circuit-lv1']!,
+    textures['orb-meltdown-core-lv1']!,
+    textures['orb-vector-blade-lv1']!,
   ];
 
   expect(fusions.map(({ fill, symbol }) => ({ fill, symbol }))).toEqual([
@@ -80,10 +83,14 @@ it('defines six distinct fusion silhouettes across all nine levels', () => {
     { fill: 0x59647a, symbol: 'collapse' },
     { fill: 0xff4f57, symbol: 'reactor' },
     { fill: 0xffb347, symbol: 'cluster' },
+    { fill: 0x5de6ff, symbol: 'mirror' },
+    { fill: 0xff5a36, symbol: 'melt' },
+    { fill: 0xd8e1ff, symbol: 'blade' },
   ]);
   expect(textures['orb-photon-orbit-lv9']).toMatchObject({ notches: 9 });
   expect(textures['orb-reactor-orb-lv9']).toMatchObject({ notches: 9 });
   expect(textures['orb-cluster-bombardment-lv4']).toMatchObject({ notches: 4 });
+  expect(textures['orb-vector-blade-lv9']).toMatchObject({ notches: 9 });
 });
 
 it('renders splitter and fragment prototype descriptors for runtime managers', () => {

@@ -362,6 +362,25 @@ export interface GameTuning {
       fill: number;
       accent: number;
     };
+    mirrorCircuit: {
+      durationMsByLevel: NineLevelValues; damageByLevel: NineLevelValues;
+      maximumMirrorsByLevel: NineLevelValues; thicknessByLevel: NineLevelValues;
+      tickMs: number; intersectionFromLevel: number; intersectionRadius: number;
+      intersectionDamage: number; fill: number; accent: number;
+    };
+    meltdownCore: {
+      chanceByLevel: NineLevelValues; radiusByLevel: NineLevelValues;
+      durationMsByLevel: NineLevelValues; damageByLevel: NineLevelValues;
+      heatPerHitByLevel: NineLevelValues; thresholdByLevel: NineLevelValues;
+      meltdownDamageByLevel: NineLevelValues; cooldownMs: number; tickMs: number;
+      maximumZones: number; bossHeatCap: number; fill: number; accent: number;
+    };
+    vectorBlade: {
+      lengthByLevel: NineLevelValues; damageByLevel: NineLevelValues;
+      thicknessByLevel: NineLevelValues; maximumVectorsByLevel: NineLevelValues;
+      speedScale: number; pathScale: number; replayFromLevel: number;
+      fill: number; accent: number;
+    };
   };
   temporaryOrbs: {
     radius: number;
@@ -754,6 +773,33 @@ export const GAME_TUNING = {
       fill: 0xffb347,
       accent: 0xfff0c2,
     },
+    mirrorCircuit: {
+      durationMsByLevel: [900, 1000, 1100, 1200, 1300, 1450, 1600, 1800, 2000],
+      damageByLevel: [0.1, 0.11, 0.12, 0.14, 0.16, 0.18, 0.2, 0.23, 0.27],
+      maximumMirrorsByLevel: [2, 2, 2, 3, 3, 3, 4, 4, 5],
+      thicknessByLevel: [6, 6, 7, 7, 8, 8, 9, 10, 11],
+      tickMs: 300, intersectionFromLevel: 9, intersectionRadius: 38,
+      intersectionDamage: 0.7, fill: 0x5de6ff, accent: 0xf2ffff,
+    },
+    meltdownCore: {
+      chanceByLevel: [0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.33, 0.36],
+      radiusByLevel: [30, 31, 32, 34, 36, 38, 40, 42, 45],
+      durationMsByLevel: [2200, 2300, 2400, 2600, 2800, 3000, 3200, 3500, 3800],
+      damageByLevel: [0.08, 0.09, 0.1, 0.11, 0.13, 0.15, 0.17, 0.2, 0.24],
+      heatPerHitByLevel: [1, 1, 1, 1, 1, 1, 2, 2, 2],
+      thresholdByLevel: [5, 5, 5, 5, 4, 4, 4, 4, 3],
+      meltdownDamageByLevel: [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.85, 2.2],
+      cooldownMs: 180, tickMs: 450, maximumZones: 10, bossHeatCap: 4,
+      fill: 0xff5a36, accent: 0xffe1a3,
+    },
+    vectorBlade: {
+      lengthByLevel: [180, 190, 200, 215, 230, 245, 260, 280, 300],
+      damageByLevel: [0.35, 0.38, 0.42, 0.46, 0.5, 0.55, 0.61, 0.68, 0.78],
+      thicknessByLevel: [8, 8, 9, 9, 10, 11, 12, 13, 15],
+      maximumVectorsByLevel: [1, 1, 1, 1, 1, 1, 2, 2, 2],
+      speedScale: 0.35, pathScale: 0.002, replayFromLevel: 9,
+      fill: 0xd8e1ff, accent: 0x7da2ff,
+    },
   },
   temporaryOrbs: {
     radius: 6,
@@ -1029,6 +1075,21 @@ export function validateGameTuning(tuning: GameTuning): void {
     ['clusterBombardment.distanceByLevel', orbFusions.clusterBombardment.distanceByLevel, 'positive'],
     ['clusterBombardment.lingeringDurationMsByLevel', orbFusions.clusterBombardment.lingeringDurationMsByLevel, 'nonNegative'],
     ['clusterBombardment.lingeringDamageByLevel', orbFusions.clusterBombardment.lingeringDamageByLevel, 'nonNegative'],
+    ['mirrorCircuit.durationMsByLevel', orbFusions.mirrorCircuit.durationMsByLevel, 'positive'],
+    ['mirrorCircuit.damageByLevel', orbFusions.mirrorCircuit.damageByLevel, 'nonNegative'],
+    ['mirrorCircuit.maximumMirrorsByLevel', orbFusions.mirrorCircuit.maximumMirrorsByLevel, 'integer'],
+    ['mirrorCircuit.thicknessByLevel', orbFusions.mirrorCircuit.thicknessByLevel, 'positive'],
+    ['meltdownCore.chanceByLevel', orbFusions.meltdownCore.chanceByLevel, 'probability'],
+    ['meltdownCore.radiusByLevel', orbFusions.meltdownCore.radiusByLevel, 'positive'],
+    ['meltdownCore.durationMsByLevel', orbFusions.meltdownCore.durationMsByLevel, 'positive'],
+    ['meltdownCore.damageByLevel', orbFusions.meltdownCore.damageByLevel, 'nonNegative'],
+    ['meltdownCore.heatPerHitByLevel', orbFusions.meltdownCore.heatPerHitByLevel, 'integer'],
+    ['meltdownCore.thresholdByLevel', orbFusions.meltdownCore.thresholdByLevel, 'integer'],
+    ['meltdownCore.meltdownDamageByLevel', orbFusions.meltdownCore.meltdownDamageByLevel, 'nonNegative'],
+    ['vectorBlade.lengthByLevel', orbFusions.vectorBlade.lengthByLevel, 'positive'],
+    ['vectorBlade.damageByLevel', orbFusions.vectorBlade.damageByLevel, 'nonNegative'],
+    ['vectorBlade.thicknessByLevel', orbFusions.vectorBlade.thicknessByLevel, 'positive'],
+    ['vectorBlade.maximumVectorsByLevel', orbFusions.vectorBlade.maximumVectorsByLevel, 'integer'],
   ];
   const validators = { positive, nonNegative, probability, integer: nonNegativeInteger };
   for (const [name, values, validator] of fusionCurves) {
@@ -1052,6 +1113,17 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(orbFusions.clusterBombardment.cooldownMs, 'orbFusions.clusterBombardment.cooldownMs');
   positiveInteger(orbFusions.clusterBombardment.projectileCount, 'orbFusions.clusterBombardment.projectileCount');
   positiveInteger(orbFusions.clusterBombardment.maximumActiveProjectiles, 'orbFusions.clusterBombardment.maximumActiveProjectiles');
+  positive(orbFusions.mirrorCircuit.tickMs, 'orbFusions.mirrorCircuit.tickMs');
+  positiveInteger(orbFusions.mirrorCircuit.intersectionFromLevel, 'orbFusions.mirrorCircuit.intersectionFromLevel');
+  positive(orbFusions.mirrorCircuit.intersectionRadius, 'orbFusions.mirrorCircuit.intersectionRadius');
+  nonNegative(orbFusions.mirrorCircuit.intersectionDamage, 'orbFusions.mirrorCircuit.intersectionDamage');
+  positive(orbFusions.meltdownCore.cooldownMs, 'orbFusions.meltdownCore.cooldownMs');
+  positive(orbFusions.meltdownCore.tickMs, 'orbFusions.meltdownCore.tickMs');
+  positiveInteger(orbFusions.meltdownCore.maximumZones, 'orbFusions.meltdownCore.maximumZones');
+  positiveInteger(orbFusions.meltdownCore.bossHeatCap, 'orbFusions.meltdownCore.bossHeatCap');
+  nonNegative(orbFusions.vectorBlade.speedScale, 'orbFusions.vectorBlade.speedScale');
+  nonNegative(orbFusions.vectorBlade.pathScale, 'orbFusions.vectorBlade.pathScale');
+  positiveInteger(orbFusions.vectorBlade.replayFromLevel, 'orbFusions.vectorBlade.replayFromLevel');
   if (
     mixedCards.early.maximumOrbs >= mixedCards.growing.maximumOrbs
     || mixedCards.growing.maximumOrbs >= build.basicGrowth.maximumOrbs

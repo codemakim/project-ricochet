@@ -2512,6 +2512,20 @@ export class CombatScene extends Phaser.Scene {
                 .moveTo(centerX, centerY - 5).lineTo(centerX, centerY - 3)
                 .moveTo(centerX, centerY + 5).lineTo(centerX, centerY + 3);
               break;
+            case 'mirror':
+              graphics.strokeRect(centerX - 5, centerY - 5, 4, 10)
+                .strokeRect(centerX + 1, centerY - 5, 4, 10);
+              break;
+            case 'melt':
+              graphics.moveTo(centerX, centerY - 6).lineTo(centerX + 5, centerY + 2)
+                .lineTo(centerX, centerY + 6).lineTo(centerX - 5, centerY + 2)
+                .lineTo(centerX, centerY - 6);
+              break;
+            case 'blade':
+              graphics.moveTo(centerX - 6, centerY + 5).lineTo(centerX + 6, centerY - 5)
+                .moveTo(centerX + 1, centerY - 4).lineTo(centerX + 5, centerY)
+                .lineTo(centerX + 6, centerY - 5);
+              break;
           }
           graphics.strokePath();
         }

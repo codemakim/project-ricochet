@@ -12,6 +12,9 @@ export const FUSION_ORB_IDS = [
   'mass-collapse',
   'reactor-orb',
   'cluster-bombardment',
+  'mirror-circuit',
+  'meltdown-core',
+  'vector-blade',
 ] as const;
 
 export type FusionOrbId = typeof FUSION_ORB_IDS[number];
@@ -137,6 +140,30 @@ export const ORB_FUSION_DEFINITIONS = {
       '충격 지대 지속시간 증가',
       '성단 폭격 피해와 발생 확률 강화',
     ],
+  },
+  'mirror-circuit': {
+    label: '거울 회로', roleHint: '반사 연결형',
+    summary: '벽 반사 지점의 거울을 광선으로 연결해 지속 피해',
+    color: GAME_TUNING.orbFusions.mirrorCircuit.fill,
+    accent: GAME_TUNING.orbFusions.mirrorCircuit.accent,
+    maximumLevel: 9, materials: ['echo', 'conduction'],
+    levelEffects: ['반사 지점에 거울 설치', '연결 피해 증가', '거울 지속시간 증가', '거울 수 증가', '광선 폭 증가', '연결 피해 증가', '거울 수 증가', '거울 지속시간 증가', '교차 광선 폭발'],
+  },
+  'meltdown-core': {
+    label: '융해 코어', roleHint: '과열 중첩형',
+    summary: '충돌 지점을 과열시키고 임계 온도에서 융해 폭발',
+    color: GAME_TUNING.orbFusions.meltdownCore.fill,
+    accent: GAME_TUNING.orbFusions.meltdownCore.accent,
+    maximumLevel: 9, materials: ['explosion', 'corrosion'],
+    levelEffects: ['확률로 과열 지역 생성', '지속 피해 증가', '발생 확률 증가', '과열 범위 증가', '열 중첩 피해 증가', '지역 지속시간 증가', '융해 임계치 감소', '융해 폭발 강화', '최대 출력 융해 폭발'],
+  },
+  'vector-blade': {
+    label: '벡터 블레이드', roleHint: '궤적 절단형',
+    summary: '반사 벡터를 저장하고 다음 직격에서 절단파로 재생',
+    color: GAME_TUNING.orbFusions.vectorBlade.fill,
+    accent: GAME_TUNING.orbFusions.vectorBlade.accent,
+    maximumLevel: 9, materials: ['inertia', 'echo'],
+    levelEffects: ['반사 벡터를 절단파로 방출', '절단 피해 증가', '절단 길이 증가', '경로 길이 보정 증가', '절단 폭 증가', '속도 보정 증가', '저장 벡터 증가', '절단 피해 증가', '최근 두 벡터 연속 재생'],
   },
 } as const satisfies Record<FusionOrbId, {
   label: string;
