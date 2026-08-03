@@ -61,7 +61,11 @@ import {
   splitProfile,
   type OrbCoreId,
 } from '../orbs/orbCoreRules';
-import { isBasicOrbCoreId } from '../orbs/orbFusionRules';
+import {
+  FUSION_ORB_IDS,
+  isBasicOrbCoreId,
+  type FusionOrbId,
+} from '../orbs/orbFusionRules';
 import type { RecoverySource } from '../orbs/orbRules';
 import {
   TemporaryOrbManager,
@@ -105,6 +109,7 @@ import {
   planDirectHitEffects,
   planFusionDirectHitEffects,
   planOrbCoreEffects,
+  recordDiscovery,
   rewardTierForBoss,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
@@ -162,6 +167,8 @@ export interface CombatDebugSnapshot {
   nanoSeeds: readonly NanoSeedSnapshot[];
   activePopulation: number;
   gameplayElapsedMs: number;
+  discoveredCoreTypes: OrbCoreId[];
+  discoveredFusionTypes: FusionOrbId[];
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -233,6 +240,8 @@ export class CombatScene extends Phaser.Scene {
   private runConfig?: RunConfig;
   private runResultEmitted = false;
   private defeatedBossIds: BossKind[] = [];
+  private discoveredCoreTypes = new Set<OrbCoreId>(ORB_CORE_IDS);
+  private discoveredFusionTypes = new Set<FusionOrbId>(FUSION_ORB_IDS);
 
   constructor() {
     super('combat');
@@ -243,6 +252,8 @@ export class CombatScene extends Phaser.Scene {
       identity: { ...config.identity },
       loadout: [...config.loadout],
       unlockedCoreTypes: [...config.unlockedCoreTypes],
+      discoveredCoreTypes: [...config.discoveredCoreTypes],
+      discoveredFusionTypes: [...config.discoveredFusionTypes],
     };
     return this;
   }
@@ -271,6 +282,12 @@ export class CombatScene extends Phaser.Scene {
     this.nextRunRewardAtMs = 0;
     this.runResultEmitted = false;
     this.defeatedBossIds = [];
+    this.discoveredCoreTypes = new Set(
+      this.runConfig?.discoveredCoreTypes ?? ORB_CORE_IDS,
+    );
+    this.discoveredFusionTypes = new Set(
+      this.runConfig?.discoveredFusionTypes ?? FUSION_ORB_IDS,
+    );
     this.combatProcs = new CombatProcState(runSeed);
     const build = new BuildState();
     this.build = build;
@@ -600,6 +617,8 @@ export class CombatScene extends Phaser.Scene {
       nanoSeeds: this.nanoSeeds.getSnapshot(),
       activePopulation: enemySnapshot.activePopulation,
       gameplayElapsedMs: this.gameplayElapsedMs,
+      discoveredCoreTypes: [...this.discoveredCoreTypes],
+      discoveredFusionTypes: [...this.discoveredFusionTypes],
     };
   }
 
@@ -1852,6 +1871,8 @@ export class CombatScene extends Phaser.Scene {
       this.build,
       this.orbManager?.getSnapshot() ?? [],
       (choice) => this.chooseRunReward(choice),
+      [...this.discoveredCoreTypes],
+      [...this.discoveredFusionTypes],
     );
   }
 
@@ -1890,6 +1911,10 @@ export class CombatScene extends Phaser.Scene {
     if (choice.kind === 'orb-add') {
       if (!this.orbManager.addOrb(choice.coreType)) return false;
       if (!this.progression.consume(choice)) return false;
+      this.discoveredCoreTypes = recordDiscovery(
+        this.discoveredCoreTypes,
+        choice.coreType,
+      );
       this.completeRunRewardChoice();
       return true;
     }
@@ -1908,9 +1933,14 @@ export class CombatScene extends Phaser.Scene {
             reopen();
             return;
           }
+          this.discoveredFusionTypes = recordDiscovery(
+            this.discoveredFusionTypes,
+            choice.fusionType,
+          );
           this.completeRunRewardChoice();
         },
         reopen,
+        this.discoveredFusionTypes.has(choice.fusionType),
       );
       return true;
     }
@@ -2018,6 +2048,8 @@ export class CombatScene extends Phaser.Scene {
       this.gameplayElapsedMs,
       this.defeatedBossIds,
       this.build?.getRanks() ?? createEmptyAbilityRanks(),
+      [...this.discoveredCoreTypes],
+      [...this.discoveredFusionTypes],
     );
     this.game.events.emit(RUN_ENDED_EVENT, result);
     return result;

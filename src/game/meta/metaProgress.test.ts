@@ -6,6 +6,7 @@ import {
   purchaseCore,
   setLoadout,
   settleRun,
+  type MetaProgress,
 } from './metaProgress';
 
 const result = (
@@ -113,7 +114,7 @@ describe('meta progress', () => {
   });
 
   it('can purchase all five cores after the default echo core', () => {
-    let progress = {
+    let progress: MetaProgress = {
       ...createDefaultMetaProgress(),
       parts: 800,
       discoveredCores: [
@@ -123,7 +124,7 @@ describe('meta progress', () => {
         'inertia',
         'split',
         'explosion',
-      ] as const,
+      ],
     };
 
     for (const core of [

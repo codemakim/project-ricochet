@@ -10,12 +10,22 @@ import {
   planDirectHitEffects,
   planFusionDirectHitEffects,
   planOrbCoreEffects,
+  recordDiscovery,
   rewardTierForBoss,
   settlePlannedAreaEffects,
   shouldFinalizeBossReward,
 } from './combatSceneRules';
 
 describe('combat scene rules', () => {
+  it('records a discovery without mutating or duplicating the current set', () => {
+    const current = new Set(['echo']);
+    const next = recordDiscovery(current, 'conduction');
+
+    expect([...current]).toEqual(['echo']);
+    expect([...next]).toEqual(['echo', 'conduction']);
+    expect([...recordDiscovery(next, 'conduction')]).toEqual(['echo', 'conduction']);
+  });
+
   it('opens only pending level-up rewards after the resume gap', () => {
     expect(pendingRunRewardKind(1, true)).toBe('levelUp');
     expect(pendingRunRewardKind(1, false)).toBeNull();
