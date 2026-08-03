@@ -79,9 +79,9 @@ describe('ProgressionManager', () => {
       { coreType: 'photon-orbit', level: 9 },
       { coreType: 'resonant-swarm', level: 9 },
       { coreType: 'nano-proliferator', level: 9 },
-      { coreType: 'echo', level: 5 },
-      { coreType: 'explosion', level: 5 },
-      { coreType: 'inertia', level: 5 },
+      { coreType: 'mass-collapse', level: 9 },
+      { coreType: 'reactor-orb', level: 9 },
+      { coreType: 'cluster-bombardment', level: 9 },
     ]));
     const startingLevel = manager.getSnapshot().level;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrbTypeId } from '../orbs/orbFusionRules';
+import { isBasicOrbCoreId, type OrbTypeId } from '../orbs/orbFusionRules';
 import {
   ABILITY_MAX_RANKS,
   createEmptyAbilityRanks,
@@ -27,11 +27,7 @@ function context(
     abilityRanks,
     abilityEligibility: {
       coreTypes: orbs.map(({ coreType }) => coreType)
-        .filter((coreType): coreType is Exclude<OrbTypeId, 'photon-orbit' | 'resonant-swarm' | 'nano-proliferator'> => (
-          !coreType.includes('-orbit')
-          && coreType !== 'resonant-swarm'
-          && coreType !== 'nano-proliferator'
-        )),
+        .filter(isBasicOrbCoreId),
     },
   };
 }

@@ -11,10 +11,14 @@ import type { EnemyAreaDamageEffect } from '../enemies/EnemyManager';
 import type { Vector } from '../math/vector';
 import type { OrbTypeId } from '../orbs/orbFusionRules';
 import {
+  clusterBombardmentProfile,
+  massCollapseProfile,
   nanoFusionProfile,
   photonFusionProfile,
   resonantSwarmProfile,
   type NanoFusionProfile,
+  type ClusterBombardmentProfile,
+  type MassCollapseProfile,
   type ResonantSwarmProfile,
 } from '../combat/FusionCombatState';
 import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
@@ -113,6 +117,8 @@ export interface FusionDirectHitPlan {
   photonBeam: ReturnType<typeof photonFusionProfile>['beam'] | null;
   resonantSwarm: ResonantSwarmProfile | null;
   nanoSeeds: NanoFusionProfile | null;
+  massCollapse: (MassCollapseProfile & { addedStacks: number }) | null;
+  clusterBombardment: ClusterBombardmentProfile | null;
 }
 
 export function planFusionDirectHitEffects(
@@ -120,10 +126,18 @@ export function planFusionDirectHitEffects(
     source: 'permanent' | 'temporary';
     coreType?: OrbTypeId;
     coreLevel?: number;
+    speedRatio?: number;
+    precisionHit?: boolean;
   },
   procTriggered: boolean,
 ): FusionDirectHitPlan {
-  const empty = { photonBeam: null, resonantSwarm: null, nanoSeeds: null };
+  const empty: FusionDirectHitPlan = {
+    photonBeam: null,
+    resonantSwarm: null,
+    nanoSeeds: null,
+    massCollapse: null,
+    clusterBombardment: null,
+  };
   if (event.source !== 'permanent' || event.coreLevel === undefined) return empty;
   if (event.coreType === 'photon-orbit') {
     return { ...empty, photonBeam: photonFusionProfile(event.coreLevel).beam };
@@ -133,6 +147,21 @@ export function planFusionDirectHitEffects(
   }
   if (event.coreType === 'nano-proliferator' && procTriggered) {
     return { ...empty, nanoSeeds: nanoFusionProfile(event.coreLevel) };
+  }
+  if (event.coreType === 'mass-collapse') {
+    const profile = massCollapseProfile(event.coreLevel);
+    if ((event.speedRatio ?? 0) < profile.minimumSpeedRatio) return empty;
+    return {
+      ...empty,
+      massCollapse: {
+        ...profile,
+        addedStacks: profile.stacksPerHit
+          + (event.precisionHit ? profile.precisionBonusStacks : 0),
+      },
+    };
+  }
+  if (event.coreType === 'cluster-bombardment' && procTriggered) {
+    return { ...empty, clusterBombardment: clusterBombardmentProfile(event.coreLevel) };
   }
   return empty;
 }
