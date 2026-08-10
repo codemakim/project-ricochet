@@ -196,6 +196,22 @@ describe('OrbStore', () => {
     expect(store.getSnapshot().some(({ id }) => id === 2)).toBe(false);
   });
 
+  it('fuses only the selected conduction orb and preserves its sibling', () => {
+    const store = new OrbStore(EXPERIMENT_DEFAULTS);
+    store.addOrb('conduction'); // id 1
+    store.addOrb('conduction'); // id 2
+    store.addOrb('inertia'); // id 3
+    store.upgradeOrb(2, 'conduction');
+
+    expect(store.fuseOrbs(3, 1, 'photon-orbit')).toBe(true);
+    expect(store.getSnapshot().map(({ id, coreType, level }) => ({ id, coreType, level })))
+      .toEqual([
+        { id: 0, coreType: 'echo', level: 1 },
+        { id: 2, coreType: 'conduction', level: 2 },
+        { id: 3, coreType: 'photon-orbit', level: 1 },
+      ]);
+  });
+
   it('rejects stale, duplicate, wrong-material, and fusion-material recipes', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
     store.addOrb('inertia');

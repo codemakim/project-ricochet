@@ -33,7 +33,6 @@ export class OrbFusionOverlay {
     orbs: readonly OrbSnapshot[],
     onConfirm: (firstId: number, secondId: number) => void,
     onCancel: () => void,
-    discovered = true,
   ): void {
     this.hide();
     const pairs = fusionMaterialPairs(orbs, fusionType);
@@ -43,7 +42,7 @@ export class OrbFusionOverlay {
     }
 
     const fusion = ORB_FUSION_DEFINITIONS[fusionType];
-    const resultLabel = discovered ? fusion.label : '???';
+    const resultLabel = fusion.label;
     const byId = new Map(orbs.map((orb) => [orb.id, orb]));
     this.visible = true;
     this.onConfirm = onConfirm;

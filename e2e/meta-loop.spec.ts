@@ -129,7 +129,7 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
   expect(reward.kind).toBe('orb-add');
   const acquiredCoreType = (reward as { kind: 'orb-add'; coreType: OrbCoreId }).coreType;
   await expect.poll(async () => (await activeSceneTexts(page)).some((text) => (
-    text.includes('1. ??? Lv1')
+    text.includes(`1. ${ORB_CORE_DEFINITIONS[acquiredCoreType].label} Lv1`)
   ))).toBe(true);
   await page.keyboard.press('Digit1');
   await page.keyboard.press('Enter');

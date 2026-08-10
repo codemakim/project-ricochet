@@ -55,6 +55,9 @@ describe('combat scene rules', () => {
       coreType: 'conduction',
       conductionTriggered: true,
     }, true)).toEqual({ spawnCorrosion: false, dischargeConduction: false });
+    expect(planFusionDirectHitEffects({
+      source: 'permanent', coreType: 'conduction', coreLevel: 2,
+    }, false).photonBeam).toBeNull();
   });
 
   it('plans only the selected permanent fusion effect and respects proc decisions', () => {
