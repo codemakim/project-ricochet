@@ -31,6 +31,24 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 코어 호환 보스 유물 | `GAME_TUNING.relics` |
 | 코어 해금 비용 | `META_TUNING.corePrices` |
 
+## 2026-08-10 플레이 조정 기준
+
+| 효과 | 중앙 위치 | 피해 값 |
+| --- | --- | --- |
+| 부식 틱 | `GAME_TUNING.orbCores.corrosion.damagePerTickByLevel` | `[0.28, 0.34, 0.42, 0.5, 0.62]` |
+| 광자 궤도 | `orbFusions.photonOrbit`의 `beamDamageByLevel`, `trail.damageByLevel`, `intersection.damage` | `[0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 1.7, 2]`, `[0, 0, 0, 0.22, 0.26, 0.3, 0.36, 0.42, 0.5]`, `1.6` |
+| 공명 군체 | `orbFusions.resonantSwarm`의 `damageByLevel`, `finalDamageByLevel` | `[0.36, 0.4, 0.44, 0.48, 0.54, 0.6, 0.68, 0.78, 0.9]`, `[0.35, 0.4, 0.45, 0.5, 0.58, 0.66, 0.76, 0.88, 1.05]` |
+| 나노 증식체 | `orbFusions.nanoProliferator.damageByLevel` | `[0.22, 0.24, 0.27, 0.3, 0.34, 0.38, 0.43, 0.5, 0.6]` |
+| 질량 붕괴탄 | `orbFusions.massCollapse.collapseDamageByLevel` | `[1.5, 1.7, 1.9, 2.1, 2.4, 2.7, 3.1, 3.6, 4.4]` |
+| 반응로 구슬 | `orbFusions.reactorOrb.damagePerChargeByLevel` | `[0.36, 0.4, 0.44, 0.48, 0.54, 0.6, 0.66, 0.72, 0.82]` |
+| 성단 폭격체 | `orbFusions.clusterBombardment`의 `damageByLevel`, `lingeringDamageByLevel` | `[0.6, 0.66, 0.72, 0.8, 0.88, 0.98, 1.1, 1.24, 1.4]`, `[0, 0, 0, 0, 0, 0, 0.18, 0.22, 0.28]` |
+| 거울 회로 | `orbFusions.mirrorCircuit`의 `damageByLevel`, `intersectionDamage` | `[0.22, 0.24, 0.27, 0.31, 0.36, 0.41, 0.47, 0.55, 0.65]`, `1.4` |
+| 융해 코어 | `orbFusions.meltdownCore`의 `damageByLevel`, `meltdownDamageByLevel` | `[0.18, 0.2, 0.22, 0.25, 0.29, 0.34, 0.4, 0.48, 0.58]`, `[1.6, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.7, 4.4]` |
+| 벡터 블레이드 | `orbFusions.vectorBlade.damageByLevel` | `[0.75, 0.82, 0.9, 1, 1.1, 1.22, 1.36, 1.52, 1.75]` |
+
+- 보조 피해 라벨 상한은 `GAME_TUNING.visual.coreFeedback.maximumDamageLabels = 18`, 수명은 `damageNumberDurationMs = 260`이다.
+- 첫 레벨 XP는 `src/game/progression/progressionRules.ts`의 `xpRequiredForLevel(0) = 5`다. 이후 곡선은 `12 + level * 5`다.
+
 ## 변경 규칙
 
 1. 공통 수치는 `GAME_TUNING`, 특정 스테이지만 다른 수치는 `STAGES`에 둔다.

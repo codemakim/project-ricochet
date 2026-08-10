@@ -148,6 +148,7 @@ interface DevelopmentScene {
       texture?: { key?: string };
       orbId?: number;
       text?: string;
+      getData?(key: string): unknown;
       setPosition?(x: number, y: number): void;
       body?: {
         x?: number;
@@ -307,6 +308,36 @@ async function activeSceneNames(page: Page): Promise<string[]> {
   return sceneCall(page, (scene) => scene.children.list
     .filter((child) => child.active && child.name)
     .map((child) => child.name!));
+}
+
+function hasConnectedEmptyPassage(enemies: CombatSnapshot['enemies']): boolean {
+  const footprints = enemies.flatMap(({ footprint }) => footprint ? [footprint] : []);
+  const rows = Math.max(2, ...footprints.map(({ row, height }) => row + height));
+  const occupied = new Set(footprints.flatMap(({ column, row, width, height }) => (
+    Array.from({ length: width * height }, (_, index) => (
+      `${row + Math.floor(index / width)}:${column + index % width}`
+    ))
+  )));
+  const queue = Array.from({ length: 8 }, (_, column) => ({ row: rows - 1, column }))
+    .filter(({ row, column }) => !occupied.has(`${row}:${column}`));
+  const visited = new Set(queue.map(({ row, column }) => `${row}:${column}`));
+  for (let index = 0; index < queue.length; index += 1) {
+    const cell = queue[index]!;
+    if (cell.row === 0) return true;
+    for (const next of [
+      { row: cell.row - 1, column: cell.column },
+      { row: cell.row + 1, column: cell.column },
+      { row: cell.row, column: cell.column - 1 },
+      { row: cell.row, column: cell.column + 1 },
+    ]) {
+      const key = `${next.row}:${next.column}`;
+      if (next.row < 0 || next.row >= rows || next.column < 0 || next.column >= 8
+        || occupied.has(key) || visited.has(key)) continue;
+      visited.add(key);
+      queue.push(next);
+    }
+  }
+  return false;
 }
 
 async function preparePhotonFusion(page: Page) {
@@ -596,9 +627,54 @@ test('@desktop fuses a selected orb pair and renders the fusion core', async ({ 
     scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 100);
     scene.debugPlaceOrb(orbId, { x: 225, y: 320 });
   }, photon.id);
-  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.name === 'fusion-feedback-photon-beam',
-  )), { intervals: [10], timeout: 500 }).toBe(true);
+  await expect.poll(async () => sceneCall(page, (scene, sourceOrbId) => (
+    scene.children.list.some(
+      (child) => child.active
+        && child.name === 'fusion-feedback-photon-beam'
+        && child.getData?.('sourceOrbId') === sourceOrbId,
+    )
+  ), photon.id), { intervals: [10], timeout: 500 }).toBe(true);
+});
+
+test('@desktop keeps the unfused conduction orb and moving hive modules', async ({ page }) => {
+  const { box } = await preparePhotonFusion(page);
+  await choosePhotonFusionWithPointer(page, box, false);
+  const fused = await snapshot(page);
+  expect(fused.orbs.filter(({ coreType }) => coreType === 'conduction')).toHaveLength(1);
+  expect(fused.orbs.filter(({ coreType }) => coreType === 'photon-orbit')).toHaveLength(1);
+  const photon = fused.orbs.find(({ coreType }) => coreType === 'photon-orbit')!;
+  const aim = clientPoint(box, { x: fused.player.x, y: fused.player.y - 100 });
+  await page.mouse.move(aim.x, aim.y);
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find(({ id }) => id === photon.id)?.state).toBe('active');
+
+  await enterHiveByScore(page);
+  const initial = (await snapshot(page)).boss.partPositions!;
+  await sceneCall(page, (scene) => scene.debugAdvanceHiveCycle(1_000));
+  const shielded = (await snapshot(page)).boss.partPositions!;
+  expect(shielded.leftReflector!.x).not.toBe(initial.leftReflector!.x);
+  expect(shielded.leftShooter).toEqual(initial.leftShooter);
+  await sceneCall(page, (scene) => {
+    scene.debugAdvanceHiveCycle(3_000);
+    scene.debugAdvanceHiveCycle(1_500);
+    scene.debugAdvanceHiveCycle(7_000);
+  });
+  const cycled = (await snapshot(page)).boss.partPositions!;
+  expect(cycled.leftShooter).toEqual(initial.leftShooter);
+  expect(cycled.rightShooter).toEqual(initial.rightShooter);
+
+  await sceneCall(page, (scene, input) => {
+    scene.debugPlaceOrb(input.orbId, {
+      x: input.reflector.x + 28,
+      y: input.reflector.y,
+    });
+    const sprite = scene.children.list.find(({ orbId }) => orbId === input.orbId)!;
+    sprite.body!.setVelocity!(-200, 0);
+  }, { orbId: photon.id, reflector: cycled.leftReflector! });
+  await expect.poll(async () => (
+    await snapshot(page)
+  ).orbs.find(({ id }) => id === photon.id)!.velocity.x).toBeGreaterThan(0);
 });
 
 test('@desktop triggers mass collapse after repeated high-speed direct hits', async ({ page }) => {
@@ -760,6 +836,26 @@ test('@desktop shows and expires corrosion and conduction feedback', async ({ pa
   expect(await feedbackNames()).toEqual(['core-feedback-corrosion']);
   await page.waitForTimeout(2_500);
   expect(await feedbackNames()).toEqual([]);
+});
+
+test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
+  await loadCanvas(page);
+  const enemyId = await sceneCall(page, (scene) => {
+    scene.debugFreezeEnemies();
+    const [target, ...others] = scene.getDebugSnapshot().enemies;
+    scene.debugRemoveEnemies(others.map(({ id }) => id));
+    scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 0.2);
+    scene.debugShowCoreFeedback('corrosion', { x: 225, y: 320 });
+    return target!.id;
+  });
+  await expect.poll(async () => {
+    const [current, names] = await Promise.all([snapshot(page), activeSceneNames(page)]);
+    return {
+      alive: current.enemies.some(({ id }) => id === enemyId),
+      feedback: names.includes('secondary-damage-feedback'),
+    };
+  }, { intervals: [10], timeout: 1_000 }).toEqual({ alive: false, feedback: true });
+  expect((await snapshot(page)).enemies.some(({ id }) => id === enemyId)).toBe(false);
 });
 
 test('@mobile supports simultaneous touch movement and retained aim', async ({ page }) => {
@@ -1330,7 +1426,7 @@ test('@desktop resumes briefly between queued level-up choices', async ({ page }
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
   const selected = await snapshot(page);
-  expect(selected.progression).toMatchObject({ level: 2, xp: 5, pendingChoices: 0 });
+  expect(selected.progression).toMatchObject({ level: 2, xp: 8, pendingChoices: 0 });
   expect(Object.values(selected.buildRanks).reduce((total, rank) => total + rank, 0)).toBe(2);
   expect(selected.pauseReasons).not.toContain('levelUp');
 });
@@ -1370,7 +1466,7 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   await page.waitForTimeout(370);
   await sceneCall(page, (scene) => scene.debugGrantXp(13));
   const dirty = await snapshot(page);
-  expect(dirty.progression).toMatchObject({ level: 1, xp: 5, pendingChoices: 1 });
+  expect(dirty.progression).toMatchObject({ level: 1, xp: 8, pendingChoices: 1 });
   expect(dirty.buildRanks.split).toBe(0);
   expect(dirty.temporaryOrbs).toBe(0);
   expect(dirty.levelUpVisible).toBe(true);
@@ -1423,12 +1519,11 @@ test('@desktop density uses shipped enemy stats and exact reinforcement release 
     && footprint.column + footprint.width <= 8
     && footprint.row + footprint.height <= 5
   ))).toBe(true);
-  expect(initial.enemies.some(({ footprint }) =>
-    footprint?.width === 2 && footprint.height === 2)).toBe(true);
   expect(initial.activePopulation).toBe(initial.enemies.reduce(
     (sum, enemy) => sum + enemy.footprint!.width * enemy.footprint!.height,
     0,
   ));
+  expect(initial.activePopulation).toBeGreaterThanOrEqual(14);
 
   const blocked = await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
@@ -1458,6 +1553,18 @@ test('@desktop density uses shipped enemy stats and exact reinforcement release 
   expect(released.encounter).toMatchObject({ phase: 0, spawnSequence: 1 });
   expect(reinforcementCount).toBeGreaterThan(0);
   expect(released.activePopulation).toBeLessThanOrEqual(24);
+});
+
+test('@desktop emits a connected empty passage in a reinforcement', async ({ page }) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    const ids = scene.getDebugSnapshot().enemies.map(({ id }) => id);
+    scene.debugRemoveEnemies(ids);
+    scene.debugAdvanceEncounter(9_000);
+  });
+  const enemies = (await snapshot(page)).enemies;
+  expect(enemies.length).toBeGreaterThan(0);
+  expect(hasConnectedEmptyPassage(enemies)).toBe(true);
 });
 
 test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {
@@ -1878,7 +1985,7 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
   await hitWithTemporaryOrb(beforeRewardIds.directId);
   expect((await snapshot(page)).enemies.find(
     (enemy) => enemy.id === beforeRewardIds.directId,
-  )!.hp).toBeCloseTo(1.6);
+  )!.hp).toBeCloseTo(1.35);
   expect((await snapshot(page)).enemies.find(
     (enemy) => enemy.id === beforeRewardIds.splashId,
   )!.hp).toBe(2);
