@@ -46,6 +46,10 @@ const PART_ORDER = [
   'rightReflector',
 ] as const satisfies readonly HivePartId[];
 
+function isReflector(partId: HivePartId): boolean {
+  return partId === 'leftReflector' || partId === 'rightReflector';
+}
+
 type BossSprite = Phaser.Physics.Arcade.Sprite;
 type HiveProjectileKind = 'hiveShooter' | 'hiveCore' | 'hiveEnrageFan' | 'hiveEnrageAimedBurst';
 type HiveProjectileSprite = BossSprite & { hiveProjectileKind: HiveProjectileKind };
@@ -402,7 +406,7 @@ export class HiveBossManager implements BossEncounter {
     if (!orb.active || !this.partCanCollide(partId)) return false;
     if (partId === 'core' && !this.coreIsExposed()) return true;
     const sourceKey = `permanent:${orb.orbId}`;
-    if (!this.acceptHit(sourceKey, partId)) return false;
+    if (!this.acceptHit(sourceKey, partId)) return isReflector(partId);
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
@@ -414,13 +418,9 @@ export class HiveBossManager implements BossEncounter {
         this.parts[partId].y - this.options.player.y,
       ),
     );
-    if (!result) return false;
+    if (!result) return isReflector(partId);
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
-    if (
-      !result.reflect
-      && partId !== 'leftReflector'
-      && partId !== 'rightReflector'
-    ) {
+    if (!result.reflect && !isReflector(partId)) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -432,20 +432,16 @@ export class HiveBossManager implements BossEncounter {
     if (!orb.active || !this.partCanCollide(partId)) return false;
     if (partId === 'core' && !this.coreIsExposed()) return true;
     const sourceKey = `temporary:${orb.temporaryOrbId}`;
-    if (!this.acceptHit(sourceKey, partId)) return false;
+    if (!this.acceptHit(sourceKey, partId)) return isReflector(partId);
     const result = this.options.temporaryOrbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
       this.state.parts[partId],
       this.options.getGameplayElapsedMs(),
     );
-    if (!result) return false;
+    if (!result) return isReflector(partId);
     const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
-    if (
-      !result.reflect
-      && partId !== 'leftReflector'
-      && partId !== 'rightReflector'
-    ) {
+    if (!result.reflect && !isReflector(partId)) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -460,7 +456,10 @@ export class HiveBossManager implements BossEncounter {
     }
     const key = `permanent:${orb.orbId}:${partId}`;
     const pending = this.pendingHits.get(key);
-    if (!pending) return;
+    if (!pending) {
+      if (isReflector(partId)) this.options.orbManager.synchronizeOrb(orb);
+      return;
+    }
     this.pendingHits.delete(key);
     this.options.orbManager.synchronizeOrb(orb);
     this.applyPendingHit(pending);
@@ -473,7 +472,10 @@ export class HiveBossManager implements BossEncounter {
     }
     const key = `temporary:${orb.temporaryOrbId}:${partId}`;
     const pending = this.pendingHits.get(key);
-    if (!pending) return;
+    if (!pending) {
+      if (isReflector(partId)) this.options.temporaryOrbManager.synchronizeOrb(orb);
+      return;
+    }
     this.pendingHits.delete(key);
     this.options.temporaryOrbManager.synchronizeOrb(orb);
     this.applyPendingHit(pending);

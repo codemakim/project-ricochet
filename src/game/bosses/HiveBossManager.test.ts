@@ -509,6 +509,36 @@ describe('HiveBossManager', () => {
     }));
   });
 
+  it.each(['permanent', 'temporary'] as const)(
+    'reflects and synchronizes a %s orb again during reflector damage cooldown without another hit',
+    (source) => {
+      const boundary = createBoundary();
+      const orb = source === 'permanent' ? boundary.orb : boundary.temporaryOrb;
+      const collider = boundary.colliderFor(
+        'hive-left-reflector',
+        source === 'permanent' ? boundary.orb : boundary.temporaryGroup,
+      );
+      const handleHit = source === 'permanent'
+        ? boundary.handleEnemyHit
+        : boundary.handleTemporaryHit;
+      const synchronize = source === 'permanent'
+        ? boundary.synchronizeOrb
+        : boundary.synchronizeTemporary;
+
+      expect(collider.trigger(orb, collider.second as FakeSprite)).toBe(true);
+      const hp = boundary.manager.getSnapshot().parts!.leftReflector;
+      const reflectedVelocity = orb.body.velocity.x;
+      boundary.gameplay.now = 79;
+
+      expect(collider.trigger(orb, collider.second as FakeSprite)).toBe(true);
+      expect(orb.body.velocity.x).toBe(-reflectedVelocity);
+      expect(handleHit).toHaveBeenCalledTimes(1);
+      expect(synchronize).toHaveBeenCalledTimes(2);
+      expect(boundary.onDirectHit).toHaveBeenCalledTimes(1);
+      expect(boundary.manager.getSnapshot().parts!.leftReflector).toBe(hp);
+    },
+  );
+
   it('keeps shooters silent while shielded, cancels warnings, and restarts offsets', () => {
     const boundary = createBoundary();
     const tuning = GAME_TUNING.projectiles.hiveShooter;
