@@ -252,27 +252,20 @@ describe('HiveBossManager', () => {
     expect(boundary.groups).toHaveLength(5);
   });
 
-  it('recalls every module around the core until exposure, then deploys exact combat positions', () => {
+  it('keeps modules deployed and moving through the whole shield cycle', () => {
     const boundary = createBoundary();
-    const positions = () => boundary.manager.getSnapshot().partPositions;
-    const recalled = {
-      core: { x: 225, y: 140 },
-      leftShooter: { x: 135, y: 140 },
-      rightShooter: { x: 315, y: 140 },
-      leftReflector: { x: 151, y: 292 },
-      rightReflector: { x: 299, y: 292 },
-    };
+    const initial = boundary.manager.getSnapshot().partPositions!;
 
-    expect(positions()).toEqual(recalled);
-    expect(boundary.updateAt(4000).partPositions).toEqual(recalled);
-    expect(boundary.updateAt(5500).partPositions).toEqual({
-      core: { x: 225, y: 140 },
-      leftShooter: { x: 135, y: 56 },
-      rightShooter: { x: 315, y: 56 },
-      leftReflector: { x: 100, y: 280 },
-      rightReflector: { x: 350, y: 280 },
-    });
-    expect(boundary.updateAt(12_500).partPositions).toEqual(recalled);
+    expect(initial.leftShooter).toEqual({ x: 135, y: 56 });
+    expect(initial.rightShooter).toEqual({ x: 315, y: 56 });
+    boundary.updateAt(1000);
+    const shielded = boundary.manager.getSnapshot().partPositions!;
+    expect(shielded.leftReflector.x).not.toBe(initial.leftReflector.x);
+    boundary.updateAt(5500);
+    boundary.updateAt(12_500);
+    const cycled = boundary.manager.getSnapshot().partPositions!;
+    expect(cycled.leftShooter).toEqual(initial.leftShooter);
+    expect(cycled.rightShooter).toEqual(initial.rightShooter);
   });
 
   it('reflects both orb kinds from the shielded core without consuming or reporting hits', () => {
@@ -411,7 +404,7 @@ describe('HiveBossManager', () => {
     }
   });
 
-  it('starts reflector motion after exposure entry instead of reusing telegraph delta', () => {
+  it('does not reset reflector motion at exposure entry', () => {
     const boundary = createBoundary();
     const left = boundary.sprite('hive-left-reflector');
     const right = boundary.sprite('hive-right-reflector');
@@ -424,17 +417,19 @@ describe('HiveBossManager', () => {
       + GAME_TUNING.hiveBoss.reflector.rightTravel.maximum
     ) / 2;
 
-    boundary.updateAt(4000);
-    boundary.updateAt(5500);
-
-    expect({ left: left.x, right: right.x }).toEqual({
+    boundary.updateAt(1000);
+    expect({ left: left.x, right: right.x }).not.toEqual({
       left: leftStart,
       right: rightStart,
     });
 
-    boundary.updateAt(6500);
-    expect(left.x).toBeCloseTo(leftStart + GAME_TUNING.hiveBoss.reflector.speed);
-    expect(right.x).toBeCloseTo(rightStart - GAME_TUNING.hiveBoss.reflector.speed);
+    boundary.updateAt(4000);
+    boundary.updateAt(5500);
+
+    expect({ left: left.x, right: right.x }).not.toEqual({
+      left: leftStart,
+      right: rightStart,
+    });
   });
 
   it('starts permanent-exposure motion from the gameplay time modules are destroyed', () => {
@@ -459,43 +454,37 @@ describe('HiveBossManager', () => {
     expect({ left: left.x, right: right.x }).toEqual(start);
   });
 
-  it('damages recalled reflectors without wall reflection, then reflects only while deployed', () => {
+  it.each([
+    ['shielded', 0],
+    ['telegraph', 4_000],
+    ['exposed', 5_500],
+  ] as const)('reflects both orb kinds from a living reflector while %s', (phase, now) => {
     const boundary = createBoundary();
     const reflector = boundary.colliderFor('hive-left-reflector');
     const temporaryReflector = boundary.colliderFor(
       'hive-left-reflector',
       boundary.temporaryGroup,
     );
-    const initialPermanentVelocity = { ...boundary.orb.body.velocity };
-    const initialTemporaryVelocity = { ...boundary.temporaryOrb.body.velocity };
+    if (phase === 'exposed') boundary.updateAt(4_000);
+    boundary.updateAt(now);
+    const permanentVelocity = boundary.orb.body.velocity.x;
+    const temporaryVelocity = boundary.temporaryOrb.body.velocity.x;
 
-    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(false);
+    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
     expect(temporaryReflector.trigger(
       boundary.temporaryOrb,
       temporaryReflector.second as FakeSprite,
-    )).toBe(false);
-    expect(boundary.orb.body.velocity).toEqual(initialPermanentVelocity);
-    expect(boundary.temporaryOrb.body.velocity).toEqual(initialTemporaryVelocity);
-    expect(boundary.handleEnemyHit).toHaveBeenCalledOnce();
-    expect(boundary.handleTemporaryHit).toHaveBeenCalledOnce();
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(20.5);
-
-    boundary.updateAt(4000);
-    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(false);
-    expect(boundary.orb.body.velocity).toEqual(initialPermanentVelocity);
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(17.5);
-
-    boundary.updateAt(5500);
-    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
-    expect(boundary.orb.body.velocity.x).toBe(-initialPermanentVelocity.x);
+    )).toBe(true);
+    expect(boundary.orb.body.velocity.x).toBe(-permanentVelocity);
+    expect(boundary.temporaryOrb.body.velocity.x).toBe(-temporaryVelocity);
     expect(boundary.synchronizeOrb).toHaveBeenCalledWith(boundary.orb);
-    expect(boundary.manager.getSnapshot().parts?.leftReflector).toBe(14.5);
+    expect(boundary.synchronizeTemporary).toHaveBeenCalledWith(boundary.temporaryOrb);
     expect(boundary.colliders.some((collider) => collider.first === boundary.player)).toBe(false);
     expect(boundary.overlaps.every((overlap) => overlap.first === boundary.player)).toBe(true);
     expect(boundary.sprites.filter((sprite) => sprite.texture.includes('reflector'))).toHaveLength(0);
   });
 
-  it('keeps shooters silent while recalled, cancels deployment warnings, and restarts offsets', () => {
+  it('keeps shooters silent while shielded, cancels warnings, and restarts offsets', () => {
     const boundary = createBoundary();
     const tuning = GAME_TUNING.projectiles.hiveShooter;
 

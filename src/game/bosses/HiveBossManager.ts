@@ -135,41 +135,39 @@ export class HiveBossManager implements BossEncounter {
     this.reflectorGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.bulletGroup = scene.physics.add.group({ allowGravity: false });
 
-    const {
-      core, shooters, reflectors, recalled,
-    } = HIVE_BOSS_GEOMETRY;
+    const { core, shooters, reflectors } = HIVE_BOSS_GEOMETRY;
     const leftReflectorX = midpoint(reflectors.leftReflector.travel);
     const rightReflectorX = midpoint(reflectors.rightReflector.travel);
     this.parts = {
       core: this.createPart(this.coreGroup, core.x, core.y, 'hive-core', core.width, core.height),
       leftShooter: this.createPart(
         this.moduleGroup,
-        recalled.leftShooter.x,
-        recalled.leftShooter.y,
+        shooters.leftShooter.x,
+        shooters.leftShooter.y,
         'hive-left-shooter',
         shooters.leftShooter.width,
         shooters.leftShooter.height,
       ),
       rightShooter: this.createPart(
         this.moduleGroup,
-        recalled.rightShooter.x,
-        recalled.rightShooter.y,
+        shooters.rightShooter.x,
+        shooters.rightShooter.y,
         'hive-right-shooter',
         shooters.rightShooter.width,
         shooters.rightShooter.height,
       ),
       leftReflector: this.createPart(
         this.reflectorGroup,
-        recalled.leftReflector.x,
-        recalled.leftReflector.y,
+        leftReflectorX,
+        reflectors.leftReflector.y,
         'hive-left-reflector',
         reflectors.leftReflector.width,
         reflectors.leftReflector.height,
       ),
       rightReflector: this.createPart(
         this.reflectorGroup,
-        recalled.rightReflector.x,
-        recalled.rightReflector.y,
+        rightReflectorX,
+        reflectors.rightReflector.y,
         'hive-right-reflector',
         reflectors.rightReflector.width,
         reflectors.rightReflector.height,
@@ -201,9 +199,7 @@ export class HiveBossManager implements BossEncounter {
         const previousPhase = this.state.phase;
         this.state = advanceHiveCycle(this.state, deltaMs);
         if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
-        else if (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed') {
-          this.moveReflectors(deltaMs);
-        }
+        if (this.state.phase !== 'defeated') this.moveReflectors(deltaMs);
         this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();
       };
     }
@@ -217,12 +213,7 @@ export class HiveBossManager implements BossEncounter {
     const previousPhase = this.state.phase;
     this.state = advanceHiveCycle(this.state, deltaMs);
     if (this.state.phase !== previousPhase) this.onPhaseTransition(previousPhase);
-    if (
-      this.state.phase === previousPhase
-      && (this.state.phase === 'exposed' || this.state.phase === 'permanentlyExposed')
-    ) {
-      this.moveReflectors(deltaMs);
-    }
+    if (this.state.phase !== 'defeated') this.moveReflectors(deltaMs);
     if (this.state.phase !== 'defeated') {
       this.scheduleAttacks(now);
       this.resolveWarnings(now);
@@ -417,7 +408,7 @@ export class HiveBossManager implements BossEncounter {
       PART_HIT_IDS[partId],
       this.state.parts[partId],
       this.options.getGameplayElapsedMs(),
-      this.isRecalledReflector(partId),
+      false,
       Math.hypot(
         this.parts[partId].x - this.options.player.x,
         this.parts[partId].y - this.options.player.y,
@@ -425,7 +416,7 @@ export class HiveBossManager implements BossEncounter {
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
-    if (!result.reflect || this.isRecalledReflector(partId)) {
+    if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -446,7 +437,7 @@ export class HiveBossManager implements BossEncounter {
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
-    if (!result.reflect || this.isRecalledReflector(partId)) {
+    if (!result.reflect) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -614,45 +605,15 @@ export class HiveBossManager implements BossEncounter {
       this.enrageFanCount = 0;
     }
     if (this.state.phase === 'exposed') {
-      this.deployModules();
       this.restartShooterSchedules(now);
     }
     if (this.state.phase === 'shielded' && previousPhase === 'exposed') {
-      this.recallModules();
       this.cancelAllShooterWarnings();
       this.stopShooterSchedules();
       this.bulletGroup.clear(true, true);
     }
     this.synchronizeParts();
     this.options.onPhaseChanged?.(this.state.phase);
-  }
-
-  private recallModules(): void {
-    for (const partId of [
-      'leftShooter',
-      'rightShooter',
-      'leftReflector',
-      'rightReflector',
-    ] as const) {
-      const position = HIVE_BOSS_GEOMETRY.recalled[partId];
-      this.parts[partId].setPosition(position.x, position.y);
-    }
-  }
-
-  private deployModules(): void {
-    for (const partId of ['leftShooter', 'rightShooter'] as const) {
-      const position = HIVE_BOSS_GEOMETRY.shooters[partId];
-      this.parts[partId].setPosition(position.x, position.y);
-    }
-    for (const partId of ['leftReflector', 'rightReflector'] as const) {
-      const geometry = HIVE_BOSS_GEOMETRY.reflectors[partId];
-      const x = midpoint(geometry.travel);
-      this.reflectorMotion[partId] = {
-        x,
-        direction: partId === 'leftReflector' ? 1 : -1,
-      };
-      this.parts[partId].setPosition(x, geometry.y);
-    }
   }
 
   private moveReflectors(deltaMs: number): void {
@@ -931,12 +892,6 @@ export class HiveBossManager implements BossEncounter {
     const { intervalMs, offsetMs } = GAME_TUNING.projectiles.hiveShooter;
     this.nextShooterWarningAt.leftShooter = now + intervalMs;
     this.nextShooterWarningAt.rightShooter = now + intervalMs + offsetMs;
-  }
-
-  private isRecalledReflector(partId: HivePartId): boolean {
-    return (partId === 'leftReflector' || partId === 'rightReflector')
-      && this.state.phase !== 'exposed'
-      && this.state.phase !== 'permanentlyExposed';
   }
 
   private cancelCoreWarnings(): void {

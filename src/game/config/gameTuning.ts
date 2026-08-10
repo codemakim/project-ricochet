@@ -1551,19 +1551,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   ) {
     throw new RangeError('hiveBoss derived shooter positions must fit the game bounds');
   }
-  const recalledReflectorOffsetX = hiveBoss.core.visualSize / 2
-    + hiveBoss.reflector.width / 2;
-  const recalledReflectorY = hiveBoss.core.y
-    + hiveBoss.core.visualSize / 2
-    + hiveBoss.reflector.height / 2;
-  if (
-    hiveBoss.core.x - recalledReflectorOffsetX - hiveBoss.reflector.width / 2 < 0
-    || hiveBoss.core.x + recalledReflectorOffsetX + hiveBoss.reflector.width / 2
-      > GAME_WIDTH
-    || recalledReflectorY + hiveBoss.reflector.height / 2 > GAME_HEIGHT
-  ) {
-    throw new RangeError('hiveBoss recalled module positions must fit the game bounds');
-  }
   positive(hiveBoss.reflector.width, 'hiveBoss.reflector.width');
   positive(hiveBoss.reflector.height, 'hiveBoss.reflector.height');
   positive(hiveBoss.reflector.hp, 'hiveBoss.reflector.hp');
@@ -1652,40 +1639,6 @@ export function validateGameTuning(tuning: GameTuning): void {
     deployedShooters.some((shooterBounds) => rectsOverlap(sweep, shooterBounds))
   ))) {
     throw new RangeError('hiveBoss reflector paths must not overlap deployed shooters');
-  }
-  const recalledBodies = [
-    coreBounds,
-    rectBounds(
-      hiveBoss.core.x - shooterOffsetX,
-      hiveBoss.core.y,
-      hiveBoss.shooter.width,
-      hiveBoss.shooter.height,
-    ),
-    rectBounds(
-      hiveBoss.core.x + shooterOffsetX,
-      hiveBoss.core.y,
-      hiveBoss.shooter.width,
-      hiveBoss.shooter.height,
-    ),
-    rectBounds(
-      hiveBoss.core.x - recalledReflectorOffsetX,
-      recalledReflectorY,
-      hiveBoss.reflector.width,
-      hiveBoss.reflector.height,
-    ),
-    rectBounds(
-      hiveBoss.core.x + recalledReflectorOffsetX,
-      recalledReflectorY,
-      hiveBoss.reflector.width,
-      hiveBoss.reflector.height,
-    ),
-  ];
-  for (let left = 0; left < recalledBodies.length; left += 1) {
-    for (let right = left + 1; right < recalledBodies.length; right += 1) {
-      if (rectsOverlap(recalledBodies[left]!, recalledBodies[right]!)) {
-        throw new RangeError('hiveBoss recalled bodies must not overlap');
-      }
-    }
   }
   for (const [phase, duration] of Object.entries(hiveBoss.timing)) {
     positive(duration, `hiveBoss.timing.${phase}`);

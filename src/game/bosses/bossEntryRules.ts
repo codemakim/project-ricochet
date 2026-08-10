@@ -23,28 +23,22 @@ export function bossEntryCorridor(kind: BossKind): BossEntryCorridor {
     };
   }
 
-  const { recalled, shooters, reflectors, core } = HIVE_BOSS_GEOMETRY;
+  const { shooters, reflectors, core } = HIVE_BOSS_GEOMETRY;
   const bodies: HiveBodyGeometry[] = [
     core,
     {
-      ...recalled.leftShooter,
-      width: shooters.leftShooter.width,
-      height: shooters.leftShooter.height,
+      ...shooters.leftShooter,
     },
     {
-      ...recalled.rightShooter,
-      width: shooters.rightShooter.width,
-      height: shooters.rightShooter.height,
+      ...shooters.rightShooter,
     },
     {
-      ...recalled.leftReflector,
-      width: reflectors.leftReflector.width,
-      height: reflectors.leftReflector.height,
+      ...reflectors.leftReflector,
+      x: (reflectors.leftReflector.travel.minimum + reflectors.leftReflector.travel.maximum) / 2,
     },
     {
-      ...recalled.rightReflector,
-      width: reflectors.rightReflector.width,
-      height: reflectors.rightReflector.height,
+      ...reflectors.rightReflector,
+      x: (reflectors.rightReflector.travel.minimum + reflectors.rightReflector.travel.maximum) / 2,
     },
   ];
   const bounds = bodies.map(bodyBounds);

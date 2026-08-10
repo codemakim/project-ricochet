@@ -8,8 +8,8 @@ describe('boss entry cleanup rules', () => {
     expect(bossEntryCorridor('siege')).toEqual({ left: 114, right: 336, bottom: 176 });
   });
 
-  it('covers every recalled hive part', () => {
-    expect(bossEntryCorridor('hive')).toEqual({ left: 93, right: 357, bottom: 396 });
+  it('covers every deployed hive part', () => {
+    expect(bossEntryCorridor('hive')).toEqual({ left: 74, right: 376, bottom: 384 });
   });
 
   it('selects corridor cleanup by default and all cleanup explicitly', () => {

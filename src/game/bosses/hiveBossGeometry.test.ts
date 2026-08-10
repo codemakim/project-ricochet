@@ -25,15 +25,9 @@ describe('hive boss geometry', () => {
     )).toBeGreaterThanOrEqual(HIVE_BOSS_GEOMETRY.minimumCorridorWidth);
   });
 
-  it('keeps every body throughout its path inside 450x800 and away from the core', () => {
+  it('keeps every deployed body throughout its path inside 450x800 and away from the core', () => {
     const bodies = [
       HIVE_BOSS_GEOMETRY.core,
-      ...Object.entries(HIVE_BOSS_GEOMETRY.recalled).map(([partId, position]) => ({
-        ...position,
-        ...(partId.includes('Shooter')
-          ? { width: HIVE_BOSS_GEOMETRY.shooters.leftShooter.width, height: HIVE_BOSS_GEOMETRY.shooters.leftShooter.height }
-          : { width: HIVE_BOSS_GEOMETRY.reflectors.leftReflector.width, height: HIVE_BOSS_GEOMETRY.reflectors.leftReflector.height }),
-      })),
       ...Object.values(HIVE_BOSS_GEOMETRY.shooters),
       ...Object.values(HIVE_BOSS_GEOMETRY.reflectors).flatMap((reflector) => [
         { ...reflector, x: reflector.travel.minimum },

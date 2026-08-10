@@ -290,9 +290,6 @@ describe('GAME_TUNING', () => {
       value.hiveBoss.reflector.y = 150;
       value.hiveBoss.reflector.leftTravel = { minimum: 48, maximum: 120 };
     }],
-    ['recalled hive modules overlapping each other', (value: Mutable<GameTuning>) => {
-      value.hiveBoss.shooter.height = 100;
-    }],
     ['non-positive reflector hit cooldown', (value: Mutable<GameTuning>) => {
       value.hiveBoss.reflector.hitCooldownMs = 0;
     }],
