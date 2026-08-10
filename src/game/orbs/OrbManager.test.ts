@@ -455,7 +455,7 @@ describe('OrbStore', () => {
       level: 3,
       targets: 1,
       radius: 150,
-      damage: 0.08,
+      damage: 0.32,
     }));
   });
 

@@ -31,7 +31,7 @@ describe('BuildState', () => {
       chance: 0.2,
       cooldownMs: 120,
       radius: 48,
-      damage: 0.45,
+      damage: 1,
     });
     expect(build.split()).toEqual({
       chance: 0.25,
@@ -89,11 +89,11 @@ describe('BuildState', () => {
       'recovery-shockwave': 2,
     });
 
-    expect(build.horizontalCutter()).toMatchObject({ chance: 0.15, damage: 0.7 });
-    expect(build.verticalCutter()).toMatchObject({ chance: 0.15, damage: 0.7 });
-    expect(build.destructionReaction()).toMatchObject({ chance: 0.25, radius: 56, damage: 0.8 });
-    expect(build.microMissile()).toMatchObject({ hitsRequired: 6, damage: 1.2 });
-    expect(build.recoveryShockwave()).toMatchObject({ recoveriesRequired: 4, radius: 72, damage: 1.25 });
+    expect(build.horizontalCutter()).toMatchObject({ chance: 0.15, damage: 1 });
+    expect(build.verticalCutter()).toMatchObject({ chance: 0.15, damage: 1 });
+    expect(build.destructionReaction()).toMatchObject({ chance: 0.25, radius: 56, damage: 1.2 });
+    expect(build.microMissile()).toMatchObject({ hitsRequired: 6, damage: 1.6 });
+    expect(build.recoveryShockwave()).toMatchObject({ recoveriesRequired: 4, radius: 72, damage: 1.6 });
   });
 
   it('derives all basic growth stats from their ranks', () => {
@@ -135,7 +135,7 @@ describe('BuildState', () => {
       speedRatio: 1.3,
       hitsRequired: 5,
       radius: 44,
-      damage: 0.65,
+      damage: 0.9,
     });
   });
 

@@ -55,13 +55,13 @@ describe('GAME_TUNING', () => {
         maxDamageBonus: 0.36,
       },
       wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
-      cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 0.7 },
+      cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 1 },
       destructionReaction: {
-        chance: 0.25, cooldownMs: 120, radius: 56, damage: 0.8,
+        chance: 0.25, cooldownMs: 120, radius: 56, damage: 1.2,
       },
-      microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.2 },
+      microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.6 },
       recoveryShockwave: {
-        recoveriesRequired: 4, radius: 72, damageByRank: [0.75, 1.25],
+        recoveriesRequired: 4, radius: 72, damageByRank: [1, 1.6],
       },
       basicGrowth: {
         maximumOrbs: 6,
@@ -79,7 +79,7 @@ describe('GAME_TUNING', () => {
         collisionAccelerationSpeedPerRank: 0.08,
         trackingDurationMs: 1200,
         trackingRadiusPerRank: 16,
-        highSpeedImpact: { speedRatio: 1.3, hitsRequired: 5, radius: 44, damage: 0.65 },
+        highSpeedImpact: { speedRatio: 1.3, hitsRequired: 5, radius: 44, damage: 0.9 },
       },
       effectModifiers: {
         procChancePerRank: 0.04,
@@ -92,12 +92,12 @@ describe('GAME_TUNING', () => {
         fragmentLifetimeMsPerRank: 350,
         conductionTargetsPerRank: 1,
       },
-      explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
+      explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 1 },
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });
     expect(GAME_TUNING.temporaryOrbs).toEqual({
       radius: 6, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
-      baseDamage: 0.4,
+      baseDamage: 0.65,
     });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
@@ -157,6 +157,13 @@ describe('GAME_TUNING', () => {
     expect(hostile.bossHazard.height).toBeGreaterThan(hostile.bossHazard.width);
   });
 
+  it('bounds short secondary-damage feedback centrally', () => {
+    expect(GAME_TUNING.visual.coreFeedback).toMatchObject({
+      maximumDamageLabels: 18,
+      damageNumberDurationMs: 260,
+    });
+  });
+
   it('accepts the shipped configuration', () => {
     expect(() => validateGameTuning(mutableTuning())).not.toThrow();
   });
@@ -199,6 +206,39 @@ describe('GAME_TUNING', () => {
     for (const [, values] of curves) {
       expect(values).toHaveLength(9);
       expect(values.every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it('keeps representative permanent-core secondary damage meaningful and increasing', () => {
+    const basicHp = [3, 4.8, 7.2] as const;
+    const corrosionTotal = (level: 1 | 5) => {
+      const index = level - 1;
+      const ticks = GAME_TUNING.orbCores.corrosion.durationMsByLevel[index]!
+        / GAME_TUNING.orbCores.corrosion.tickMs;
+      return ticks * GAME_TUNING.orbCores.corrosion.damagePerTickByLevel[index]!;
+    };
+    const representative = [
+      [
+        corrosionTotal(1),
+        GAME_TUNING.orbCores.conduction.directDamageByLevel[0]!,
+        GAME_TUNING.orbCores.explosion.damageByLevel[0]!,
+      ],
+      [
+        corrosionTotal(5),
+        GAME_TUNING.orbCores.conduction.directDamageByLevel[4]!,
+        GAME_TUNING.orbCores.explosion.damageByLevel[4]!,
+      ],
+    ] as const;
+
+    expect(corrosionTotal(1) / basicHp[0]).toBeGreaterThanOrEqual(0.3);
+    expect(GAME_TUNING.orbCores.explosion.damageByLevel[0]! / basicHp[0])
+      .toBeGreaterThanOrEqual(0.3);
+    for (const damage of representative.flat()) {
+      expect(Number.isFinite(damage)).toBe(true);
+      expect(damage).toBeGreaterThan(0);
+    }
+    for (let index = 0; index < representative[0].length; index += 1) {
+      expect(representative[1][index]).toBeGreaterThan(representative[0][index]!);
     }
   });
 

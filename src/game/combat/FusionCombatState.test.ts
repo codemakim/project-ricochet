@@ -23,7 +23,7 @@ describe('fusion combat profiles', () => {
   it('unlocks each fusion milestone from the central nine-level curve', () => {
     expect(photonFusionProfile(1)).toMatchObject({ trail: null, intersectionBlast: null });
     expect(photonFusionProfile(4).trail).not.toBeNull();
-    expect(photonFusionProfile(9).intersectionBlast).toEqual({ radius: 42, damage: 0.8 });
+    expect(photonFusionProfile(9).intersectionBlast).toEqual({ radius: 42, damage: 1.6 });
     expect(resonantSwarmProfile(1)).toMatchObject({ count: 2, targets: 1 });
     expect(resonantSwarmProfile(9)).toMatchObject({ count: 4, targets: 3 });
     expect(nanoFusionProfile(6).maximumGeneration).toBe(0);
@@ -42,6 +42,31 @@ describe('fusion combat profiles', () => {
     expect(mirrorCircuitProfile(9)).toMatchObject({ maximumMirrors: 5 });
     expect(meltdownCoreProfile(9)).toMatchObject({ heatThreshold: 3 });
     expect(vectorBladeProfile(9)).toMatchObject({ replayCount: 2 });
+  });
+
+  it('keeps level-one and level-nine fusion damage finite, positive, and increasing', () => {
+    const damages = (level: 1 | 9) => [
+      photonFusionProfile(level).beam.damage,
+      resonantSwarmProfile(level).damage,
+      nanoFusionProfile(level).damage,
+      massCollapseProfile(level).damage,
+      reactorOrbProfile(level).damagePerCharge,
+      clusterBombardmentProfile(level).damage,
+      mirrorCircuitProfile(level).damage,
+      meltdownCoreProfile(level).damage,
+      vectorBladeProfile(level).damage,
+    ];
+    const levelOne = damages(1);
+    const levelNine = damages(9);
+
+    expect(photonFusionProfile(9).beam.damage).toBeGreaterThanOrEqual(2);
+    for (const damage of [...levelOne, ...levelNine]) {
+      expect(Number.isFinite(damage)).toBe(true);
+      expect(damage).toBeGreaterThan(0);
+    }
+    levelNine.forEach((damage, index) => {
+      expect(damage).toBeGreaterThan(levelOne[index]!);
+    });
   });
 
   it('rejects fusion levels outside one through nine', () => {

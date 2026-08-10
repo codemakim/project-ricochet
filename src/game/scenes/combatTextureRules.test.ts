@@ -100,6 +100,8 @@ it('renders splitter and fragment prototype descriptors for runtime managers', (
   expect(textures).toHaveProperty('enemy-fragment-left');
   expect(textures).toHaveProperty('enemy-fragment-right');
   expect(textures).toHaveProperty('enemy-bullet');
+  expect(textures).not.toHaveProperty('secondary-damage-feedback');
+  expect(textures).not.toHaveProperty('secondary-kill-feedback');
 });
 
 it('defines deferred red/orange centered hive bullets and warning markers', () => {

@@ -198,7 +198,7 @@ export interface GameTuning {
       radius: number;
       durationMs: number;
       tickMs: number;
-      damagePerTick: number;
+      damagePerTickByLevel: FiveLevelValues;
       fieldLimitPerOrb: number;
       globalFieldLimit: number;
       chanceByLevel: FiveLevelValues;
@@ -424,7 +424,8 @@ export interface GameTuning {
       corrosionFieldAlpha: number;
       corrosionLineAlpha: number;
       corrosionTickDurationMs: number;
-      corrosionDamageNumberDurationMs: number;
+      maximumDamageLabels: number;
+      damageNumberDurationMs: number;
       conductionDurationMs: number;
     };
     triggerFeedback: {
@@ -453,14 +454,15 @@ const ORB_CORE_LEVEL_TUNING = {
     chanceByLevel: [0.15, 0.18, 0.18, 0.22, 0.22],
     radiusByLevel: [42, 50, 50, 58, 58],
     durationMsByLevel: [2500, 3000, 3000, 3500, 3500],
+    damagePerTickByLevel: [0.28, 0.34, 0.42, 0.5, 0.62],
   },
   conduction: {
     targetCountByLevel: [1, 2, 2, 3, 3],
     radiusByLevel: [120, 150, 150, 180, 180],
-    directDamageByLevel: [0.25, 0.3, 0.3, 0.35, 0.35],
+    directDamageByLevel: [0.9, 1.1, 1.35, 1.65, 2],
     flightTargetCountByLevel: [0, 0, 1, 2, 2],
     flightTickMsByLevel: [0, 0, 600, 400, 400],
-    flightDamageByLevel: [0, 0, 0.08, 0.1, 0.1],
+    flightDamageByLevel: [0, 0, 0.32, 0.4, 0.5],
   },
   inertia: {
     baseSpeedMultiplierByLevel: [1, 1.08, 1.08, 1.15, 1.15],
@@ -475,7 +477,7 @@ const ORB_CORE_LEVEL_TUNING = {
   },
   explosion: {
     chanceByLevel: [0.2, 0.2, 0.2, 0.2, 0.2],
-    damageByLevel: [0.45, 0.6, 0.6, 0.75, 0.75],
+    damageByLevel: [1.1, 1.35, 1.6, 1.9, 2.3],
     radiusByLevel: [48, 48, 48, 58, 58],
   },
 } as const;
@@ -554,18 +556,18 @@ export const GAME_TUNING = {
       maxDamageBonus: 0.36,
     },
     wallAcceleration: { speedBonusPerStack: 0.04, maxStacks: 5 },
-    cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 0.7 },
+    cutter: { chance: 0.15, cooldownMs: 120, thickness: 12, damage: 1 },
     destructionReaction: {
       chance: 0.25,
       cooldownMs: 120,
       radius: 56,
-      damage: 0.8,
+      damage: 1.2,
     },
-    microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.2 },
+    microMissile: { hitsRequired: 6, travelMs: 180, damage: 1.6 },
     recoveryShockwave: {
       recoveriesRequired: 4,
       radius: 72,
-      damageByRank: [0.75, 1.25],
+      damageByRank: [1, 1.6],
     },
     basicGrowth: {
       maximumOrbs: 6,
@@ -587,7 +589,7 @@ export const GAME_TUNING = {
         speedRatio: 1.3,
         hitsRequired: 5,
         radius: 44,
-        damage: 0.65,
+        damage: 0.9,
       },
     },
     effectModifiers: {
@@ -601,7 +603,7 @@ export const GAME_TUNING = {
       fragmentLifetimeMsPerRank: 350,
       conductionTargetsPerRank: 1,
     },
-    explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 0.45 },
+    explosion: { chance: 0.2, cooldownMs: 120, radius: 48, damage: 1 },
     split: { chance: 0.25, cooldownMs: 120, count: 2 },
   },
   orbCores: {
@@ -609,15 +611,15 @@ export const GAME_TUNING = {
       ...ORB_CORE_LEVEL_TUNING.echo,
       maxStacks: ORB_CORE_LEVEL_TUNING.echo.maxStacksByLevel[0],
       damageBonusPerStack: ORB_CORE_LEVEL_TUNING.echo.damageBonusPerStackByLevel[0],
-      shockwave: { fromLevel: 3, radius: 44, damage: 0.5 },
+      shockwave: { fromLevel: 3, radius: 44, damage: 0.9 },
       cutter: {
         fromLevel: 4,
         chance: 0.1,
-        damage: 0.45,
+        damage: 0.8,
         thickness: 10,
         cooldownMs: 120,
       },
-      replay: { fromLevel: 5, damage: 0.65, thickness: 12, pointCap: 8 },
+      replay: { fromLevel: 5, damage: 1.1, thickness: 12, pointCap: 8 },
       fill: 0x74c8ff,
       accent: 0xeaf8ff,
     },
@@ -628,12 +630,11 @@ export const GAME_TUNING = {
       radius: ORB_CORE_LEVEL_TUNING.corrosion.radiusByLevel[0],
       durationMs: ORB_CORE_LEVEL_TUNING.corrosion.durationMsByLevel[0],
       tickMs: 500,
-      damagePerTick: 0.2,
       fieldLimitPerOrb: 2,
       globalFieldLimit: 12,
       attachedFromLevel: 3,
       vulnerability: { fromLevel: 4, damageBonusPerStack: 0.05, maximumStacks: 3 },
-      deathSpread: { fromLevel: 5, radius: 32, durationMs: 1500, damagePerTick: 0.15 },
+      deathSpread: { fromLevel: 5, radius: 32, durationMs: 1500, damagePerTick: 0.32 },
       fill: 0x9be564,
       accent: 0xe8ffc8,
     },
@@ -650,7 +651,7 @@ export const GAME_TUNING = {
         tickMsByLevel: ORB_CORE_LEVEL_TUNING.conduction.flightTickMsByLevel,
         damageByLevel: ORB_CORE_LEVEL_TUNING.conduction.flightDamageByLevel,
       },
-      overcharge: { fromLevel: 5, damage: 0.35 },
+      overcharge: { fromLevel: 5, damage: 0.8 },
       fill: 0xc58cff,
       accent: 0xf3e8ff,
     },
@@ -659,13 +660,13 @@ export const GAME_TUNING = {
       maxStacks: 3,
       speedBonusPerStack: 0.1,
       speedStep: 0.1,
-      shockwave: { fromLevel: 3, radius: 42, damage: 0.5 },
+      shockwave: { fromLevel: 3, radius: 42, damage: 0.9 },
       topSpeedHold: { fromLevel: 4, durationMs: 800 },
       pierce: {
         fromLevel: 5,
         enemyCount: 1,
         explosionRadius: 40,
-        explosionDamage: 0.6,
+        explosionDamage: 1.1,
       },
       fill: 0xffbd59,
       accent: 0xfff0c2,
@@ -691,16 +692,16 @@ export const GAME_TUNING = {
       speedMultiplierByLevel: [1.04, 1.04, 1.08, 1.08, 1.08, 1.12, 1.12, 1.12, 1.16],
       beamLengthByLevel: [260, 280, 300, 300, 320, 340, 340, 360, 380],
       beamThicknessByLevel: [8, 8, 8, 10, 10, 12, 12, 14, 16],
-      beamDamageByLevel: [0.35, 0.4, 0.45, 0.45, 0.5, 0.55, 0.6, 0.65, 0.75],
+      beamDamageByLevel: [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 1.7, 2],
       trail: {
         fromLevel: 4,
         durationMsByLevel: [0, 0, 0, 900, 900, 1050, 1200, 1350, 1500],
-        damageByLevel: [0, 0, 0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.22],
+        damageByLevel: [0, 0, 0, 0.22, 0.26, 0.3, 0.36, 0.42, 0.5],
         maximumSegmentsByLevel: [0, 0, 0, 2, 2, 3, 4, 4, 5],
         tickMs: 300,
         thickness: 8,
       },
-      intersection: { fromLevel: 9, radius: 42, damage: 0.8 },
+      intersection: { fromLevel: 9, radius: 42, damage: 1.6 },
       fill: 0x70e8ff,
       accent: 0xf1fdff,
     },
@@ -710,9 +711,9 @@ export const GAME_TUNING = {
       lifetimeMsByLevel: [1200, 1300, 1400, 1600, 1700, 1800, 1900, 2050, 2200],
       targetCountByLevel: [1, 1, 1, 1, 1, 2, 2, 2, 3],
       radiusByLevel: [100, 110, 120, 130, 140, 150, 160, 170, 180],
-      damageByLevel: [0.16, 0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.31, 0.35],
+      damageByLevel: [0.36, 0.4, 0.44, 0.48, 0.54, 0.6, 0.68, 0.78, 0.9],
       finalRadiusByLevel: [24, 24, 26, 28, 28, 30, 32, 34, 38],
-      finalDamageByLevel: [0.15, 0.17, 0.19, 0.21, 0.23, 0.25, 0.28, 0.32, 0.4],
+      finalDamageByLevel: [0.35, 0.4, 0.45, 0.5, 0.58, 0.66, 0.76, 0.88, 1.05],
       cooldownMs: 160,
       siblingRadius: 80,
       siblingDamageBonus: 0.12,
@@ -725,7 +726,7 @@ export const GAME_TUNING = {
       countByLevel: [2, 2, 2, 3, 3, 3, 3, 4, 4],
       radiusByLevel: [28, 30, 32, 34, 36, 38, 40, 42, 44],
       durationMsByLevel: [2200, 2400, 2600, 2800, 3000, 3200, 3400, 3700, 4000],
-      damageByLevel: [0.1, 0.11, 0.12, 0.13, 0.14, 0.16, 0.18, 0.2, 0.24],
+      damageByLevel: [0.22, 0.24, 0.27, 0.3, 0.34, 0.38, 0.43, 0.5, 0.6],
       maximumGenerationByLevel: [0, 0, 0, 0, 0, 0, 1, 1, 2],
       cooldownMs: 180,
       tickMs: 500,
@@ -739,7 +740,7 @@ export const GAME_TUNING = {
       stacksPerHitByLevel: [1, 1, 1, 1, 1, 1, 1, 1, 1],
       precisionBonusStacksByLevel: [0, 0, 0, 1, 1, 1, 1, 1, 2],
       thresholdByLevel: [5, 5, 5, 5, 4, 4, 4, 3, 3],
-      collapseDamageByLevel: [0.75, 0.85, 0.95, 1.05, 1.2, 1.35, 1.55, 1.8, 2.2],
+      collapseDamageByLevel: [1.5, 1.7, 1.9, 2.1, 2.4, 2.7, 3.1, 3.6, 4.4],
       radiusByLevel: [34, 36, 38, 40, 44, 48, 52, 58, 64],
       secondaryScale: 0.5,
       maximumTrackedTargets: 48,
@@ -748,7 +749,7 @@ export const GAME_TUNING = {
     },
     reactorOrb: {
       maximumChargesByLevel: [3, 3, 4, 4, 5, 5, 6, 6, 7],
-      damagePerChargeByLevel: [0.18, 0.2, 0.22, 0.24, 0.27, 0.3, 0.32, 0.35, 0.4],
+      damagePerChargeByLevel: [0.36, 0.4, 0.44, 0.48, 0.54, 0.6, 0.66, 0.72, 0.82],
       radiusPerChargeByLevel: [5, 5, 6, 6, 7, 7, 8, 9, 10],
       baseRadius: 28,
       outerWaveFromLevel: 7,
@@ -759,14 +760,14 @@ export const GAME_TUNING = {
     },
     clusterBombardment: {
       chanceByLevel: [0.16, 0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.34],
-      damageByLevel: [0.28, 0.31, 0.34, 0.37, 0.4, 0.44, 0.48, 0.53, 0.6],
+      damageByLevel: [0.6, 0.66, 0.72, 0.8, 0.88, 0.98, 1.1, 1.24, 1.4],
       radiusByLevel: [22, 22, 24, 24, 26, 26, 28, 30, 32],
       travelMsByLevel: [420, 410, 400, 390, 380, 370, 350, 330, 310],
       distanceByLevel: [52, 54, 56, 60, 64, 68, 72, 76, 82],
       lingeringFromLevel: 7,
       lingeringDurationMsByLevel: [0, 0, 0, 0, 0, 0, 900, 1100, 1400],
       lingeringTickMs: 350,
-      lingeringDamageByLevel: [0, 0, 0, 0, 0, 0, 0.08, 0.1, 0.13],
+      lingeringDamageByLevel: [0, 0, 0, 0, 0, 0, 0.18, 0.22, 0.28],
       cooldownMs: 220,
       projectileCount: 6,
       maximumActiveProjectiles: 18,
@@ -775,26 +776,26 @@ export const GAME_TUNING = {
     },
     mirrorCircuit: {
       durationMsByLevel: [900, 1000, 1100, 1200, 1300, 1450, 1600, 1800, 2000],
-      damageByLevel: [0.1, 0.11, 0.12, 0.14, 0.16, 0.18, 0.2, 0.23, 0.27],
+      damageByLevel: [0.22, 0.24, 0.27, 0.31, 0.36, 0.41, 0.47, 0.55, 0.65],
       maximumMirrorsByLevel: [2, 2, 2, 3, 3, 3, 4, 4, 5],
       thicknessByLevel: [6, 6, 7, 7, 8, 8, 9, 10, 11],
       tickMs: 300, intersectionFromLevel: 9, intersectionRadius: 38,
-      intersectionDamage: 0.7, fill: 0x5de6ff, accent: 0xf2ffff,
+      intersectionDamage: 1.4, fill: 0x5de6ff, accent: 0xf2ffff,
     },
     meltdownCore: {
       chanceByLevel: [0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.33, 0.36],
       radiusByLevel: [30, 31, 32, 34, 36, 38, 40, 42, 45],
       durationMsByLevel: [2200, 2300, 2400, 2600, 2800, 3000, 3200, 3500, 3800],
-      damageByLevel: [0.08, 0.09, 0.1, 0.11, 0.13, 0.15, 0.17, 0.2, 0.24],
+      damageByLevel: [0.18, 0.2, 0.22, 0.25, 0.29, 0.34, 0.4, 0.48, 0.58],
       heatPerHitByLevel: [1, 1, 1, 1, 1, 1, 2, 2, 2],
       thresholdByLevel: [5, 5, 5, 5, 4, 4, 4, 4, 3],
-      meltdownDamageByLevel: [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.85, 2.2],
+      meltdownDamageByLevel: [1.6, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.7, 4.4],
       cooldownMs: 180, tickMs: 450, maximumZones: 10, bossHeatCap: 4,
       fill: 0xff5a36, accent: 0xffe1a3,
     },
     vectorBlade: {
       lengthByLevel: [180, 190, 200, 215, 230, 245, 260, 280, 300],
-      damageByLevel: [0.35, 0.38, 0.42, 0.46, 0.5, 0.55, 0.61, 0.68, 0.78],
+      damageByLevel: [0.75, 0.82, 0.9, 1, 1.1, 1.22, 1.36, 1.52, 1.75],
       thicknessByLevel: [8, 8, 9, 9, 10, 11, 12, 13, 15],
       maximumVectorsByLevel: [1, 1, 1, 1, 1, 1, 2, 2, 2],
       speedScale: 0.35, pathScale: 0.002, replayFromLevel: 9,
@@ -807,7 +808,7 @@ export const GAME_TUNING = {
     cap: 30,
     lifetimeMs: 1500,
     hitCooldownMs: 80,
-    baseDamage: 0.4,
+    baseDamage: 0.65,
   },
   bossAreaDamage: { secondaryDamageScale: 0.5, maxSecondaryTargets: 1 },
   hiveBoss: {
@@ -846,7 +847,8 @@ export const GAME_TUNING = {
       corrosionFieldAlpha: 0.16,
       corrosionLineAlpha: 0.7,
       corrosionTickDurationMs: 160,
-      corrosionDamageNumberDurationMs: 260,
+      maximumDamageLabels: 18,
+      damageNumberDurationMs: 260,
       conductionDurationMs: 180,
     },
     triggerFeedback: {
@@ -1284,7 +1286,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (orbCores.corrosion.tickMs > orbCores.corrosion.durationMs) {
     throw new RangeError('orbCores.corrosion.tickMs must fit its duration');
   }
-  positive(orbCores.corrosion.damagePerTick, 'orbCores.corrosion.damagePerTick');
   positiveInteger(orbCores.corrosion.fieldLimitPerOrb, 'orbCores.corrosion.fieldLimitPerOrb');
   positiveInteger(orbCores.corrosion.globalFieldLimit, 'orbCores.corrosion.globalFieldLimit');
   positiveInteger(orbCores.conduction.targetCount, 'orbCores.conduction.targetCount');
@@ -1327,6 +1328,11 @@ export function validateGameTuning(tuning: GameTuning): void {
   levelCurve(
     orbCores.corrosion.durationMsByLevel,
     'orbCores.corrosion.durationMsByLevel',
+    positive,
+  );
+  levelCurve(
+    orbCores.corrosion.damagePerTickByLevel,
+    'orbCores.corrosion.damagePerTickByLevel',
     positive,
   );
   coreLevel(orbCores.corrosion.attachedFromLevel, 'orbCores.corrosion.attachedFromLevel');
@@ -1672,6 +1678,14 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(
     feedback.corrosionTickDurationMs,
     'visual.coreFeedback.corrosionTickDurationMs',
+  );
+  positiveInteger(
+    feedback.maximumDamageLabels,
+    'visual.coreFeedback.maximumDamageLabels',
+  );
+  positive(
+    feedback.damageNumberDurationMs,
+    'visual.coreFeedback.damageNumberDurationMs',
   );
   positive(feedback.conductionDurationMs, 'visual.coreFeedback.conductionDurationMs');
   const friendlyPairs = [

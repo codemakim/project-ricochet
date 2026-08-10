@@ -5,7 +5,7 @@ import { GAME_TUNING } from '../config/gameTuning';
 import { createInitialFormation } from '../encounters/formationRules';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
-import { EnemyManager } from './EnemyManager';
+import { EnemyManager, type EnemyManagerOptions } from './EnemyManager';
 import type { EnemySpec } from './enemyRules';
 
 const INITIAL_FORMATION_SIZE = createInitialFormation(0).enemies.length;
@@ -194,6 +194,7 @@ function createBoundary(
   formation?: readonly EnemySpec[],
   withTemporaryOrbs = false,
   getExternalBulletCount: () => number = () => 0,
+  options: Partial<Pick<EnemyManagerOptions, 'onSecondaryDamage'>> = {},
 ) {
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
@@ -259,6 +260,7 @@ function createBoundary(
     onBulletHit,
     onEnemyKilled,
     onDirectHit,
+    ...options,
     formation,
     getExternalBulletCount,
   });
@@ -865,6 +867,57 @@ describe('EnemyManager', () => {
       2,
       expect.objectContaining({ enemyId: 2, kind: 'armored' }),
     );
+  });
+
+  it('reports actual area damage, position, kill state, and feedback color', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 3, x: 100, y: 100, column: 0, speed: 0 },
+      { kind: 'basic', hp: 1, x: 130, y: 100, column: 1, speed: 0 },
+    ];
+    const onSecondaryDamage = vi.fn();
+    const boundary = createBoundary(formation, false, () => 0, { onSecondaryDamage });
+    boundary.manager.applyVulnerability([0, 0], 2);
+    boundary.manager.applyVulnerability([0], 2);
+
+    boundary.manager.applyAreaDamage({ x: 100, y: 100 }, 60, 2, -1, 0x123456);
+
+    expect(onSecondaryDamage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      enemyId: 0,
+      position: { x: 100, y: 100 },
+      killed: false,
+      color: 0x123456,
+    }));
+    expect(onSecondaryDamage.mock.calls[0]![0].damage).toBeCloseTo(2.2);
+    expect(onSecondaryDamage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      enemyId: 1,
+      position: { x: 130, y: 100 },
+      damage: 1,
+      killed: true,
+      color: 0x123456,
+    }));
+  });
+
+  it('reports each non-collision secondary damage path but not an orb direct hit', () => {
+    const formation: EnemySpec[] = [
+      { kind: 'basic', hp: 10, x: 100, y: 100, column: 0, speed: 0 },
+    ];
+    const onSecondaryDamage = vi.fn();
+    const boundary = createBoundary(formation, false, () => 0, { onSecondaryDamage });
+
+    boundary.manager.applyNearestSecondaryDamage({ x: 90, y: 100 }, -1, 20, 1, 0.5, 0x111111);
+    boundary.manager.applyLineDamage('horizontal', 100, 12, 0.5, -1, 0x222222);
+    boundary.manager.applySegmentDamage(
+      { x: 90, y: 100 }, { x: 110, y: 100 }, 12, 0.5, -1, 0x333333,
+    );
+    boundary.manager.applyDirectDamage(0, 0.5, 0x444444);
+    expect(onSecondaryDamage.mock.calls.map(([event]) => event.color))
+      .toEqual([0x111111, 0x222222, 0x333333, 0x444444]);
+
+    boundary.handleEnemyHit.mockReturnValue({
+      charged: true, charges: 0, damage: 0.5, reflect: false,
+    });
+    boundary.colliders[0]!.trigger(boundary.orb, boundary.groups[0]!.children[0]!);
+    expect(onSecondaryDamage).toHaveBeenCalledTimes(4);
   });
 
   it('applies conduction damage to only the nearest two eligible enemies', () => {

@@ -11,8 +11,8 @@ describe('CorrosionFieldState', () => {
 
     expect(ignited).toEqual([expect.objectContaining({
       position: { x: 10, y: 10 },
-      damage: 0.5,
     })]);
+    expect(ignited[0]!.damage).toBeCloseTo(0.7);
     expect(fields.getSnapshot()).toHaveLength(1);
     expect(fields.getSnapshot()[0]!.position).toEqual({ x: 200, y: 200 });
   });
@@ -92,12 +92,12 @@ describe('CorrosionFieldState', () => {
     expect(fields.spreadAttachedOnDeath(7, { x: 30, y: 40 }, 200, {
       radius: 32,
       durationMs: 1500,
-      damage: 0.15,
+      damage: 0.32,
     })).toBe(true);
     expect(fields.getSnapshot()).toEqual([expect.objectContaining({
       position: { x: 30, y: 40 },
       radius: 32,
-      damage: 0.15,
+      damage: 0.32,
       expiresAtMs: 1700,
       attachedEnemyId: undefined,
     })]);

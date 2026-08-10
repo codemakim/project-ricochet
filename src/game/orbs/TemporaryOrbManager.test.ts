@@ -216,7 +216,7 @@ describe('TemporaryOrbManager', () => {
     expect(manager.handleEnemyHit(orb as unknown as never, 4, 1, 100)).toEqual({
       charged: false,
       charges: 0,
-      damage: 0.5,
+      damage: 0.8125,
       killed: false,
       reflect: true,
       preserveChargedKinetics: false,
@@ -232,7 +232,7 @@ describe('TemporaryOrbManager', () => {
       4,
       99,
       100 + GAME_TUNING.temporaryOrbs.hitCooldownMs,
-    )).toMatchObject({ damage: 0.5 });
+    )).toMatchObject({ damage: 0.8125 });
   });
 
   it('uses the configured base damage without a firepower bonus', () => {
@@ -242,7 +242,7 @@ describe('TemporaryOrbManager', () => {
 
     expect(manager.handleEnemyHit(orb as unknown as never, 7, 1, 100)).toMatchObject({
       charged: false,
-      damage: 0.4,
+      damage: 0.65,
       reflect: true,
     });
   });
@@ -258,7 +258,7 @@ describe('TemporaryOrbManager', () => {
 
     expect(manager.getSnapshot()[0]?.expiresAt).toBe(2_300);
     expect(manager.handleEnemyHit(group.children[0] as unknown as never, 1, 9, 100)?.damage)
-      .toBeCloseTo(0.725);
+      .toBeCloseTo(1.178125);
   });
 
   it('stores level-specific lifetime, bounce budget, and inherited output only on spawned children', () => {

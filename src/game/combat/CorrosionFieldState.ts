@@ -58,7 +58,7 @@ export class CorrosionFieldState {
       expiresAtMs: nowMs + (modifiers.durationMs ?? tuning.durationMs),
       nextTickAtMs: nowMs + tuning.tickMs,
       radius: modifiers.radius ?? tuning.radius,
-      damage: modifiers.damage ?? tuning.damagePerTick,
+      damage: modifiers.damage ?? tuning.damagePerTickByLevel[0],
       attachedEnemyId: modifiers.attachedEnemyId,
       spreadsOnDeath: modifiers.spreadsOnDeath,
       vulnerabilityEnabled: modifiers.vulnerabilityEnabled,

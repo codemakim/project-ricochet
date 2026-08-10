@@ -63,7 +63,7 @@ describe('combat scene rules', () => {
   it('plans only the selected permanent fusion effect and respects proc decisions', () => {
     expect(planFusionDirectHitEffects({
       source: 'permanent', coreType: 'photon-orbit', coreLevel: 9,
-    }, false)).toMatchObject({ photonBeam: { damage: 0.75 } });
+    }, false)).toMatchObject({ photonBeam: { damage: 2 } });
     expect(planFusionDirectHitEffects({
       source: 'permanent', coreType: 'resonant-swarm', coreLevel: 7,
     }, false).resonantSwarm).toBeNull();
@@ -133,7 +133,7 @@ describe('combat scene rules', () => {
       build,
       { explosion: true, split: true },
     )).toEqual({
-      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
+      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 1 }],
       spawnChildren: false,
       splitCount: 2,
     });
@@ -142,7 +142,7 @@ describe('combat scene rules', () => {
       build,
       { explosion: true, split: true },
     )).toEqual({
-      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 0.45 }],
+      immediateAreas: [{ kind: 'explosion', radius: 48, damage: 1 }],
       spawnChildren: true,
       splitCount: 0,
     });
@@ -175,7 +175,7 @@ describe('combat scene rules', () => {
     const applyEnemyBatch = vi.fn();
     const applyBossArea = vi.fn();
     const effects = [
-      { kind: 'explosion' as const, radius: 80, damage: 2 },
+      { kind: 'explosion' as const, radius: 80, damage: 2, feedbackColor: 0xff8f3d },
       { kind: 'explosion' as const, radius: 48, damage: 0.5 },
     ];
 
@@ -188,7 +188,10 @@ describe('combat scene rules', () => {
     );
 
     expect(applyEnemyBatch).toHaveBeenCalledWith([
-      { center: { x: 225, y: 180 }, radius: 80, damage: 2, excludedEnemyId: 7 },
+      {
+        center: { x: 225, y: 180 }, radius: 80, damage: 2,
+        excludedEnemyId: 7, feedbackColor: 0xff8f3d,
+      },
       { center: { x: 225, y: 180 }, radius: 48, damage: 0.5, excludedEnemyId: 7 },
     ]);
     expect(applyBossArea.mock.calls).toEqual([

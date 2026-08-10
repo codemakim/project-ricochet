@@ -79,7 +79,7 @@ describe('orb core rules', () => {
   it('builds native and generic explosion profiles through one clamped roll', () => {
     expect(explosionProfile('explosion', 1, null, 0)).toMatchObject({
       chance: 0.2,
-      damage: 0.45,
+      damage: 1.1,
       radius: 48,
     });
     expect(explosionProfile('echo', 1, {
@@ -87,7 +87,7 @@ describe('orb core rules', () => {
     }, 0)).toMatchObject({ chance: 0.3, damage: 0.5, radius: 50 });
     expect(explosionProfile('explosion', 2, {
       chance: 0.99, cooldownMs: 120, damage: 0.5, radius: 50,
-    }, 0)).toMatchObject({ chance: 0.99, damage: 0.72, radius: 48 });
+    }, 0)).toMatchObject({ chance: 0.99, damage: 1.62, radius: 48 });
   });
 
   it('tracks explosion pity only on its physical dedicated orb', () => {
@@ -112,7 +112,7 @@ describe('orb core rules', () => {
     });
     expect(coreDirectEffectProfile('echo', 3, true, 7).shockwave).toEqual({
       radius: 44,
-      damage: 0.5,
+      damage: 0.9,
     });
     expect(coreDirectEffectProfile('echo', 5, true, 9)).toMatchObject({
       replayPath: true,
@@ -123,12 +123,12 @@ describe('orb core rules', () => {
     expect(coreDirectEffectProfile('inertia', 3, false, 0).shockwave).toBeNull();
     expect(coreDirectEffectProfile('inertia', 3, true, 0).shockwave).toEqual({
       radius: 42,
-      damage: 0.5,
+      damage: 0.9,
     });
     expect(coreDirectEffectProfile('inertia', 5, true, 0)).toMatchObject({
       holdTopSpeedMs: 800,
       pierce: true,
-      kineticExplosion: { radius: 40, damage: 0.6 },
+      kineticExplosion: { radius: 40, damage: 1.1 },
     });
   });
 
@@ -136,18 +136,18 @@ describe('orb core rules', () => {
     expect(coreDirectEffectProfile('conduction', 1, false, 0).chain).toEqual({
       targets: 1,
       radius: 120,
-      damage: 0.25,
+      damage: 0.9,
       overchargeDamage: 0,
     });
     expect(coreDirectEffectProfile('conduction', 5, false, 0).chain).toEqual({
       targets: 3,
       radius: 180,
-      damage: 0.35,
-      overchargeDamage: 0.35,
+      damage: 2,
+      overchargeDamage: 0.8,
     });
     expect(conductionFlightProfile(2)).toBeNull();
-    expect(conductionFlightProfile(3)).toEqual({ targets: 1, radius: 150, tickMs: 600, damage: 0.08 });
-    expect(conductionFlightProfile(4)).toEqual({ targets: 2, radius: 180, tickMs: 400, damage: 0.1 });
+    expect(conductionFlightProfile(3)).toEqual({ targets: 1, radius: 150, tickMs: 600, damage: 0.32 });
+    expect(conductionFlightProfile(4)).toEqual({ targets: 2, radius: 180, tickMs: 400, damage: 0.4 });
   });
 
   it('clears echo resonance on every recovery source', () => {

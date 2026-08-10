@@ -88,11 +88,20 @@ export interface EnemyKilledEvent {
   position: Vector;
 }
 
+export interface EnemySecondaryDamageEvent {
+  enemyId: number;
+  position: Vector;
+  damage: number;
+  killed: boolean;
+  color?: number;
+}
+
 export interface EnemyAreaDamageEffect {
   center: Vector;
   radius: number;
   damage: number;
   excludedEnemyId: number;
+  feedbackColor?: number;
 }
 
 export interface EnemyManagerOptions {
@@ -106,6 +115,7 @@ export interface EnemyManagerOptions {
   onBulletHit: (damage: number) => void;
   onEnemyKilled?: (event: EnemyKilledEvent) => void;
   onDirectHit?: (event: DirectHitEvent) => void;
+  onSecondaryDamage?: (event: EnemySecondaryDamageEvent) => void;
   getExternalBulletCount?: () => number;
   textureKeys?: Partial<Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>>;
 }
@@ -364,8 +374,16 @@ export class EnemyManager {
     });
   }
 
-  applyAreaDamage(center: Vector, radius: number, damage: number, excludedEnemyId: number): number[] {
-    return this.applyAreaDamageBatch([{ center, radius, damage, excludedEnemyId }]);
+  applyAreaDamage(
+    center: Vector,
+    radius: number,
+    damage: number,
+    excludedEnemyId: number,
+    feedbackColor?: number,
+  ): number[] {
+    return this.applyAreaDamageBatch([{
+      center, radius, damage, excludedEnemyId, feedbackColor,
+    }]);
   }
 
   applyAreaDamageBatch(effects: readonly EnemyAreaDamageEffect[]): number[] {
@@ -379,7 +397,7 @@ export class EnemyManager {
           enemy.enemyId !== effect.excludedEnemyId
           && Math.hypot(enemy.x - effect.center.x, enemy.y - effect.center.y) <= effect.radius
         ) {
-          this.damageEnemy(enemy, effect.damage);
+          this.reportSecondaryDamage(enemy, effect.damage, effect.feedbackColor);
         }
       }
       if (enemy.hp <= 0) lethal.push({ enemy, event: killEvent });
@@ -394,6 +412,7 @@ export class EnemyManager {
     radius: number,
     maximumTargets: number,
     damage: number,
+    feedbackColor?: number,
   ): number[] {
     const targetIds = new Set(
       this.nearestSecondaryTargets(origin, excludedEnemyId, radius, maximumTargets)
@@ -403,7 +422,7 @@ export class EnemyManager {
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
-      this.damageEnemy(enemy, damage);
+      this.reportSecondaryDamage(enemy, damage, feedbackColor);
       if (enemy.hp <= 0) lethal.push({ enemy, event });
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
@@ -462,6 +481,7 @@ export class EnemyManager {
     thickness: number,
     damage: number,
     excludedEnemyId = -1,
+    feedbackColor?: number,
   ): number[] {
     const targets = [...this.enemies.values()].filter((enemy) => (
       enemy.active
@@ -471,7 +491,7 @@ export class EnemyManager {
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
-      this.damageEnemy(enemy, damage);
+      this.reportSecondaryDamage(enemy, damage, feedbackColor);
       if (enemy.hp <= 0) lethal.push({ enemy, event });
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
@@ -484,6 +504,7 @@ export class EnemyManager {
     thickness: number,
     damage: number,
     excludedEnemyId = -1,
+    feedbackColor?: number,
   ): number[] {
     const targets = [...this.enemies.values()].filter((enemy) => (
       enemy.active
@@ -493,18 +514,18 @@ export class EnemyManager {
     const lethal: Array<{ enemy: EnemySprite; event: EnemyKilledEvent }> = [];
     for (const enemy of targets) {
       const event = this.createKillEvent(enemy);
-      this.damageEnemy(enemy, damage);
+      this.reportSecondaryDamage(enemy, damage, feedbackColor);
       if (enemy.hp <= 0) lethal.push({ enemy, event });
     }
     for (const { enemy, event } of lethal) this.killEnemy(enemy, event);
     return targets.map((enemy) => enemy.enemyId);
   }
 
-  applyDirectDamage(enemyId: number, damage: number): boolean {
+  applyDirectDamage(enemyId: number, damage: number, feedbackColor?: number): boolean {
     const enemy = this.enemies.get(enemyId);
     if (!enemy?.active) return false;
     const event = this.createKillEvent(enemy);
-    this.damageEnemy(enemy, damage);
+    this.reportSecondaryDamage(enemy, damage, feedbackColor);
     if (enemy.hp <= 0) this.killEnemy(enemy, event);
     return true;
   }
@@ -760,9 +781,30 @@ export class EnemyManager {
     if (!this.destroyed) this.spawnFormation(fragments);
   }
 
-  private damageEnemy(enemy: EnemySprite, damage: number): void {
+  private reportSecondaryDamage(
+    enemy: EnemySprite,
+    damage: number,
+    color?: number,
+  ): void {
+    const actualDamage = this.damageEnemy(enemy, damage);
+    if (actualDamage <= 0) return;
+    this.options.onSecondaryDamage?.({
+      enemyId: enemy.enemyId,
+      position: { x: enemy.x, y: enemy.y },
+      damage: actualDamage,
+      killed: enemy.hp <= 0,
+      ...(color === undefined ? {} : { color }),
+    });
+  }
+
+  private damageEnemy(enemy: EnemySprite, damage: number): number {
     const vulnerability = GAME_TUNING.orbCores.corrosion.vulnerability;
     const stacks = this.vulnerabilityStacks.get(enemy.enemyId) ?? 0;
-    enemy.hp -= damage * (1 + stacks * vulnerability.damageBonusPerStack);
+    const previousHp = Math.max(0, enemy.hp);
+    enemy.hp = Math.max(
+      0,
+      enemy.hp - damage * (1 + stacks * vulnerability.damageBonusPerStack),
+    );
+    return previousHp - enemy.hp;
   }
 }

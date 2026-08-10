@@ -64,6 +64,7 @@ import {
   type EnemyAreaDamageEffect,
   type EnemyKilledEvent,
   type EnemyManagerSnapshot,
+  type EnemySecondaryDamageEvent,
 } from '../enemies/EnemyManager';
 import { PlayerInput } from '../input/PlayerInput';
 import { clamp, type Vector } from '../math/vector';
@@ -109,6 +110,7 @@ import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
 import { OrbFusionOverlay } from '../ui/OrbFusionOverlay';
 import { OrbUpgradeOverlay } from '../ui/OrbUpgradeOverlay';
 import { progressionHudState } from '../ui/progressionHud';
+import { formatDisplayNumber } from '../ui/displayNumber';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
   createRunResult,
@@ -247,6 +249,7 @@ export class CombatScene extends Phaser.Scene {
   private readonly clusterProjectiles = new Set<Phaser.GameObjects.Graphics>();
   private readonly clusterTimers = new Set<Phaser.Time.TimerEvent>();
   private readonly feedbackFrames = new Map<string, number>();
+  private readonly secondaryFeedback = new Set<Phaser.GameObjects.GameObject>();
   private combatProcs?: CombatProcState;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private healthText!: Phaser.GameObjects.Text;
@@ -322,6 +325,7 @@ export class CombatScene extends Phaser.Scene {
     this.meltdownVisuals.clear();
     this.vectorBlades.clear();
     this.feedbackFrames.clear();
+    this.clearSecondaryFeedback();
     this.clearClusterProjectiles();
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
@@ -408,6 +412,7 @@ export class CombatScene extends Phaser.Scene {
       onBulletHit: (damage) => this.damagePlayer(damage),
       onEnemyKilled: (event) => this.handleEnemyKilled(event),
       onDirectHit: (event) => this.handleDirectHit(event),
+      onSecondaryDamage: (event) => this.drawSecondaryDamage(event),
       getExternalBulletCount: () => this.activeBoss?.getBulletCount() ?? 0,
       textureKeys: {
         splitter: 'enemy-splitter',
@@ -943,7 +948,9 @@ export class CombatScene extends Phaser.Scene {
         {
           durationMs: this.build.durationMs(corrosion.durationMsByLevel[corrosionLevelIndex]!),
           radius: this.build.circularRadius(corrosion.radiusByLevel[corrosionLevelIndex]!),
-          damage: this.build.secondaryDamage(corrosion.damagePerTick),
+          damage: this.build.secondaryDamage(
+            corrosion.damagePerTickByLevel[corrosionLevelIndex]!,
+          ),
           ...(coreLevel >= corrosion.attachedFromLevel
             && event.precisionHit
             && excludedBossTargetId === undefined
@@ -979,6 +986,7 @@ export class CombatScene extends Phaser.Scene {
           radius,
           targetCount,
           damage,
+          GAME_TUNING.orbCores.conduction.accent,
         );
       } else {
         const targetIds = this.activeBoss?.applyAreaDamage(
@@ -1007,7 +1015,13 @@ export class CombatScene extends Phaser.Scene {
       const damage = linkedDamage(this.build.secondaryDamage(
         advancedCore.shockwave.damage + (rupture?.damage ?? 0),
       ));
-      this.applyAreaEffects(event.position, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+      this.applyAreaEffects(
+        event.position,
+        [{ radius, damage }],
+        excludedEnemyId,
+        excludedBossTargetId,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+      );
       this.drawEffectRing(
         event.position,
         radius,
@@ -1019,7 +1033,13 @@ export class CombatScene extends Phaser.Scene {
       const effect = advancedCore.kineticExplosion;
       const radius = this.build.circularRadius(effect.radius);
       const damage = linkedDamage(this.build.secondaryDamage(effect.damage));
-      this.applyAreaEffects(event.position, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+      this.applyAreaEffects(
+        event.position,
+        [{ radius, damage }],
+        excludedEnemyId,
+        excludedBossTargetId,
+        GAME_TUNING.orbCores.inertia.accent,
+      );
       this.drawEffectRing(
         event.position,
         radius,
@@ -1079,6 +1099,7 @@ export class CombatScene extends Phaser.Scene {
         [{ radius: reaction.radius, damage: linkedDamage(reaction.damage) }],
         excludedEnemyId,
         excludedBossTargetId,
+        GAME_TUNING.visual.triggerFeedback.destructionColor,
       );
       this.drawEffectRing(
         event.position,
@@ -1097,6 +1118,7 @@ export class CombatScene extends Phaser.Scene {
         linkedAreas,
         excludedEnemyId,
         excludedBossTargetId,
+        GAME_TUNING.orbCores.explosion.accent,
       );
       for (const effect of linkedAreas) {
         this.drawExplosion(event.position, effect.radius);
@@ -1111,7 +1133,13 @@ export class CombatScene extends Phaser.Scene {
             ignitionFraction,
           );
           for (const field of ignited) {
-            this.applyAreaEffects(field.position, [field]);
+            this.applyAreaEffects(
+              field.position,
+              [field],
+              -1,
+              undefined,
+              GAME_TUNING.orbCores.explosion.accent,
+            );
             this.drawExplosion(field.position, field.radius);
           }
           this.syncCorrosionVisuals();
@@ -1161,6 +1189,7 @@ export class CombatScene extends Phaser.Scene {
         [{ radius: highSpeedImpact.radius, damage: linkedDamage(highSpeedImpact.damage) }],
         excludedEnemyId,
         excludedBossTargetId,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
       );
       this.drawEffectRing(
         event.position,
@@ -1199,7 +1228,13 @@ export class CombatScene extends Phaser.Scene {
         const blast = profile.intersectionBlast!;
         const radius = this.build.circularRadius(blast.radius);
         const damage = this.build.secondaryDamage(blast.damage);
-        this.applyAreaEffects(position, [{ radius, damage }]);
+        this.applyAreaEffects(
+          position,
+          [{ radius, damage }],
+          -1,
+          undefined,
+          GAME_TUNING.orbFusions.mirrorCircuit.accent,
+        );
         this.drawEffectRing(
           position,
           radius,
@@ -1258,7 +1293,13 @@ export class CombatScene extends Phaser.Scene {
         const blast = profile.intersectionBlast!;
         const radius = this.build.circularRadius(blast.radius);
         const damage = this.build.secondaryDamage(blast.damage);
-        this.applyAreaEffects(position, [{ radius, damage }]);
+        this.applyAreaEffects(
+          position,
+          [{ radius, damage }],
+          -1,
+          undefined,
+          GAME_TUNING.orbFusions.photonOrbit.accent,
+        );
         this.drawEffectRing(
           position,
           radius,
@@ -1318,6 +1359,7 @@ export class CombatScene extends Phaser.Scene {
       radius,
       targetCount,
       damage,
+      GAME_TUNING.orbCores.conduction.accent,
     );
     this.activeBoss?.applyAreaDamage(event.position, radius, damage);
     this.drawConductionFeedback(
@@ -1356,7 +1398,7 @@ export class CombatScene extends Phaser.Scene {
         this.applyAreaEffects(event.position, [
           { radius: radius * 0.45, damage },
           { radius, damage: damage * plan.massCollapse.secondaryScale },
-        ]);
+        ], -1, undefined, GAME_TUNING.orbFusions.massCollapse.accent);
         this.drawCollapseFeedback(event.position, radius);
       }
     }
@@ -1379,6 +1421,7 @@ export class CombatScene extends Phaser.Scene {
           ],
           excludedEnemyId,
           excludedBossTargetId,
+          GAME_TUNING.orbFusions.reactorOrb.accent,
         );
         this.drawEffectRing(
           event.position,
@@ -1402,6 +1445,7 @@ export class CombatScene extends Phaser.Scene {
         thickness,
         damage,
         excludedEnemyId,
+        GAME_TUNING.orbFusions.photonOrbit.accent,
       );
       this.activeBoss?.applySegmentDamage(
         event.position,
@@ -1470,7 +1514,13 @@ export class CombatScene extends Phaser.Scene {
       if (result.erupted && result.zone) {
         const radius = this.build.circularRadius(result.zone.radius);
         const damage = this.build.secondaryDamage(plan.meltdownCore.meltdownDamage);
-        this.applyAreaEffects(event.position, [{ radius, damage }]);
+        this.applyAreaEffects(
+          event.position,
+          [{ radius, damage }],
+          -1,
+          undefined,
+          GAME_TUNING.orbFusions.meltdownCore.accent,
+        );
         this.drawEffectRing(
           event.position,
           radius,
@@ -1499,6 +1549,7 @@ export class CombatScene extends Phaser.Scene {
           thickness,
           damage,
           excludedEnemyId,
+          GAME_TUNING.orbFusions.vectorBlade.accent,
         );
         this.activeBoss?.applySegmentDamage(
           event.position,
@@ -1552,6 +1603,7 @@ export class CombatScene extends Phaser.Scene {
       radius,
       targets,
       damage,
+      GAME_TUNING.orbFusions.resonantSwarm.accent,
     );
     const bossTargetIds = this.activeBoss?.applyAreaDamage(
       position,
@@ -1603,7 +1655,13 @@ export class CombatScene extends Phaser.Scene {
         projectile.destroy();
         const radius = this.build?.circularRadius(profile.radius) ?? profile.radius;
         const damage = this.build?.secondaryDamage(profile.damage) ?? profile.damage;
-        this.applyAreaEffects(landing, [{ radius, damage }]);
+        this.applyAreaEffects(
+          landing,
+          [{ radius, damage }],
+          -1,
+          undefined,
+          GAME_TUNING.orbFusions.clusterBombardment.accent,
+        );
         this.drawEffectRing(
           landing,
           radius,
@@ -1637,7 +1695,13 @@ export class CombatScene extends Phaser.Scene {
     const pulse = resonantSwarmProfile(event.fusionSource.level).finalPulse;
     const radius = this.build.circularRadius(pulse.radius);
     const damage = this.build.secondaryDamage(pulse.damage);
-    this.applyAreaEffects(event.position, [{ radius, damage }]);
+    this.applyAreaEffects(
+      event.position,
+      [{ radius, damage }],
+      -1,
+      undefined,
+      GAME_TUNING.orbFusions.resonantSwarm.accent,
+    );
     this.drawEffectRing(
       event.position,
       radius,
@@ -1654,6 +1718,8 @@ export class CombatScene extends Phaser.Scene {
         trail.end,
         trail.thickness,
         damage,
+        -1,
+        GAME_TUNING.orbFusions.photonOrbit.fill,
       );
       this.activeBoss?.applySegmentDamage(
         trail.start,
@@ -1665,7 +1731,13 @@ export class CombatScene extends Phaser.Scene {
     for (const seed of this.nanoSeeds.drainDue(this.gameplayElapsedMs)) {
       const radius = this.build?.circularRadius(seed.radius) ?? seed.radius;
       const damage = this.build?.secondaryDamage(seed.damage) ?? seed.damage;
-      this.applyAreaEffects(seed.position, [{ radius, damage }]);
+      this.applyAreaEffects(
+        seed.position,
+        [{ radius, damage }],
+        -1,
+        undefined,
+        GAME_TUNING.orbFusions.nanoProliferator.accent,
+      );
       this.drawEffectRing(
         seed.position,
         radius * 0.75,
@@ -1676,7 +1748,13 @@ export class CombatScene extends Phaser.Scene {
     for (const field of this.clusterFields.drainDue(this.gameplayElapsedMs)) {
       const radius = this.build?.circularRadius(field.radius) ?? field.radius;
       const damage = this.build?.secondaryDamage(field.damage) ?? field.damage;
-      this.applyAreaEffects(field.position, [{ radius, damage }]);
+      this.applyAreaEffects(
+        field.position,
+        [{ radius, damage }],
+        -1,
+        undefined,
+        GAME_TUNING.orbFusions.clusterBombardment.fill,
+      );
       this.drawEffectRing(
         field.position,
         radius * 0.75,
@@ -1692,6 +1770,8 @@ export class CombatScene extends Phaser.Scene {
         mirror.end,
         thickness,
         damage,
+        -1,
+        GAME_TUNING.orbFusions.mirrorCircuit.fill,
       );
       this.activeBoss?.applySegmentDamage(
         mirror.start,
@@ -1703,7 +1783,13 @@ export class CombatScene extends Phaser.Scene {
     for (const zone of this.meltdownZones.drainDue(this.gameplayElapsedMs)) {
       const radius = this.build?.circularRadius(zone.radius) ?? zone.radius;
       const damage = this.build?.secondaryDamage(zone.damage) ?? zone.damage;
-      this.applyAreaEffects(zone.position, [{ radius, damage }]);
+      this.applyAreaEffects(
+        zone.position,
+        [{ radius, damage }],
+        -1,
+        undefined,
+        GAME_TUNING.orbFusions.meltdownCore.fill,
+      );
       this.drawEffectRing(
         zone.position,
         radius * 0.75,
@@ -1836,7 +1922,13 @@ export class CombatScene extends Phaser.Scene {
     const radius = this.build.cutterThickness(replay.thickness);
     const damage = this.build.secondaryDamage(replay.damage);
     for (const point of points) {
-      this.applyAreaEffects(point, [{ radius, damage }], excludedEnemyId, excludedBossTargetId);
+      this.applyAreaEffects(
+        point,
+        [{ radius, damage }],
+        excludedEnemyId,
+        excludedBossTargetId,
+        GAME_TUNING.orbCores.echo.accent,
+      );
     }
     const line = this.add.graphics()
       .lineStyle(radius, GAME_TUNING.orbCores.echo.accent, 0.65)
@@ -1857,7 +1949,14 @@ export class CombatScene extends Phaser.Scene {
     excludedBossTargetId?: BossTargetId,
   ): void {
     const { thickness, damage } = cutter;
-    this.enemyManager?.applyLineDamage(axis, coordinate, thickness, damage, excludedEnemyId);
+    this.enemyManager?.applyLineDamage(
+      axis,
+      coordinate,
+      thickness,
+      damage,
+      excludedEnemyId,
+      GAME_TUNING.visual.triggerFeedback.laserColor,
+    );
     this.activeBoss?.applyLineDamage(
       axis,
       coordinate,
@@ -1877,13 +1976,17 @@ export class CombatScene extends Phaser.Scene {
 
   private applyAreaEffects(
     position: Vector,
-    effects: readonly Pick<EnemyAreaDamageEffect, 'radius' | 'damage'>[],
+    effects: readonly Pick<EnemyAreaDamageEffect, 'radius' | 'damage' | 'feedbackColor'>[],
     excludedEnemyId = -1,
     excludedBossTargetId?: BossTargetId,
+    feedbackColor?: number,
   ): void {
     settlePlannedAreaEffects(
       position,
-      effects,
+      effects.map((effect) => ({
+        ...effect,
+        feedbackColor: effect.feedbackColor ?? feedbackColor,
+      })),
       excludedEnemyId,
       excludedBossTargetId,
       {
@@ -1913,9 +2016,14 @@ export class CombatScene extends Phaser.Scene {
           vulnerability.maximumStacks,
         );
       }
-      this.applyAreaEffects(tick.position, [tick]);
+      this.applyAreaEffects(
+        tick.position,
+        [tick],
+        -1,
+        undefined,
+        GAME_TUNING.orbCores.corrosion.accent,
+      );
       this.drawCorrosionTick(tick.position, tick.radius);
-      for (const target of targets) this.drawCorrosionDamage(target.position, tick.damage);
     }
     this.syncCorrosionVisuals();
   }
@@ -1994,16 +2102,57 @@ export class CombatScene extends Phaser.Scene {
     return true;
   }
 
-  private drawCorrosionDamage(position: Vector, damage: number): void {
-    const label = this.add.text(position.x, position.y - 14, `-${damage.toFixed(2)}`, {
-      color: '#7dff91',
-      fontSize: '12px',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(5).setName('core-feedback-corrosion-damage');
-    this.time.delayedCall(
-      GAME_TUNING.visual.coreFeedback.corrosionDamageNumberDurationMs,
-      () => label.destroy(),
+  private trackSecondaryFeedback(
+    object: Phaser.GameObjects.GameObject,
+    durationMs: number,
+  ): void {
+    while (
+      this.secondaryFeedback.size
+        >= GAME_TUNING.visual.coreFeedback.maximumDamageLabels
+    ) {
+      const oldest = this.secondaryFeedback.values().next().value!;
+      oldest.destroy();
+      this.secondaryFeedback.delete(oldest);
+    }
+    this.secondaryFeedback.add(object);
+    this.time.delayedCall(durationMs, () => {
+      object.destroy();
+      this.secondaryFeedback.delete(object);
+    });
+  }
+
+  private drawSecondaryDamage(event: EnemySecondaryDamageEvent): void {
+    const color = event.color ?? GAME_TUNING.visual.triggerFeedback.shockwaveColor;
+    const label = this.add.text(
+      event.position.x,
+      event.position.y - 14,
+      `-${formatDisplayNumber(event.damage)}`,
+      {
+        color: `#${color.toString(16).padStart(6, '0')}`,
+        fontSize: '12px',
+        fontStyle: 'bold',
+      },
+    ).setOrigin(0.5).setDepth(5).setName('secondary-damage-feedback');
+    this.trackSecondaryFeedback(
+      label,
+      GAME_TUNING.visual.coreFeedback.damageNumberDurationMs,
     );
+    if (event.killed) {
+      const flash = this.add.graphics()
+        .lineStyle(3, color, 0.9)
+        .strokeCircle(event.position.x, event.position.y, 12)
+        .setDepth(5)
+        .setName('secondary-kill-feedback');
+      this.trackSecondaryFeedback(
+        flash,
+        GAME_TUNING.visual.triggerFeedback.durationMs,
+      );
+    }
+  }
+
+  private clearSecondaryFeedback(): void {
+    for (const object of this.secondaryFeedback) object.destroy();
+    this.secondaryFeedback.clear();
   }
 
   private handleOrbRecovery(source: RecoverySource): void {
@@ -2015,7 +2164,13 @@ export class CombatScene extends Phaser.Scene {
       && this.player
     ) {
       const position = { x: this.player.x, y: this.player.y };
-      this.applyAreaEffects(position, [shockwave]);
+      this.applyAreaEffects(
+        position,
+        [shockwave],
+        -1,
+        undefined,
+        GAME_TUNING.visual.triggerFeedback.shockwaveColor,
+      );
       this.drawEffectRing(
         position,
         shockwave.radius,
@@ -2064,7 +2219,13 @@ export class CombatScene extends Phaser.Scene {
       .setName('trigger-feedback-micro-missile');
     this.time.delayedCall(missile.travelMs, () => {
       trail.destroy();
-      if (target.kind === 'enemy') this.enemyManager?.applyDirectDamage(target.id, missile.damage);
+      if (target.kind === 'enemy') {
+        this.enemyManager?.applyDirectDamage(
+          target.id,
+          missile.damage,
+          GAME_TUNING.visual.triggerFeedback.missileColor,
+        );
+      }
       else this.activeBoss?.applyDirectDamage(target.id, missile.damage);
       this.drawEffectRing(
         target.position,
@@ -2266,6 +2427,7 @@ export class CombatScene extends Phaser.Scene {
   private applyLifecycle(
     reason: Parameters<typeof finalizeCombatLifecycle>[0],
   ): void {
+    this.clearSecondaryFeedback();
     this.corrosionFields.clear();
     this.photonTrails.clear();
     this.nanoSeeds.clear();

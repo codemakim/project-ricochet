@@ -217,16 +217,17 @@ interface AreaEffectSettlement {
 
 export function settlePlannedAreaEffects(
   position: Vector,
-  effects: readonly Pick<PlannedAreaEffect, 'radius' | 'damage'>[],
+  effects: readonly Pick<EnemyAreaDamageEffect, 'radius' | 'damage' | 'feedbackColor'>[],
   excludedEnemyId: number,
   excludedBossTargetId: BossTargetId | undefined,
   settlement: AreaEffectSettlement,
 ): void {
-  settlement.applyEnemyBatch(effects.map(({ radius, damage }) => ({
+  settlement.applyEnemyBatch(effects.map(({ radius, damage, feedbackColor }) => ({
     center: { ...position },
     radius,
     damage,
     excludedEnemyId,
+    ...(feedbackColor === undefined ? {} : { feedbackColor }),
   })));
   for (const { radius, damage } of effects) {
     settlement.applyBossArea(
