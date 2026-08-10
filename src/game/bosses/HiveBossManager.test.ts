@@ -484,6 +484,31 @@ describe('HiveBossManager', () => {
     expect(boundary.sprites.filter((sprite) => sprite.texture.includes('reflector'))).toHaveLength(0);
   });
 
+  it('reflects a level-five inertia precision hit from a living reflector despite pierce', () => {
+    const boundary = createBoundary();
+    const reflector = boundary.colliderFor('hive-left-reflector');
+    boundary.permanentResult.current = {
+      ...result(3, false),
+      coreType: 'inertia',
+      coreLevel: 5,
+      precisionHit: true,
+      preserveChargedKinetics: true,
+    };
+    const velocity = boundary.orb.body.velocity.x;
+
+    expect(reflector.trigger(boundary.orb, reflector.second as FakeSprite)).toBe(true);
+    expect(boundary.orb.body.velocity.x).toBe(-velocity);
+    expect(boundary.synchronizeOrb).toHaveBeenCalledWith(boundary.orb);
+    expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
+      targetId: 'leftReflector',
+      source: 'permanent',
+      sourceOrbId: 0,
+      coreType: 'inertia',
+      coreLevel: 5,
+      precisionHit: true,
+    }));
+  });
+
   it('keeps shooters silent while shielded, cancels warnings, and restarts offsets', () => {
     const boundary = createBoundary();
     const tuning = GAME_TUNING.projectiles.hiveShooter;

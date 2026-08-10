@@ -42,6 +42,7 @@ export function createCombatGame(parent: string, config?: RunConfig): Phaser.Gam
 export class AppController {
   private progress: MetaProgress;
   private game?: Phaser.Game;
+  private workshopMediaCleanup?: () => void;
 
   constructor(
     private readonly root: HTMLElement,
@@ -55,6 +56,8 @@ export class AppController {
   }
 
   private renderDeploy(): void {
+    this.workshopMediaCleanup?.();
+    this.workshopMediaCleanup = undefined;
     const options = this.progress.unlockedCores
       .map((id) => `<option value="${id}">${ORB_CORE_DEFINITIONS[id].label}</option>`)
       .join('');
@@ -130,6 +133,7 @@ export class AppController {
   }
 
   private renderWorkshop(message = ''): void {
+    this.workshopMediaCleanup?.();
     const price = META_TUNING.corePrices[this.progress.unlockedCores.length - 1];
     this.root.innerHTML = `
       <section class="meta-screen workshop-screen">
@@ -139,12 +143,13 @@ export class AppController {
           <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
           ${message ? `<p role="status">${message}</p>` : ''}
           <div class="workshop-tabs" role="tablist" aria-label="작업장 목록">
-            <button type="button" role="tab" data-workshop-tab="core" aria-selected="true">기본 구슬</button>
-            <button type="button" role="tab" data-workshop-tab="fusion" aria-selected="false">융합 기록</button>
+            <button type="button" role="tab" id="workshop-tab-core" data-workshop-tab="core" aria-controls="workshop-panel-core" aria-selected="true" tabindex="0">기본 구슬</button>
+            <button type="button" role="tab" id="workshop-tab-fusion" data-workshop-tab="fusion" aria-controls="workshop-panel-fusion" aria-selected="false" tabindex="-1">융합 기록</button>
           </div>
         </header>
         <div class="workshop-layout">
-          <div class="workshop-grid" data-workshop-grid></div>
+          <div class="workshop-grid" id="workshop-panel-core" role="tabpanel" aria-labelledby="workshop-tab-core" data-workshop-panel="core"></div>
+          <div class="workshop-grid" id="workshop-panel-fusion" role="tabpanel" aria-labelledby="workshop-tab-fusion" data-workshop-panel="fusion" hidden></div>
           <aside class="workshop-detail" data-workshop-detail aria-live="polite">
             <p>카드를 선택하세요</p>
           </aside>
@@ -155,7 +160,7 @@ export class AppController {
     `;
 
     const mobile = window.matchMedia('(max-width: 640px)');
-    const grid = this.root.querySelector<HTMLElement>('[data-workshop-grid]')!;
+    const panels = [...this.root.querySelectorAll<HTMLElement>('[data-workshop-panel]')];
     const detail = this.root.querySelector<HTMLElement>('[data-workshop-detail]')!;
     const sheet = this.root.querySelector<HTMLDialogElement>('[data-workshop-sheet]')!;
     let selectedCard: HTMLButtonElement | null = null;
@@ -218,8 +223,15 @@ export class AppController {
     };
 
     const renderGrid = (kind: 'core' | 'fusion') => {
+      const grid = panels.find((panel) => panel.dataset.workshopPanel === kind)!;
+      for (const panel of panels) {
+        panel.hidden = panel !== grid;
+        if (panel !== grid) panel.innerHTML = '';
+      }
       this.root.querySelectorAll<HTMLButtonElement>('[data-workshop-tab]').forEach((tab) => {
-        tab.setAttribute('aria-selected', String(tab.dataset.workshopTab === kind));
+        const selected = tab.dataset.workshopTab === kind;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
       });
       grid.innerHTML = kind === 'core'
         ? ORB_CORE_IDS.map((id) => {
@@ -258,16 +270,35 @@ export class AppController {
     sheet.addEventListener('click', (event) => {
       if (event.target === sheet) sheet.close();
     });
-    mobile.addEventListener('change', ({ matches }) => {
+    const handleMobileChange = ({ matches }: MediaQueryListEvent) => {
       if (!matches && sheet.open) sheet.close();
-    });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-workshop-tab]').forEach((tab) => {
+    };
+    mobile.addEventListener('change', handleMobileChange);
+    this.workshopMediaCleanup = () => {
+      mobile.removeEventListener('change', handleMobileChange);
+    };
+    const tabs = [...this.root.querySelectorAll<HTMLButtonElement>('[data-workshop-tab]')];
+    const activateTab = (tab: HTMLButtonElement, focus = false) => {
+      if (sheet.open) sheet.close();
+      selectedCard = null;
+      detail.innerHTML = '<p>카드를 선택하세요</p>';
+      sheet.innerHTML = '';
+      renderGrid(tab.dataset.workshopTab as 'core' | 'fusion');
+      if (focus) tab.focus();
+    };
+    tabs.forEach((tab, index) => {
       tab.addEventListener('click', () => {
-        if (sheet.open) sheet.close();
-        selectedCard = null;
-        detail.innerHTML = '<p>카드를 선택하세요</p>';
-        sheet.innerHTML = '';
-        renderGrid(tab.dataset.workshopTab as 'core' | 'fusion');
+        activateTab(tab);
+      });
+      tab.addEventListener('keydown', (event) => {
+        let next: number | undefined;
+        if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        if (event.key === 'Home') next = 0;
+        if (event.key === 'End') next = tabs.length - 1;
+        if (next === undefined) return;
+        event.preventDefault();
+        activateTab(tabs[next]!, true);
       });
     });
     renderGrid('core');

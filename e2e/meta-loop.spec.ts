@@ -213,6 +213,45 @@ test('@desktop workshop uses a card grid and side detail', async ({ page }) => {
   await expect(page.locator('[data-workshop-card]')).toHaveCount(9);
 });
 
+test('@desktop workshop tabs expose a complete keyboard tab pattern', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '코어 작업장' }).click();
+  const core = page.getByRole('tab', { name: '기본 구슬' });
+  const fusion = page.getByRole('tab', { name: '융합 기록' });
+  const corePanel = page.locator('#workshop-panel-core');
+  const fusionPanel = page.locator('#workshop-panel-fusion');
+
+  await expect(core).toHaveAttribute('aria-controls', 'workshop-panel-core');
+  await expect(fusion).toHaveAttribute('aria-controls', 'workshop-panel-fusion');
+  await expect(core).toHaveAttribute('tabindex', '0');
+  await expect(fusion).toHaveAttribute('tabindex', '-1');
+  await expect(corePanel).toHaveAttribute('role', 'tabpanel');
+  await expect(corePanel).toHaveAttribute('aria-labelledby', 'workshop-tab-core');
+  await expect(fusionPanel).toHaveAttribute('role', 'tabpanel');
+  await expect(fusionPanel).toHaveAttribute('aria-labelledby', 'workshop-tab-fusion');
+  await expect(corePanel).toBeVisible();
+  await expect(fusionPanel).toBeHidden();
+
+  await core.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(fusion).toBeFocused();
+  await expect(fusion).toHaveAttribute('aria-selected', 'true');
+  await expect(core).toHaveAttribute('aria-selected', 'false');
+  await expect(fusion).toHaveAttribute('tabindex', '0');
+  await expect(core).toHaveAttribute('tabindex', '-1');
+  await expect(corePanel).toBeHidden();
+  await expect(fusionPanel).toBeVisible();
+  await expect(page.locator('[data-workshop-card]')).toHaveCount(9);
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(core).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(fusion).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(core).toBeFocused();
+  await expect(page.locator('[data-workshop-card]')).toHaveCount(6);
+});
+
 test('@mobile workshop opens a visible bottom sheet without scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -234,6 +273,69 @@ test('@mobile workshop opens a visible bottom sheet without scrolling', async ({
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
   await expect(card).toBeFocused();
+});
+
+test('@desktop removes the workshop media listener across rerenders and exit', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('project-ricochet.meta', JSON.stringify({
+      schemaVersion: 3,
+      parts: 100,
+      unlockedCores: ['echo'],
+      discoveredCores: ['echo', 'inertia'],
+      discoveredFusions: [],
+      loadout: ['echo'],
+      claimedRunIds: [],
+      firstBossKills: [],
+      firstValidRunClaimed: false,
+    }));
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    const changeListeners = new Set<EventListenerOrEventListenerObject>();
+    window.matchMedia = (query: string) => {
+      const media = nativeMatchMedia(query);
+      return {
+        get matches() { return media.matches; },
+        media: media.media,
+        onchange: null,
+        addListener: media.addListener.bind(media),
+        removeListener: media.removeListener.bind(media),
+        dispatchEvent: media.dispatchEvent.bind(media),
+        addEventListener(
+          type: string,
+          listener: EventListenerOrEventListenerObject,
+          options?: boolean | AddEventListenerOptions,
+        ) {
+          if (type === 'change') changeListeners.add(listener);
+          media.addEventListener(type, listener, options);
+        },
+        removeEventListener(
+          type: string,
+          listener: EventListenerOrEventListenerObject,
+          options?: boolean | EventListenerOptions,
+        ) {
+          if (type === 'change') changeListeners.delete(listener);
+          media.removeEventListener(type, listener, options);
+        },
+      } as MediaQueryList;
+    };
+    (window as typeof window & { workshopMediaListenerCount(): number })
+      .workshopMediaListenerCount = () => changeListeners.size;
+  });
+  const listenerCount = () => page.evaluate(() => (
+    window as typeof window & { workshopMediaListenerCount(): number }
+  ).workshopMediaListenerCount());
+
+  await page.goto('/');
+  expect(await listenerCount()).toBe(0);
+  await page.getByRole('button', { name: '코어 작업장' }).click();
+  expect(await listenerCount()).toBe(1);
+  await page.locator('[data-workshop-card][data-workshop-id="inertia"]').click();
+  await page.locator('[data-workshop-detail] [data-buy-core="inertia"]').click();
+  await expect(page.getByText('코어 해금 완료')).toBeVisible();
+  expect(await listenerCount()).toBe(1);
+  await page.getByRole('button', { name: '돌아가기' }).click();
+  expect(await listenerCount()).toBe(0);
+  await page.getByRole('button', { name: '출격', exact: true }).click();
+  expect(await listenerCount()).toBe(0);
 });
 
 test('@desktop migrates a schema 1 loadout without losing parts or unlocks', async ({ page }) => {

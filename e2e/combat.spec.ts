@@ -838,6 +838,30 @@ test('@desktop shows and expires corrosion and conduction feedback', async ({ pa
   expect(await feedbackNames()).toEqual([]);
 });
 
+test('@desktop keeps permanent and temporary conduction feedback source namespaces separate', async ({ page }) => {
+  await loadCanvas(page);
+  const feedbackCount = await sceneCall(page, (scene) => {
+    const feedbackScene = scene as unknown as {
+      drawConductionFeedback(
+        position: Vector,
+        targets: readonly Vector[],
+        sourceOrbId: number,
+        source: 'permanent' | 'temporary',
+      ): void;
+    };
+    feedbackScene.drawConductionFeedback({ x: 200, y: 300 }, [], 7, 'permanent');
+    feedbackScene.drawConductionFeedback({ x: 250, y: 300 }, [], 7, 'temporary');
+    feedbackScene.drawConductionFeedback({ x: 300, y: 300 }, [], 7, 'permanent');
+    return scene.children.list.filter(
+      (child) => child.active
+        && child.name === 'core-feedback-conduction'
+        && child.getData?.('sourceOrbId') === 7,
+    ).length;
+  });
+
+  expect(feedbackCount).toBe(2);
+});
+
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
   await loadCanvas(page);
   const enemyId = await sceneCall(page, (scene) => {

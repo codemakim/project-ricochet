@@ -496,7 +496,7 @@ export class CombatScene extends Phaser.Scene {
           this.corrosionFields.spawn(-1, position, this.gameplayElapsedMs);
           this.syncCorrosionVisuals();
         } else {
-          this.drawConductionFeedback(position, [], -1);
+          this.drawConductionFeedback(position, [], -1, 'permanent');
         }
       };
     }
@@ -999,7 +999,12 @@ export class CombatScene extends Phaser.Scene {
           .map((targetId) => this.activeBoss?.getTargetPosition(targetId))
           .filter((position): position is Vector => position !== null && position !== undefined);
       }
-      this.drawConductionFeedback(event.position, targetPositions, event.sourceOrbId);
+      this.drawConductionFeedback(
+        event.position,
+        targetPositions,
+        event.sourceOrbId,
+        event.source,
+      );
     }
     if (advancedCore?.shockwave) {
       const rupture = event.coreType === 'echo'
@@ -1366,12 +1371,14 @@ export class CombatScene extends Phaser.Scene {
       event.position,
       targets.map(({ position }) => position),
       event.orbId,
+      'permanent',
     );
   }
 
   private applyFusionDirectHit(
     plan: ReturnType<typeof planFusionDirectHitEffects>,
     event: {
+      source: DirectHitEvent['source'];
       sourceOrbId: number;
       position: Vector;
       direction: Vector;
@@ -1454,7 +1461,7 @@ export class CombatScene extends Phaser.Scene {
         damage,
         excludedBossTargetId,
       );
-      if (this.acceptsFeedbackFrame('photon', event.sourceOrbId)) {
+      if (this.acceptsFeedbackFrame('photon', event.source, event.sourceOrbId)) {
         const line = this.add.graphics()
           .setData('sourceOrbId', event.sourceOrbId)
           .lineStyle(thickness, GAME_TUNING.orbFusions.photonOrbit.accent, 0.85)
@@ -1618,6 +1625,7 @@ export class CombatScene extends Phaser.Scene {
       position,
       [...enemyTargets.map(({ position: target }) => target), ...bossPositions],
       temporaryOrbId,
+      'temporary',
     );
   }
 
@@ -2067,8 +2075,9 @@ export class CombatScene extends Phaser.Scene {
     position: Vector,
     targets: readonly Vector[],
     sourceOrbId: number,
+    source: DirectHitEvent['source'],
   ): void {
-    if (!this.acceptsFeedbackFrame('conduction', sourceOrbId)) return;
+    if (!this.acceptsFeedbackFrame('conduction', source, sourceOrbId)) return;
     const { conduction } = GAME_TUNING.orbCores;
     const pulse = this.add.graphics()
       .setData('sourceOrbId', sourceOrbId)
@@ -2094,8 +2103,12 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
-  private acceptsFeedbackFrame(kind: string, sourceOrbId: number): boolean {
-    const key = `${kind}:${sourceOrbId}`;
+  private acceptsFeedbackFrame(
+    kind: string,
+    source: DirectHitEvent['source'],
+    sourceOrbId: number,
+  ): boolean {
+    const key = `${source}:${kind}:${sourceOrbId}`;
     const frame = this.game.loop.frame;
     if (this.feedbackFrames.get(key) === frame) return false;
     this.feedbackFrames.set(key, frame);

@@ -416,7 +416,11 @@ export class HiveBossManager implements BossEncounter {
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'permanent', orb.orbId, orb);
-    if (!result.reflect) {
+    if (
+      !result.reflect
+      && partId !== 'leftReflector'
+      && partId !== 'rightReflector'
+    ) {
       this.applyPendingHit(pending);
       return false;
     }
@@ -437,7 +441,11 @@ export class HiveBossManager implements BossEncounter {
     );
     if (!result) return false;
     const pending = this.createPending(result, partId, 'temporary', orb.temporaryOrbId, orb);
-    if (!result.reflect) {
+    if (
+      !result.reflect
+      && partId !== 'leftReflector'
+      && partId !== 'rightReflector'
+    ) {
       this.applyPendingHit(pending);
       return false;
     }
