@@ -110,7 +110,7 @@ test('@desktop completes all three bosses without a final combat reward', async 
   expect((await combatSnapshot(page)).encounter.stageId).toBe('default-1');
 });
 
-test('@desktop settles, unlocks a core, and persists the redeploy loadout', async ({ page }) => {
+test('@desktop settles, unlocks a core in the workshop, and persists the redeploy loadout', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '출격 준비' })).toBeVisible();
   await page.getByRole('button', { name: '출격', exact: true }).click();
@@ -162,13 +162,25 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
     ORB_CORE_DEFINITIONS[acquiredCoreType].label,
     { exact: true },
   )).toBeVisible();
-  await expect(page.locator(`[data-buy-core="${acquiredCoreType}"]`)).toBeEnabled();
+  await page.locator(
+    `[data-workshop-card][data-workshop-id="${acquiredCoreType}"]`,
+  ).click();
+  await expect(page.locator(
+    `[data-workshop-detail] [data-buy-core="${acquiredCoreType}"]`,
+  )).toBeEnabled();
+  await page.getByRole('tab', { name: '융합 기록' }).click();
   await expect(page.getByText('광자 궤도')).toBeVisible();
   await expect(page.getByText('질량 붕괴탄')).toBeVisible();
   await expect(page.getByText('거울 회로')).toBeVisible();
   await expect(page.getByText('공명 군체')).toHaveCount(0);
   await expect(page.getByText('반응로 구슬')).toHaveCount(0);
-  await page.locator(`[data-buy-core="${acquiredCoreType}"]`).click();
+  await page.getByRole('tab', { name: '기본 구슬' }).click();
+  await page.locator(
+    `[data-workshop-card][data-workshop-id="${acquiredCoreType}"]`,
+  ).click();
+  await page.locator(
+    `[data-workshop-detail] [data-buy-core="${acquiredCoreType}"]`,
+  ).click();
   await expect(page.getByText('코어 해금 완료')).toBeVisible();
   await page.getByRole('button', { name: '돌아가기' }).click();
 
@@ -188,6 +200,40 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
     { exact: true },
   ).locator('..'))
     .toContainText('해금됨');
+});
+
+test('@desktop workshop uses a card grid and side detail', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '코어 작업장' }).click();
+  await expect(page.locator('[data-workshop-card]')).toHaveCount(6);
+  await page.locator('[data-workshop-card]').first().click();
+  await expect(page.locator('[data-workshop-detail]')).toBeVisible();
+  await expect(page.locator('[data-workshop-sheet][open]')).toHaveCount(0);
+  await page.getByRole('tab', { name: '융합 기록' }).click();
+  await expect(page.locator('[data-workshop-card]')).toHaveCount(9);
+});
+
+test('@mobile workshop opens a visible bottom sheet without scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '코어 작업장' }).click();
+  const card = page.locator('[data-workshop-card]').first();
+  await card.click();
+  const sheet = page.locator('[data-workshop-sheet][open]');
+  await expect(sheet).toBeVisible();
+  expect((await sheet.boundingBox())!.y).toBeLessThan(844);
+  await page.mouse.click(10, 10);
+  await expect(sheet).toHaveCount(0);
+  await expect(card).toBeFocused();
+  await card.click();
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator('[data-workshop-detail]')).toContainText('반향 구슬');
+  await expect(card).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await card.click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(card).toBeFocused();
 });
 
 test('@desktop migrates a schema 1 loadout without losing parts or unlocks', async ({ page }) => {

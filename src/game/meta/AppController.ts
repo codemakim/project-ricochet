@@ -132,64 +132,145 @@ export class AppController {
   private renderWorkshop(message = ''): void {
     const price = META_TUNING.corePrices[this.progress.unlockedCores.length - 1];
     this.root.innerHTML = `
-      <section class="meta-screen">
-        <p class="eyebrow">CORE WORKSHOP</p>
-        <h1>코어 작업장</h1>
-        <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
-        ${message ? `<p role="status">${message}</p>` : ''}
-        <h2>기본 구슬</h2>
-        <div class="core-list">
-          ${ORB_CORE_IDS.map((id) => {
-            const discovered = this.progress.discoveredCores.includes(id);
-            const unlocked = this.progress.unlockedCores.includes(id);
-            if (!discovered) {
-              return `
-                <article>
-                  <strong>???</strong>
-                  <span>${ORB_CORE_DEFINITIONS[id].roleHint} · 미발견</span>
-                </article>
-              `;
-            }
-            return `
-              <article>
-                <strong>${ORB_CORE_DEFINITIONS[id].label}</strong>
-                <span>${ORB_CORE_DEFINITIONS[id].summary}</span>
-                ${unlocked
-                  ? '<span>해금됨</span>'
-                  : `<button data-buy-core="${id}" ${price === undefined || this.progress.parts < price ? 'disabled' : ''}>${price ?? '-'} 부품</button>`}
-              </article>
-            `;
-          }).join('')}
-        </div>
-        <h2>융합 기록</h2>
-        <div class="core-list">
-          ${FUSION_ORB_IDS.map((id) => {
-            const definition = ORB_FUSION_DEFINITIONS[id];
-            const discovered = this.progress.discoveredFusions.includes(id);
-            const [first, second] = definition.materials;
-            return `
-              <article>
-                <strong>${discovered ? definition.label : '???'}</strong>
-                <span>${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label}</span>
-                <span>${discovered ? definition.summary : `${definition.roleHint} · 미발견`}</span>
-              </article>
-            `;
-          }).join('')}
+      <section class="meta-screen workshop-screen">
+        <header class="workshop-header">
+          <p class="eyebrow">CORE WORKSHOP</p>
+          <h1>코어 작업장</h1>
+          <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
+          ${message ? `<p role="status">${message}</p>` : ''}
+          <div class="workshop-tabs" role="tablist" aria-label="작업장 목록">
+            <button type="button" role="tab" data-workshop-tab="core" aria-selected="true">기본 구슬</button>
+            <button type="button" role="tab" data-workshop-tab="fusion" aria-selected="false">융합 기록</button>
+          </div>
+        </header>
+        <div class="workshop-layout">
+          <div class="workshop-grid" data-workshop-grid></div>
+          <aside class="workshop-detail" data-workshop-detail aria-live="polite">
+            <p>카드를 선택하세요</p>
+          </aside>
         </div>
         <button data-action="back">돌아가기</button>
+        <dialog class="workshop-sheet" data-workshop-sheet aria-label="작업장 상세"></dialog>
       </section>
     `;
-    this.root.querySelectorAll<HTMLButtonElement>('[data-buy-core]').forEach((button) => {
-      button.addEventListener('click', () => {
-        try {
-          this.progress = purchaseCore(this.progress, button.dataset.buyCore as OrbCoreId);
-          this.store.save(this.progress);
-          this.renderWorkshop('코어 해금 완료');
-        } catch (error) {
-          this.renderWorkshop(error instanceof Error ? error.message : '구매 실패');
-        }
+
+    const mobile = window.matchMedia('(max-width: 640px)');
+    const grid = this.root.querySelector<HTMLElement>('[data-workshop-grid]')!;
+    const detail = this.root.querySelector<HTMLElement>('[data-workshop-detail]')!;
+    const sheet = this.root.querySelector<HTMLDialogElement>('[data-workshop-sheet]')!;
+    let selectedCard: HTMLButtonElement | null = null;
+
+    const bindPurchase = () => {
+      this.root.querySelectorAll<HTMLButtonElement>('[data-buy-core]').forEach((button) => {
+        button.addEventListener('click', () => {
+          try {
+            this.progress = purchaseCore(this.progress, button.dataset.buyCore as OrbCoreId);
+            this.store.save(this.progress);
+            this.renderWorkshop('코어 해금 완료');
+          } catch (error) {
+            this.renderWorkshop(error instanceof Error ? error.message : '구매 실패');
+          }
+        });
+      });
+    };
+
+    const renderDetail = (kind: string, id: string) => {
+      let content: string;
+      if (kind === 'core') {
+        const coreId = id as OrbCoreId;
+        const definition = ORB_CORE_DEFINITIONS[coreId];
+        const discovered = this.progress.discoveredCores.includes(coreId);
+        const unlocked = this.progress.unlockedCores.includes(coreId);
+        content = `
+          <div class="workshop-detail-content">
+            <span class="workshop-orb" style="--orb-color: #${definition.color.toString(16).padStart(6, '0')}" aria-hidden="true"></span>
+            <h2>${discovered ? definition.label : '???'}</h2>
+            <p>${discovered ? definition.summary : `${definition.roleHint} · 미발견`}</p>
+            ${discovered
+              ? unlocked
+                ? '<p class="workshop-state">해금됨</p>'
+                : `<button type="button" class="primary" data-buy-core="${coreId}" ${price === undefined || this.progress.parts < price ? 'disabled' : ''}>${price ?? '-'} 부품으로 해금</button>`
+              : '<p class="workshop-state">미발견</p>'}
+          </div>
+        `;
+      } else {
+        const fusionId = id as keyof typeof ORB_FUSION_DEFINITIONS;
+        const definition = ORB_FUSION_DEFINITIONS[fusionId];
+        const discovered = this.progress.discoveredFusions.includes(fusionId);
+        const [first, second] = definition.materials;
+        content = `
+          <div class="workshop-detail-content">
+            <span class="workshop-orb fusion" style="--orb-color: #${definition.color.toString(16).padStart(6, '0')}; --orb-accent: #${definition.accent.toString(16).padStart(6, '0')}" aria-hidden="true"></span>
+            <h2>${discovered ? definition.label : '???'}</h2>
+            <p>${ORB_CORE_DEFINITIONS[first].label} + ${ORB_CORE_DEFINITIONS[second].label}</p>
+            <p>${discovered ? definition.summary : `${definition.roleHint} · 미발견`}</p>
+          </div>
+        `;
+      }
+      detail.innerHTML = content;
+      sheet.innerHTML = `
+        <button type="button" class="workshop-sheet-close" data-close-workshop-sheet aria-label="닫기">닫기</button>
+        ${content}
+      `;
+      sheet.querySelector('[data-close-workshop-sheet]')
+        ?.addEventListener('click', () => sheet.close());
+      bindPurchase();
+    };
+
+    const renderGrid = (kind: 'core' | 'fusion') => {
+      this.root.querySelectorAll<HTMLButtonElement>('[data-workshop-tab]').forEach((tab) => {
+        tab.setAttribute('aria-selected', String(tab.dataset.workshopTab === kind));
+      });
+      grid.innerHTML = kind === 'core'
+        ? ORB_CORE_IDS.map((id) => {
+            const definition = ORB_CORE_DEFINITIONS[id];
+            const discovered = this.progress.discoveredCores.includes(id);
+            const unlocked = this.progress.unlockedCores.includes(id);
+            return `
+              <button type="button" class="workshop-card" data-workshop-card data-workshop-kind="core" data-workshop-id="${id}">
+                <span class="workshop-orb" style="--orb-color: #${definition.color.toString(16).padStart(6, '0')}" aria-hidden="true"></span>
+                <strong>${discovered ? definition.label : '???'}</strong>
+                <span>${discovered ? unlocked ? '해금됨' : `${price ?? '-'} 부품` : '미발견'}</span>
+              </button>
+            `;
+          }).join('')
+        : FUSION_ORB_IDS.map((id) => {
+            const definition = ORB_FUSION_DEFINITIONS[id];
+            const discovered = this.progress.discoveredFusions.includes(id);
+            return `
+              <button type="button" class="workshop-card" data-workshop-card data-workshop-kind="fusion" data-workshop-id="${id}">
+                <span class="workshop-orb fusion" style="--orb-color: #${definition.color.toString(16).padStart(6, '0')}; --orb-accent: #${definition.accent.toString(16).padStart(6, '0')}" aria-hidden="true"></span>
+                <strong>${discovered ? definition.label : '???'}</strong>
+                <span>${discovered ? '발견됨' : '미발견'}</span>
+              </button>
+            `;
+          }).join('');
+      grid.querySelectorAll<HTMLButtonElement>('[data-workshop-card]').forEach((card) => {
+        card.addEventListener('click', () => {
+          selectedCard = card;
+          renderDetail(card.dataset.workshopKind!, card.dataset.workshopId!);
+          if (mobile.matches) sheet.showModal();
+        });
+      });
+    };
+
+    sheet.addEventListener('close', () => selectedCard?.focus());
+    sheet.addEventListener('click', (event) => {
+      if (event.target === sheet) sheet.close();
+    });
+    mobile.addEventListener('change', ({ matches }) => {
+      if (!matches && sheet.open) sheet.close();
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-workshop-tab]').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        if (sheet.open) sheet.close();
+        selectedCard = null;
+        detail.innerHTML = '<p>카드를 선택하세요</p>';
+        sheet.innerHTML = '';
+        renderGrid(tab.dataset.workshopTab as 'core' | 'fusion');
       });
     });
+    renderGrid('core');
     this.root.querySelector('[data-action="back"]')
       ?.addEventListener('click', () => this.renderDeploy());
   }
