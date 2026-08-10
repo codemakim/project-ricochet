@@ -95,6 +95,7 @@ import {
   createEmptyAbilityRanks,
   type AbilityId,
   type AbilityRanks,
+  xpRequiredForLevel,
 } from '../progression/progressionRules';
 import {
   selectBossRewardOptions,
@@ -635,7 +636,7 @@ export class CombatScene extends Phaser.Scene {
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
         xp: 0,
-        xpRequired: 5,
+        xpRequired: xpRequiredForLevel(0),
         pendingChoices: 0,
         choices: [],
       },
