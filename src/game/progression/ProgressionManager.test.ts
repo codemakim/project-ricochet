@@ -28,7 +28,7 @@ describe('ProgressionManager', () => {
     const manager = new ProgressionManager(7);
     manager.gainExperience(30);
 
-    expect(manager.getSnapshot()).toMatchObject({ level: 2, xp: 5, pendingChoices: 2 });
+    expect(manager.getSnapshot()).toMatchObject({ level: 2, xp: 8, pendingChoices: 2 });
     expect(manager.getChoices().every(({ kind }) => (
       kind === 'ability' || kind === 'orb-add' || kind === 'orb-upgrade'
     ))).toBe(true);
@@ -50,7 +50,7 @@ describe('ProgressionManager', () => {
     const build = new BuildState();
     const orbs: RewardOrb[] = [{ coreType: 'echo', level: 1 }];
     const manager = new ProgressionManager(0, build, liveContext(orbs));
-    manager.gainExperience(8);
+    manager.gainExperience(5);
     const choice = manager.getChoices().find((candidate) => candidate.kind === 'orb-add')!;
     orbs.push({ coreType: choice.coreType, level: 1 });
 

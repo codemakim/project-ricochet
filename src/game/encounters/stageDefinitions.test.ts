@@ -126,4 +126,14 @@ describe('stage content', () => {
     expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
       .toThrow('default-1 phase cap must fit its profile');
   });
+
+  it('rejects profiles whose minimum cells cannot fit around a passage', () => {
+    const invalid = { ...FORMATION_PROFILES[0]!, cellMinimum: 14, cellMaximum: 14 };
+
+    expect(() => validateStageContent(
+      STAGES,
+      ENEMY_CATALOG,
+      [invalid, ...FORMATION_PROFILES.slice(1)],
+    )).toThrow('opening cannot fit its passage and minimum cells');
+  });
 });

@@ -635,7 +635,7 @@ export class CombatScene extends Phaser.Scene {
       progression: this.progression?.getSnapshot() ?? {
         level: 0,
         xp: 0,
-        xpRequired: 8,
+        xpRequired: 5,
         pendingChoices: 0,
         choices: [],
       },

@@ -1,6 +1,11 @@
 import type { BossKind } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
-import { occupyFootprint, type GridFootprint } from './formationGrid';
+import {
+  FORMATION_COLUMNS,
+  occupyFootprint,
+  reservedPassageCells,
+  type GridFootprint,
+} from './formationGrid';
 import type { FormationStyle } from './formationRules';
 
 export type BattlefieldId = 'default';
@@ -372,6 +377,11 @@ export function validateStageContent(
     positiveInteger(profile.cellMaximum, `${profile.id}.cellMaximum`);
     if (profile.cellMinimum > profile.cellMaximum) {
       throw new RangeError(`${profile.id} cell range must be ordered`);
+    }
+    const largestPassage = Math.max(...[0, 2, 4].map((sequence) =>
+      reservedPassageCells(profile.rowMinimum, sequence, 0).size));
+    if (FORMATION_COLUMNS * profile.rowMinimum - largestPassage < profile.cellMinimum) {
+      throw new RangeError(`${profile.id} cannot fit its passage and minimum cells`);
     }
     finiteNonNegative(profile.proceduralWeight, `${profile.id}.proceduralWeight`);
     const totalSourceWeight = profile.proceduralWeight

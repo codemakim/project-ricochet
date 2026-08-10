@@ -6,6 +6,7 @@ import {
   createReinforcementFormation,
   type FormationRecipe,
 } from './formationRules';
+import { FORMATION_COLUMNS, reservedPassageCells } from './formationGrid';
 import { FORMATION_PROFILES, STAGES } from './stageDefinitions';
 
 function recipe(stageIndex = 0, phaseIndex = 0): FormationRecipe {
@@ -33,6 +34,51 @@ function occupiedCells(enemies: readonly FormationEnemySpec[]): string[] {
   ));
 }
 
+function hasConnectedEmptyPassage(enemies: readonly FormationEnemySpec[]): boolean {
+  const rows = Math.max(...enemies.map(({ row, height }) => row + height));
+  const occupied = new Set(occupiedCells(enemies));
+  const queue = Array.from({ length: FORMATION_COLUMNS }, (_, column) => ({
+    row: rows - 1,
+    column,
+  })).filter(({ row, column }) => !occupied.has(`${row}:${column}`));
+  const visited = new Set(queue.map(({ row, column }) => `${row}:${column}`));
+
+  while (queue.length > 0) {
+    const cell = queue.shift()!;
+    if (cell.row === 0) return true;
+    for (const [row, column] of [
+      [cell.row - 1, cell.column],
+      [cell.row + 1, cell.column],
+      [cell.row, cell.column - 1],
+      [cell.row, cell.column + 1],
+    ] as const) {
+      const key = `${row}:${column}`;
+      if (
+        row >= 0 && row < rows && column >= 0 && column < FORMATION_COLUMNS
+        && !occupied.has(key) && !visited.has(key)
+      ) {
+        visited.add(key);
+        queue.push({ row, column });
+      }
+    }
+  }
+  return false;
+}
+
+function sharedBottomPassageColumns(
+  first: readonly FormationEnemySpec[],
+  second: readonly FormationEnemySpec[],
+): number[] {
+  const bottomColumns = (enemies: readonly FormationEnemySpec[]) => {
+    const row = Math.max(...enemies.map((enemy) => enemy.row + enemy.height)) - 1;
+    const occupied = new Set(occupiedCells(enemies));
+    return Array.from({ length: FORMATION_COLUMNS }, (_, column) => column)
+      .filter((column) => !occupied.has(`${row}:${column}`));
+  };
+  const secondColumns = new Set(bottomColumns(second));
+  return bottomColumns(first).filter((column) => secondColumns.has(column));
+}
+
 describe('multi-cell formation generation', () => {
   it('is deterministic and emits non-overlapping footprints within five rows', () => {
     const first = createReinforcementFormation(recipe(1, 1), 0, 91);
@@ -47,7 +93,6 @@ describe('multi-cell formation generation', () => {
       && column + width <= 8
       && row + height <= 5
     ))).toBe(true);
-    expect(first.enemies.some(({ width, height }) => width > 1 || height > 1)).toBe(true);
     expect(first.populationCost).toBe(cells.length);
   });
 
@@ -75,6 +120,19 @@ describe('multi-cell formation generation', () => {
     expect(Math.max(...cellCounts)).toBeLessThanOrEqual(selected.profile.cellMaximum + 3);
   });
 
+  it('shares one connected passage for each consecutive formation pair', () => {
+    for (const selected of FORMATION_PROFILES) {
+      const recipeForProfile = { ...recipe(), profile: selected };
+      for (let sequence = 0; sequence < 64; sequence += 2) {
+        const first = createReinforcementFormation(recipeForProfile, sequence, 808).enemies;
+        const second = createReinforcementFormation(recipeForProfile, sequence + 1, 808).enemies;
+        expect(hasConnectedEmptyPassage(first)).toBe(true);
+        expect(hasConnectedEmptyPassage(second)).toBe(true);
+        expect(sharedBottomPassageColumns(first, second).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('supports an exact fixed template', () => {
     const fixedRecipe = {
       ...recipe(1, 1),
@@ -91,14 +149,13 @@ describe('multi-cell formation generation', () => {
       kind, column, row, width, height,
     }))).toEqual([
       { kind: 'basic', column: 0, row: 0, width: 1, height: 1 },
-      { kind: 'splitter', column: 3, row: 0, width: 2, height: 1 },
       { kind: 'basic', column: 7, row: 0, width: 1, height: 1 },
       { kind: 'shooter', column: 1, row: 2, width: 1, height: 1 },
       { kind: 'shooter', column: 6, row: 2, width: 1, height: 1 },
     ]);
   });
 
-  it('mutates a mixed template reproducibly without changing its large anchor', () => {
+  it('mutates a mixed template reproducibly while preserving its passage', () => {
     const mixedRecipe = {
       ...recipe(0, 0),
       profile: {
@@ -113,10 +170,13 @@ describe('multi-cell formation generation', () => {
 
     expect(layouts[0]).toEqual(createReinforcementFormation(mixedRecipe, 0, 0).enemies);
     expect(new Set(layouts.map((layout) => JSON.stringify(layout))).size).toBeGreaterThan(2);
-    expect(layouts.every((enemies) =>
+    expect(layouts.some((enemies) =>
       enemies.some(({ column, row, width, height }) => (
         (column === 0 || column === 6) && row === 0 && width === 2 && height === 2
       )))).toBe(true);
+    expect(layouts.every((enemies, seed) =>
+      occupiedCells(enemies).every((cell) => !reservedPassageCells(4, 0, seed).has(cell)),
+    )).toBe(true);
   });
 
   it('keeps the initial chunk dense but non-grid and world-aligned', () => {

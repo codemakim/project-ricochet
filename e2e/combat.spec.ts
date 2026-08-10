@@ -315,7 +315,7 @@ async function preparePhotonFusion(page: Page) {
     for (const coreType of ['conduction', 'inertia', 'inertia', 'conduction', 'inertia'] as const) {
       if (!scene.debugAddOrb(coreType)) throw new Error(`failed to add ${coreType}`);
     }
-    scene.debugGrantXp(8);
+    scene.debugGrantXp(5);
   });
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   expect((await snapshot(page)).progression.choices[0]).toEqual({
@@ -797,7 +797,7 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
 test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
   await page.clock.install();
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(5));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedChoice = paused.progression.choices[0]!;
@@ -1191,7 +1191,7 @@ test('@desktop pauses for level-up until a mixed reward is chosen', async ({ pag
   await page.mouse.move(aim.x, aim.y);
   await page.clock.runFor(120);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(5));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedChoice = paused.progression.choices[0]!;
@@ -1233,7 +1233,7 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
   await page.mouse.move(aimPoint.x, aimPoint.y);
   await page.clock.runFor(32);
   const aimed = await snapshot(page);
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(5));
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
   const paused = await snapshot(page);
   const selectedChoice = paused.progression.choices[0]!;
@@ -1263,7 +1263,7 @@ test('@desktop keeps visibility pause after choosing a level-up while hidden', a
   await sceneCall(page, (scene) => scene.debugRemoveEnemies([0, 3, 7, 11]));
   await page.clock.runFor(1_000);
   await page.keyboard.down('KeyD');
-  await sceneCall(page, (scene) => scene.debugGrantXp(8));
+  await sceneCall(page, (scene) => scene.debugGrantXp(5));
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));

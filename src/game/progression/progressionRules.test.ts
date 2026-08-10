@@ -56,7 +56,7 @@ describe('progression rules', () => {
   it('maps enemy kinds to XP and levels to exact costs', () => {
     expect((['basic', 'shooter', 'armored', 'splitter', 'fragment'] as const).map(xpForEnemy))
       .toEqual([1, 2, 3, 1, 1]);
-    expect([0, 1, 2, 3, 4].map(xpRequiredForLevel)).toEqual([8, 17, 22, 27, 32]);
+    expect([0, 1, 2, 3, 4].map(xpRequiredForLevel)).toEqual([5, 17, 22, 27, 32]);
   });
 
   it('keeps physical orb acquisition outside ordinary abilities', () => {

@@ -4,6 +4,7 @@ import {
   FORMATION_COLUMNS,
   footprintWorldRect,
   occupyFootprint,
+  reservedPassageCells,
   type GridFootprint,
 } from './formationGrid';
 import {
@@ -164,6 +165,7 @@ function canOccupy(
   occupied: ReadonlySet<string>,
   footprint: GridFootprint,
   rows: number,
+  reserved: ReadonlySet<string>,
 ): boolean {
   if (
     footprint.column < 0
@@ -177,7 +179,7 @@ function canOccupy(
       column < footprint.column + footprint.width;
       column += 1
     ) {
-      if (occupied.has(`${row}:${column}`)) return false;
+      if (occupied.has(`${row}:${column}`) || reserved.has(`${row}:${column}`)) return false;
     }
   }
   return true;
@@ -228,6 +230,7 @@ function fillProcedural(
   rows: number,
   targetCells: number,
   style: FormationStyle,
+  reserved: ReadonlySet<string>,
   random: () => number,
 ): void {
   const catalog = eligibleCatalog(recipe);
@@ -237,7 +240,7 @@ function fillProcedural(
       ...anchor,
       width: entry.width,
       height: entry.height,
-    }, rows));
+    }, rows, reserved));
     const entry = pickKind(fitting, counts, recipe, random);
     if (!entry) continue;
     addPlacement(placements, occupied, counts, entry, {
@@ -287,8 +290,9 @@ function placeTemplate(
   recipe: FormationRecipe,
   targetCells: number,
   style: FormationStyle,
+  reserved: ReadonlySet<string>,
   random: () => number,
-): { placements: Placement[]; rows: number } {
+): Placement[] {
   const rows = template.rows;
   const occupied = new Set<string>();
   const placements: Placement[] = [];
@@ -307,7 +311,7 @@ function placeTemplate(
     const entry = slot.kind
       ? catalog.find(({ kind }) => kind === slot.kind)
       : pickKind(catalog, counts, recipe, random, footprint);
-    if (!entry || !canOccupy(occupied, footprint, rows)) continue;
+    if (!entry || !canOccupy(occupied, footprint, rows, reserved)) continue;
     addPlacement(placements, occupied, counts, entry, footprint, rows);
   }
   if (template.mode === 'mixed') {
@@ -319,10 +323,11 @@ function placeTemplate(
       rows,
       targetCells,
       style,
+      reserved,
       random,
     );
   }
-  return { placements, rows };
+  return placements;
 }
 
 function styleFor(
@@ -370,19 +375,22 @@ function createFormation(
   const targetCells = recipe.profile.cellMinimum
     + Math.floor(random() * (recipe.profile.cellMaximum - recipe.profile.cellMinimum + 1));
   const source = selectSource(recipe, random);
+  const rows = source.type === 'template'
+    ? source.template.rows
+    : recipe.profile.rowMinimum
+      + Math.floor(random() * (recipe.profile.rowMaximum - recipe.profile.rowMinimum + 1));
+  const reserved = reservedPassageCells(rows, sequence, runSeed);
   let placements: Placement[];
-  let rows: number;
   if (source.type === 'template') {
-    ({ placements, rows } = placeTemplate(
+    placements = placeTemplate(
       source.template,
       recipe,
       targetCells,
       style,
+      reserved,
       random,
-    ));
+    );
   } else {
-    rows = recipe.profile.rowMinimum
-      + Math.floor(random() * (recipe.profile.rowMaximum - recipe.profile.rowMinimum + 1));
     placements = [];
     fillProcedural(
       placements,
@@ -392,6 +400,7 @@ function createFormation(
       rows,
       targetCells,
       style,
+      reserved,
       random,
     );
   }

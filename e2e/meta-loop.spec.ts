@@ -122,7 +122,7 @@ test('@desktop settles, unlocks a core, and persists the redeploy loadout', asyn
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
       scene: { getScene(key: string): { debugGrantXp(amount: number): void } };
     } }).__RICHOCHET_GAME__!;
-    game.scene.getScene('combat').debugGrantXp(8);
+    game.scene.getScene('combat').debugGrantXp(5);
   });
   await expect.poll(async () => (await combatSnapshot(page)).levelUpVisible).toBe(true);
   const reward = (await combatSnapshot(page)).progression.choices[0]!;
