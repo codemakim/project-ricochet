@@ -361,10 +361,10 @@ describe('BossManager', () => {
       leftCenterX: left.x,
       rightCenterX: right.x,
     }).toEqual({
-      width: 22,
-      height: 52,
-      leftCenterX: 133,
-      rightCenterX: 317,
+      width: 38,
+      height: 72,
+      leftCenterX: 134,
+      rightCenterX: 316,
     });
     expect(right.body.halfWidth).toBe(left.body.halfWidth);
     expect(body.depth).toBeLessThan(0);
@@ -389,8 +389,8 @@ describe('BossManager', () => {
     manager.debugSetPosition!(120);
 
     expect(manager.getSnapshot().position).toEqual({ x: 120, y: 120 });
-    expect(() => manager.debugSetPosition!(98)).toThrow(RangeError);
-    expect(() => manager.debugSetPosition!(352)).toThrow(RangeError);
+    expect(() => manager.debugSetPosition!(109)).toThrow(RangeError);
+    expect(() => manager.debugSetPosition!(341)).toThrow(RangeError);
     expect(() => manager.debugSetPosition!(Number.NaN)).toThrow(RangeError);
   });
 
@@ -413,7 +413,7 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body');
     const weakpoint = boundary.colliderFor('boss-left-weakpoint');
-    boundary.orb.setPosition(133, 120);
+    boundary.orb.setPosition(134, 120);
 
     expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
     expect(weakpoint.trigger(boundary.orb, weakpoint.second as FakeSprite)).toBe(true);
@@ -519,7 +519,7 @@ describe('BossManager', () => {
       leftWeakpoint: 13,
       rightWeakpoint: 13,
     });
-    expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: 133, y: 120 });
+    expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: 134, y: 120 });
   });
 
   it('damages only exposed sentinel parts near a finite beam segment', () => {

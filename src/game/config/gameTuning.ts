@@ -486,9 +486,9 @@ export const GAME_TUNING = {
     y: 120,
     body: { width: 176, height: 96 },
     weakpoint: {
-      visual: { width: 18, height: 48 },
-      hitbox: { width: 22, height: 52 },
-      edgeOverlap: 5,
+      visual: { width: 30, height: 64 },
+      hitbox: { width: 38, height: 72 },
+      edgeOverlap: 12,
       hp: 14,
     },
     core: { visualSize: 32, hitboxSize: 28, hp: 36 },
