@@ -1,4 +1,4 @@
-import { GAME_TUNING, type BossKind } from '../config/gameTuning';
+import type { BossKind } from '../config/gameTuning';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { canSpawnReinforcement, phaseAt } from './encounterRules';
 import {
@@ -98,7 +98,7 @@ export class EncounterDirector {
 
     const phase = phaseAt(stage, this.stageElapsedMs);
     if (this.elapsedSinceSpawnMs < phase.definition.spawnIntervalMs
-      || enemyState.topmostEnemyY < GAME_TUNING.encounter.reinforcementReleaseY) {
+      || enemyState.topmostEnemyY < phase.definition.reinforcementReleaseY) {
       return NO_UPDATE;
     }
 
@@ -119,7 +119,7 @@ export class EncounterDirector {
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
       spawnIntervalMs: phase.definition.spawnIntervalMs,
       topmostEnemyY: enemyState.topmostEnemyY,
-      requiredTopmostY: GAME_TUNING.encounter.reinforcementReleaseY,
+      requiredTopmostY: phase.definition.reinforcementReleaseY,
       activeEnemies: enemyState.activePopulation,
       incomingEnemies: formation.populationCost,
       activeCap: phase.definition.activeCap,

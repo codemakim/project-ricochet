@@ -63,6 +63,17 @@ describe('EncounterDirector', () => {
     expect(director.getSnapshot().phase).toBe(1);
   });
 
+  it('uses each phase reinforcement release line', () => {
+    const director = new EncounterDirector(7);
+    const upperEnemies = { activePopulation: 0, topmostEnemyY: 25 };
+
+    expect(director.update(8_000, upperEnemies).formation).toBeNull();
+
+    const pressure = director.update(52_000, upperEnemies);
+    expect(director.getSnapshot().phase).toBe(1);
+    expect(pressure.formation).not.toBeNull();
+  });
+
   it('releases the seeded stage recipe and records global metadata', () => {
     const director = new EncounterDirector(1234);
     const formation = director.update(STAGES[0].phases[0].spawnIntervalMs, clearTop).formation;

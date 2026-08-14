@@ -1,4 +1,4 @@
-import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y } from '../constants';
+import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 
 export interface RangeTuning { minimum: number; maximum: number }
 export type BossKind = 'sentinel' | 'hive' | 'siege';
@@ -49,7 +49,6 @@ export interface GameTuning {
     };
   };
   encounter: {
-    reinforcementReleaseY: number;
     bossEntry: {
       cleanupMode: 'corridor' | 'all';
       padding: number;
@@ -504,7 +503,6 @@ export const GAME_TUNING = {
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
-    reinforcementReleaseY: 50,
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
   },
@@ -982,7 +980,6 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(enemy.breachDamage, `enemies.${kind}.breachDamage`);
   }
   positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
-  finite(encounter.reinforcementReleaseY, 'encounter.reinforcementReleaseY');
   if (encounter.bossEntry.cleanupMode !== 'corridor'
     && encounter.bossEntry.cleanupMode !== 'all') {
     throw new RangeError('encounter.bossEntry.cleanupMode must be corridor or all');
@@ -999,9 +996,6 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (encounter.grid.gap >= encounter.grid.cellWidth
     || encounter.grid.gap >= encounter.grid.cellHeight) {
     throw new RangeError('encounter.grid.gap must fit inside its cells');
-  }
-  if (!(encounter.reinforcementReleaseY < PLAYER_MIN_Y)) {
-    throw new RangeError('encounter reinforcement release must be below PLAYER_MIN_Y');
   }
   nonNegative(rewardFlow.resumeGameplayMs, 'rewardFlow.resumeGameplayMs');
   const mixedCards = rewardFlow.mixedCards;

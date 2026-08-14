@@ -19,14 +19,14 @@ describe('stage content', () => {
     expect(STAGES.map(({ powerBand }) => powerBand)).toEqual([
       {
         expectedOrbCount: 3,
-        normalHpMultiplier: 1,
-        eliteHpMultiplier: 1,
+        normalHpMultiplier: 1.3,
+        eliteHpMultiplier: 1.5,
         largeEnemyRatio: 0.12,
       },
       {
         expectedOrbCount: 6,
-        normalHpMultiplier: 1.6,
-        eliteHpMultiplier: 1.8,
+        normalHpMultiplier: 1.9,
+        eliteHpMultiplier: 2.2,
         largeEnemyRatio: 0.22,
       },
       {
@@ -36,12 +36,27 @@ describe('stage content', () => {
         largeEnemyRatio: 0.32,
       },
     ]);
-    expect(STAGES[0]!.phases.map(({ activeCap, spawnIntervalMs }) => (
-      [activeCap, spawnIntervalMs]
-    ))).toEqual([
-      [24, 9_000],
-      [30, 8_000],
-      [36, 7_000],
+    expect(STAGES.map(({ phases }) => phases.map((phase) => ({
+      activeCap: phase.activeCap,
+      spawnIntervalMs: phase.spawnIntervalMs,
+      reinforcementReleaseY: phase.reinforcementReleaseY,
+      shooterWeight: phase.enemyWeightMultipliers?.shooter,
+      shooterMaximum: phase.maxPerFormationOverrides?.shooter,
+    })))).toEqual([
+      [
+        { activeCap: 28, spawnIntervalMs: 8_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
+        { activeCap: 40, spawnIntervalMs: 5_500, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
+        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+      ],
+      [
+        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 56, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
+      ],
+      [
+        { activeCap: 44, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
+        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
+        { activeCap: 52, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
+      ],
     ]);
   });
 
@@ -125,6 +140,19 @@ describe('stage content', () => {
 
     expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
       .toThrow('default-1 phase cap must fit its profile');
+  });
+
+  it('rejects a non-finite phase reinforcement release line', () => {
+    const stage = {
+      ...STAGES[0]!,
+      phases: [
+        { ...STAGES[0]!.phases[0]!, reinforcementReleaseY: Number.NaN },
+        ...STAGES[0]!.phases.slice(1),
+      ],
+    };
+
+    expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
+      .toThrow('default-1.reinforcementReleaseY must be finite and non-negative');
   });
 
   it('rejects profiles whose minimum cells cannot fit around a passage', () => {

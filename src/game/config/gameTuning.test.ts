@@ -27,7 +27,7 @@ describe('GAME_TUNING', () => {
       fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
     });
     expect(Object.hasOwn(GAME_TUNING.encounter, 'initialFormation')).toBe(false);
-    expect(GAME_TUNING.encounter.reinforcementReleaseY).toBe(50);
+    expect(Object.hasOwn(GAME_TUNING.encounter, 'reinforcementReleaseY')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
     expect(GAME_TUNING.encounter.bossEntry).toEqual({
@@ -397,7 +397,6 @@ describe('GAME_TUNING', () => {
     ['non-finite hostile color', (value: Mutable<GameTuning>) => {
       value.visual.hostile.enemyBullet.accent = Number.POSITIVE_INFINITY;
     }],
-    ['release height outside ingress band', (value: Mutable<GameTuning>) => { value.encounter.reinforcementReleaseY = 98; }],
     ['boss wider than the game', (value: Mutable<GameTuning>) => { value.boss.body.width = 450; }],
     ['identical friendly and hostile palette', (value: Mutable<GameTuning>) => {
       value.visual.hostile.enemyBullet = { ...value.visual.friendly.temporaryOrb };
