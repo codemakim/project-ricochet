@@ -16,6 +16,7 @@ export function updateBossMotion(
   deltaMs: number,
   obstacles: readonly HorizontalInterval[],
   bounds: HorizontalInterval = BOSS_GEOMETRY.movementBounds,
+  speed: { maxSpeed: number; minimumTurnSpeed: number } = GAME_TUNING.boss.movement,
 ): BossMotion {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     throw new Error('deltaMs must be finite and non-negative');
@@ -28,6 +29,15 @@ export function updateBossMotion(
   }
   if (obstacles.some((obstacle) => !isValidInterval(obstacle))) {
     throw new Error('obstacles must have finite, ordered endpoints');
+  }
+  if (
+    !Number.isFinite(speed.maxSpeed)
+    || !Number.isFinite(speed.minimumTurnSpeed)
+    || speed.maxSpeed <= 0
+    || speed.minimumTurnSpeed <= 0
+    || speed.minimumTurnSpeed > speed.maxSpeed
+  ) {
+    throw new Error('movement speed must have finite, positive, ordered values');
   }
 
   const freeIntervals = subtractIntervals(bounds, mergeIntervals(obstacles, bounds));
@@ -50,11 +60,11 @@ export function updateBossMotion(
 
   const boundary = direction === 1 ? range.maximum : range.minimum;
   const remaining = Math.abs(boundary - current.x);
-  const speed = Math.min(
-    GAME_TUNING.boss.movement.maxSpeed,
-    Math.max(GAME_TUNING.boss.movement.minimumTurnSpeed, remaining),
+  const travelSpeed = Math.min(
+    speed.maxSpeed,
+    Math.max(speed.minimumTurnSpeed, remaining),
   );
-  const distance = Math.min(remaining, (deltaMs / 1000) * speed);
+  const distance = Math.min(remaining, (deltaMs / 1000) * travelSpeed);
   return { x: current.x + direction * distance, direction };
 }
 

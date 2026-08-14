@@ -107,7 +107,22 @@ describe('GAME_TUNING', () => {
     });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
-      core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
+      core: {
+        x: 225,
+        y: 140,
+        visualSize: 112,
+        hitboxSize: 96,
+        hp: 120,
+        enrage: {
+          travel: { minimum: 110, maximum: 340 },
+          maxSpeed: 42,
+          minimumTurnSpeed: 15,
+          obstaclePadding: 12,
+          enemyHalfSize: 22,
+          pulseScale: 0.1,
+          pulsePeriodMs: 160,
+        },
+      },
       shooter: { width: 68, height: 56, hp: 20 },
       reflector: {
         width: 36, height: 192, y: 280, hp: 24,
@@ -129,13 +144,14 @@ describe('GAME_TUNING', () => {
       intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0,
     });
     expect(GAME_TUNING.projectiles.hiveEnrage).toEqual({
+      hostileCap: 16,
       fan: {
-        intervalMs: 2800, warningMs: 350, speed: 150, damage: 1, radius: 5,
+        intervalMs: 2200, warningMs: 350, speed: 150, damage: 1, radius: 5,
         count: 9, arcDegrees: 96, alternatingOffsetDegrees: 6,
       },
       aimedBurst: {
-        intervalMs: 1600, warningMs: 350, speed: 190, damage: 1, radius: 5,
-        count: 3, spreadDegrees: 18,
+        intervalMs: 1100, warningMs: 350, speed: 190, damage: 1, radius: 5,
+        count: 4, spreadDegrees: 18,
       },
     });
     expect(GAME_TUNING.relics).toMatchObject({
@@ -301,6 +317,24 @@ describe('GAME_TUNING', () => {
     expect(() => validateGameTuning(tuning)).toThrow(
       'rewardFlow.mixedCards orb bands must increase below the orb cap',
     );
+  });
+
+  it.each([
+    ['unordered travel', { travel: { minimum: 340, maximum: 110 } }],
+    ['turn speed above maximum', { maxSpeed: 42, minimumTurnSpeed: 43 }],
+    ['non-positive pulse period', { pulsePeriodMs: 0 }],
+  ])('rejects hive core enrage %s', (_label, override) => {
+    const tuning = mutableTuning();
+    Object.assign(tuning.hiveBoss.core.enrage, override);
+
+    expect(() => validateGameTuning(tuning)).toThrow();
+  });
+
+  it('rejects a non-positive hive enrage hostile cap', () => {
+    const tuning = mutableTuning();
+    tuning.projectiles.hiveEnrage.hostileCap = 0;
+
+    expect(() => validateGameTuning(tuning)).toThrow();
   });
 
   it.each([

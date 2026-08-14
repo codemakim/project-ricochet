@@ -22,6 +22,8 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 단계별 체력 배율 | `STAGES[].powerBand.normalHpMultiplier`, `eliteHpMultiplier` |
 | 증원 간격·활성 적 상한·증원선·슈터 가중치/상한 | `STAGES[].phases` |
 | 보스 진입 시간·처치 점수 | `STAGES[].boss` |
+| 하이브 코어 이동·장애물 여유·펄스 | `GAME_TUNING.hiveBoss.core.enrage` |
+| 하이브 격노 공격 간격·탄 수·탄 상한 | `GAME_TUNING.projectiles.hiveEnrage` |
 | 일반 능력 수치 | `GAME_TUNING.build` |
 | 코어 고유 수치·색상 | `GAME_TUNING.orbCores` |
 | 코어 최대 레벨·설명 | `ORB_CORE_DEFINITIONS[*].maximumLevel`, `levelEffects` |

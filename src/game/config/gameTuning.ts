@@ -83,6 +83,7 @@ export interface GameTuning {
     hiveShooter: { intervalMs: number; offsetMs: number; warningMs: number; speed: number; damage: number; radius: number };
     hiveCore: { intervalMs: number; speed: number; damage: number; radius: number; count: number; arcDegrees: number; offsetDegrees: number };
     hiveEnrage: {
+      hostileCap: number;
       fan: {
         intervalMs: number; warningMs: number; speed: number; damage: number; radius: number;
         count: number; arcDegrees: number; alternatingOffsetDegrees: number;
@@ -391,7 +392,22 @@ export interface GameTuning {
   };
   bossAreaDamage: { secondaryDamageScale: number; maxSecondaryTargets: number };
   hiveBoss: {
-    core: { x: number; y: number; visualSize: number; hitboxSize: number; hp: number };
+    core: {
+      x: number;
+      y: number;
+      visualSize: number;
+      hitboxSize: number;
+      hp: number;
+      enrage: {
+        travel: RangeTuning;
+        maxSpeed: number;
+        minimumTurnSpeed: number;
+        obstaclePadding: number;
+        enemyHalfSize: number;
+        pulseScale: number;
+        pulsePeriodMs: number;
+      };
+    };
     shooter: { width: number; height: number; hp: number };
     reflector: {
       width: number;
@@ -524,13 +540,14 @@ export const GAME_TUNING = {
     hiveShooter: { intervalMs: 1400, offsetMs: 700, warningMs: 300, speed: 170, damage: 1, radius: 5 },
     hiveCore: { intervalMs: 7000, speed: 140, damage: 1, radius: 5, count: 5, arcDegrees: 72, offsetDegrees: 0 },
     hiveEnrage: {
+      hostileCap: 16,
       fan: {
-        intervalMs: 2800, warningMs: 350, speed: 150, damage: 1, radius: 5,
+        intervalMs: 2200, warningMs: 350, speed: 150, damage: 1, radius: 5,
         count: 9, arcDegrees: 96, alternatingOffsetDegrees: 6,
       },
       aimedBurst: {
-        intervalMs: 1600, warningMs: 350, speed: 190, damage: 1, radius: 5,
-        count: 3, spreadDegrees: 18,
+        intervalMs: 1100, warningMs: 350, speed: 190, damage: 1, radius: 5,
+        count: 4, spreadDegrees: 18,
       },
     },
     siegeLaser: {
@@ -810,7 +827,22 @@ export const GAME_TUNING = {
   },
   bossAreaDamage: { secondaryDamageScale: 0.5, maxSecondaryTargets: 1 },
   hiveBoss: {
-    core: { x: 225, y: 140, visualSize: 112, hitboxSize: 96, hp: 120 },
+    core: {
+      x: 225,
+      y: 140,
+      visualSize: 112,
+      hitboxSize: 96,
+      hp: 120,
+      enrage: {
+        travel: { minimum: 110, maximum: 340 },
+        maxSpeed: 42,
+        minimumTurnSpeed: 15,
+        obstaclePadding: 12,
+        enemyHalfSize: 22,
+        pulseScale: 0.1,
+        pulsePeriodMs: 160,
+      },
+    },
     shooter: { width: 68, height: 56, hp: 20 },
     reflector: {
       width: 36,
@@ -1169,6 +1201,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   finite(projectiles.hiveCore.arcDegrees, 'projectiles.hiveCore.arcDegrees');
   finite(projectiles.hiveCore.offsetDegrees, 'projectiles.hiveCore.offsetDegrees');
   positive(projectiles.hiveEnrage.fan.intervalMs, 'projectiles.hiveEnrage.fan.intervalMs');
+  positiveInteger(projectiles.hiveEnrage.hostileCap, 'projectiles.hiveEnrage.hostileCap');
   positive(projectiles.hiveEnrage.fan.warningMs, 'projectiles.hiveEnrage.fan.warningMs');
   positive(projectiles.hiveEnrage.fan.radius, 'projectiles.hiveEnrage.fan.radius');
   positiveInteger(projectiles.hiveEnrage.fan.count, 'projectiles.hiveEnrage.fan.count');
@@ -1528,6 +1561,25 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   finite(hiveBoss.core.x, 'hiveBoss.core.x');
   finite(hiveBoss.core.y, 'hiveBoss.core.y');
+  const coreEnrage = hiveBoss.core.enrage;
+  finite(coreEnrage.travel.minimum, 'hiveBoss.core.enrage.travel.minimum');
+  finite(coreEnrage.travel.maximum, 'hiveBoss.core.enrage.travel.maximum');
+  if (
+    coreEnrage.travel.minimum > coreEnrage.travel.maximum
+    || coreEnrage.travel.minimum - hiveBoss.core.visualSize / 2 < 0
+    || coreEnrage.travel.maximum + hiveBoss.core.visualSize / 2 > GAME_WIDTH
+  ) {
+    throw new RangeError('hiveBoss core enrage travel must fit the game bounds');
+  }
+  positive(coreEnrage.maxSpeed, 'hiveBoss.core.enrage.maxSpeed');
+  positive(coreEnrage.minimumTurnSpeed, 'hiveBoss.core.enrage.minimumTurnSpeed');
+  if (coreEnrage.minimumTurnSpeed > coreEnrage.maxSpeed) {
+    throw new RangeError('hiveBoss core enrage minimum turn speed must not exceed max speed');
+  }
+  nonNegative(coreEnrage.obstaclePadding, 'hiveBoss.core.enrage.obstaclePadding');
+  positive(coreEnrage.enemyHalfSize, 'hiveBoss.core.enrage.enemyHalfSize');
+  positive(coreEnrage.pulseScale, 'hiveBoss.core.enrage.pulseScale');
+  positive(coreEnrage.pulsePeriodMs, 'hiveBoss.core.enrage.pulsePeriodMs');
   if (
     hiveBoss.core.x - hiveBoss.core.visualSize / 2 < 0
     || hiveBoss.core.x + hiveBoss.core.visualSize / 2 > GAME_WIDTH

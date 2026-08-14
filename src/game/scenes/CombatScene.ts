@@ -2320,6 +2320,7 @@ export class CombatScene extends Phaser.Scene {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
+      getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
       getEnemyBulletCount: () => this.enemyManager?.getBulletCount() ?? 0,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
       onPlayerHit: (damage: number) => this.damagePlayer(damage),
@@ -2327,15 +2328,11 @@ export class CombatScene extends Phaser.Scene {
       onDefeated: () => this.handleBossDefeatSignal(),
     };
     this.activeBoss = createBossForKind<BossEncounter>(kind, {
-      sentinel: () => new BossManager(this, {
-        ...commonOptions,
-        getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
-      }),
+      sentinel: () => new BossManager(this, commonOptions),
       hive: () => new HiveBossManager(this, commonOptions),
       siege: () => new BossManager(this, {
         ...commonOptions,
         kind: 'siege',
-        getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
       }),
     });
   }

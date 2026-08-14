@@ -48,20 +48,40 @@ describe('boss movement rules', () => {
     });
 
     expect(updateBossMotion({ x: 340, direction: 1 }, 1000, [])).toEqual({
-      x: 347,
-      direction: 1,
+      x: 340,
+      direction: -1,
     });
+  });
+
+  it('uses a caller-provided movement speed', () => {
+    expect(updateBossMotion(
+      { x: 225, direction: 1 },
+      1_000,
+      [],
+      { minimum: 110, maximum: 340 },
+      { maxSpeed: 42, minimumTurnSpeed: 15 },
+    )).toEqual({ x: 267, direction: 1 });
+  });
+
+  it('rejects an invalid caller-provided movement speed', () => {
+    expect(() => updateBossMotion(
+      { x: 225, direction: 1 },
+      1_000,
+      [],
+      { minimum: 110, maximum: 340 },
+      { maxSpeed: 42, minimumTurnSpeed: 43 },
+    )).toThrow('movement speed must have finite, positive, ordered values');
   });
 
   it('decelerates near a boundary, settles there, then reverses on a later update', () => {
     const decelerating = updateBossMotion({ x: 321, direction: 1 }, 500, []);
-    expect(decelerating).toEqual({ x: 334, direction: 1 });
+    expect(decelerating).toEqual({ x: 330.5, direction: 1 });
 
     const settling = updateBossMotion(decelerating, 1000, []);
-    expect(settling).toEqual({ x: 347, direction: 1 });
+    expect(settling).toEqual({ x: 340, direction: 1 });
 
     const reversing = updateBossMotion(settling, 16, []);
-    expect(reversing).toEqual({ x: 347, direction: -1 });
+    expect(reversing).toEqual({ x: 340, direction: -1 });
   });
 
   it('clips movement to a padded obstacle interval', () => {
