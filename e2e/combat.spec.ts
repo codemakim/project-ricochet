@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { BossProjectileSnapshot } from '../src/game/bosses/bossEncounter';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
@@ -29,12 +30,6 @@ interface OrbSnapshot {
   position: Vector;
   velocity: Vector;
   lastRecoverySource: string | null;
-}
-
-interface BossProjectileSnapshot {
-  kind: 'basic' | 'aimed';
-  position: Vector;
-  velocity: Vector;
 }
 
 interface CombatSnapshot {
@@ -516,6 +511,13 @@ async function confirmFocusedLevelUp(page: Page): Promise<void> {
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
 }
 
+async function waitForLevelUpSelection(page: Page): Promise<void> {
+  await page.clock.runFor(16);
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.text === '획득',
+  )), { intervals: [0] }).toBe(true);
+}
+
 test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const before = await snapshot(page);
@@ -677,7 +679,7 @@ test('@desktop keeps the unfused conduction orb and moving hive modules', async 
   ).orbs.find(({ id }) => id === photon.id)!.velocity.x).toBeGreaterThan(0);
 });
 
-test('@desktop triggers mass collapse after repeated high-speed direct hits', async ({ page }) => {
+test('@desktop triggers mass collapse on a high-speed precision hit', async ({ page }) => {
   const { orbId, enemyId } = await prepareDebugFusion(
     page,
     'Digit2',
@@ -690,13 +692,10 @@ test('@desktop triggers mass collapse after repeated high-speed direct hits', as
   await sceneCall(page, (scene) => {
     for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
   });
-  for (let hit = 0; hit < 3; hit += 1) {
-    await sceneCall(page, (scene, input) => {
-      const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
-      scene.debugPlaceOrb(input.orbId, target.position);
-    }, { orbId, enemyId });
-    await page.waitForTimeout(90);
-  }
+  await sceneCall(page, (scene, input) => {
+    const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+    scene.debugPlaceOrb(input.orbId, target.position);
+  }, { orbId, enemyId });
   await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
     .toContain('fusion-feedback-mass-collapse');
 });
@@ -925,6 +924,7 @@ test('@mobile taps a visible level-up card and resumes combat', async ({ page })
 
   const card = clientPoint(box, { x: 225, y: 210 });
   await page.touchscreen.tap(card.x, card.y);
+  await waitForLevelUpSelection(page);
   expect((await snapshot(page)).pauseReasons).toContain('levelUp');
 
   const confirm = clientPoint(box, { x: 225, y: 625 });
@@ -1360,6 +1360,7 @@ test('@desktop clicks a level-up card without changing aim and resumes gameplay'
 
   const card = clientPoint(box, { x: 225, y: 210 });
   await page.mouse.click(card.x, card.y);
+  await waitForLevelUpSelection(page);
   await confirmFocusedLevelUp(page);
 
   await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(false);
@@ -1556,27 +1557,27 @@ test('@desktop density uses shipped enemy stats and exact reinforcement release 
     for (const enemy of scene.getDebugSnapshot().enemies) {
       scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 49 }, enemy.hp);
     }
-    scene.debugAdvanceEncounter(9_000);
+    scene.debugAdvanceEncounter(8_000);
     return scene.getDebugSnapshot();
   });
   expect(Math.min(...blocked.enemies.map(({ position }) => position.y))).toBe(49);
   expect(blocked.encounter).toMatchObject({ phase: 0, spawnSequence: 0 });
   expect(blocked.enemies).toHaveLength(3);
 
-  const released = await sceneCall(page, (scene) => {
+  const pressure = await sceneCall(page, (scene) => {
     for (const enemy of scene.getDebugSnapshot().enemies) {
-      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 50 }, enemy.hp);
+      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 25 }, enemy.hp);
     }
-    scene.debugAdvanceEncounter(0);
+    scene.debugAdvanceEncounter(52_000);
     return scene.getDebugSnapshot();
   });
-  const reinforcementCount = released.enemies.length - blocked.enemies.length;
-  expect(Math.min(...released.enemies
+  const reinforcementCount = pressure.enemies.length - blocked.enemies.length;
+  expect(Math.min(...pressure.enemies
     .filter(({ id }) => id < initial.enemies.length)
-    .map(({ position }) => position.y))).toBe(50);
-  expect(released.encounter).toMatchObject({ phase: 0, spawnSequence: 1 });
+    .map(({ position }) => position.y))).toBe(25);
+  expect(pressure.encounter).toMatchObject({ phase: 1, spawnSequence: 1 });
   expect(reinforcementCount).toBeGreaterThan(0);
-  expect(released.activePopulation).toBeLessThanOrEqual(24);
+  expect(pressure.activePopulation).toBeLessThanOrEqual(40);
 });
 
 test('@desktop emits a connected empty passage in a reinforcement', async ({ page }) => {
@@ -1858,7 +1859,7 @@ test('@desktop midboss real orb collisions reflect body, respect locked core, an
 
   await sceneCall(page, (scene) => {
     scene.debugSetBossPosition(225);
-    if (!scene.debugPlaceOrb(0, { x: 130, y: 156 })) throw new Error('active orb required');
+    if (!scene.debugPlaceOrb(0, { x: 134, y: 165 })) throw new Error('active orb required');
   });
   await expect.poll(async () => {
     const current = await snapshot(page);
@@ -2250,40 +2251,56 @@ test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure',
   });
 });
 
-test('@desktop hive permanent exposure fires both enrage patterns and still rewards core death', async ({ page }) => {
+test('@desktop hive permanent exposure moves, fires both enrage patterns, and rewards core death', async ({ page }, testInfo) => {
   await loadCanvas(page);
   await enterHiveByScore(page);
   const entered = await sceneCall(page, (scene) => {
     const core = scene.children.list.find(
       (child) => child.active && child.texture?.key === 'hive-core',
     );
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
+    const startX = scene.getDebugSnapshot().boss.position!.x;
     scene.debugDamageBossPart('leftShooter', 20);
     scene.debugDamageBossPart('rightShooter', 20);
     scene.debugDamageBossPart('leftReflector', 24);
     scene.debugDamageBossPart('rightReflector', 24);
     scene.update(0, 40);
     const pulse = { width: core?.displayWidth, height: core?.displayHeight };
-    scene.update(0, 2_760);
-    return pulse;
+    scene.update(0, 1_060);
+    return { pulse, startX };
   });
-  expect(entered.width).toBeGreaterThan(116);
-  expect(entered.height).toBeGreaterThan(116);
+  expect(entered.pulse.width).toBeGreaterThan(122);
+  expect(entered.pulse.height).toBeGreaterThan(122);
   const warning = await snapshot(page);
   expect(warning.boss).toMatchObject({
     phase: 'permanentlyExposed',
     parts: { leftShooter: 0, rightShooter: 0, leftReflector: 0, rightReflector: 0 },
   });
-  expect(warning.boss.warningKinds).toEqual([
+  expect(warning.boss.position!.x).toBeGreaterThan(entered.startX);
+  expect(warning.boss.position!.x).toBeLessThanOrEqual(340);
+  expect(warning.boss.warningKinds).toEqual(['hiveEnrageAimedBurst']);
+
+  await sceneCall(page, (scene) => scene.update(0, 350));
+  const aimed = await snapshot(page);
+  const aimedProjectile = aimed.boss.projectiles.find(
+    ({ kind }) => kind === 'hiveEnrageAimedBurst',
+  )!;
+  expect(aimedProjectile.position.x).toBeCloseTo(aimed.boss.position!.x, 5);
+
+  await sceneCall(page, (scene) => scene.update(0, 750));
+  expect((await snapshot(page)).boss.warningKinds).toEqual([
     'hiveEnrageFan',
     'hiveEnrageAimedBurst',
   ]);
-
   await sceneCall(page, (scene) => scene.update(0, 350));
   const fired = await snapshot(page);
   expect(fired.boss.projectiles.map(({ kind }) => kind)).toEqual(expect.arrayContaining([
     'hiveEnrageFan',
     'hiveEnrageAimedBurst',
   ]));
+  const enrageScreenshot = testInfo.outputPath('hive-enrage.png');
+  await page.screenshot({ path: enrageScreenshot });
+  await testInfo.attach('hive-enrage', { path: enrageScreenshot });
 
   await sceneCall(page, (scene) => scene.debugDamageBossPart('core', 120));
   await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
@@ -2357,6 +2374,13 @@ test('@desktop hive attacks respect hostile cap and clean up on defeat', async (
     scene.debugDamageBossPart('rightShooter', 20);
     scene.debugDamageBossPart('leftReflector', 24);
     scene.debugDamageBossPart('rightReflector', 24);
+    scene.update(0, 2_200);
+    scene.update(0, 350);
+  });
+  const enraged = await snapshot(page);
+  expect(enraged.boss.phase).toBe('permanentlyExposed');
+  expect(enraged.bullets + (enraged.boss.bullets ?? 0)).toBeLessThanOrEqual(16);
+  await sceneCall(page, (scene) => {
     scene.debugDamageBossPart('core', 120);
     scene.update(0, 0);
   });
