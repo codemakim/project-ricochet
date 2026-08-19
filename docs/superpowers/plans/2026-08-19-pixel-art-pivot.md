@@ -1,5 +1,7 @@
 # Pixel Art Pivot Implementation Plan
 
+> **Superseded after Task 1 on 2026-08-19:** Task 1 is complete and remains valid. Do not execute Tasks 2–4; replace them with the plan derived from `docs/superpowers/specs/2026-08-19-gbc-psychedelic-art-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the rejected opening-slice illustrations with readable chunky pixel art while preserving every gameplay size, collider, timing, and balance value.

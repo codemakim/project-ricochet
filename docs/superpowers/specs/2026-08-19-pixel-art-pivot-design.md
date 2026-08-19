@@ -1,5 +1,7 @@
 # Pixel Art Pivot Design
 
+> **Superseded on 2026-08-19:** The direct low-resolution GBC-style rules in `docs/superpowers/specs/2026-08-19-gbc-psychedelic-art-design.md` replace this document. Do not execute its high-resolution generation and reduction workflow.
+
 ## Goal
 
 Replace the opening combat slice's downscaled hand-painted units with original chunky pixel art that remains cute, readable, and distinct at actual mobile gameplay size. Use smooth high-resolution effects as deliberate contrast. Preserve gameplay geometry and balance.
