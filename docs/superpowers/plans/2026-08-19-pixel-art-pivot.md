@@ -54,12 +54,11 @@ Do not change `GAME_TUNING`, grid footprints, logical display sizes, or physics 
 
 - [ ] **Step 1: Write RED sampling tests**
 
-Import `Phaser`, `applyCombatTextureSampling`, and `textureFilterFor`. Add:
+Import `COMBAT_TEXTURE_FILTER` and `applyCombatTextureSampling`. Add:
 
 ```ts
 it('assigns nearest sampling to pixel art and linear sampling to smooth effects', () => {
-  expect(textureFilterFor('nearest')).toBe(Phaser.Textures.FilterMode.NEAREST);
-  expect(textureFilterFor('linear')).toBe(Phaser.Textures.FilterMode.LINEAR);
+  expect(COMBAT_TEXTURE_FILTER).toEqual({ linear: 0, nearest: 1 });
   expect(COMBAT_IMAGE_ASSETS.every(({ sampling }) => sampling === 'nearest')).toBe(true);
 });
 
@@ -70,7 +69,7 @@ it('applies sampling only to loaded production textures', () => {
   applyCombatTextureSampling({ textures: { exists, get } } as never);
   expect(get).toHaveBeenCalledOnce();
   expect(get).toHaveBeenCalledWith('player');
-  expect(setFilter).toHaveBeenCalledWith(Phaser.Textures.FilterMode.NEAREST);
+  expect(setFilter).toHaveBeenCalledWith(COMBAT_TEXTURE_FILTER.nearest);
 });
 ```
 
@@ -84,12 +83,15 @@ Expected: FAIL because sampling fields and helpers do not exist.
 
 - [ ] **Step 3: Implement the minimal manifest contract**
 
-Replace the type-only Phaser import and extend the image interface:
+Keep the type-only Phaser import and extend the image interface:
 
 ```ts
-import Phaser from 'phaser';
-
 export type CombatTextureSampling = 'nearest' | 'linear';
+
+export const COMBAT_TEXTURE_FILTER = {
+  linear: 0,
+  nearest: 1,
+} as const satisfies Record<CombatTextureSampling, Phaser.Textures.FilterMode>;
 
 export interface CombatImageAsset {
   key: string;
@@ -101,18 +103,10 @@ export interface CombatImageAsset {
 Add `sampling: 'nearest'` to every current `COMBAT_IMAGE_ASSETS` entry. Then add:
 
 ```ts
-export function textureFilterFor(
-  sampling: CombatTextureSampling,
-): Phaser.Textures.FilterMode {
-  return sampling === 'nearest'
-    ? Phaser.Textures.FilterMode.NEAREST
-    : Phaser.Textures.FilterMode.LINEAR;
-}
-
 export function applyCombatTextureSampling(scene: Phaser.Scene): void {
   for (const { key, sampling } of COMBAT_IMAGE_ASSETS) {
     if (!scene.textures.exists(key)) continue;
-    scene.textures.get(key).setFilter(textureFilterFor(sampling));
+    scene.textures.get(key).setFilter(COMBAT_TEXTURE_FILTER[sampling]);
   }
 }
 ```

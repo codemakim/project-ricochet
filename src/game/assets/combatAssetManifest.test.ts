@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   COMBAT_AUDIO_ASSETS,
   COMBAT_IMAGE_ASSETS,
+  COMBAT_TEXTURE_FILTER,
+  applyCombatTextureSampling,
   preloadCombatAssets,
 } from './combatAssetManifest';
 import {
@@ -31,6 +33,21 @@ describe('combat asset manifest', () => {
     preloadCombatAssets({ load: { image, audio } } as never);
     expect(image).toHaveBeenCalledTimes(COMBAT_IMAGE_ASSETS.length);
     expect(audio).toHaveBeenCalledTimes(COMBAT_AUDIO_ASSETS.length);
+  });
+
+  it('assigns nearest sampling to pixel art and keeps linear available for smooth effects', () => {
+    expect(COMBAT_TEXTURE_FILTER).toEqual({ linear: 0, nearest: 1 });
+    expect(COMBAT_IMAGE_ASSETS.every(({ sampling }) => sampling === 'nearest')).toBe(true);
+  });
+
+  it('applies sampling only to loaded production textures', () => {
+    const setFilter = vi.fn();
+    const exists = vi.fn((key: string) => key === 'player');
+    const get = vi.fn(() => ({ setFilter }));
+    applyCombatTextureSampling({ textures: { exists, get } } as never);
+    expect(get).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledWith('player');
+    expect(setFilter).toHaveBeenCalledWith(COMBAT_TEXTURE_FILTER.nearest);
   });
 
   it('returns only missing fallback keys', () => {

@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { createCombatFallbackTextures } from '../assets/createCombatFallbackTextures';
-import { preloadCombatAssets } from '../assets/combatAssetManifest';
+import {
+  applyCombatTextureSampling,
+  preloadCombatAssets,
+} from '../assets/combatAssetManifest';
 import { traceFirstBounce } from '../aim/trajectory';
 import { BossManager, type BossManagerSnapshot } from '../bosses/BossManager';
 import { bossEntryCleanup } from '../bosses/bossEntryRules';
@@ -366,6 +369,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardOverlay = new BossRewardOverlay(this);
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     createCombatFallbackTextures(this);
+    applyCombatTextureSampling(this);
     if (this.textures.exists('combat-background')) {
       this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
         .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
@@ -382,14 +386,6 @@ export class CombatScene extends Phaser.Scene {
       (this.player.width - playerSourceRadius * 2) / 2,
       (this.player.height - playerSourceRadius * 2) / 2,
     ).setCollideWorldBounds(true);
-    this.tweens.add({
-      targets: this.player,
-      angle: { from: -1.5, to: 1.5 },
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.inOut',
-    });
     this.playerInput = new PlayerInput(this, () => ({ x: this.player.x, y: this.player.y }));
     this.orbManager = new OrbManager(this, {
       settings: this.experiment,
