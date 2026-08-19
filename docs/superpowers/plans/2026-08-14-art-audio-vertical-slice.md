@@ -1,6 +1,6 @@
 # Art And Audio Vertical Slice Implementation Plan
 
-> **2026-08-19 visual-direction update:** Tasks 3–5 are superseded by `docs/superpowers/plans/2026-08-19-pixel-art-pivot.md`. Tasks 6–7 remain authoritative; Task 8 follows the revised acceptance notes in the pixel-art plan.
+> **2026-08-19 visual-direction update:** Tasks 3–5 are superseded by `docs/superpowers/plans/2026-08-19-gbc-psychedelic-art.md`. Tasks 6–7 remain authoritative; integrate their audio work only after the GBC visual plan passes its opening-slice checkpoint.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
