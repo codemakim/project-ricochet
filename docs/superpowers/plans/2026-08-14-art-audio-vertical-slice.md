@@ -1,5 +1,7 @@
 # Art And Audio Vertical Slice Implementation Plan
 
+> **2026-08-19 visual-direction update:** Tasks 3–5 are superseded by `docs/superpowers/plans/2026-08-19-pixel-art-pivot.md`. Tasks 6–7 remain authoritative; Task 8 follows the revised acceptance notes in the pixel-art plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver one production-quality scrapyard combat slice from deployment through Sentinel defeat using original hand-painted 2D assets, bounded VFX, readable sound cues, and adaptive music without changing gameplay behavior.
