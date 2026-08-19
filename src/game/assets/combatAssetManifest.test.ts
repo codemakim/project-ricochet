@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { describe, expect, it, vi } from 'vitest';
 import {
   COMBAT_AUDIO_ASSETS,
@@ -35,5 +37,16 @@ describe('combat asset manifest', () => {
     const loaded = new Set(FALLBACK_COMBAT_TEXTURE_KEYS.slice(1));
     expect(missingCombatTextureKeys((key) => loaded.has(key)))
       .toEqual([FALLBACK_COMBAT_TEXTURE_KEYS[0]]);
+  });
+
+  it('ships the arena, player, and common enemy files', () => {
+    const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/**/*')));
+    const taskKeys = new Set([
+      'combat-background', 'player',
+      'enemy-basic', 'enemy-armored', 'enemy-shooter',
+    ]);
+    for (const { key, url } of COMBAT_IMAGE_ASSETS.filter(({ key }) => taskKeys.has(key))) {
+      expect(shippedAssets.has(`/public${url}`), url).toBe(true);
+    }
   });
 });

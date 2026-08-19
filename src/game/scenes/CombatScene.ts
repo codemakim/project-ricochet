@@ -366,10 +366,30 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardOverlay = new BossRewardOverlay(this);
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     createCombatFallbackTextures(this);
+    if (this.textures.exists('combat-background')) {
+      this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
+        .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+        .setDepth(-100);
+    }
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     this.player = this.physics.add.sprite(GAME_WIDTH / 2, 690, 'player');
-    this.player.setCircle(PLAYER_RADIUS).setCollideWorldBounds(true);
+    this.player.setDisplaySize(36, 36);
+    const playerScale = Math.abs(this.player.scaleX);
+    const playerSourceRadius = PLAYER_RADIUS / playerScale;
+    this.player.setCircle(
+      playerSourceRadius,
+      (this.player.width - playerSourceRadius * 2) / 2,
+      (this.player.height - playerSourceRadius * 2) / 2,
+    ).setCollideWorldBounds(true);
+    this.tweens.add({
+      targets: this.player,
+      angle: { from: -1.5, to: 1.5 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut',
+    });
     this.playerInput = new PlayerInput(this, () => ({ x: this.player.x, y: this.player.y }));
     this.orbManager = new OrbManager(this, {
       settings: this.experiment,
