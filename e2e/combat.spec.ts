@@ -132,6 +132,9 @@ interface CombatSnapshot {
 }
 
 interface DevelopmentScene {
+  textures: {
+    get(key: string): { getSourceImage(): { width: number } };
+  };
   children: {
     list: Array<{
       active?: boolean;
@@ -517,6 +520,34 @@ async function waitForLevelUpSelection(page: Page): Promise<void> {
     (child) => child.active && child.text === '획득',
   )), { intervals: [0] }).toBe(true);
 }
+
+test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
+  const failedAssets: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/assets/combat/') && !response.ok()) {
+      failedAssets.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  await loadCanvas(page);
+  const dimensions = await sceneCall(page, (scene) => (
+    ['player', 'enemy-basic', 'enemy-armored', 'enemy-shooter']
+      .map((key) => ({ key, width: scene.textures.get(key).getSourceImage().width }))
+  ));
+  expect(dimensions).toEqual([
+    { key: 'player', width: 72 },
+    { key: 'enemy-basic', width: 72 },
+    { key: 'enemy-armored', width: 80 },
+    { key: 'enemy-shooter', width: 76 },
+  ]);
+  expect(failedAssets).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });
+});
+
+test('@mobile renders the GBC opening slice', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await expect(page.locator('#game-root canvas')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('gbc-opening-mobile.png') });
+});
 
 test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
   const { box } = await loadCanvas(page);
