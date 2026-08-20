@@ -41,6 +41,17 @@ const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
 const BOSS_ACTION_DEPTH = 1;
 
+const setWorldBodySize = (
+  sprite: Phaser.Physics.Arcade.Sprite,
+  width: number,
+  height: number,
+): void => {
+  sprite.setSize(
+    width / Math.abs(sprite.scaleX),
+    height / Math.abs(sprite.scaleY),
+  );
+};
+
 type ManagedPartId = BossPartId | 'defenseModule';
 
 const PART_HIT_IDS: Record<ManagedPartId, number> = {
@@ -143,10 +154,9 @@ export class BossManager implements BossEncounter {
       GAME_TUNING.boss.y,
       `${texturePrefix}-body`,
     );
-    this.body
-      .setImmovable(true)
-      .setSize(GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height)
-      .setDepth(BOSS_BODY_DEPTH);
+    this.body.setDisplaySize(GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height);
+    setWorldBodySize(this.body, GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height);
+    this.body.setImmovable(true).setDepth(BOSS_BODY_DEPTH);
     this.partSprites = {
       leftWeakpoint: scene.physics.add.sprite(
         this.motion.x - BOSS_GEOMETRY.weakpointOffsetX,
@@ -160,23 +170,29 @@ export class BossManager implements BossEncounter {
       ),
       core: scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, `${texturePrefix}-core`),
     };
-    this.partSprites.leftWeakpoint
-      .setImmovable(true)
-      .setSize(
+    for (const weakpoint of [this.partSprites.leftWeakpoint, this.partSprites.rightWeakpoint]) {
+      weakpoint.setDisplaySize(
+        GAME_TUNING.boss.weakpoint.visual.width,
+        GAME_TUNING.boss.weakpoint.visual.height,
+      );
+      setWorldBodySize(
+        weakpoint,
         GAME_TUNING.boss.weakpoint.hitbox.width,
         GAME_TUNING.boss.weakpoint.hitbox.height,
-      )
-      .setDepth(BOSS_PART_DEPTH);
-    this.partSprites.rightWeakpoint
-      .setImmovable(true)
-      .setSize(
-        GAME_TUNING.boss.weakpoint.hitbox.width,
-        GAME_TUNING.boss.weakpoint.hitbox.height,
-      )
-      .setDepth(BOSS_PART_DEPTH);
+      );
+      weakpoint.setImmovable(true).setDepth(BOSS_PART_DEPTH);
+    }
+    this.partSprites.core.setDisplaySize(
+      GAME_TUNING.boss.core.visualSize,
+      GAME_TUNING.boss.core.visualSize,
+    );
+    setWorldBodySize(
+      this.partSprites.core,
+      GAME_TUNING.boss.core.hitboxSize,
+      GAME_TUNING.boss.core.hitboxSize,
+    );
     this.partSprites.core
       .setImmovable(true)
-      .setSize(GAME_TUNING.boss.core.hitboxSize, GAME_TUNING.boss.core.hitboxSize)
       .setDepth(BOSS_PART_DEPTH)
       .setVisible(false);
     (this.partSprites.core.body as Phaser.Physics.Arcade.Body).enable = false;

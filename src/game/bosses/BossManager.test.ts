@@ -33,6 +33,13 @@ class FakeBody {
   get bottom(): number { return this.center.y + this.halfHeight; }
 }
 
+const sourceSize = (texture: string): [number, number] => {
+  if (texture === 'boss-body') return [352, 192];
+  if (texture.includes('boss-') && texture.includes('weakpoint')) return [60, 128];
+  if (texture === 'boss-core') return [64, 64];
+  return [32, 32];
+};
+
 class FakeSprite {
   active = true;
   destroyed = false;
@@ -40,8 +47,17 @@ class FakeSprite {
   tint?: number;
   depth = 0;
   readonly body: FakeBody;
+  width: number;
+  height: number;
+  displayWidth: number;
+  displayHeight: number;
+  scaleX = 1;
+  scaleY = 1;
 
   constructor(public x: number, public y: number, readonly texture: string) {
+    [this.width, this.height] = sourceSize(texture);
+    this.displayWidth = this.width;
+    this.displayHeight = this.height;
     this.body = new FakeBody(this);
   }
 
@@ -53,6 +69,13 @@ class FakeSprite {
   }
   setImmovable(): this { return this; }
   setDepth(depth: number): this { this.depth = depth; return this; }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
+    return this;
+  }
   setSize(width: number, height: number): this {
     this.body.isCircle = false;
     this.body.halfWidth = width / 2;
@@ -351,21 +374,27 @@ describe('BossManager', () => {
     const right = sprites.find((sprite) => sprite.texture === 'boss-right-weakpoint')!;
     const core = sprites.find((sprite) => sprite.texture === 'boss-core')!;
 
-    expect({ width: body.body.halfWidth * 2, height: body.body.halfHeight * 2 }).toEqual({
-      width: 176,
-      height: 96,
+    expect({ width: body.displayWidth, height: body.displayHeight }).toEqual({
+      width: GAME_TUNING.boss.body.width,
+      height: GAME_TUNING.boss.body.height,
     });
+    expect(body.body.halfWidth * 2 * body.scaleX).toBe(GAME_TUNING.boss.body.width);
     expect({
-      width: left.body.halfWidth * 2,
-      height: left.body.halfHeight * 2,
+      width: left.displayWidth,
+      height: left.displayHeight,
       leftCenterX: left.x,
       rightCenterX: right.x,
     }).toEqual({
-      width: 38,
-      height: 72,
+      width: GAME_TUNING.boss.weakpoint.visual.width,
+      height: GAME_TUNING.boss.weakpoint.visual.height,
       leftCenterX: 134,
       rightCenterX: 316,
     });
+    expect(left.body.halfWidth * 2 * left.scaleX)
+      .toBe(GAME_TUNING.boss.weakpoint.hitbox.width);
+    expect(left.body.halfHeight * 2 * left.scaleY)
+      .toBe(GAME_TUNING.boss.weakpoint.hitbox.height);
+    expect(core.displayWidth).toBe(GAME_TUNING.boss.core.visualSize);
     expect(right.body.halfWidth).toBe(left.body.halfWidth);
     expect(body.depth).toBeLessThan(0);
     expect(left.depth).toBeLessThan(0);

@@ -34,4 +34,12 @@ check_blocks public/assets/combat/sprites/player.png
 check_blocks public/assets/combat/sprites/enemy-basic.png
 check_blocks public/assets/combat/sprites/enemy-armored.png
 check_blocks public/assets/combat/sprites/enemy-shooter.png
+check public/assets/combat/sprites/sentinel-body.png 352x192 5 yes
+check public/assets/combat/sprites/sentinel-left-weakpoint.png 60x128 5 yes
+check public/assets/combat/sprites/sentinel-right-weakpoint.png 60x128 5 yes
+check public/assets/combat/sprites/sentinel-core.png 64x64 5 yes
+check_blocks public/assets/combat/sprites/sentinel-body.png
+check_blocks public/assets/combat/sprites/sentinel-left-weakpoint.png
+check_blocks public/assets/combat/sprites/sentinel-right-weakpoint.png
+check_blocks public/assets/combat/sprites/sentinel-core.png
 echo 'GBC combat art verified'

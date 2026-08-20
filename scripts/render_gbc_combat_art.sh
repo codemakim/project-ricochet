@@ -73,3 +73,28 @@ magick -size 225x360 "xc:$FLOOR" +antialias \
   -fill "$YELLOW" -draw 'rectangle 109,8 115,12 rectangle 109,347 115,351' \
   "$SOURCE/scrapyard-arena-master.png"
 magick "$SOURCE/scrapyard-arena-master.png" -filter point -resize 400% -define webp:lossless=true "$BACKGROUNDS/scrapyard-arena.webp"
+
+magick -size 88x48 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 4,6 83,43 rectangle 0,13 87,36' \
+  -fill "$VIOLET" -draw 'rectangle 7,8 80,41 rectangle 2,15 85,34' \
+  -fill "$BLUE_STEEL" -draw 'rectangle 14,10 73,18 rectangle 10,27 77,38' \
+  -fill "$INK" -draw 'rectangle 34,16 53,35 rectangle 0,18 10,31 rectangle 77,18 87,31' \
+  "$SOURCE/sentinel-body-master.png"
+export_sprite "$SOURCE/sentinel-body-master.png" "$SPRITES/sentinel-body.png"
+
+magick -size 15x32 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,1 12,30 rectangle 0,6 14,25' \
+  -fill "$VIOLET" -draw 'rectangle 3,2 11,29 rectangle 1,7 13,24' \
+  -fill "$YELLOW" -draw 'rectangle 4,9 10,21' \
+  -fill "$INK" -draw 'rectangle 6,11 8,19' \
+  "$SOURCE/sentinel-weakpoint-master.png"
+export_sprite "$SOURCE/sentinel-weakpoint-master.png" "$SPRITES/sentinel-left-weakpoint.png"
+magick "$SPRITES/sentinel-left-weakpoint.png" -flop "$SPRITES/sentinel-right-weakpoint.png"
+
+magick -size 16x16 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,2 13,13' \
+  -fill "$YELLOW" -draw 'rectangle 4,4 11,11' \
+  -fill "$CERAMIC" -draw 'rectangle 6,5 9,10' \
+  -fill "$MAGENTA" -draw 'rectangle 7,7 8,8' \
+  "$SOURCE/sentinel-core-master.png"
+export_sprite "$SOURCE/sentinel-core-master.png" "$SPRITES/sentinel-core.png"
