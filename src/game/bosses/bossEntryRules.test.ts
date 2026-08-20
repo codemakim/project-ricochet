@@ -4,8 +4,8 @@ import { bossEntryCleanup, bossEntryCorridor } from './bossEntryRules';
 
 describe('boss entry cleanup rules', () => {
   it('covers sentinel and siege initial collision geometry', () => {
-    expect(bossEntryCorridor('sentinel')).toEqual({ left: 107, right: 343, bottom: 176 });
-    expect(bossEntryCorridor('siege')).toEqual({ left: 107, right: 343, bottom: 176 });
+    expect(bossEntryCorridor('sentinel')).toEqual({ left: 49, right: 401, bottom: 200 });
+    expect(bossEntryCorridor('siege')).toEqual({ left: 49, right: 401, bottom: 200 });
   });
 
   it('covers every deployed hive part', () => {

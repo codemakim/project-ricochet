@@ -47,8 +47,8 @@ describe('boss movement rules', () => {
       direction: 1,
     });
 
-    expect(updateBossMotion({ x: 340, direction: 1 }, 1000, [])).toEqual({
-      x: 340,
+    expect(updateBossMotion({ x: 282, direction: 1 }, 1000, [])).toEqual({
+      x: 282,
       direction: -1,
     });
   });
@@ -74,14 +74,14 @@ describe('boss movement rules', () => {
   });
 
   it('decelerates near a boundary, settles there, then reverses on a later update', () => {
-    const decelerating = updateBossMotion({ x: 321, direction: 1 }, 500, []);
-    expect(decelerating).toEqual({ x: 330.5, direction: 1 });
+    const decelerating = updateBossMotion({ x: 263, direction: 1 }, 500, []);
+    expect(decelerating).toEqual({ x: 272.5, direction: 1 });
 
     const settling = updateBossMotion(decelerating, 1000, []);
-    expect(settling).toEqual({ x: 340, direction: 1 });
+    expect(settling).toEqual({ x: 282, direction: 1 });
 
     const reversing = updateBossMotion(settling, 16, []);
-    expect(reversing).toEqual({ x: 340, direction: -1 });
+    expect(reversing).toEqual({ x: 282, direction: -1 });
   });
 
   it('clips movement to a padded obstacle interval', () => {
@@ -95,15 +95,25 @@ describe('boss movement rules', () => {
         + GAME_TUNING.boss.movement.obstaclePadding,
     };
 
-    expect(updateBossMotion({ x: 120, direction: 1 }, 1000, [paddedObstacle])).toEqual({
-      x: 155,
+    expect(updateBossMotion(
+      { x: 90, direction: 1 },
+      1000,
+      [paddedObstacle],
+      CENTER_BOUNDS,
+    )).toEqual({
+      x: 120,
       direction: 1,
     });
   });
 
   it('reverses at an obstacle before overlap', () => {
     expect(
-      updateBossMotion({ x: 120, direction: 1 }, 1000, [{ minimum: 150, maximum: 200 }]),
+      updateBossMotion(
+        { x: 120, direction: 1 },
+        1000,
+        [{ minimum: 150, maximum: 200 }],
+        CENTER_BOUNDS,
+      ),
     ).toEqual({ x: 150, direction: 1 });
   });
 

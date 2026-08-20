@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PLAYER_RADIUS } from '../constants';
 import { movePlayer, resolveAim } from './playerRules';
 
 describe('player rules', () => {
@@ -9,7 +10,10 @@ describe('player rules', () => {
   });
 
   it('clamps the player below the spawn exclusion zone', () => {
-    expect(movePlayer({ x: 20, y: 100 }, { x: -1, y: -1 }, 1000)).toEqual({ x: 18, y: 98 });
+    expect(movePlayer({ x: 20, y: 100 }, { x: -1, y: -1 }, 1000)).toEqual({
+      x: PLAYER_RADIUS,
+      y: 98,
+    });
   });
 
   it('uses an injected build speed', () => {

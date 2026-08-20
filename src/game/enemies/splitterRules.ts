@@ -1,7 +1,7 @@
 import { GAME_WIDTH } from '../constants';
 import { GAME_TUNING } from '../config/gameTuning';
 import { clamp } from '../math/vector';
-import { footprintWorldRect } from '../encounters/formationGrid';
+import { FORMATION_COLUMNS, footprintWorldRect } from '../encounters/formationGrid';
 import type { EnemyKind, EnemySpec, FragmentSide } from './enemyRules';
 
 export interface FragmentSpec {
@@ -39,7 +39,7 @@ export function fragmentSpecsFor(
       speed: parent.speed,
     })) as [FragmentSpec, FragmentSpec];
   }
-  const firstColumn = clamp(parent.column, 0, 6);
+  const firstColumn = clamp(parent.column, 0, FORMATION_COLUMNS - 2);
   return [firstColumn, firstColumn + 1].map((column, index) => ({
     kind: 'fragment',
     side: index === 0 ? 'left' : 'right',

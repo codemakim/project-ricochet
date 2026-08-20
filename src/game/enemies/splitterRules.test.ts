@@ -7,11 +7,11 @@ describe('splitter rules', () => {
       x: 225, y: 180, column: 3, row: 2, speed: 8,
     })).toEqual([
       {
-        kind: 'fragment', side: 'left', hp: 2, x: 199, y: 180,
+        kind: 'fragment', side: 'left', hp: 2, x: 309, y: 180,
         column: 3, row: 2, width: 1, height: 1, speed: 8,
       },
       {
-        kind: 'fragment', side: 'right', hp: 2, x: 251, y: 180,
+        kind: 'fragment', side: 'right', hp: 2, x: 393, y: 180,
         column: 4, row: 2, width: 1, height: 1, speed: 8,
       },
     ]);
@@ -21,9 +21,11 @@ describe('splitter rules', () => {
     expect(fragmentSpecsFor({
       x: 0, y: 180, column: 0, row: 2, speed: 8,
     }).every(({ x }) => x >= 24)).toBe(true);
-    expect(fragmentSpecsFor({
+    const right = fragmentSpecsFor({
       x: 450, y: 180, column: 6, row: 2, speed: 8,
-    }).every(({ x }) => x <= 426)).toBe(true);
+    });
+    expect(right.every(({ x }) => x <= 408)).toBe(true);
+    expect(right.map(({ column }) => column)).toEqual([3, 4]);
   });
 
   it('counts splitters as two population and fragments as one', () => {

@@ -129,10 +129,10 @@ it('defines hostile hive body modules with a clear reflector wall silhouette', (
     shape: 'hiveCore', fill: 0xff5c70, accent: 0xffd19a,
   });
   expect(textures['hive-left-shooter']).toMatchObject({
-    shape: 'hiveShooter', width: 68, height: 56,
+    shape: 'hiveShooter', width: 70, height: 56,
   });
   expect(textures['hive-right-shooter']).toMatchObject({
-    shape: 'hiveShooter', width: 68, height: 56,
+    shape: 'hiveShooter', width: 70, height: 56,
   });
   expect(textures['hive-left-reflector']).toMatchObject({
     shape: 'reflectorWall', width: 36, height: 192,

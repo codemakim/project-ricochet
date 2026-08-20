@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ORB_RADIUS } from '../constants';
 import { BuildState } from './BuildState';
 
 describe('BuildState', () => {
@@ -104,7 +105,7 @@ describe('BuildState', () => {
       'armor-reinforcement': 3,
     });
 
-    expect(build.orbRadius()).toBeCloseTo(8 * 1.16);
+    expect(build.orbRadius()).toBeCloseTo(ORB_RADIUS * 1.16);
     expect(build.recoveryRadius()).toBe(74);
     expect(build.playerSpeed()).toBeCloseTo(420 * 1.16);
     expect(build.maximumHealth()).toBe(13);
