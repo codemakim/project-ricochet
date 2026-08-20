@@ -221,7 +221,7 @@ Expected: old templates exceed column four and old population bands differ.
 Use these slot layouts:
 
 ```ts
-// staggered-lanes, rows 3
+// staggered-lanes, rows 4 so the onslaught minimum fits beside its reserved passage
 [
   { column: 0, row: 0, width: 1, height: 1 },
   { column: 1, row: 0, width: 1, height: 1, optional: true },

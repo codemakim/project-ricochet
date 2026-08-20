@@ -44,18 +44,18 @@ describe('stage content', () => {
       shooterMaximum: phase.maxPerFormationOverrides?.shooter,
     })))).toEqual([
       [
-        { activeCap: 28, spawnIntervalMs: 8_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
-        { activeCap: 40, spawnIntervalMs: 5_500, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
-        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 12, spawnIntervalMs: 8_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
+        { activeCap: 18, spawnIntervalMs: 5_500, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
+        { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
       ],
       [
-        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
-        { activeCap: 56, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
+        { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 26, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
       ],
       [
-        { activeCap: 44, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
-        { activeCap: 48, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
-        { activeCap: 52, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
+        { activeCap: 24, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
+        { activeCap: 28, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
+        { activeCap: 30, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
       ],
     ]);
   });
@@ -74,23 +74,39 @@ describe('stage content', () => {
       && profile.rowMaximum <= 5
       && profile.cellMinimum <= profile.cellMaximum
     ))).toBe(true);
+    expect(FORMATION_PROFILES.map(({ cellMinimum, cellMaximum }) => (
+      [cellMinimum, cellMaximum]
+    ))).toEqual([[5, 8], [7, 11], [9, 14], [11, 17]]);
     expect(FORMATION_TEMPLATES.map(({ id }) => id)).toEqual([
       'staggered-lanes',
       'side-fort',
       'split-gate',
       'broken-wall',
     ]);
+    for (const template of FORMATION_TEMPLATES) {
+      const occupied = template.slots.reduce((cells, slot) => {
+        for (let row = slot.row; row < slot.row + slot.height; row += 1) {
+          for (let column = slot.column; column < slot.column + slot.width; column += 1) {
+            cells.add(`${row}:${column}`);
+          }
+        }
+        return cells;
+      }, new Set<string>());
+      expect(Math.max(...template.slots.map((slot) => slot.column + slot.width)))
+        .toBeLessThanOrEqual(5);
+      expect(occupied.size).toBeLessThan(template.rows * 5);
+    }
     expect(() => validateStageContent()).not.toThrow();
   });
 
-  it('rejects a template footprint outside eight columns', () => {
+  it('rejects a template footprint outside five columns', () => {
     const invalid = {
       id: 'invalid',
       mode: 'fixed',
       rows: 2,
       minStage: 1,
       weight: 1,
-      slots: [{ kind: 'basic', column: 7, row: 0, width: 2, height: 1 }],
+      slots: [{ kind: 'basic', column: 4, row: 0, width: 2, height: 1 }],
     } as const;
 
     expect(() => validateStageContent(

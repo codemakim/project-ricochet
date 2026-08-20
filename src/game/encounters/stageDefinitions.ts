@@ -125,19 +125,18 @@ export const FORMATION_TEMPLATES = [
   {
     id: 'staggered-lanes',
     mode: 'mixed',
-    rows: 3,
+    rows: 4,
     minStage: 1,
     weight: 1,
     slots: [
       { column: 0, row: 0, width: 1, height: 1 },
       { column: 1, row: 0, width: 1, height: 1, optional: true },
       { column: 4, row: 0, width: 1, height: 1 },
-      { column: 5, row: 0, width: 1, height: 1 },
       { column: 2, row: 1, width: 1, height: 1 },
-      { column: 6, row: 1, width: 1, height: 1, optional: true },
+      { column: 3, row: 1, width: 1, height: 1, optional: true },
       { column: 0, row: 2, width: 1, height: 1 },
-      { column: 4, row: 2, width: 1, height: 1 },
-      { column: 5, row: 2, width: 1, height: 1, optional: true },
+      { column: 3, row: 2, width: 1, height: 1 },
+      { column: 4, row: 2, width: 1, height: 1, optional: true },
     ],
   },
   {
@@ -149,11 +148,9 @@ export const FORMATION_TEMPLATES = [
     slots: [
       { column: 0, row: 0, width: 2, height: 2 },
       { column: 3, row: 0, width: 1, height: 1 },
-      { column: 6, row: 0, width: 1, height: 1, optional: true },
-      { column: 4, row: 1, width: 1, height: 1 },
+      { column: 4, row: 1, width: 1, height: 1, optional: true },
       { column: 2, row: 2, width: 1, height: 1 },
-      { column: 5, row: 2, width: 1, height: 1 },
-      { column: 7, row: 3, width: 1, height: 1, optional: true },
+      { column: 4, row: 3, width: 1, height: 1, optional: true },
     ],
   },
   {
@@ -164,10 +161,10 @@ export const FORMATION_TEMPLATES = [
     weight: 1,
     slots: [
       { kind: 'basic', column: 0, row: 0, width: 1, height: 1 },
-      { kind: 'splitter', column: 3, row: 0, width: 2, height: 1 },
-      { kind: 'basic', column: 7, row: 0, width: 1, height: 1 },
-      { kind: 'shooter', column: 1, row: 2, width: 1, height: 1 },
-      { kind: 'shooter', column: 6, row: 2, width: 1, height: 1 },
+      { kind: 'splitter', column: 1, row: 0, width: 2, height: 1 },
+      { kind: 'basic', column: 4, row: 0, width: 1, height: 1 },
+      { kind: 'shooter', column: 0, row: 2, width: 1, height: 1 },
+      { kind: 'shooter', column: 4, row: 2, width: 1, height: 1 },
     ],
   },
   {
@@ -179,16 +176,16 @@ export const FORMATION_TEMPLATES = [
     slots: [
       { column: 0, row: 0, width: 1, height: 1 },
       { column: 1, row: 0, width: 1, height: 1 },
-      { column: 6, row: 0, width: 1, height: 1 },
-      { column: 7, row: 0, width: 1, height: 1 },
+      { column: 3, row: 0, width: 1, height: 1 },
+      { column: 4, row: 0, width: 1, height: 1 },
       { column: 0, row: 1, width: 1, height: 1, optional: true },
-      { column: 6, row: 1, width: 1, height: 1 },
+      { column: 3, row: 1, width: 1, height: 1 },
       { column: 1, row: 3, width: 1, height: 1 },
-      { column: 7, row: 3, width: 1, height: 1, optional: true },
+      { column: 4, row: 3, width: 1, height: 1, optional: true },
       { column: 0, row: 4, width: 1, height: 1 },
       { column: 1, row: 4, width: 1, height: 1 },
-      { column: 5, row: 4, width: 1, height: 1 },
-      { column: 6, row: 4, width: 1, height: 1 },
+      { column: 3, row: 4, width: 1, height: 1 },
+      { column: 4, row: 4, width: 1, height: 1 },
     ],
   },
 ] as const satisfies readonly FormationTemplate[];
@@ -196,22 +193,22 @@ export const FORMATION_TEMPLATES = [
 export const FORMATION_PROFILES = [
   {
     id: 'opening', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 8, cellMaximum: 12,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 5, cellMaximum: 8,
     rowMinimum: 2, rowMaximum: 3, allowedTags: [],
   },
   {
     id: 'pressure', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 11, cellMaximum: 16,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 7, cellMaximum: 11,
     rowMinimum: 3, rowMaximum: 4, allowedTags: [],
   },
   {
     id: 'assault', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 14, cellMaximum: 20,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 9, cellMaximum: 14,
     rowMinimum: 3, rowMaximum: 5, allowedTags: [],
   },
   {
     id: 'onslaught', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 17, cellMaximum: 24,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 11, cellMaximum: 17,
     rowMinimum: 4, rowMaximum: 5, allowedTags: [],
   },
 ] as const satisfies readonly FormationProfile[];
@@ -247,9 +244,9 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 28, 8_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
-      phase(60_000, 40, 5_500, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
-      phase(120_000, 48, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
+      phase(0, 12, 8_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
+      phase(60_000, 18, 5_500, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
+      phase(120_000, 22, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
     ],
     boss: { kind: 'sentinel', minimumMs: 120_000, scoreTarget: 70, hardMaximumMs: 210_000, warningMs: 2_000 },
   },
@@ -265,8 +262,8 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 48, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
-      phase(60_000, 56, 4_500, 0, 'onslaught', { basic: 21, armored: 3, shooter: 5, splitter: 2 }, { armored: 3, shooter: 4, splitter: 2 }),
+      phase(0, 22, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
+      phase(60_000, 26, 4_500, 0, 'onslaught', { basic: 21, armored: 3, shooter: 5, splitter: 2 }, { armored: 3, shooter: 4, splitter: 2 }),
     ],
     boss: { kind: 'hive', minimumMs: 150_000, scoreTarget: 110, hardMaximumMs: 210_000, warningMs: 2_000 },
   },
@@ -282,9 +279,9 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 44, 5_500, 50, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
-      phase(60_000, 48, 5_000, 50, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
-      phase(120_000, 52, 4_500, 50, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
+      phase(0, 24, 5_500, 50, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
+      phase(60_000, 28, 5_000, 50, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
+      phase(120_000, 30, 4_500, 50, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
     ],
     boss: { kind: 'siege', minimumMs: 150_000, scoreTarget: 140, hardMaximumMs: 210_000, warningMs: 2_000 },
   },
@@ -342,7 +339,7 @@ export function validateStageContent(
     positiveInteger(entry.minStage, `${entry.kind}.minStage`);
     positiveInteger(entry.width, `${entry.kind}.width`);
     positiveInteger(entry.height, `${entry.kind}.height`);
-    if (entry.width > 8) throw new RangeError(`${entry.kind}.width must fit the grid`);
+    if (entry.width > FORMATION_COLUMNS) throw new RangeError(`${entry.kind}.width must fit the grid`);
     if (!Number.isFinite(entry.weight) || entry.weight <= 0) {
       throw new RangeError(`${entry.kind}.weight must be positive`);
     }

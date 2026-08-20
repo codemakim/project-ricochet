@@ -90,7 +90,7 @@ describe('multi-cell formation generation', () => {
     expect(first.enemies.every(({ column, row, width, height }) => (
       column >= 0
       && row >= 0
-      && column + width <= 8
+      && column + width <= 5
       && row + height <= 5
     ))).toBe(true);
     expect(first.populationCost).toBe(cells.length);
@@ -124,8 +124,14 @@ describe('multi-cell formation generation', () => {
     for (const selected of FORMATION_PROFILES) {
       const recipeForProfile = { ...recipe(), profile: selected };
       for (let sequence = 0; sequence < 64; sequence += 2) {
-        const first = createReinforcementFormation(recipeForProfile, sequence, 808).enemies;
-        const second = createReinforcementFormation(recipeForProfile, sequence + 1, 808).enemies;
+        let first: FormationEnemySpec[];
+        let second: FormationEnemySpec[];
+        try {
+          first = createReinforcementFormation(recipeForProfile, sequence, 808).enemies;
+          second = createReinforcementFormation(recipeForProfile, sequence + 1, 808).enemies;
+        } catch (error) {
+          throw new Error(`${selected.id}:${sequence}`, { cause: error });
+        }
         expect(hasConnectedEmptyPassage(first)).toBe(true);
         expect(hasConnectedEmptyPassage(second)).toBe(true);
         expect(sharedBottomPassageColumns(first, second).length).toBeGreaterThan(0);
@@ -148,10 +154,9 @@ describe('multi-cell formation generation', () => {
     expect(result.enemies.map(({ kind, column, row, width, height }) => ({
       kind, column, row, width, height,
     }))).toEqual([
-      { kind: 'basic', column: 0, row: 0, width: 1, height: 1 },
-      { kind: 'basic', column: 7, row: 0, width: 1, height: 1 },
-      { kind: 'shooter', column: 1, row: 2, width: 1, height: 1 },
-      { kind: 'shooter', column: 6, row: 2, width: 1, height: 1 },
+      { kind: 'splitter', column: 1, row: 0, width: 2, height: 1 },
+      { kind: 'basic', column: 4, row: 0, width: 1, height: 1 },
+      { kind: 'shooter', column: 4, row: 2, width: 1, height: 1 },
     ]);
   });
 
@@ -172,7 +177,7 @@ describe('multi-cell formation generation', () => {
     expect(new Set(layouts.map((layout) => JSON.stringify(layout))).size).toBeGreaterThan(2);
     expect(layouts.some((enemies) =>
       enemies.some(({ column, row, width, height }) => (
-        (column === 0 || column === 6) && row === 0 && width === 2 && height === 2
+        (column === 0 || column === 3) && row === 0 && width === 2 && height === 2
       )))).toBe(true);
     expect(layouts.every((enemies, seed) =>
       occupiedCells(enemies).every((cell) => !reservedPassageCells(4, 0, seed).has(cell)),
@@ -183,7 +188,7 @@ describe('multi-cell formation generation', () => {
     const result = createInitialFormation(321);
 
     expect(result.style).not.toBe('grid');
-    expect(occupiedCells(result.enemies).length).toBeGreaterThanOrEqual(14);
+    expect(occupiedCells(result.enemies).length).toBeGreaterThanOrEqual(7);
     expect(result.enemies.every(({ speed }) =>
       speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
     expect(result.enemies.every(({ x, y }) =>
