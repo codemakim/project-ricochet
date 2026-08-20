@@ -25,15 +25,36 @@ check_blocks() {
   [[ "$(compare -metric AE "$file" "$TMP_ROUND" null: 2>&1)" == '0 (0)' ]]
 }
 
+check_opaque_bounds() {
+  local file="$ROOT/$1" expected="$2" bounds
+  bounds="$(magick "$file" -alpha extract -trim -format '%@' info:)"
+  [[ "$bounds" == "$expected+0+0" ]] || {
+    echo "$file: opaque bounds expected $expected+0+0, got $bounds"
+    exit 1
+  }
+}
+
 check public/assets/combat/sprites/player.png 72x72 5 yes
-check public/assets/combat/sprites/enemy-basic.png 72x56 5 yes
-check public/assets/combat/sprites/enemy-armored.png 80x64 5 yes
-check public/assets/combat/sprites/enemy-shooter.png 76x60 5 yes
+check public/assets/combat/sprites/enemy-basic.png 84x72 5 yes
+check public/assets/combat/sprites/enemy-armored.png 168x144 5 yes
+check public/assets/combat/sprites/enemy-shooter.png 84x72 5 yes
+check public/assets/combat/sprites/enemy-splitter.png 168x72 4 yes
+check public/assets/combat/sprites/enemy-fragment-left.png 84x72 4 yes
+check public/assets/combat/sprites/enemy-fragment-right.png 84x72 4 yes
 check public/assets/combat/backgrounds/scrapyard-arena.webp 900x1440 12 no
 check_blocks public/assets/combat/sprites/player.png
 check_blocks public/assets/combat/sprites/enemy-basic.png
 check_blocks public/assets/combat/sprites/enemy-armored.png
 check_blocks public/assets/combat/sprites/enemy-shooter.png
+check_blocks public/assets/combat/sprites/enemy-splitter.png
+check_blocks public/assets/combat/sprites/enemy-fragment-left.png
+check_blocks public/assets/combat/sprites/enemy-fragment-right.png
+check_opaque_bounds public/assets/combat/sprites/enemy-basic.png 84x72
+check_opaque_bounds public/assets/combat/sprites/enemy-armored.png 168x144
+check_opaque_bounds public/assets/combat/sprites/enemy-shooter.png 84x72
+check_opaque_bounds public/assets/combat/sprites/enemy-splitter.png 168x72
+check_opaque_bounds public/assets/combat/sprites/enemy-fragment-left.png 84x72
+check_opaque_bounds public/assets/combat/sprites/enemy-fragment-right.png 84x72
 check public/assets/combat/sprites/sentinel-body.png 352x192 5 yes
 check public/assets/combat/sprites/sentinel-left-weakpoint.png 60x128 5 yes
 check public/assets/combat/sprites/sentinel-right-weakpoint.png 60x128 5 yes

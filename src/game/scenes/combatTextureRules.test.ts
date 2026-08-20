@@ -51,14 +51,14 @@ it('defines distinct prototype textures for a splitter and complementary fragmen
   const textures = combatProjectileTextureDescriptors();
 
   expect(textures['enemy-splitter']).toMatchObject({
-    shape: 'crackedRoundedRect', width: 38, height: 30, deferred: true,
+    shape: 'crackedRoundedRect', width: 168, height: 72, deferred: true,
   });
 
   expect(textures['enemy-fragment-left']).toMatchObject({
-    shape: 'fragmentLeft', width: 22, height: 18, deferred: true,
+    shape: 'fragmentLeft', width: 84, height: 72, deferred: true,
   });
   expect(textures['enemy-fragment-right']).toMatchObject({
-    shape: 'fragmentRight', width: 22, height: 18, deferred: true,
+    shape: 'fragmentRight', width: 84, height: 72, deferred: true,
   });
 });
 

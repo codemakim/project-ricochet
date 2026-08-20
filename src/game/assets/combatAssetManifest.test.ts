@@ -20,6 +20,7 @@ describe('combat asset manifest', () => {
     expect(keys).toEqual(expect.arrayContaining([
       'combat-background', 'player',
       'enemy-basic', 'enemy-armored', 'enemy-shooter',
+      'enemy-splitter', 'enemy-fragment-left', 'enemy-fragment-right',
       'boss-body', 'boss-left-weakpoint', 'boss-right-weakpoint', 'boss-core',
       'orb-echo', 'orb-corrosion', 'orb-conduction',
       'orb-inertia', 'orb-split', 'orb-explosion',

@@ -113,11 +113,12 @@ class FakeSprite {
     this.x = x;
     this.y = y;
     [this.width, this.height] = ({
-      'enemy-basic': [36, 28],
-      'enemy-armored': [40, 32],
-      'enemy-shooter': [38, 30],
-      'enemy-fragment-left': [22, 18],
-      'enemy-fragment-right': [22, 18],
+      'enemy-basic': [84, 72],
+      'enemy-armored': [168, 144],
+      'enemy-shooter': [84, 72],
+      'enemy-splitter': [168, 72],
+      'enemy-fragment-left': [84, 72],
+      'enemy-fragment-right': [84, 72],
       'enemy-bullet': [20, 20],
     } as Record<string, [number, number]>)[texture] ?? [0, 0];
   }
@@ -326,10 +327,10 @@ describe('EnemyManager', () => {
       bodyHeight: sprite.body.height,
       velocityY: sprite.body.velocity.y,
     }).toEqual({
-      displayWidth: 100,
-      displayHeight: 92,
-      bodyWidth: 100,
-      bodyHeight: 92,
+      displayWidth: 168,
+      displayHeight: 144,
+      bodyWidth: 168,
+      bodyHeight: 144,
       velocityY: 8,
     });
     manager.update();
@@ -374,7 +375,7 @@ describe('EnemyManager', () => {
 
   it('keeps a body that only touches the corridor edge', () => {
     const { manager } = createBoundary([
-      { kind: 'basic', hp: 3, x: 76, y: 120, column: 0, row: 0, speed: 0 },
+      { kind: 'basic', hp: 3, x: 58, y: 120, column: 0, row: 0, speed: 0 },
     ]);
 
     expect(manager.clearCorridor({ left: 100, right: 300, bottom: 180 })).toEqual([]);
@@ -463,7 +464,7 @@ describe('EnemyManager', () => {
     ]);
 
     expect(groups[0]!.children.map(({ texture }) => texture)).toEqual([
-      'enemy-basic',
+      'enemy-splitter',
       'enemy-fragment-left',
       'enemy-fragment-right',
     ]);
@@ -597,7 +598,7 @@ describe('EnemyManager', () => {
 
   it('debug-removes selected enemies without reusing IDs', () => {
     const { manager } = createBoundary();
-    manager.debugRemoveEnemies!([0, 3, 7, 11]);
+    manager.debugRemoveEnemies!([0, 1, 2, 3]);
     expect(manager.getSnapshot().enemies)
       .toHaveLength(INITIAL_FORMATION_SIZE - 4);
 

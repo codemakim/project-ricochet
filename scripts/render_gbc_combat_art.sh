@@ -37,29 +37,46 @@ magick -size 18x18 xc:none +antialias \
   -strip "$SOURCE/player-master.png"
 export_sprite "$SOURCE/player-master.png" "$SPRITES/player.png"
 
-magick -size 18x14 xc:none +antialias \
-  -fill "$INK" -draw 'rectangle 3,3 14,12 rectangle 2,5 15,11' \
-  -fill "$GREEN" -draw 'rectangle 4,4 13,11 rectangle 3,6 14,10' \
-  -fill "$INK" -draw 'rectangle 5,6 12,9' \
-  -fill "$CORAL" -draw 'point 7,8 point 10,8' \
+magick -size 21x18 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 1,0 19,17 rectangle 0,1 20,16' \
+  -fill "$GREEN" -draw 'rectangle 2,1 18,16 rectangle 1,2 19,15' \
+  -fill "$INK" -draw 'rectangle 4,6 16,11' \
+  -fill "$CORAL" -draw 'rectangle 6,8 7,9 rectangle 13,8 14,9' \
   -strip "$SOURCE/enemy-basic-master.png"
 export_sprite "$SOURCE/enemy-basic-master.png" "$SPRITES/enemy-basic.png"
 
-magick -size 20x16 xc:none +antialias \
-  -fill "$INK" -draw 'rectangle 3,3 16,14 rectangle 1,5 18,13' \
-  -fill "$VIOLET" -draw 'rectangle 4,4 15,13 rectangle 2,6 17,12' \
-  -fill "$BLUE_STEEL" -draw 'rectangle 5,5 14,9' \
-  -fill "$INK" -draw 'rectangle 7,8 12,12' \
+magick -size 42x36 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,0 39,35 rectangle 0,2 41,33' \
+  -fill "$VIOLET" -draw 'rectangle 3,1 38,34 rectangle 1,3 40,32' \
+  -fill "$BLUE_STEEL" -draw 'rectangle 5,5 36,23' \
+  -fill "$INK" -draw 'rectangle 13,13 28,29' \
   -strip "$SOURCE/enemy-armored-master.png"
 export_sprite "$SOURCE/enemy-armored-master.png" "$SPRITES/enemy-armored.png"
 
-magick -size 19x15 xc:none +antialias \
-  -fill "$INK" -draw 'rectangle 7,0 11,14 rectangle 5,2 13,12' \
-  -fill "$ORANGE" -draw 'rectangle 8,1 10,13 rectangle 6,3 12,11' \
-  -fill "$YELLOW" -draw 'rectangle 8,2 10,3' \
-  -fill "$INK" -draw 'rectangle 7,6 11,11' \
+magick -size 21x18 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 1,0 19,17 rectangle 0,1 20,16' \
+  -fill "$ORANGE" -draw 'rectangle 2,1 18,16 rectangle 1,2 19,15' \
+  -fill "$YELLOW" -draw 'rectangle 8,2 12,4' \
+  -fill "$INK" -draw 'rectangle 5,6 15,15' \
   -strip "$SOURCE/enemy-shooter-master.png"
 export_sprite "$SOURCE/enemy-shooter-master.png" "$SPRITES/enemy-shooter.png"
+
+magick -size 42x18 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 1,0 40,17 rectangle 0,1 41,16' \
+  -fill "$CORAL" -draw 'rectangle 2,1 39,16 rectangle 1,2 40,15' \
+  -fill "$INK" -draw 'polygon 20,0 23,4 20,8 23,12 20,17 18,17 20,12 17,8 20,4 18,0' \
+  -strip "$SOURCE/enemy-splitter-master.png"
+export_sprite "$SOURCE/enemy-splitter-master.png" "$SPRITES/enemy-splitter.png"
+
+magick -size 21x18 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 1,0 19,17 rectangle 0,1 20,16' \
+  -fill "$CORAL" -draw 'rectangle 2,1 18,16 rectangle 1,2 19,15' \
+  -fill "$INK" -draw 'polygon 20,1 16,4 19,8 15,12 20,16 20,1' \
+  -strip "$SOURCE/enemy-fragment-left-master.png"
+export_sprite "$SOURCE/enemy-fragment-left-master.png" "$SPRITES/enemy-fragment-left.png"
+magick "$SOURCE/enemy-fragment-left-master.png" -flop -strip \
+  "$SOURCE/enemy-fragment-right-master.png"
+export_sprite "$SOURCE/enemy-fragment-right-master.png" "$SPRITES/enemy-fragment-right.png"
 
 magick -size 225x360 "xc:$FLOOR" +antialias \
   -fill "$FLOOR_ALT" -draw 'rectangle 22,24 109,118 rectangle 112,24 202,118 rectangle 22,121 202,235 rectangle 22,238 109,335 rectangle 112,238 202,335' \
