@@ -26,7 +26,7 @@ ORANGE='#c53a17'
 YELLOW='#ffae2b'
 
 export_sprite() {
-  magick "$1" -filter point -resize 400% "$2"
+  magick "$1" -filter point -resize 400% -strip "$2"
 }
 
 magick -size 18x18 xc:none +antialias \
@@ -34,7 +34,7 @@ magick -size 18x18 xc:none +antialias \
   -fill "$AMBER" -draw 'rectangle 5,3 12,14 rectangle 3,5 14,12' \
   -fill "$CERAMIC" -draw 'rectangle 5,5 12,9' \
   -fill "$CYAN" -draw 'point 7,7 point 10,7 rectangle 8,12 9,13' \
-  "$SOURCE/player-master.png"
+  -strip "$SOURCE/player-master.png"
 export_sprite "$SOURCE/player-master.png" "$SPRITES/player.png"
 
 magick -size 18x14 xc:none +antialias \
@@ -42,7 +42,7 @@ magick -size 18x14 xc:none +antialias \
   -fill "$GREEN" -draw 'rectangle 4,4 13,11 rectangle 3,6 14,10' \
   -fill "$INK" -draw 'rectangle 5,6 12,9' \
   -fill "$CORAL" -draw 'point 7,8 point 10,8' \
-  "$SOURCE/enemy-basic-master.png"
+  -strip "$SOURCE/enemy-basic-master.png"
 export_sprite "$SOURCE/enemy-basic-master.png" "$SPRITES/enemy-basic.png"
 
 magick -size 20x16 xc:none +antialias \
@@ -50,7 +50,7 @@ magick -size 20x16 xc:none +antialias \
   -fill "$VIOLET" -draw 'rectangle 4,4 15,13 rectangle 2,6 17,12' \
   -fill "$BLUE_STEEL" -draw 'rectangle 5,5 14,9' \
   -fill "$INK" -draw 'rectangle 7,8 12,12' \
-  "$SOURCE/enemy-armored-master.png"
+  -strip "$SOURCE/enemy-armored-master.png"
 export_sprite "$SOURCE/enemy-armored-master.png" "$SPRITES/enemy-armored.png"
 
 magick -size 19x15 xc:none +antialias \
@@ -58,7 +58,7 @@ magick -size 19x15 xc:none +antialias \
   -fill "$ORANGE" -draw 'rectangle 8,1 10,13 rectangle 6,3 12,11' \
   -fill "$YELLOW" -draw 'rectangle 8,2 10,3' \
   -fill "$INK" -draw 'rectangle 7,6 11,11' \
-  "$SOURCE/enemy-shooter-master.png"
+  -strip "$SOURCE/enemy-shooter-master.png"
 export_sprite "$SOURCE/enemy-shooter-master.png" "$SPRITES/enemy-shooter.png"
 
 magick -size 225x360 "xc:$FLOOR" +antialias \
@@ -71,15 +71,15 @@ magick -size 225x360 "xc:$FLOOR" +antialias \
   -fill "$MAGENTA" -draw 'rectangle 10,221 12,230 rectangle 212,296 214,307' \
   -fill "$ACID" -draw 'rectangle 10,306 12,319 rectangle 212,48 214,57' \
   -fill "$YELLOW" -draw 'rectangle 109,8 115,12 rectangle 109,347 115,351' \
-  "$SOURCE/scrapyard-arena-master.png"
-magick "$SOURCE/scrapyard-arena-master.png" -filter point -resize 400% -define webp:lossless=true "$BACKGROUNDS/scrapyard-arena.webp"
+  -strip "$SOURCE/scrapyard-arena-master.png"
+magick "$SOURCE/scrapyard-arena-master.png" -filter point -resize 400% -strip -define webp:lossless=true "$BACKGROUNDS/scrapyard-arena.webp"
 
 magick -size 88x48 xc:none +antialias \
   -fill "$INK" -draw 'rectangle 4,6 83,43 rectangle 0,13 87,36' \
   -fill "$VIOLET" -draw 'rectangle 7,8 80,41 rectangle 2,15 85,34' \
   -fill "$BLUE_STEEL" -draw 'rectangle 14,10 73,18 rectangle 10,27 77,38' \
   -fill "$INK" -draw 'rectangle 34,16 53,35 rectangle 0,18 10,31 rectangle 77,18 87,31' \
-  "$SOURCE/sentinel-body-master.png"
+  -strip "$SOURCE/sentinel-body-master.png"
 export_sprite "$SOURCE/sentinel-body-master.png" "$SPRITES/sentinel-body.png"
 
 magick -size 15x32 xc:none +antialias \
@@ -87,14 +87,14 @@ magick -size 15x32 xc:none +antialias \
   -fill "$VIOLET" -draw 'rectangle 3,2 11,29 rectangle 1,7 13,24' \
   -fill "$YELLOW" -draw 'rectangle 4,9 10,21' \
   -fill "$INK" -draw 'rectangle 6,11 8,19' \
-  "$SOURCE/sentinel-weakpoint-master.png"
+  -strip "$SOURCE/sentinel-weakpoint-master.png"
 export_sprite "$SOURCE/sentinel-weakpoint-master.png" "$SPRITES/sentinel-left-weakpoint.png"
-magick "$SPRITES/sentinel-left-weakpoint.png" -flop "$SPRITES/sentinel-right-weakpoint.png"
+magick "$SPRITES/sentinel-left-weakpoint.png" -flop -strip "$SPRITES/sentinel-right-weakpoint.png"
 
 magick -size 16x16 xc:none +antialias \
   -fill "$INK" -draw 'rectangle 2,2 13,13' \
   -fill "$YELLOW" -draw 'rectangle 4,4 11,11' \
   -fill "$CERAMIC" -draw 'rectangle 6,5 9,10' \
   -fill "$MAGENTA" -draw 'rectangle 7,7 8,8' \
-  "$SOURCE/sentinel-core-master.png"
+  -strip "$SOURCE/sentinel-core-master.png"
 export_sprite "$SOURCE/sentinel-core-master.png" "$SPRITES/sentinel-core.png"
