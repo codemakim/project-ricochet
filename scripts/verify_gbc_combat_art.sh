@@ -55,9 +55,9 @@ check_opaque_bounds public/assets/combat/sprites/enemy-shooter.png 84x72
 check_opaque_bounds public/assets/combat/sprites/enemy-splitter.png 168x72
 check_opaque_bounds public/assets/combat/sprites/enemy-fragment-left.png 84x72
 check_opaque_bounds public/assets/combat/sprites/enemy-fragment-right.png 84x72
-check public/assets/combat/sprites/sentinel-body.png 352x192 5 yes
-check public/assets/combat/sprites/sentinel-left-weakpoint.png 60x128 5 yes
-check public/assets/combat/sprites/sentinel-right-weakpoint.png 60x128 5 yes
+check public/assets/combat/sprites/sentinel-body.png 252x144 5 yes
+check public/assets/combat/sprites/sentinel-left-weakpoint.png 56x120 5 yes
+check public/assets/combat/sprites/sentinel-right-weakpoint.png 56x120 5 yes
 check public/assets/combat/sprites/sentinel-core.png 64x64 5 yes
 check_blocks public/assets/combat/sprites/sentinel-body.png
 check_blocks public/assets/combat/sprites/sentinel-left-weakpoint.png

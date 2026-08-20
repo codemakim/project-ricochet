@@ -1,9 +1,11 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
+import { ORB_RADIUS } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import type { OrbManager, PermanentHitResult } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
+import { BOSS_GEOMETRY } from './bossGeometry';
 import { BossManager } from './BossManager';
 import type { BossEncounter } from './bossEncounter';
 
@@ -34,13 +36,17 @@ class FakeBody {
 }
 
 const sourceSize = (texture: string): [number, number] => {
-  if (texture === 'boss-body') return [352, 192];
-  if (texture.includes('boss-') && texture.includes('weakpoint')) return [60, 128];
+  if (texture === 'boss-body') return [252, 144];
+  if (texture.includes('boss-') && texture.includes('weakpoint')) return [56, 120];
   if (texture === 'boss-core') return [64, 64];
   if (texture === 'boss-basic-bullet' || texture === 'boss-aimed-bullet') return [20, 20];
   if (texture === 'boss-falling-hazard') return [32, 48];
   return [32, 32];
 };
+
+const sentinelCenterX = GAME_TUNING.world.width / 2;
+const leftWeakpointX = sentinelCenterX - BOSS_GEOMETRY.weakpointOffsetX;
+const rightWeakpointX = sentinelCenterX + BOSS_GEOMETRY.weakpointOffsetX;
 
 class FakeSprite {
   active = true;
@@ -193,7 +199,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 120, 'orb') as FakeSprite & { orbId: number };
   orb.orbId = 0;
-  orb.setCircle(8);
+  orb.setCircle(ORB_RADIUS);
   orb.setVelocity(100, -200);
   const handleEnemyHit = vi.fn(() => hitResult());
   const synchronizeOrb = vi.fn();
@@ -209,7 +215,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
   } as unknown as OrbManager;
   const temporaryOrb = new FakeSprite(225, 120, 'temporary') as FakeSprite & { temporaryOrbId: number };
   temporaryOrb.temporaryOrbId = 4;
-  temporaryOrb.setCircle(6);
+  temporaryOrb.setCircle(GAME_TUNING.temporaryOrbs.radius);
   temporaryOrb.setVelocity(-120, -80);
   const temporaryGroup = new FakeGroup();
   temporaryGroup.children.push(temporaryOrb);
@@ -246,7 +252,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
     addRuntimeOrb: () => {
       const runtimeOrb = new FakeSprite(225, 120, 'orb-runtime') as FakeSprite & { orbId: number };
       runtimeOrb.orbId = 1;
-      runtimeOrb.setCircle(8).setVelocity(100, -200);
+      runtimeOrb.setCircle(ORB_RADIUS).setVelocity(100, -200);
       for (const listener of orbAddedListeners) listener(runtimeOrb);
       return runtimeOrb;
     },
@@ -389,8 +395,8 @@ describe('BossManager', () => {
     }).toEqual({
       width: GAME_TUNING.boss.weakpoint.visual.width,
       height: GAME_TUNING.boss.weakpoint.visual.height,
-      leftCenterX: 134,
-      rightCenterX: 316,
+      leftCenterX: 85,
+      rightCenterX: 365,
     });
     expect(left.body.halfWidth * 2 * left.scaleX)
       .toBe(GAME_TUNING.boss.weakpoint.hitbox.width);
@@ -417,11 +423,11 @@ describe('BossManager', () => {
   it('sets a deterministic boss position through its DEV-only debug hook', () => {
     const { manager } = createBoundary();
 
-    manager.debugSetPosition!(120);
+    manager.debugSetPosition!(225);
 
-    expect(manager.getSnapshot().position).toEqual({ x: 120, y: 120 });
-    expect(() => manager.debugSetPosition!(109)).toThrow(RangeError);
-    expect(() => manager.debugSetPosition!(341)).toThrow(RangeError);
+    expect(manager.getSnapshot().position).toEqual({ x: 225, y: 120 });
+    expect(() => manager.debugSetPosition!(167)).toThrow(RangeError);
+    expect(() => manager.debugSetPosition!(283)).toThrow(RangeError);
     expect(() => manager.debugSetPosition!(Number.NaN)).toThrow(RangeError);
   });
 
@@ -444,18 +450,22 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body');
     const weakpoint = boundary.colliderFor('boss-left-weakpoint');
-    boundary.orb.setPosition(134, 120);
+    boundary.orb.setPosition(leftWeakpointX, GAME_TUNING.boss.y);
 
     expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
     expect(weakpoint.trigger(boundary.orb, weakpoint.second as FakeSprite)).toBe(true);
     expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(11);
   });
 
-  it('rejects body reflection when a permanent radius-8 orb clips a weakpoint seam corner', () => {
+  it('rejects body reflection when a permanent orb clips a weakpoint seam corner', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body');
     const weakpoint = boundary.colliderFor('boss-left-weakpoint');
-    boundary.orb.setPosition(145, 153);
+    boundary.orb.setPosition(
+      sentinelCenterX - GAME_TUNING.boss.body.width / 2
+        + GAME_TUNING.boss.weakpoint.edgeOverlap / 2,
+      GAME_TUNING.boss.y + GAME_TUNING.boss.weakpoint.hitbox.height / 2 + ORB_RADIUS - 1,
+    );
 
     expect(body.trigger(boundary.orb, body.second as FakeSprite)).toBe(false);
     expect(boundary.handleEnemyHit).not.toHaveBeenCalled();
@@ -463,11 +473,16 @@ describe('BossManager', () => {
     expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(11);
   });
 
-  it('rejects body reflection when a temporary radius-6 orb clips a weakpoint seam corner', () => {
+  it('rejects body reflection when a temporary orb clips a weakpoint seam corner', () => {
     const boundary = createBoundary();
     const body = boundary.colliderFor('boss-body', boundary.temporaryGroup);
     const weakpoint = boundary.colliderFor('boss-left-weakpoint', boundary.temporaryGroup);
-    boundary.temporaryOrb.setPosition(145, 151);
+    boundary.temporaryOrb.setPosition(
+      sentinelCenterX - GAME_TUNING.boss.body.width / 2
+        + GAME_TUNING.boss.weakpoint.edgeOverlap / 2,
+      GAME_TUNING.boss.y + GAME_TUNING.boss.weakpoint.hitbox.height / 2
+        + GAME_TUNING.temporaryOrbs.radius - 1,
+    );
 
     expect(body.trigger(boundary.temporaryOrb, body.second as FakeSprite)).toBe(false);
     expect(boundary.handleTemporaryHit).not.toHaveBeenCalled();
@@ -495,8 +510,8 @@ describe('BossManager', () => {
     const core = boundary.colliderFor('boss-core');
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(false);
 
-    boundary.manager.applyAreaDamage({ x: 133, y: 120 }, 1, 28);
-    boundary.manager.applyAreaDamage({ x: 317, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: leftWeakpointX, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: rightWeakpointX, y: 120 }, 1, 28);
 
     expect(boundary.manager.getSnapshot().phase).toBe('core');
     expect((core.second as FakeSprite).visible).toBe(true);
@@ -520,7 +535,7 @@ describe('BossManager', () => {
   it('excludes the direct sentinel part and halves the nearest secondary damage', () => {
     const { manager } = createBoundary();
 
-    expect(manager.applyAreaDamage({ x: 220, y: 120 }, 100, 4, 'leftWeakpoint'))
+    expect(manager.applyAreaDamage({ x: sentinelCenterX, y: 120 }, 150, 4, 'leftWeakpoint'))
       .toEqual(['rightWeakpoint']);
     expect(manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 14, rightWeakpoint: 12 });
   });
@@ -550,15 +565,15 @@ describe('BossManager', () => {
       leftWeakpoint: 13,
       rightWeakpoint: 13,
     });
-    expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: 134, y: 120 });
+    expect(manager.getTargetPosition('leftWeakpoint')).toEqual({ x: leftWeakpointX, y: 120 });
   });
 
   it('damages only exposed sentinel parts near a finite beam segment', () => {
     const { manager } = createBoundary();
 
     expect(manager.applySegmentDamage(
-      { x: 100, y: 120 },
-      { x: 170, y: 120 },
+      { x: 50, y: 120 },
+      { x: 120, y: 120 },
       12,
       1,
     )).toEqual(['leftWeakpoint']);
@@ -833,8 +848,8 @@ describe('BossManager', () => {
 
   it('defeats once when the exposed core reaches zero', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 133, y: 120 }, 1, 28);
-    boundary.manager.applyAreaDamage({ x: 317, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: leftWeakpointX, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: rightWeakpointX, y: 120 }, 1, 28);
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 72);
 
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
@@ -852,8 +867,8 @@ describe('BossManager', () => {
 
   it('settles the killing direct-hit event before reporting defeat', () => {
     const boundary = createBoundary();
-    boundary.manager.applyAreaDamage({ x: 133, y: 120 }, 1, 28);
-    boundary.manager.applyAreaDamage({ x: 317, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: leftWeakpointX, y: 120 }, 1, 28);
+    boundary.manager.applyAreaDamage({ x: rightWeakpointX, y: 120 }, 1, 28);
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 66);
     boundary.gameplay.now = 1;
     const core = boundary.colliderFor('boss-core');

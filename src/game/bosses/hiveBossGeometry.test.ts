@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
 import {
   HIVE_BOSS_GEOMETRY,
@@ -13,6 +14,12 @@ describe('hive boss geometry', () => {
     expect(shooters).toHaveLength(2);
     expect(new Set(shooters.map(({ x, y }) => `${x}:${y}`)).size).toBe(2);
     expect(shooters.every((shooter) => !bodiesOverlap(shooter, HIVE_BOSS_GEOMETRY.core))).toBe(true);
+    expect(shooters[0]!.x + shooters[1]!.x).toBe(GAME_WIDTH);
+
+    const bounds = shooters.map(bodyBounds);
+    expect(Math.max(...bounds.map(({ right }) => right))
+      - Math.min(...bounds.map(({ left }) => left)))
+      .toBe(GAME_TUNING.encounter.grid.cellWidth * 3);
   });
 
   it('defines two ordered reflector paths with the configured minimum corridor', () => {
@@ -69,7 +76,7 @@ describe('hive boss geometry', () => {
       - Math.min(...bounds.map(({ left }) => left));
     const height = Math.max(...bounds.map(({ bottom }) => bottom))
       - Math.min(...bounds.map(({ top }) => top));
-    expect(width).toBeGreaterThanOrEqual(208);
+    expect(width).toBeGreaterThanOrEqual(GAME_TUNING.encounter.grid.cellWidth * 3);
     expect(height).toBeGreaterThanOrEqual(144);
   });
 });

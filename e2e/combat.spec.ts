@@ -133,7 +133,7 @@ interface CombatSnapshot {
 
 interface DevelopmentScene {
   textures: {
-    get(key: string): { getSourceImage(): { width: number } };
+    get(key: string): { getSourceImage(): { width: number; height: number } };
   };
   children: {
     list: Array<{

@@ -17,13 +17,14 @@ describe('GAME_TUNING', () => {
   it('defines the approved global boss, enemy, and encounter values once', () => {
     expect(GAME_TUNING.world).toEqual({ width: 450, height: 800 });
     expect(GAME_TUNING.player.visual).toEqual({ width: 96, height: 96, hurtRadius: 32 });
-    expect(GAME_TUNING.boss.body).toEqual({ width: 176, height: 96 });
+    expect(GAME_TUNING.boss.body).toEqual({ width: 252, height: 144 });
     expect(GAME_TUNING.boss.weakpoint).toEqual({
-      visual: { width: 30, height: 64 },
-      hitbox: { width: 38, height: 72 },
-      edgeOverlap: 12,
+      visual: { width: 56, height: 120 },
+      hitbox: { width: 56, height: 120 },
+      edgeOverlap: 14,
       hp: 14,
     });
+    expect(GAME_TUNING.boss.core).toEqual({ visualSize: 64, hitboxSize: 56, hp: 36 });
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
       descentSpeed: 8,
@@ -136,7 +137,7 @@ describe('GAME_TUNING', () => {
           pulsePeriodMs: 160,
         },
       },
-      shooter: { width: 68, height: 56, hp: 20 },
+      shooter: { width: 70, height: 56, hp: 20 },
       reflector: {
         width: 36, height: 192, y: 280, hp: 24,
         leftTravel: { minimum: 70, maximum: 130 },

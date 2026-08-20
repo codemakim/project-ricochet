@@ -281,8 +281,8 @@ describe('HiveBossManager', () => {
     const boundary = createBoundary();
     const initial = boundary.manager.getSnapshot().partPositions!;
 
-    expect(initial.leftShooter).toEqual({ x: 135, y: 56 });
-    expect(initial.rightShooter).toEqual({ x: 315, y: 56 });
+    expect(initial.leftShooter).toEqual({ x: 134, y: 56 });
+    expect(initial.rightShooter).toEqual({ x: 316, y: 56 });
     boundary.updateAt(1000);
     const shielded = boundary.manager.getSnapshot().partPositions!;
     expect(shielded.leftReflector.x).not.toBe(initial.leftReflector.x);

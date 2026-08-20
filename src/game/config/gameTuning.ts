@@ -502,14 +502,14 @@ export const GAME_TUNING = {
   player: { visual: { width: 96, height: 96, hurtRadius: 32 } },
   boss: {
     y: 120,
-    body: { width: 176, height: 96 },
+    body: { width: 252, height: 144 },
     weakpoint: {
-      visual: { width: 30, height: 64 },
-      hitbox: { width: 38, height: 72 },
-      edgeOverlap: 12,
+      visual: { width: 56, height: 120 },
+      hitbox: { width: 56, height: 120 },
+      edgeOverlap: 14,
       hp: 14,
     },
-    core: { visualSize: 32, hitboxSize: 28, hp: 36 },
+    core: { visualSize: 64, hitboxSize: 56, hp: 36 },
     movement: { maxSpeed: 35, minimumTurnSpeed: 15, obstaclePadding: 12, enemyHalfSize: 22 },
     majorIntervalsMs: { twoWeakpoints: 2800, oneWeakpoint: 2300, core: 1900 },
   },
@@ -845,7 +845,7 @@ export const GAME_TUNING = {
         pulsePeriodMs: 160,
       },
     },
-    shooter: { width: 68, height: 56, hp: 20 },
+    shooter: { width: 70, height: 56, hp: 20 },
     reflector: {
       width: 36,
       height: 192,
