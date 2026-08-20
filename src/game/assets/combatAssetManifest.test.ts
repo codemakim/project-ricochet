@@ -23,6 +23,8 @@ describe('combat asset manifest', () => {
       'boss-body', 'boss-left-weakpoint', 'boss-right-weakpoint', 'boss-core',
       'orb-echo', 'orb-corrosion', 'orb-conduction',
       'orb-inertia', 'orb-split', 'orb-explosion',
+      'orb-temporary', 'enemy-bullet',
+      'boss-basic-bullet', 'boss-aimed-bullet', 'boss-falling-hazard',
       'hud-status-frame', 'hud-boss-frame',
     ]));
   });

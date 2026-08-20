@@ -27,6 +27,12 @@ class FakeSprite {
   circle?: number;
   bounce?: [number, number];
   collideWorldBounds = false;
+  width = 24;
+  height = 24;
+  displayWidth = 24;
+  displayHeight = 24;
+  scaleX = 1;
+  scaleY = 1;
   readonly body = new FakeBody(this);
 
   constructor(public x: number, public y: number, readonly texture: string) {
@@ -34,6 +40,13 @@ class FakeSprite {
   }
 
   setCircle(radius: number): this { this.circle = radius; return this; }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
+    return this;
+  }
   setBounce(x: number, y: number): this { this.bounce = [x, y]; return this; }
   setCollideWorldBounds(value: boolean): this { this.collideWorldBounds = value; return this; }
   setVelocity(x: number, y: number): this { this.body.setVelocity(x, y); return this; }
@@ -144,7 +157,8 @@ describe('TemporaryOrbManager', () => {
       sprite.x === 10
       && sprite.y === 20
       && sprite.texture === 'orb-temporary'
-      && sprite.circle === GAME_TUNING.temporaryOrbs.radius
+      && sprite.circle! * sprite.scaleX === GAME_TUNING.temporaryOrbs.radius
+      && sprite.displayWidth === GAME_TUNING.visual.friendly.temporaryOrb.width
       && sprite.bounce?.[0] === 1
       && sprite.bounce[1] === 1
       && sprite.collideWorldBounds

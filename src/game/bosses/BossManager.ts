@@ -52,6 +52,21 @@ const setWorldBodySize = (
   );
 };
 
+const setWorldCircle = (
+  sprite: Phaser.Physics.Arcade.Sprite,
+  width: number,
+  height: number,
+  radius: number,
+): void => {
+  sprite.setDisplaySize(width, height);
+  const sourceRadius = radius / Math.abs(sprite.scaleX);
+  sprite.setCircle(
+    sourceRadius,
+    (sprite.width - sourceRadius * 2) / 2,
+    (sprite.height - sourceRadius * 2) / 2,
+  );
+};
+
 type ManagedPartId = BossPartId | 'defenseModule';
 
 const PART_HIT_IDS: Record<ManagedPartId, number> = {
@@ -853,7 +868,9 @@ export class BossManager implements BossEncounter {
       'boss-basic-bullet',
     ) as BossProjectileSprite;
     bullet.bossProjectileKind = 'basic';
-    bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
+    const visual = GAME_TUNING.visual.hostile.bossBasic;
+    setWorldCircle(bullet, visual.width, visual.height, tuning.radius);
+    bullet.setDepth(BOSS_ACTION_DEPTH).setVelocity(
       shot.direction.x * shot.speed,
       shot.direction.y * shot.speed,
     );
@@ -878,7 +895,9 @@ export class BossManager implements BossEncounter {
         'boss-aimed-bullet',
       ) as BossProjectileSprite;
       bullet.bossProjectileKind = 'aimed';
-      bullet.setCircle(tuning.radius).setDepth(BOSS_ACTION_DEPTH).setVelocity(
+      const visual = GAME_TUNING.visual.hostile.bossAimed;
+      setWorldCircle(bullet, visual.width, visual.height, tuning.radius);
+      bullet.setDepth(BOSS_ACTION_DEPTH).setVelocity(
         shot.direction.x * shot.speed,
         shot.direction.y * shot.speed,
       );
@@ -888,8 +907,10 @@ export class BossManager implements BossEncounter {
   private spawnFallingHazard(x: number): void {
     const tuning = GAME_TUNING.projectiles.bossSupport;
     const hazard = this.fallingHazardGroup.create(x, -8, 'boss-falling-hazard') as BossSprite;
-    hazard.setSize(tuning.width, tuning.height)
-      .setDepth(BOSS_ACTION_DEPTH)
+    const visual = GAME_TUNING.visual.hostile.bossHazard;
+    hazard.setDisplaySize(visual.width, visual.height);
+    setWorldBodySize(hazard, tuning.width, tuning.height);
+    hazard.setDepth(BOSS_ACTION_DEPTH)
       .setVelocity(0, tuning.speed);
   }
 

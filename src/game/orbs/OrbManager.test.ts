@@ -56,6 +56,12 @@ class FakeSprite {
   setPositionCalls = 0;
   circle = 0;
   textureKey: string;
+  width = 16;
+  height = 16;
+  displayWidth = 16;
+  displayHeight = 16;
+  scaleX = 1;
+  scaleY = 1;
   readonly body = new FakeBody(this);
 
   constructor(textureKey = '') {
@@ -72,7 +78,21 @@ class FakeSprite {
     this.y = y;
     return this;
   }
-  setTexture(textureKey: string): this { this.textureKey = textureKey; return this; }
+  setTexture(textureKey: string): this {
+    this.textureKey = textureKey;
+    if (/^orb-(echo|corrosion|conduction|inertia|split|explosion)$/.test(textureKey)) {
+      this.width = 32;
+      this.height = 32;
+    }
+    return this;
+  }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
+    return this;
+  }
   destroy(): void { this.destroyed = true; }
 }
 
@@ -534,7 +554,7 @@ describe('OrbStore', () => {
       () => 6,
       () => 9.28,
     );
-    expect(sprites.every(({ circle }) => circle === 9.28)).toBe(true);
+    expect(sprites.every(({ circle, scaleX }) => circle * scaleX === 9.28)).toBe(true);
   });
 
   it('disables collision and damage when proximity recovery begins', () => {
@@ -776,7 +796,10 @@ describe('OrbManager Phaser adapter', () => {
     const { manager, sprites } = createManager();
 
     expect(manager.configureStartingCores(['inertia'])).toBe(true);
-    expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia-lv1']);
+    expect(manager.upgradeOrb(0, 'inertia')).toBe(true);
+    expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
+    expect(sprites[0]?.displayWidth).toBe(GAME_TUNING.visual.friendly.permanentOrb.width);
+    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(8);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {
@@ -788,7 +811,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites).toHaveLength(2);
     expect(manager.getSprites()).toHaveLength(2);
     expect(manager.getSnapshot()[1]).toMatchObject({ id: 1, state: 'queued' });
-    expect(sprites[1]?.textureKey).toBe('orb-conduction-lv1');
+    expect(sprites[1]?.textureKey).toBe('orb-conduction');
   });
 
   it('forwards an exact physical-orb upgrade and rejects it after destroy', () => {

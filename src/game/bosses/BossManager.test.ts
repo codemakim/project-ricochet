@@ -37,6 +37,8 @@ const sourceSize = (texture: string): [number, number] => {
   if (texture === 'boss-body') return [352, 192];
   if (texture.includes('boss-') && texture.includes('weakpoint')) return [60, 128];
   if (texture === 'boss-core') return [64, 64];
+  if (texture === 'boss-basic-bullet' || texture === 'boss-aimed-bullet') return [20, 20];
+  if (texture === 'boss-falling-hazard') return [32, 48];
   return [32, 32];
 };
 
@@ -609,6 +611,10 @@ describe('BossManager', () => {
     const shot = updateAt(boundary, 900).projectiles[0]!;
     expect(shot.kind).toBe('basic');
     expect(Math.hypot(shot.velocity.x, shot.velocity.y)).toBeCloseTo(150);
+    const bullet = boundary.groups[0]!.children.find((child) => child.active)!;
+    expect(bullet.displayWidth).toBe(GAME_TUNING.visual.hostile.bossBasic.width);
+    expect(bullet.body.halfWidth * 2 * bullet.scaleX)
+      .toBe(GAME_TUNING.projectiles.bossBasic.radius * 2);
   });
 
   it('samples the player aim when a basic shot fires', () => {
@@ -734,8 +740,12 @@ describe('BossManager', () => {
     boundary.gameplay.now = 6400;
     boundary.manager.update();
     expect(boundary.manager.getSnapshot()).toMatchObject({ warnings: 0, fallingHazards: 2 });
-    expect(boundary.groups[1]!.children.filter((child) => child.active).map((child) => child.x))
+    const hazards = boundary.groups[1]!.children.filter((child) => child.active);
+    expect(hazards.map((child) => child.x))
       .toEqual([225, 315]);
+    expect(hazards[0]!.displayWidth).toBe(GAME_TUNING.visual.hostile.bossHazard.width);
+    expect(hazards[0]!.body.halfWidth * 2 * hazards[0]!.scaleX)
+      .toBe(GAME_TUNING.projectiles.bossSupport.width);
   });
 
   it('clamps the left-edge support anchor before applying its positive offset', () => {

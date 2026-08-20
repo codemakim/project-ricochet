@@ -727,7 +727,14 @@ export class EnemyManager {
       x: this.options.player.x - shooter.x,
       y: this.options.player.y - shooter.y,
     });
-    bullet.setCircle(5).setVelocity(
+    const visual = GAME_TUNING.visual.hostile.enemyBullet;
+    bullet.setDisplaySize(visual.width, visual.height);
+    const sourceRadius = 5 / Math.abs(bullet.scaleX);
+    bullet.setCircle(
+      sourceRadius,
+      (bullet.width - sourceRadius * 2) / 2,
+      (bullet.height - sourceRadius * 2) / 2,
+    ).setVelocity(
       direction.x * GAME_TUNING.enemies.shooter.bulletSpeed,
       direction.y * GAME_TUNING.enemies.shooter.bulletSpeed,
     );

@@ -104,6 +104,9 @@ class FakeSprite {
   hp = 0;
   displayWidth = 0;
   displayHeight = 0;
+  scaleX = 1;
+  scaleY = 1;
+  circle = 0;
   readonly body = new FakeBody(this);
 
   constructor(x: number, y: number, readonly texture: string) {
@@ -115,6 +118,7 @@ class FakeSprite {
       'enemy-shooter': [38, 30],
       'enemy-fragment-left': [22, 18],
       'enemy-fragment-right': [22, 18],
+      'enemy-bullet': [20, 20],
     } as Record<string, [number, number]>)[texture] ?? [0, 0];
   }
 
@@ -132,9 +136,11 @@ class FakeSprite {
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
     this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
     return this;
   }
-  setCircle(): this { return this; }
+  setCircle(radius: number): this { this.circle = radius; return this; }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
   setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
@@ -672,6 +678,8 @@ describe('EnemyManager', () => {
       groups[1]!.children[0]!.body.velocity.x,
       groups[1]!.children[0]!.body.velocity.y,
     )).toBeCloseTo(180);
+    expect(firstBullet.displayWidth).toBe(GAME_TUNING.visual.hostile.enemyBullet.width);
+    expect(firstBullet.circle * firstBullet.scaleX).toBe(5);
 
     for (let cycle = 0; cycle < 6; cycle += 1) time.advance(1650);
     expect(manager.getSnapshot().bullets).toBe(12);

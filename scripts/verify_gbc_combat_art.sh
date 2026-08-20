@@ -42,4 +42,16 @@ check_blocks public/assets/combat/sprites/sentinel-body.png
 check_blocks public/assets/combat/sprites/sentinel-left-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-right-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-core.png
+for core in echo corrosion conduction inertia split explosion; do
+  check "public/assets/combat/sprites/orb-$core.png" 32x32 5 yes
+  check_blocks "public/assets/combat/sprites/orb-$core.png"
+done
+check public/assets/combat/sprites/projectile-temporary.png 24x24 4 yes
+check public/assets/combat/sprites/projectile-enemy.png 20x20 4 yes
+check public/assets/combat/sprites/projectile-boss.png 20x20 4 yes
+check public/assets/combat/sprites/projectile-hazard.png 32x48 4 yes
+check_blocks public/assets/combat/sprites/projectile-temporary.png
+check_blocks public/assets/combat/sprites/projectile-enemy.png
+check_blocks public/assets/combat/sprites/projectile-boss.png
+check_blocks public/assets/combat/sprites/projectile-hazard.png
 echo 'GBC combat art verified'

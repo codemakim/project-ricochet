@@ -291,8 +291,15 @@ export class TemporaryOrbManager {
     sprite.temporaryOrbId = this.nextId;
     sprite.expiresAt = expiresAt;
     this.nextId += 1;
+    const visual = GAME_TUNING.visual.friendly.temporaryOrb;
+    sprite.setDisplaySize(visual.width, visual.height);
+    const sourceRadius = GAME_TUNING.temporaryOrbs.radius / Math.abs(sprite.scaleX);
     sprite
-      .setCircle(GAME_TUNING.temporaryOrbs.radius)
+      .setCircle(
+        sourceRadius,
+        (sprite.width - sourceRadius * 2) / 2,
+        (sprite.height - sourceRadius * 2) / 2,
+      )
       .setBounce(1, 1)
       .setCollideWorldBounds(true)
       .setVelocity(velocity.x, velocity.y);
