@@ -20,26 +20,30 @@ describe('formation grid', () => {
     )).toThrow('formation footprints overlap');
   });
 
-  it('rejects footprints outside eight columns or the chunk rows', () => {
-    expect(FORMATION_COLUMNS).toBe(8);
+  it('rejects footprints outside five columns or the chunk rows', () => {
+    expect(FORMATION_COLUMNS).toBe(5);
     expect(() => validateFootprint(
-      { column: 7, row: 0, width: 2, height: 1 },
+      { column: 4, row: 0, width: 2, height: 1 },
       3,
     )).toThrow('formation footprint is outside the grid');
   });
 
-  it('converts adjacent cells to one gap-aware world rectangle', () => {
+  it('converts adjacent occupied cells to touching world rectangles', () => {
     expect(footprintWorldRect(
       { column: 1, row: 2, width: 2, height: 1 },
       80,
-    )).toEqual({ x: 121, y: 200, width: 100, height: 44 });
+    )).toEqual({ x: 183, y: 260, width: 168, height: 72 });
+
+    const left = footprintWorldRect({ column: 0, row: 0, width: 1, height: 1 }, 0);
+    const right = footprintWorldRect({ column: 1, row: 0, width: 1, height: 1 }, 0);
+    expect(left.x + left.width / 2).toBe(right.x - right.width / 2);
   });
 
   it('reserves paired straight, turning, and pocket passages', () => {
     expect([...reservedPassageCells(3, 0, 0)].sort()).toEqual(['0:1', '1:1', '2:1']);
-    expect([...reservedPassageCells(3, 2, 0)].sort()).toEqual(['0:4', '1:3', '1:4', '2:3']);
+    expect([...reservedPassageCells(3, 2, 0)].sort()).toEqual(['0:3', '1:2', '1:3', '2:2']);
     expect([...reservedPassageCells(3, 4, 0)].sort())
-      .toEqual(['0:5', '0:6', '1:5', '1:6', '2:6']);
+      .toEqual(['0:2', '0:3', '1:2', '1:3', '2:2']);
     expect(reservedPassageCells(3, 0, 3)).toEqual(reservedPassageCells(3, 1, 3));
   });
 });

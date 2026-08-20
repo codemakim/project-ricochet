@@ -15,6 +15,8 @@ function mutableTuning(): Mutable<GameTuning> {
 
 describe('GAME_TUNING', () => {
   it('defines the approved global boss, enemy, and encounter values once', () => {
+    expect(GAME_TUNING.world).toEqual({ width: 450, height: 800 });
+    expect(GAME_TUNING.player.visual).toEqual({ width: 96, height: 96, hurtRadius: 32 });
     expect(GAME_TUNING.boss.body).toEqual({ width: 176, height: 96 });
     expect(GAME_TUNING.boss.weakpoint).toEqual({
       visual: { width: 30, height: 64 },
@@ -39,6 +41,13 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.encounter.bossEntry).toEqual({
       cleanupMode: 'corridor',
       padding: 8,
+    });
+    expect(GAME_TUNING.encounter.grid).toEqual({
+      columns: 5,
+      left: 15,
+      cellWidth: 84,
+      cellHeight: 72,
+      gap: 0,
     });
     expect(GAME_TUNING.rewardFlow).toEqual({
       resumeGameplayMs: 300,
@@ -102,8 +111,12 @@ describe('GAME_TUNING', () => {
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });
     expect(GAME_TUNING.temporaryOrbs).toEqual({
-      radius: 6, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
+      radius: 12, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
       baseDamage: 0.65,
+    });
+    expect(GAME_TUNING.visual.friendly).toEqual({
+      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 40, height: 40 },
+      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24 },
     });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
@@ -169,7 +182,7 @@ describe('GAME_TUNING', () => {
   it('uses shape and palette separation for friendly and hostile projectiles', () => {
     const { friendly, hostile } = GAME_TUNING.visual;
     expect(friendly.temporaryOrb).toEqual({
-      fill: 0x8cf7ff, accent: 0x167d9a, width: 12, height: 12,
+      fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24,
     });
     expect(hostile.enemyBullet).toEqual({
       fill: 0xff4d5a, accent: 0x4a0710, width: 10, height: 10,
@@ -319,6 +332,22 @@ describe('GAME_TUNING', () => {
     );
   });
 
+  it('rejects non-positive world geometry at its tuning boundary', () => {
+    const tuning = mutableTuning();
+    tuning.world.width = 0;
+
+    expect(() => validateGameTuning(tuning)).toThrow('world.width');
+  });
+
+  it('rejects a player hurt core larger than the visible body', () => {
+    const tuning = mutableTuning();
+    tuning.player.visual.hurtRadius = 49;
+
+    expect(() => validateGameTuning(tuning)).toThrow(
+      'player.visual.hurtRadius must fit inside the visible body',
+    );
+  });
+
   it.each([
     ['unordered travel', { travel: { minimum: 340, maximum: 110 } }],
     ['turn speed above maximum', { maxSpeed: 42, minimumTurnSpeed: 43 }],
@@ -339,8 +368,8 @@ describe('GAME_TUNING', () => {
 
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
-    ['non-eight-column formation grid', (value: Mutable<GameTuning>) => {
-      value.encounter.grid.columns = 7;
+    ['non-five-column formation grid', (value: Mutable<GameTuning>) => {
+      value.encounter.grid.columns = 4;
     }],
     ['formation gap outside its cells', (value: Mutable<GameTuning>) => {
       value.encounter.grid.gap = value.encounter.grid.cellWidth;

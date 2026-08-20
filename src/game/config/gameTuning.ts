@@ -1,5 +1,3 @@
-import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
-
 export interface RangeTuning { minimum: number; maximum: number }
 export type BossKind = 'sentinel' | 'hive' | 'siege';
 type FiveLevelValues = readonly [number, number, number, number, number];
@@ -13,6 +11,8 @@ export interface ProjectileVisualTuning {
 }
 
 export interface GameTuning {
+  world: { width: number; height: number };
+  player: { visual: { width: number; height: number; hurtRadius: number } };
   boss: {
     y: number;
     body: { width: number; height: number };
@@ -498,6 +498,8 @@ const ORB_CORE_LEVEL_TUNING = {
 } as const;
 
 export const GAME_TUNING = {
+  world: { width: 450, height: 800 },
+  player: { visual: { width: 96, height: 96, hurtRadius: 32 } },
   boss: {
     y: 120,
     body: { width: 176, height: 96 },
@@ -520,7 +522,7 @@ export const GAME_TUNING = {
   },
   encounter: {
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
-    grid: { columns: 8, left: 17, cellWidth: 52, cellHeight: 48, gap: 4 },
+    grid: { columns: 5, left: 15, cellWidth: 84, cellHeight: 72, gap: 0 },
   },
   rewardFlow: {
     resumeGameplayMs: 300,
@@ -818,7 +820,7 @@ export const GAME_TUNING = {
     },
   },
   temporaryOrbs: {
-    radius: 6,
+    radius: 12,
     speed: 440,
     cap: 30,
     lifetimeMs: 1500,
@@ -870,8 +872,8 @@ export const GAME_TUNING = {
   },
   visual: {
     friendly: {
-      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 16, height: 16 },
-      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 12, height: 12 },
+      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 40, height: 40 },
+      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24 },
     },
     coreFeedback: {
       corrosionFieldAlpha: 0.16,
@@ -972,9 +974,18 @@ function rectsOverlap(left: RectBounds, right: RectBounds): boolean {
 
 export function validateGameTuning(tuning: GameTuning): void {
   const {
+    world, player,
     boss, enemies, encounter, rewardFlow, projectiles, build, orbCores, orbFusions, temporaryOrbs,
     bossAreaDamage, hiveBoss, relics, visual,
   } = tuning;
+  positive(world.width, 'world.width');
+  positive(world.height, 'world.height');
+  positive(player.visual.width, 'player.visual.width');
+  positive(player.visual.height, 'player.visual.height');
+  positive(player.visual.hurtRadius, 'player.visual.hurtRadius');
+  if (player.visual.hurtRadius * 2 > Math.min(player.visual.width, player.visual.height)) {
+    throw new RangeError('player.visual.hurtRadius must fit inside the visible body');
+  }
   finite(boss.y, 'boss.y');
   positive(boss.body.width, 'boss.body.width');
   positive(boss.body.height, 'boss.body.height');
@@ -1021,9 +1032,9 @@ export function validateGameTuning(tuning: GameTuning): void {
   nonNegative(encounter.grid.left, 'encounter.grid.left');
   positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
   positiveInteger(encounter.grid.cellHeight, 'encounter.grid.cellHeight');
-  positiveInteger(encounter.grid.gap, 'encounter.grid.gap');
-  if (encounter.grid.columns !== 8) {
-    throw new RangeError('encounter.grid.columns must equal eight');
+  nonNegativeInteger(encounter.grid.gap, 'encounter.grid.gap');
+  if (encounter.grid.columns !== 5) {
+    throw new RangeError('encounter.grid.columns must equal five');
   }
   if (encounter.grid.gap >= encounter.grid.cellWidth
     || encounter.grid.gap >= encounter.grid.cellHeight) {
@@ -1163,8 +1174,8 @@ export function validateGameTuning(tuning: GameTuning): void {
   const weakpointOffset = (boss.body.width + boss.weakpoint.visual.width) / 2
     - boss.weakpoint.edgeOverlap;
   const collisionWidth = 2 * (weakpointOffset + boss.weakpoint.hitbox.width / 2);
-  if (collisionWidth >= GAME_WIDTH) throw new RangeError('boss collision width must fit GAME_WIDTH');
-  if (boss.y - boss.body.height / 2 < 0 || boss.y + boss.body.height / 2 > GAME_HEIGHT) {
+  if (collisionWidth >= world.width) throw new RangeError('boss collision width must fit GAME_WIDTH');
+  if (boss.y - boss.body.height / 2 < 0 || boss.y + boss.body.height / 2 > world.height) {
     throw new RangeError('boss body must fit GAME_HEIGHT');
   }
   positiveInteger(projectiles.hostileCap, 'projectiles.hostileCap');
@@ -1567,7 +1578,7 @@ export function validateGameTuning(tuning: GameTuning): void {
   if (
     coreEnrage.travel.minimum > coreEnrage.travel.maximum
     || coreEnrage.travel.minimum - hiveBoss.core.visualSize / 2 < 0
-    || coreEnrage.travel.maximum + hiveBoss.core.visualSize / 2 > GAME_WIDTH
+    || coreEnrage.travel.maximum + hiveBoss.core.visualSize / 2 > world.width
   ) {
     throw new RangeError('hiveBoss core enrage travel must fit the game bounds');
   }
@@ -1582,9 +1593,9 @@ export function validateGameTuning(tuning: GameTuning): void {
   positive(coreEnrage.pulsePeriodMs, 'hiveBoss.core.enrage.pulsePeriodMs');
   if (
     hiveBoss.core.x - hiveBoss.core.visualSize / 2 < 0
-    || hiveBoss.core.x + hiveBoss.core.visualSize / 2 > GAME_WIDTH
+    || hiveBoss.core.x + hiveBoss.core.visualSize / 2 > world.width
     || hiveBoss.core.y - hiveBoss.core.visualSize / 2 < 0
-    || hiveBoss.core.y + hiveBoss.core.visualSize / 2 > GAME_HEIGHT
+    || hiveBoss.core.y + hiveBoss.core.visualSize / 2 > world.height
   ) {
     throw new RangeError('hiveBoss core must fit the game bounds');
   }
@@ -1597,9 +1608,9 @@ export function validateGameTuning(tuning: GameTuning): void {
     - hiveBoss.shooter.height / 2;
   if (
     hiveBoss.core.x - shooterOffsetX - hiveBoss.shooter.width / 2 < 0
-    || hiveBoss.core.x + shooterOffsetX + hiveBoss.shooter.width / 2 > GAME_WIDTH
+    || hiveBoss.core.x + shooterOffsetX + hiveBoss.shooter.width / 2 > world.width
     || deployedShooterY - hiveBoss.shooter.height / 2 < 0
-    || deployedShooterY + hiveBoss.shooter.height / 2 > GAME_HEIGHT
+    || deployedShooterY + hiveBoss.shooter.height / 2 > world.height
   ) {
     throw new RangeError('hiveBoss derived shooter positions must fit the game bounds');
   }
@@ -1616,14 +1627,14 @@ export function validateGameTuning(tuning: GameTuning): void {
     if (
       travel.minimum > travel.maximum
       || travel.minimum - hiveBoss.reflector.width / 2 < 0
-      || travel.maximum + hiveBoss.reflector.width / 2 > GAME_WIDTH
+      || travel.maximum + hiveBoss.reflector.width / 2 > world.width
     ) {
       throw new RangeError(`hiveBoss.reflector.${side} must fit the game bounds`);
     }
   }
   if (
     hiveBoss.reflector.y - hiveBoss.reflector.height / 2 < 0
-    || hiveBoss.reflector.y + hiveBoss.reflector.height / 2 > GAME_HEIGHT
+    || hiveBoss.reflector.y + hiveBoss.reflector.height / 2 > world.height
   ) {
     throw new RangeError('hiveBoss reflector must fit the game bounds');
   }

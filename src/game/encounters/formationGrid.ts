@@ -22,7 +22,7 @@ export function reservedPassageCells(
   runSeed: number,
 ): ReadonlySet<string> {
   const pair = Math.floor(sequence / 2);
-  const anchors = [1, 4, 6, 3] as const;
+  const anchors = [1, 3, 2, 0, 4] as const;
   const column = anchors[(runSeed % anchors.length + pair) % anchors.length]!;
   const variant = pair % 3;
   const cells = new Set<string>();
