@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BuildState } from '../progression/BuildState';
 import { BossBuild } from '../progression/BossBuild';
 import {
+  bossHudRatio,
   bossKindAfterTransition,
   createBossForKind,
   finalizeCombatLifecycle,
@@ -17,6 +18,12 @@ import {
 } from './combatSceneRules';
 
 describe('combat scene rules', () => {
+  it('clamps the combined boss-part health into a HUD ratio', () => {
+    expect(bossHudRatio({ left: 0, right: 14, core: 36 }, 64)).toBeCloseTo(50 / 64);
+    expect(bossHudRatio(null, 64)).toBe(0);
+    expect(bossHudRatio({ core: -5 }, 36)).toBe(0);
+  });
+
   it('records a discovery without mutating or duplicating the current set', () => {
     const current = new Set(['echo']);
     const next = recordDiscovery(current, 'conduction');

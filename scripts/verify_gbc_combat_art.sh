@@ -54,4 +54,8 @@ check_blocks public/assets/combat/sprites/projectile-temporary.png
 check_blocks public/assets/combat/sprites/projectile-enemy.png
 check_blocks public/assets/combat/sprites/projectile-boss.png
 check_blocks public/assets/combat/sprites/projectile-hazard.png
+check public/assets/combat/sprites/hud-status-frame.png 360x128 5 yes
+check public/assets/combat/sprites/hud-boss-frame.png 760x80 5 yes
+check_blocks public/assets/combat/sprites/hud-status-frame.png
+check_blocks public/assets/combat/sprites/hud-boss-frame.png
 echo 'GBC combat art verified'

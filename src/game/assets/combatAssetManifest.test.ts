@@ -58,13 +58,9 @@ describe('combat asset manifest', () => {
       .toEqual([FALLBACK_COMBAT_TEXTURE_KEYS[0]]);
   });
 
-  it('ships the arena, player, and common enemy files', () => {
+  it('ships every declared production image', () => {
     const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/**/*')));
-    const taskKeys = new Set([
-      'combat-background', 'player',
-      'enemy-basic', 'enemy-armored', 'enemy-shooter',
-    ]);
-    for (const { key, url } of COMBAT_IMAGE_ASSETS.filter(({ key }) => taskKeys.has(key))) {
+    for (const { url } of COMBAT_IMAGE_ASSETS) {
       expect(shippedAssets.has(`/public${url}`), url).toBe(true);
     }
   });

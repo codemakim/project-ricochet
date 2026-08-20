@@ -120,3 +120,17 @@ magick -size 5x5 xc:none +antialias -fill "$INK" -draw 'rectangle 0,1 4,3 rectan
 export_sprite "$SOURCE/projectile-boss-master.png" "$SPRITES/projectile-boss.png"
 magick -size 8x12 xc:none +antialias -fill "$INK" -draw 'rectangle 1,0 6,11' -fill "$CORAL" -draw 'rectangle 2,1 5,10' -fill "$YELLOW" -draw 'rectangle 3,2 4,5' -strip "$SOURCE/projectile-hazard-master.png"
 export_sprite "$SOURCE/projectile-hazard-master.png" "$SPRITES/projectile-hazard.png"
+
+magick -size 90x32 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,0 87,1 rectangle 2,30 87,31 rectangle 0,2 1,29 rectangle 88,2 89,29' \
+  -fill "$STEEL" -draw 'rectangle 2,2 87,2 rectangle 2,29 87,29 rectangle 2,2 2,29 rectangle 87,2 87,29' \
+  -fill "$CYAN" -draw 'rectangle 3,3 8,4 rectangle 3,27 8,28 rectangle 81,3 86,4 rectangle 81,27 86,28' \
+  -strip "$SOURCE/hud-status-frame-master.png"
+export_sprite "$SOURCE/hud-status-frame-master.png" "$SPRITES/hud-status-frame.png"
+
+magick -size 190x20 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,0 187,1 rectangle 2,18 187,19 rectangle 0,2 1,17 rectangle 188,2 189,17' \
+  -fill "$STEEL" -draw 'rectangle 2,2 187,2 rectangle 2,17 187,17 rectangle 2,2 2,17 rectangle 187,2 187,17' \
+  -fill "$YELLOW" -draw 'rectangle 3,3 10,4 rectangle 3,15 10,16 rectangle 179,3 186,4 rectangle 179,15 186,16' \
+  -strip "$SOURCE/hud-boss-frame-master.png"
+export_sprite "$SOURCE/hud-boss-frame-master.png" "$SPRITES/hud-boss-frame.png"

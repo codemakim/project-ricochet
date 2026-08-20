@@ -42,6 +42,15 @@ export function pendingRunRewardKind(
   return pendingLevelUps > 0 ? 'levelUp' : null;
 }
 
+export function bossHudRatio(
+  parts: Readonly<Record<string, number>> | null,
+  maximumHp: number,
+): number {
+  if (!parts || maximumHp <= 0) return 0;
+  const remaining = Object.values(parts).reduce((sum, hp) => sum + Math.max(0, hp), 0);
+  return Math.max(0, Math.min(1, remaining / maximumHp));
+}
+
 export function shouldFinalizeBossReward(
   bossDefeatPending: boolean,
   defeated: boolean,
