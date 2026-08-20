@@ -541,12 +541,39 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
   ]);
   expect(failedAssets).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });
+  await enterMidbossByScore(page);
+  await expect.poll(async () => (await snapshot(page)).boss.active).toBe(true);
+  await page.waitForTimeout(1_000);
+  await page.screenshot({ path: testInfo.outputPath('gbc-sentinel-desktop.png') });
 });
 
 test('@mobile renders the GBC opening slice', async ({ page }, testInfo) => {
-  await loadCanvas(page);
+  const failedAssets: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/assets/combat/') && !response.ok()) {
+      failedAssets.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  const { box } = await loadCanvas(page);
   await expect(page.locator('#game-root canvas')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-mobile.png') });
+  const moveStart = { x: box.x + box.width * 0.22, y: box.y + box.height * 0.78 };
+  const moveEnd = { x: box.x + box.width * 0.34, y: box.y + box.height * 0.66 };
+  const aimStart = { x: box.x + box.width * 0.78, y: box.y + box.height * 0.78 };
+  const aimEnd = { x: box.x + box.width * 0.66, y: box.y + box.height * 0.66 };
+  await dispatchTouchPointers(page, [
+    { type: 'pointerdown', pointerId: 41, point: moveStart },
+    { type: 'pointerdown', pointerId: 77, point: aimStart },
+    { type: 'pointermove', pointerId: 41, point: moveEnd },
+    { type: 'pointermove', pointerId: 77, point: aimEnd },
+  ]);
+  await page.waitForTimeout(250);
+  await dispatchTouchPointers(page, [
+    { type: 'pointerup', pointerId: 41, point: moveEnd },
+    { type: 'pointerup', pointerId: 77, point: aimEnd },
+  ]);
+  expect(failedAssets).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('gbc-combat-mobile.png') });
 });
 
 test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
@@ -630,7 +657,7 @@ test('@desktop chooses permanent orb cores', async ({ page }) => {
   expect(await sceneCall(page, (scene) => scene.children.list
     .map((child) => child.texture?.key)
     .filter((key) => key?.startsWith('orb-'))))
-    .toContain('orb-inertia-lv1');
+    .toContain('orb-inertia');
 
 });
 

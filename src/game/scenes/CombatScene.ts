@@ -262,6 +262,7 @@ export class CombatScene extends Phaser.Scene {
   private bossHudFrame!: Phaser.GameObjects.Image;
   private bossHudFill!: Phaser.GameObjects.Rectangle;
   private bossHudLabel!: Phaser.GameObjects.Text;
+  private controlsText!: Phaser.GameObjects.Text;
   private bossMaximumHp = 0;
   private healthText!: Phaser.GameObjects.Text;
   private progressionText!: Phaser.GameObjects.Text;
@@ -533,11 +534,11 @@ export class CombatScene extends Phaser.Scene {
     this.orbLevelGraphics = this.add.graphics().setDepth(7);
     this.statusHudFrame = this.add.image(8, 8, 'hud-status-frame')
       .setOrigin(0, 0).setDisplaySize(180, 64).setDepth(9);
-    this.bossHudFrame = this.add.image(GAME_WIDTH / 2, 8, 'hud-boss-frame')
-      .setOrigin(0.5, 0).setDisplaySize(380, 40).setDepth(20).setVisible(false);
-    this.bossHudFill = this.add.rectangle(55, 34, 340, 8, 0xffae2b)
+    this.bossHudFrame = this.add.image(202, 8, 'hud-boss-frame')
+      .setOrigin(0, 0).setDisplaySize(240, 40).setDepth(20).setVisible(false);
+    this.bossHudFill = this.add.rectangle(214, 34, 216, 8, 0xffae2b)
       .setOrigin(0, 0.5).setDepth(21).setVisible(false);
-    this.bossHudLabel = this.add.text(GAME_WIDTH / 2, 14, '', {
+    this.bossHudLabel = this.add.text(322, 14, '', {
       color: '#eee3c8', fontSize: '12px', fontStyle: 'bold',
     }).setOrigin(0.5, 0).setDepth(22).setVisible(false);
     this.healthText = this.add.text(16, 16, '', { color: '#dff7ff', fontSize: '20px' }).setDepth(10);
@@ -548,10 +549,10 @@ export class CombatScene extends Phaser.Scene {
     this.progressionBarFill = this.add.rectangle(16, 70, XP_BAR_WIDTH, 8, 0x65f6ff, 1)
       .setOrigin(0, 0.5)
       .setDepth(11);
-    this.add.text(GAME_WIDTH - 16, 16, 'WASD / MOUSE · TWO TOUCH STICKS', {
+    this.controlsText = this.add.text(GAME_WIDTH - 16, 16, 'WASD / MOUSE · TWO TOUCH STICKS', {
       color: '#6f8aa8',
       fontSize: '12px',
-    }).setOrigin(1, 0);
+    }).setOrigin(1, 0).setDepth(10);
     this.updateHealthText();
     this.updateProgressionText();
     this.drawAimGuide();
@@ -2684,6 +2685,7 @@ export class CombatScene extends Phaser.Scene {
       this.bossHudFrame.setVisible(false);
       this.bossHudFill.setVisible(false);
       this.bossHudLabel.setVisible(false);
+      this.controlsText.setVisible(true);
       return;
     }
     if (this.bossMaximumHp === 0) {
@@ -2692,6 +2694,7 @@ export class CombatScene extends Phaser.Scene {
     this.bossHudFrame.setVisible(true);
     this.bossHudFill.setVisible(true).setScale(bossHudRatio(parts, this.bossMaximumHp), 1);
     this.bossHudLabel.setVisible(true).setText(snapshot.kind.toUpperCase());
+    this.controlsText.setVisible(false);
   }
 
   private showDefeat(): void {

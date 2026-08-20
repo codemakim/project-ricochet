@@ -128,9 +128,9 @@ magick -size 90x32 xc:none +antialias \
   -strip "$SOURCE/hud-status-frame-master.png"
 export_sprite "$SOURCE/hud-status-frame-master.png" "$SPRITES/hud-status-frame.png"
 
-magick -size 190x20 xc:none +antialias \
-  -fill "$INK" -draw 'rectangle 2,0 187,1 rectangle 2,18 187,19 rectangle 0,2 1,17 rectangle 188,2 189,17' \
-  -fill "$STEEL" -draw 'rectangle 2,2 187,2 rectangle 2,17 187,17 rectangle 2,2 2,17 rectangle 187,2 187,17' \
-  -fill "$YELLOW" -draw 'rectangle 3,3 10,4 rectangle 3,15 10,16 rectangle 179,3 186,4 rectangle 179,15 186,16' \
+magick -size 120x20 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 2,0 117,1 rectangle 2,18 117,19 rectangle 0,2 1,17 rectangle 118,2 119,17' \
+  -fill "$STEEL" -draw 'rectangle 2,2 117,2 rectangle 2,17 117,17 rectangle 2,2 2,17 rectangle 117,2 117,17' \
+  -fill "$YELLOW" -draw 'rectangle 3,3 10,4 rectangle 3,15 10,16 rectangle 109,3 116,4 rectangle 109,15 116,16' \
   -strip "$SOURCE/hud-boss-frame-master.png"
 export_sprite "$SOURCE/hud-boss-frame-master.png" "$SPRITES/hud-boss-frame.png"
