@@ -109,7 +109,7 @@ export_sprite "$SOURCE/sentinel-weakpoint-master.png" "$SPRITES/sentinel-left-we
 magick "$SPRITES/sentinel-left-weakpoint.png" -flop -strip "$SPRITES/sentinel-right-weakpoint.png"
 
 magick -size 16x16 xc:none +antialias \
-  -fill "$INK" -draw 'rectangle 2,2 13,13' \
+  -fill "$INK" -draw 'rectangle 1,1 14,14' \
   -fill "$YELLOW" -draw 'rectangle 4,4 11,11' \
   -fill "$CERAMIC" -draw 'rectangle 6,5 9,10' \
   -fill "$MAGENTA" -draw 'rectangle 7,7 8,8' \

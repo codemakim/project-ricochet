@@ -24,27 +24,32 @@ export function createCombatFallbackTextures(scene: Phaser.Scene): void {
 
   const graphics = scene.add.graphics();
   const shouldCreate = (key: string): boolean => missing.has(key);
+  const { cellWidth, cellHeight } = GAME_TUNING.encounter.grid;
 
   if (shouldCreate('player')) {
-    graphics.fillStyle(0x4ddcff).fillCircle(18, 18, 18);
-    graphics.fillStyle(0x061225).fillCircle(12, 15, 2).fillCircle(24, 15, 2);
-    graphics.lineStyle(2, 0x061225).beginPath().moveTo(12, 24).lineTo(18, 27)
-      .lineTo(24, 24).strokePath();
-    graphics.generateTexture('player', 36, 36);
+    const { width, height } = GAME_TUNING.player.visual;
+    graphics.fillStyle(0x4ddcff).fillCircle(width / 2, height / 2, width / 2);
+    graphics.fillStyle(0x061225)
+      .fillCircle(width / 3, height * 0.42, width / 18)
+      .fillCircle(width * 2 / 3, height * 0.42, width / 18);
+    graphics.lineStyle(width / 18, 0x061225).lineBetween(
+      width / 3, height * 0.68, width * 2 / 3, height * 0.68,
+    );
+    graphics.generateTexture('player', width, height);
   }
   if (shouldCreate('enemy-basic')) {
-    graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, 36, 28, 5)
-      .generateTexture('enemy-basic', 36, 28);
+    graphics.clear().fillStyle(0xff5c70).fillRoundedRect(0, 0, cellWidth, cellHeight, 5)
+      .generateTexture('enemy-basic', cellWidth, cellHeight);
   }
   if (shouldCreate('enemy-armored')) {
-    graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, 40, 32, 5);
-    graphics.lineStyle(3, 0xd8c8ff).strokeRoundedRect(2, 2, 36, 28, 4)
-      .generateTexture('enemy-armored', 40, 32);
+    graphics.clear().fillStyle(0x9b6dff).fillRoundedRect(0, 0, cellWidth * 2, cellHeight * 2, 5);
+    graphics.lineStyle(3, 0xd8c8ff).strokeRoundedRect(2, 2, cellWidth * 2 - 4, cellHeight * 2 - 4, 4)
+      .generateTexture('enemy-armored', cellWidth * 2, cellHeight * 2);
   }
   if (shouldCreate('enemy-shooter')) {
-    graphics.clear().fillStyle(0xffa23a).fillRoundedRect(0, 0, 38, 30, 5);
-    graphics.fillStyle(0x4c2400).fillCircle(19, 15, 5)
-      .generateTexture('enemy-shooter', 38, 30);
+    graphics.clear().fillStyle(0xffa23a).fillRoundedRect(0, 0, cellWidth, cellHeight, 5);
+    graphics.fillStyle(0x4c2400).fillCircle(cellWidth / 2, cellHeight / 2, 5)
+      .generateTexture('enemy-shooter', cellWidth, cellHeight);
   }
 
   for (const [key, descriptor] of Object.entries(renderableCombatTextureDescriptors())) {

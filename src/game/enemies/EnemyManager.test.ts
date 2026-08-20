@@ -482,8 +482,8 @@ describe('EnemyManager', () => {
     colliders[0]!.trigger(orb, splitter);
 
     expect(manager.getSnapshot().enemies).toEqual([
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 213, y: 180 } }),
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 237, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 183, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 267, y: 180 } }),
     ]);
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
     expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
@@ -539,8 +539,8 @@ describe('EnemyManager', () => {
 
     expect(manager.getSnapshot().enemies.map(({ kind, position }) => ({ kind, position }))).toEqual([
       { kind: 'basic', position: { x: 225, y: 180 } },
-      { kind: 'fragment', position: { x: 213, y: 180 } },
-      { kind: 'fragment', position: { x: 237, y: 180 } },
+      { kind: 'fragment', position: { x: 183, y: 180 } },
+      { kind: 'fragment', position: { x: 267, y: 180 } },
     ]);
   });
 

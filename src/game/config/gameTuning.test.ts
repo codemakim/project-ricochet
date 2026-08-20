@@ -30,7 +30,7 @@ describe('GAME_TUNING', () => {
       descentSpeed: 8,
       hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
       splitter: {
-        width: 38, height: 30, fragmentOffsetX: 12,
+        width: 38, height: 30,
         populationCost: 2, score: 2, xp: 1, breachDamage: 3,
       },
       fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },

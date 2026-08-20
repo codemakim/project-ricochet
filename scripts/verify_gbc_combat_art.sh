@@ -63,6 +63,10 @@ check_blocks public/assets/combat/sprites/sentinel-body.png
 check_blocks public/assets/combat/sprites/sentinel-left-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-right-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-core.png
+[[ "$(magick "$ROOT/public/assets/combat/sprites/sentinel-core.png" -alpha extract -trim -format '%wx%h%O' info:)" == '56x56+4+4' ]] || {
+  echo 'sentinel core opaque bounds must match its centered 56x56 hitbox'
+  exit 1
+}
 for core in echo corrosion conduction inertia split explosion; do
   check "public/assets/combat/sprites/orb-$core.png" 40x40 5 yes
   check_blocks "public/assets/combat/sprites/orb-$core.png"

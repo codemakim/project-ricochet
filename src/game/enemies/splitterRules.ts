@@ -21,16 +21,13 @@ export function fragmentSpecsFor(
   parent: Pick<EnemySpec, 'x' | 'y' | 'column' | 'row' | 'speed'>,
 ): readonly [FragmentSpec, FragmentSpec] {
   if ((parent.row ?? -1) < 0) {
-    const halfWidth = GAME_TUNING.enemies.fragment.width / 2;
+    const halfWidth = GAME_TUNING.encounter.grid.cellWidth / 2;
+    const center = clamp(parent.x, halfWidth * 2, GAME_WIDTH - halfWidth * 2);
     return [-1, 1].map((direction, index) => ({
       kind: 'fragment',
       side: index === 0 ? 'left' : 'right',
       hp: GAME_TUNING.enemies.hp.fragment,
-      x: clamp(
-        parent.x + direction * GAME_TUNING.enemies.splitter.fragmentOffsetX,
-        halfWidth,
-        GAME_WIDTH - halfWidth,
-      ),
+      x: center + direction * halfWidth,
       y: parent.y,
       column: -1,
       row: -1,

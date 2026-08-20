@@ -33,7 +33,6 @@ export interface GameTuning {
     splitter: {
       width: number;
       height: number;
-      fragmentOffsetX: number;
       populationCost: number;
       score: number;
       xp: number;
@@ -517,7 +516,7 @@ export const GAME_TUNING = {
     descentSpeed: 8,
     hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
     shooter: { intervalMs: 1300, warningMs: 350, bulletSpeed: 180, damage: 1 },
-    splitter: { width: 38, height: 30, fragmentOffsetX: 12, populationCost: 2, score: 2, xp: 1, breachDamage: 3 },
+    splitter: { width: 38, height: 30, populationCost: 2, score: 2, xp: 1, breachDamage: 3 },
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
@@ -1022,7 +1021,6 @@ export function validateGameTuning(tuning: GameTuning): void {
     nonNegative(enemy.xp, `enemies.${kind}.xp`);
     positive(enemy.breachDamage, `enemies.${kind}.breachDamage`);
   }
-  positive(enemies.splitter.fragmentOffsetX, 'enemies.splitter.fragmentOffsetX');
   if (encounter.bossEntry.cleanupMode !== 'corridor'
     && encounter.bossEntry.cleanupMode !== 'all') {
     throw new RangeError('encounter.bossEntry.cleanupMode must be corridor or all');

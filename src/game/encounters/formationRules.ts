@@ -115,8 +115,8 @@ function orderedCells(
   if (style === 'bands') {
     return shuffled(Array.from({ length: rows }, (_, row) => row), random)
       .flatMap((row) => {
-        const start = Math.floor(random() * 4);
-        const length = 3 + Math.floor(random() * 3);
+        const length = Math.min(FORMATION_COLUMNS, 3 + Math.floor(random() * 3));
+        const start = Math.floor(random() * (FORMATION_COLUMNS - length + 1));
         return Array.from({ length }, (_, offset) => ({ row, column: start + offset }));
       })
       .concat(shuffled(cells, random));

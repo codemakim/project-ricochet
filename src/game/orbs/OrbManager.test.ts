@@ -802,6 +802,21 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(20);
   });
 
+  it('keeps an expanded permanent orb visible up to its collision edge', () => {
+    const radius = 23.2;
+    const { manager, sprites } = createManager(
+      true, () => false, null, () => 0, () => ORB_SPEED, false,
+      () => GAME_TUNING.build.basicGrowth.maximumOrbs,
+      () => radius,
+    );
+
+    manager.refreshCombatModifiers();
+
+    expect(sprites[0]?.displayWidth).toBe(radius * 2);
+    expect(sprites[0]?.displayHeight).toBe(radius * 2);
+    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBeCloseTo(radius);
+  });
+
   it('creates a runtime sprite for a newly added queued orb', () => {
     const { manager, sprites } = createManager();
     manager.activateAim();

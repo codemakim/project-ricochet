@@ -334,7 +334,7 @@ function hasConnectedEmptyPassage(enemies: CombatSnapshot['enemies']): boolean {
       { row: cell.row, column: cell.column + 1 },
     ]) {
       const key = `${next.row}:${next.column}`;
-      if (next.row < 0 || next.row >= rows || next.column < 0 || next.column >= 8
+      if (next.row < 0 || next.row >= rows || next.column < 0 || next.column >= 5
         || occupied.has(key) || visited.has(key)) continue;
       visited.add(key);
       queue.push(next);
@@ -1168,7 +1168,7 @@ test('@desktop bounds permanent explosion and split procs per flight', async ({ 
         .map((enemy) => enemy.id),
     );
     scene.debugSetEnemy(anchorId!, { x: 100, y: 300 }, 99);
-    scene.debugSetEnemy(splashId!, { x: 140, y: 300 }, 99);
+    scene.debugSetEnemy(splashId!, { x: 100, y: 253 }, 99);
     return { anchorId: anchorId!, splashId: splashId! };
   });
   const initial = await snapshot(page);

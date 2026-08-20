@@ -908,9 +908,10 @@ export class OrbManager {
       const textureKey = isBasicOrbCoreId(state.coreType)
         ? `orb-${state.coreType}`
         : `orb-${state.coreType}-lv${state.level}`;
+      const diameter = this.currentOrbRadius() * 2;
       sprite.setTexture(textureKey).setDisplaySize(
-        GAME_TUNING.visual.friendly.permanentOrb.width,
-        GAME_TUNING.visual.friendly.permanentOrb.height,
+        diameter,
+        diameter,
       );
       const sourceRadius = this.currentOrbRadius() / Math.abs(sprite.scaleX);
       sprite.setCircle(

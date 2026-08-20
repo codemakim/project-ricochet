@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import { fragmentSpecsFor, populationCostForEnemy } from './splitterRules';
 
 describe('splitter rules', () => {
@@ -20,12 +21,28 @@ describe('splitter rules', () => {
   it('keeps fragments inside the left and right edges', () => {
     expect(fragmentSpecsFor({
       x: 0, y: 180, column: 0, row: 2, speed: 8,
-    }).every(({ x }) => x >= 24)).toBe(true);
+    }).map(({ x }) => x)).toEqual([57, 141]);
     const right = fragmentSpecsFor({
       x: 450, y: 180, column: 6, row: 2, speed: 8,
     });
-    expect(right.every(({ x }) => x <= 408)).toBe(true);
+    expect(right.map(({ x }) => x)).toEqual([309, 393]);
     expect(right.map(({ column }) => column)).toEqual([3, 4]);
+  });
+
+  it('places rowless fragments side by side inside the five-column arena', () => {
+    const fragments = fragmentSpecsFor({
+      x: 225, y: 180, column: -1, row: -1, speed: 8,
+    });
+
+    expect(fragments.map(({ x }) => x)).toEqual([183, 267]);
+    expect(fragments[1]!.x - fragments[0]!.x)
+      .toBe(GAME_TUNING.encounter.grid.cellWidth);
+    expect(fragmentSpecsFor({
+      x: 0, y: 180, column: -1, row: -1, speed: 8,
+    }).map(({ x }) => x)).toEqual([42, 126]);
+    expect(fragmentSpecsFor({
+      x: 450, y: 180, column: -1, row: -1, speed: 8,
+    }).map(({ x }) => x)).toEqual([324, 408]);
   });
 
   it('counts splitters as two population and fragments as one', () => {
