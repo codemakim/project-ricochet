@@ -386,7 +386,10 @@ export class CombatScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     this.player = this.physics.add.sprite(GAME_WIDTH / 2, 690, 'player');
-    this.player.setDisplaySize(36, 36);
+    this.player.setDisplaySize(
+      GAME_TUNING.player.visual.width,
+      GAME_TUNING.player.visual.height,
+    );
     const playerScale = Math.abs(this.player.scaleX);
     const playerSourceRadius = PLAYER_RADIUS / playerScale;
     this.player.setCircle(

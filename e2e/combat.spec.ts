@@ -158,7 +158,12 @@ interface DevelopmentScene {
       };
     }>;
   };
-  player: { setPosition(x: number, y: number): void };
+  player: {
+    displayWidth: number;
+    displayHeight: number;
+    body?: { width?: number; height?: number };
+    setPosition(x: number, y: number): void;
+  };
   update(time: number, delta: number): void;
   getDebugSnapshot(): CombatSnapshot;
   debugPlaceOrb(id: number, position: Vector): boolean;
@@ -530,15 +535,48 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
   });
   await loadCanvas(page);
   const dimensions = await sceneCall(page, (scene) => (
-    ['player', 'enemy-basic', 'enemy-armored', 'enemy-shooter']
-      .map((key) => ({ key, width: scene.textures.get(key).getSourceImage().width }))
+    [
+      'player', 'enemy-basic', 'enemy-armored', 'enemy-shooter',
+      'orb-echo', 'orb-corrosion', 'orb-conduction',
+      'orb-inertia', 'orb-split', 'orb-explosion',
+    ].map((key) => {
+      const source = scene.textures.get(key).getSourceImage();
+      return { key, width: source.width, height: source.height };
+    })
   ));
   expect(dimensions).toEqual([
-    { key: 'player', width: 72 },
-    { key: 'enemy-basic', width: 72 },
-    { key: 'enemy-armored', width: 80 },
-    { key: 'enemy-shooter', width: 76 },
+    { key: 'player', width: 96, height: 96 },
+    { key: 'enemy-basic', width: 84, height: 72 },
+    { key: 'enemy-armored', width: 168, height: 144 },
+    { key: 'enemy-shooter', width: 84, height: 72 },
+    { key: 'orb-echo', width: 40, height: 40 },
+    { key: 'orb-corrosion', width: 40, height: 40 },
+    { key: 'orb-conduction', width: 40, height: 40 },
+    { key: 'orb-inertia', width: 40, height: 40 },
+    { key: 'orb-split', width: 40, height: 40 },
+    { key: 'orb-explosion', width: 40, height: 40 },
   ]);
+  const liveGeometry = await sceneCall(page, (scene) => {
+    const orb = scene.children.list.find((child) => child.orbId === 0)!;
+    return {
+      player: {
+        width: scene.player.displayWidth,
+        height: scene.player.displayHeight,
+        bodyWidth: scene.player.body?.width,
+        bodyHeight: scene.player.body?.height,
+      },
+      orb: {
+        width: orb.displayWidth,
+        height: orb.displayHeight,
+        bodyWidth: orb.body?.width,
+        bodyHeight: orb.body?.height,
+      },
+    };
+  });
+  expect(liveGeometry).toEqual({
+    player: { width: 96, height: 96, bodyWidth: 64, bodyHeight: 64 },
+    orb: { width: 40, height: 40, bodyWidth: 40, bodyHeight: 40 },
+  });
   expect(failedAssets).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });
   await enterMidbossByScore(page);

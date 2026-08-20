@@ -29,11 +29,11 @@ export_sprite() {
   magick "$1" -filter point -resize 400% -strip "$2"
 }
 
-magick -size 18x18 xc:none +antialias \
-  -fill "$INK" -draw 'polygon 5,2 12,2 12,3 14,3 14,4 15,4 15,13 13,13 13,15 4,15 4,13 2,13 2,4 4,4 4,3 5,3' \
-  -fill "$AMBER" -draw 'rectangle 5,3 12,14 rectangle 3,5 14,12' \
-  -fill "$CERAMIC" -draw 'rectangle 5,5 12,9' \
-  -fill "$CYAN" -draw 'point 7,7 point 10,7 rectangle 8,12 9,13' \
+magick -size 24x24 xc:none +antialias \
+  -fill "$INK" -draw 'rectangle 3,0 20,23 rectangle 0,3 23,20' \
+  -fill "$AMBER" -draw 'rectangle 4,1 19,22 rectangle 1,4 22,19' \
+  -fill "$CERAMIC" -draw 'rectangle 4,5 19,13' \
+  -fill "$CYAN" -draw 'rectangle 7,8 8,9 rectangle 15,8 16,9 rectangle 9,17 14,21' \
   -strip "$SOURCE/player-master.png"
 export_sprite "$SOURCE/player-master.png" "$SPRITES/player.png"
 
@@ -116,18 +116,23 @@ magick -size 16x16 xc:none +antialias \
   -strip "$SOURCE/sentinel-core-master.png"
 export_sprite "$SOURCE/sentinel-core-master.png" "$SPRITES/sentinel-core.png"
 
-magick -size 8x8 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 6,6' -fill "$CYAN" -draw 'rectangle 2,2 5,5' -fill "$CERAMIC" -draw 'point 2,4 point 3,3 point 4,4 point 5,3' -strip "$SOURCE/orb-echo-master.png"
-export_sprite "$SOURCE/orb-echo-master.png" "$SPRITES/orb-echo.png"
-magick -size 8x8 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 6,6' -fill "$ACID" -draw 'rectangle 2,2 5,5' -fill "$CERAMIC" -draw 'point 4,2 point 3,3 point 3,4 point 4,5' -strip "$SOURCE/orb-corrosion-master.png"
-export_sprite "$SOURCE/orb-corrosion-master.png" "$SPRITES/orb-corrosion.png"
-magick -size 8x8 xc:none +antialias -fill "$BLUE_STEEL" -draw 'rectangle 1,1 6,6' -fill "$CYAN" -draw 'rectangle 2,2 5,5' -fill "$CERAMIC" -draw 'point 3,2 point 3,3 point 2,4 point 4,4 point 4,5' -strip "$SOURCE/orb-conduction-master.png"
-export_sprite "$SOURCE/orb-conduction-master.png" "$SPRITES/orb-conduction.png"
-magick -size 8x8 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 6,6' -fill "$CERAMIC" -draw 'rectangle 2,2 5,5' -fill "$CYAN" -draw 'point 2,5 point 3,4 point 4,3 point 5,2 point 4,2 point 5,3' -strip "$SOURCE/orb-inertia-master.png"
-export_sprite "$SOURCE/orb-inertia-master.png" "$SPRITES/orb-inertia.png"
-magick -size 8x8 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 6,6' -fill "$MAGENTA" -draw 'rectangle 2,2 5,5' -fill "$CERAMIC" -draw 'point 3,5 point 3,4 point 2,3 point 4,3 point 5,2' -strip "$SOURCE/orb-split-master.png"
-export_sprite "$SOURCE/orb-split-master.png" "$SPRITES/orb-split.png"
-magick -size 8x8 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 6,6' -fill "$ORANGE" -draw 'rectangle 2,2 5,5' -fill "$YELLOW" -draw 'point 3,2 point 3,5 point 2,3 point 5,3 point 3,3' -strip "$SOURCE/orb-explosion-master.png"
-export_sprite "$SOURCE/orb-explosion-master.png" "$SPRITES/orb-explosion.png"
+orb_shell() {
+  local fill="$1" motif="$2" output="$3"
+  magick -size 10x10 xc:none +antialias \
+    -fill "$INK" -draw 'rectangle 3,0 6,9 rectangle 0,3 9,6 rectangle 1,1 8,8' \
+    -fill "$fill" -draw 'rectangle 3,1 6,8 rectangle 1,3 8,6 rectangle 2,2 7,7' \
+    -fill "$CERAMIC" -draw "$motif" -strip "$output"
+}
+
+orb_shell "$CYAN" 'rectangle 2,2 7,3 rectangle 3,6 6,7' "$SOURCE/orb-echo-master.png"
+orb_shell "$ACID" 'polygon 5,2 3,5 4,7 6,7 7,5' "$SOURCE/orb-corrosion-master.png"
+orb_shell "$CYAN" 'polygon 5,1 3,5 5,5 4,8 7,4 5,4' "$SOURCE/orb-conduction-master.png"
+orb_shell "$BLUE_STEEL" 'polygon 2,4 6,2 8,5 6,8' "$SOURCE/orb-inertia-master.png"
+orb_shell "$MAGENTA" 'rectangle 2,3 4,7 rectangle 6,2 7,6' "$SOURCE/orb-split-master.png"
+orb_shell "$ORANGE" 'rectangle 4,1 5,8 rectangle 1,4 8,5' "$SOURCE/orb-explosion-master.png"
+for core in echo corrosion conduction inertia split explosion; do
+  export_sprite "$SOURCE/orb-$core-master.png" "$SPRITES/orb-$core.png"
+done
 
 magick -size 6x6 xc:none +antialias -fill "$INK" -draw 'rectangle 1,1 4,4' -fill "$CYAN" -draw 'rectangle 2,2 3,3' -strip "$SOURCE/projectile-temporary-master.png"
 export_sprite "$SOURCE/projectile-temporary-master.png" "$SPRITES/projectile-temporary.png"

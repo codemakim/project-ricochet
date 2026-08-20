@@ -34,7 +34,7 @@ check_opaque_bounds() {
   }
 }
 
-check public/assets/combat/sprites/player.png 72x72 5 yes
+check public/assets/combat/sprites/player.png 96x96 5 yes
 check public/assets/combat/sprites/enemy-basic.png 84x72 5 yes
 check public/assets/combat/sprites/enemy-armored.png 168x144 5 yes
 check public/assets/combat/sprites/enemy-shooter.png 84x72 5 yes
@@ -64,7 +64,7 @@ check_blocks public/assets/combat/sprites/sentinel-left-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-right-weakpoint.png
 check_blocks public/assets/combat/sprites/sentinel-core.png
 for core in echo corrosion conduction inertia split explosion; do
-  check "public/assets/combat/sprites/orb-$core.png" 32x32 5 yes
+  check "public/assets/combat/sprites/orb-$core.png" 40x40 5 yes
   check_blocks "public/assets/combat/sprites/orb-$core.png"
 done
 check public/assets/combat/sprites/projectile-temporary.png 24x24 4 yes

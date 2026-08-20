@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
-import { EXPERIMENT_DEFAULTS, ORB_PICKUP_RADIUS, ORB_SPEED } from '../constants';
+import { EXPERIMENT_DEFAULTS, ORB_PICKUP_RADIUS, ORB_RADIUS, ORB_SPEED } from '../constants';
 import { OrbManager, OrbStore } from './OrbManager';
 
 const player = { x: 100, y: 200 };
@@ -104,7 +104,7 @@ function createManager(
   getChargedSpeed: () => number = () => ORB_SPEED,
   passThroughOnKill = false,
   getOrbLimit: () => number = () => GAME_TUNING.build.basicGrowth.maximumOrbs,
-  getOrbRadius: () => number = () => 8,
+  getOrbRadius: () => number = () => ORB_RADIUS,
   getRecoveryRadius: () => number = () => ORB_PICKUP_RADIUS,
 ) {
   const world = new FakeWorld();
@@ -519,7 +519,7 @@ describe('OrbStore', () => {
     store.update(0, 0, player, up);
     expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active']);
     expect(store.getSnapshot()[0]).toMatchObject({
-      position: { x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 },
+      position: { x: 100, y: 144 },
       velocity: { x: 0, y: -ORB_SPEED },
     });
 
@@ -619,7 +619,7 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()[0]).toMatchObject({
       state: 'active',
       charges: 3,
-      position: { x: player.x + ORB_PICKUP_RADIUS + 1, y: player.y },
+      position: { x: 156, y: player.y },
       velocity: { x: ORB_SPEED, y: 0 },
     });
   });
@@ -799,7 +799,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.upgradeOrb(0, 'inertia')).toBe(true);
     expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
     expect(sprites[0]?.displayWidth).toBe(GAME_TUNING.visual.friendly.permanentOrb.width);
-    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(8);
+    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(20);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {
@@ -949,7 +949,7 @@ describe('OrbManager Phaser adapter', () => {
     const sprite = sprites[0]!;
     const callsAfterLaunch = sprite.setPositionCalls;
 
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 144 });
     expect(sprite.body.enable).toBe(true);
 
     // World.update has advanced the authoritative body, while the sprite still
@@ -964,7 +964,7 @@ describe('OrbManager Phaser adapter', () => {
       velocity: { x: 40, y: -300 },
     });
     expect(sprite.setPositionCalls).toBe(callsAfterLaunch);
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: player.y - ORB_PICKUP_RADIUS - 1 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 144 });
   });
 
   it('owns bottom world-bound recall and disables the body immediately from the exact contact position', () => {
