@@ -2,6 +2,8 @@
 
 These PNGs are final source art, manually re-authored from approved concept masters. They are not automatic downscales.
 
+At `1×` mobile size, every visible cluster must describe silhouette, material separation, or a role device. Surface marks that read only as noise are removed at concept stage; palette compliance alone is not approval.
+
 `scripts/render_gbc_combat_art.sh` exports each master at exactly `200%` with nearest-neighbor sampling. `scripts/verify_gbc_combat_art.sh` checks dimensions, palette size, alpha, `2×` pixel blocks, and collision-filling opaque bounds.
 
 | Key | Master | Runtime |

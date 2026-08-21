@@ -38,6 +38,8 @@ Color reinforces identity but never replaces silhouette or internal construction
 
 - Every permanent orb is a physical occult machine weapon, not a colored circle.
 - Shared black-metal containment shells frame a readable internal phenomenon.
+- At `16 × 16`, each orb gets one outer silhouette and one internal phenomenon. Extra ring lines, facet lines, shell segmentation, filigree, and tiny attachments are forbidden; if a line cannot survive as a named part, delete it.
+- Use shape and one dominant energy cluster before color. A grayscale thumbnail must not resemble broken glass or an arbitrary pile of pixels.
 - Echo: resonant rings and vibrating lens.
 - Corrosion: sealed gas ampoule, vents, suspended vapor.
 - Conduction: forked electrodes and unstable arc.
@@ -49,6 +51,10 @@ Color reinforces identity but never replaces silhouette or internal construction
 ## Pixel translation
 
 - Preserve silhouette, paired visor, role device, material separation, and energy source.
+- Design concepts for the final in-game size: large color masses first, then at most one role device and one identity mark.
+- A mark is allowed only when it remains a readable symbol at `1×` mobile size. If it becomes texture, dithering, scratches, or visual static after pixel translation, remove it from the concept before pixel work.
+- Do not fill shells with circuit glyphs, engraved borders, repeated panel lines, rivet fields, mottling, or ornamental highlights. Empty armor planes are intentional readability space.
+- Spend detail on silhouette breaks and functional parts—visor, barrel, fracture, shield, reactor—not surface decoration.
 - Author at half runtime dimensions, then export at exactly `200%` with nearest-neighbor sampling.
 - Use `8–12` purposeful colors when material separation requires them.
 - Group highlights and shadows into clusters; remove gradients, micro-scratches, isolated noise pixels, and sub-`2px` runtime detail.
@@ -70,7 +76,7 @@ Color reinforces identity but never replaces silhouette or internal construction
 ## Production gate
 
 1. Design each family in high resolution.
-2. Review the complete family for one visual language.
+2. Review the complete family at intended runtime size; reject any concept whose marks collapse into noisy texture.
 3. Re-author approved concepts as final-scale pixel art; automatic downsampling is forbidden.
 4. Add motion and smooth effects without changing collision geometry.
 5. Inspect in live desktop and mobile combat.
