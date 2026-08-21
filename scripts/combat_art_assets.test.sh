@@ -19,7 +19,10 @@ fail() {
 [[ "$(select_art_assets orb-inertia orb-split orb-explosion | cut -d'|' -f1 | paste -sd, -)" == 'orb-inertia,orb-split,orb-explosion' ]] \
   || fail 'remaining base orbs must be registered'
 
-[[ "$(select_art_assets | wc -l | tr -d ' ')" == '13' ]] \
+[[ "$(select_art_assets orb-photon-orbit orb-vector-blade | cut -d'|' -f1 | paste -sd, -)" == 'orb-photon-orbit,orb-vector-blade' ]] \
+  || fail 'fusion orbs must be registered'
+
+[[ "$(select_art_assets | wc -l | tr -d ' ')" == '22' ]] \
   || fail 'no-argument selection must include every registered asset'
 
 if select_art_assets unknown >/dev/null 2>&1; then

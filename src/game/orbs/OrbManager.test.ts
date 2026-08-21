@@ -80,7 +80,7 @@ class FakeSprite {
   }
   setTexture(textureKey: string): this {
     this.textureKey = textureKey;
-    if (/^orb-(echo|corrosion|conduction|inertia|split|explosion)$/.test(textureKey)) {
+    if (textureKey.startsWith('orb-')) {
       this.width = 32;
       this.height = 32;
     }
@@ -800,6 +800,21 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
     expect(sprites[0]?.displayWidth).toBe(GAME_TUNING.visual.friendly.permanentOrb.width);
     expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(ORB_RADIUS);
+  });
+
+  it('uses one stable fusion texture regardless of the resulting level', () => {
+    const { manager, sprites } = createManager();
+    expect(manager.configureStartingCores(['inertia'])).toBe(true);
+    expect(manager.addOrb('conduction')).toBe(true);
+    for (let level = 1; level < 4; level += 1) {
+      expect(manager.upgradeOrb(0, 'inertia')).toBe(true);
+    }
+    expect(manager.upgradeOrb(1, 'conduction')).toBe(true);
+
+    expect(manager.fuseOrbs(0, 1, 'photon-orbit')).toBe(true);
+    expect(manager.getSnapshot()[0]).toMatchObject({ coreType: 'photon-orbit', level: 5 });
+    expect(sprites[0]?.textureKey).toBe('orb-photon-orbit');
+    expect(sprites[1]?.destroyed).toBe(true);
   });
 
   it('keeps an expanded permanent orb visible up to its collision edge', () => {

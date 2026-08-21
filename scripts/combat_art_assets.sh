@@ -15,6 +15,15 @@ COMBAT_ART_ASSETS=(
   'orb-inertia|sprites/orb-inertia.png|16x16|32x32|10|yes|-'
   'orb-split|sprites/orb-split.png|16x16|32x32|10|yes|-'
   'orb-explosion|sprites/orb-explosion.png|16x16|32x32|10|yes|-'
+  'orb-photon-orbit|sprites/orb-photon-orbit.png|16x16|32x32|10|yes|-'
+  'orb-resonant-swarm|sprites/orb-resonant-swarm.png|16x16|32x32|10|yes|-'
+  'orb-nano-proliferator|sprites/orb-nano-proliferator.png|16x16|32x32|10|yes|-'
+  'orb-mass-collapse|sprites/orb-mass-collapse.png|16x16|32x32|10|yes|-'
+  'orb-reactor-orb|sprites/orb-reactor-orb.png|16x16|32x32|10|yes|-'
+  'orb-cluster-bombardment|sprites/orb-cluster-bombardment.png|16x16|32x32|10|yes|-'
+  'orb-mirror-circuit|sprites/orb-mirror-circuit.png|16x16|32x32|10|yes|-'
+  'orb-meltdown-core|sprites/orb-meltdown-core.png|16x16|32x32|10|yes|-'
+  'orb-vector-blade|sprites/orb-vector-blade.png|16x16|32x32|10|yes|-'
 )
 
 select_art_assets() {

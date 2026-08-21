@@ -21,6 +21,15 @@ At `1×` mobile size, every visible cluster must describe silhouette, material s
 | `orb-inertia` | `16 × 16` | `32 × 32px` |
 | `orb-split` | `16 × 16` | `32 × 32px` |
 | `orb-explosion` | `16 × 16` | `32 × 32px` |
+| `orb-photon-orbit` | `16 × 16` | `32 × 32px` |
+| `orb-resonant-swarm` | `16 × 16` | `32 × 32px` |
+| `orb-nano-proliferator` | `16 × 16` | `32 × 32px` |
+| `orb-mass-collapse` | `16 × 16` | `32 × 32px` |
+| `orb-reactor-orb` | `16 × 16` | `32 × 32px` |
+| `orb-cluster-bombardment` | `16 × 16` | `32 × 32px` |
+| `orb-mirror-circuit` | `16 × 16` | `32 × 32px` |
+| `orb-meltdown-core` | `16 × 16` | `32 × 32px` |
+| `orb-vector-blade` | `16 × 16` | `32 × 32px` |
 
 Run all registered assets:
 

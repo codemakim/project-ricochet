@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { BossProjectileSnapshot } from '../src/game/bosses/bossEncounter';
+import { GAME_TUNING } from '../src/game/config/gameTuning';
+import { FORMATION_COLUMNS } from '../src/game/encounters/formationGrid';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
@@ -715,9 +717,8 @@ test('@desktop fuses a selected orb pair and renders the fusion core', async ({ 
   expect(photon.level).toBe(1);
   expect(fused.pauseReasons).not.toContain('levelUp');
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-photon-orbit-lv1',
+    (child) => child.active && child.texture?.key === 'orb-photon-orbit',
   ))).toBe(true);
-
   const aim = clientPoint(box, { x: fused.player.x, y: fused.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => (
@@ -789,7 +790,7 @@ test('@desktop triggers mass collapse on a high-speed precision hit', async ({ p
     'mass-collapse',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-mass-collapse-lv9',
+    (child) => child.active && child.texture?.key === 'orb-mass-collapse',
   ))).toBe(true);
   await sceneCall(page, (scene) => {
     for (let rank = 0; rank < 3; rank += 1) scene.debugUpgradeAbility('kinetic');
@@ -810,7 +811,7 @@ test('@desktop charges reactor bounces and releases the next-hit blast', async (
     'reactor-orb',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-reactor-orb-lv9',
+    (child) => child.active && child.texture?.key === 'orb-reactor-orb',
   ))).toBe(true);
   for (let bounce = 0; bounce < 3; bounce += 1) {
     await sceneCall(page, (scene, id) => {
@@ -836,7 +837,7 @@ test('@desktop launches six-way cluster impacts and lingering fields', async ({ 
     'cluster-bombardment',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-cluster-bombardment-lv9',
+    (child) => child.active && child.texture?.key === 'orb-cluster-bombardment',
   ))).toBe(true);
   for (let hit = 0; hit < 6; hit += 1) {
     await sceneCall(page, (scene, input) => {
@@ -859,7 +860,7 @@ test('@desktop connects mirror circuit wall nodes into a live beam', async ({ pa
     'mirror-circuit',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-mirror-circuit-lv9',
+    (child) => child.active && child.texture?.key === 'orb-mirror-circuit',
   ))).toBe(true);
   for (const x of [120, 330]) {
     await sceneCall(page, (scene, input) => {
@@ -881,7 +882,7 @@ test('@desktop heats a persistent meltdown core zone', async ({ page }) => {
     'meltdown-core',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-meltdown-core-lv9',
+    (child) => child.active && child.texture?.key === 'orb-meltdown-core',
   ))).toBe(true);
   for (let hit = 0; hit < 6 && (await snapshot(page)).meltdownZones.length === 0; hit += 1) {
     await sceneCall(page, (scene, input) => {
@@ -902,7 +903,7 @@ test('@desktop replays stored wall vectors as vector blades', async ({ page }) =
     'vector-blade',
   );
   expect(await sceneCall(page, (scene) => scene.children.list.some(
-    (child) => child.active && child.texture?.key === 'orb-vector-blade-lv9',
+    (child) => child.active && child.texture?.key === 'orb-vector-blade',
   ))).toBe(true);
   await sceneCall(page, (scene, id) => {
     const orb = scene.children.list.find((child) => child.orbId === id)!;
@@ -1634,9 +1635,10 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   });
 });
 
-test('@desktop five-column density uses shipped enemy stats and exact reinforcement release gate', async ({ page }) => {
+test('@desktop six-column density uses shipped enemy stats and exact reinforcement release gate', async ({ page }) => {
   await loadCanvas(page);
   const initial = await snapshot(page);
+  const { left, cellWidth } = GAME_TUNING.encounter.grid;
   expect(initial.enemies.length).toBeGreaterThan(0);
   expect(initial.enemies.every(({ speed }) => speed === 8)).toBe(true);
   expect(initial.enemies.every(({ kind, hp }) => (
@@ -1645,9 +1647,11 @@ test('@desktop five-column density uses shipped enemy stats and exact reinforcem
   expect(initial.enemies.every(({ footprint, position }) => (
     footprint !== undefined
     && footprint.column >= 0
-    && footprint.column + footprint.width <= 5
+    && footprint.column + footprint.width <= FORMATION_COLUMNS
     && footprint.row + footprint.height <= 5
-    && Math.abs(position.x - (15 + footprint.column * 84 + footprint.width * 84 / 2)) < 0.01
+    && Math.abs(position.x - (
+      left + footprint.column * cellWidth + footprint.width * cellWidth / 2
+    )) < 0.01
   ))).toBe(true);
   expect(initial.activePopulation).toBe(initial.enemies.reduce(
     (sum, enemy) => sum + enemy.footprint!.width * enemy.footprint!.height,

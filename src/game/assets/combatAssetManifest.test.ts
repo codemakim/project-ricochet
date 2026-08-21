@@ -12,6 +12,7 @@ import {
   FALLBACK_COMBAT_TEXTURE_KEYS,
   missingCombatTextureKeys,
 } from './createCombatFallbackTextures';
+import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
 
 describe('combat asset manifest', () => {
   it('uses one unique runtime path per production image key', () => {
@@ -63,6 +64,16 @@ describe('combat asset manifest', () => {
     const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/**/*')));
     for (const { url } of COMBAT_IMAGE_ASSETS) {
       expect(shippedAssets.has(`/public${url}`), url).toBe(true);
+    }
+  });
+
+  it('loads one stable production texture for every fusion orb', () => {
+    for (const id of FUSION_ORB_IDS) {
+      expect(COMBAT_IMAGE_ASSETS).toContainEqual({
+        key: `orb-${id}`,
+        url: `/assets/combat/sprites/orb-${id}.png`,
+        sampling: 'nearest',
+      });
     }
   });
 });

@@ -905,9 +905,7 @@ export class OrbManager {
       if (!sprite) continue;
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
-      const textureKey = isBasicOrbCoreId(state.coreType)
-        ? `orb-${state.coreType}`
-        : `orb-${state.coreType}-lv${state.level}`;
+      const textureKey = `orb-${state.coreType}`;
       const diameter = this.currentOrbRadius() * 2;
       sprite.setTexture(textureKey).setDisplaySize(
         diameter,

@@ -46,77 +46,6 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     split: coreTexture('split', 'fork'),
     explosion: coreTexture('explosion', 'burst'),
   } as const;
-  const leveledCores = Object.fromEntries(Object.entries(coreTextures).flatMap(
-    ([core, descriptor]) => [1, 2, 3, 4, 5].map((level) => [
-      `orb-${core}-lv${level}`,
-      { ...descriptor, notches: level },
-    ]),
-  ));
-  const fusionTextures = {
-    'photon-orbit': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.photonOrbit.fill,
-      accent: GAME_TUNING.orbFusions.photonOrbit.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'beam' as const,
-    },
-    'resonant-swarm': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.resonantSwarm.fill,
-      accent: GAME_TUNING.orbFusions.resonantSwarm.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'swarm' as const,
-    },
-    'nano-proliferator': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.nanoProliferator.fill,
-      accent: GAME_TUNING.orbFusions.nanoProliferator.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'seed' as const,
-    },
-    'mass-collapse': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.massCollapse.fill,
-      accent: GAME_TUNING.orbFusions.massCollapse.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'collapse' as const,
-    },
-    'reactor-orb': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.reactorOrb.fill,
-      accent: GAME_TUNING.orbFusions.reactorOrb.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'reactor' as const,
-    },
-    'cluster-bombardment': {
-      ...friendly.permanentOrb,
-      fill: GAME_TUNING.orbFusions.clusterBombardment.fill,
-      accent: GAME_TUNING.orbFusions.clusterBombardment.accent,
-      shape: 'outlinedCircle' as const,
-      symbol: 'cluster' as const,
-    },
-    'mirror-circuit': {
-      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.mirrorCircuit.fill,
-      accent: GAME_TUNING.orbFusions.mirrorCircuit.accent,
-      shape: 'outlinedCircle' as const, symbol: 'mirror' as const,
-    },
-    'meltdown-core': {
-      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.meltdownCore.fill,
-      accent: GAME_TUNING.orbFusions.meltdownCore.accent,
-      shape: 'outlinedCircle' as const, symbol: 'melt' as const,
-    },
-    'vector-blade': {
-      ...friendly.permanentOrb, fill: GAME_TUNING.orbFusions.vectorBlade.fill,
-      accent: GAME_TUNING.orbFusions.vectorBlade.accent,
-      shape: 'outlinedCircle' as const, symbol: 'blade' as const,
-    },
-  };
-  const leveledFusions = Object.fromEntries(Object.entries(fusionTextures).flatMap(
-    ([fusion, descriptor]) => Array.from({ length: 9 }, (_, index) => [
-      `orb-${fusion}-lv${index + 1}`,
-      { ...descriptor, notches: index + 1 },
-    ]),
-  ));
   return {
     'orb-charged': { ...friendly.permanentOrb, shape: 'outlinedCircle' },
     'orb-echo': coreTextures.echo,
@@ -125,8 +54,6 @@ export function combatProjectileTextureDescriptors(): Record<string, CombatTextu
     'orb-inertia': coreTextures.inertia,
     'orb-split': coreTextures.split,
     'orb-explosion': coreTextures.explosion,
-    ...leveledCores,
-    ...leveledFusions,
     'orb-temporary': { ...friendly.temporaryOrb, shape: 'outlinedCircle' },
     'enemy-bullet': { ...hostile.enemyBullet, shape: 'centeredCircle' },
     'boss-basic-bullet': { ...hostile.bossBasic, shape: 'centeredCircle' },

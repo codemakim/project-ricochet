@@ -2666,13 +2666,14 @@ export class CombatScene extends Phaser.Scene {
 
   private drawOrbLevels(): void {
     this.orbLevelGraphics.clear().fillStyle(0xffffff, 0.9);
+    const radius = GAME_TUNING.visual.friendly.permanentOrb.width / 2 + 3;
     for (const orb of this.orbManager?.getSnapshot() ?? []) {
       if (orb.state === 'stored' || orb.state === 'queued') continue;
       for (let notch = 0; notch < Math.min(orb.level, 9); notch += 1) {
         const angle = Math.PI + notch * Math.PI / 4;
         this.orbLevelGraphics.fillRect(
-          Math.round(orb.position.x + Math.cos(angle) * 7),
-          Math.round(orb.position.y + Math.sin(angle) * 7),
+          Math.round(orb.position.x + Math.cos(angle) * radius),
+          Math.round(orb.position.y + Math.sin(angle) * radius),
           1,
           1,
         );

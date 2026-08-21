@@ -18,7 +18,7 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   expect(textures['boss-muzzle-flash']).toMatchObject({ shape: 'flash' });
 });
 
-  it('defines six permanent orb colors, symbols, and five same-size level notches', () => {
+it('keeps only stable base-orb fallbacks and does not fabricate level textures', () => {
   const textures = combatProjectileTextureDescriptors();
   const cores = [
     textures['orb-echo'],
@@ -39,58 +39,29 @@ it('maps tuning to distinct friendly and hostile texture descriptors', () => {
   ]);
   expect(new Set(cores.map((core) => `${core?.fill}:${core?.accent}`)).size).toBe(6);
   expect(new Set(cores.map((core) => core?.symbol)).size).toBe(6);
-  expect([1, 2, 3, 4, 5].map((level) => textures[`orb-conduction-lv${level}`]))
-    .toEqual([1, 2, 3, 4, 5].map((notches) => expect.objectContaining({
-      notches,
-      width: cores[2]!.width,
-      height: cores[2]!.height,
-    })));
+  expect(Object.keys(textures).filter((key) => key.startsWith('orb-') && key.includes('-lv')))
+    .toEqual([]);
 });
 
 it('defines distinct prototype textures for a splitter and complementary fragments', () => {
   const textures = combatProjectileTextureDescriptors();
 
   expect(textures['enemy-splitter']).toMatchObject({
-    shape: 'crackedRoundedRect', width: 168, height: 72, deferred: true,
+    shape: 'crackedRoundedRect', width: 140, height: 60, deferred: true,
   });
 
   expect(textures['enemy-fragment-left']).toMatchObject({
-    shape: 'fragmentLeft', width: 84, height: 72, deferred: true,
+    shape: 'fragmentLeft', width: 70, height: 60, deferred: true,
   });
   expect(textures['enemy-fragment-right']).toMatchObject({
-    shape: 'fragmentRight', width: 84, height: 72, deferred: true,
+    shape: 'fragmentRight', width: 70, height: 60, deferred: true,
   });
 });
 
-it('defines nine distinct fusion silhouettes across all nine levels', () => {
+it('leaves fusion identities to static production assets', () => {
   const textures = combatProjectileTextureDescriptors();
-  const fusions = [
-    textures['orb-photon-orbit-lv1']!,
-    textures['orb-resonant-swarm-lv1']!,
-    textures['orb-nano-proliferator-lv1']!,
-    textures['orb-mass-collapse-lv1']!,
-    textures['orb-reactor-orb-lv1']!,
-    textures['orb-cluster-bombardment-lv1']!,
-    textures['orb-mirror-circuit-lv1']!,
-    textures['orb-meltdown-core-lv1']!,
-    textures['orb-vector-blade-lv1']!,
-  ];
-
-  expect(fusions.map(({ fill, symbol }) => ({ fill, symbol }))).toEqual([
-    { fill: 0x70e8ff, symbol: 'beam' },
-    { fill: 0x9d8cff, symbol: 'swarm' },
-    { fill: 0x72e69b, symbol: 'seed' },
-    { fill: 0x59647a, symbol: 'collapse' },
-    { fill: 0xff4f57, symbol: 'reactor' },
-    { fill: 0xffb347, symbol: 'cluster' },
-    { fill: 0x5de6ff, symbol: 'mirror' },
-    { fill: 0xff5a36, symbol: 'melt' },
-    { fill: 0xd8e1ff, symbol: 'blade' },
-  ]);
-  expect(textures['orb-photon-orbit-lv9']).toMatchObject({ notches: 9 });
-  expect(textures['orb-reactor-orb-lv9']).toMatchObject({ notches: 9 });
-  expect(textures['orb-cluster-bombardment-lv4']).toMatchObject({ notches: 4 });
-  expect(textures['orb-vector-blade-lv9']).toMatchObject({ notches: 9 });
+  expect(Object.keys(textures).filter((key) => key.startsWith('orb-photon-orbit')))
+    .toEqual([]);
 });
 
 it('renders splitter and fragment prototype descriptors for runtime managers', () => {

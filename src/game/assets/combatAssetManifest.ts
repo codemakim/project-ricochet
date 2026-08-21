@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
 
 export type CombatTextureSampling = 'nearest' | 'linear';
 
@@ -37,6 +38,11 @@ export const COMBAT_IMAGE_ASSETS = [
   { key: 'orb-inertia', url: '/assets/combat/sprites/orb-inertia.png', sampling: 'nearest' },
   { key: 'orb-split', url: '/assets/combat/sprites/orb-split.png', sampling: 'nearest' },
   { key: 'orb-explosion', url: '/assets/combat/sprites/orb-explosion.png', sampling: 'nearest' },
+  ...FUSION_ORB_IDS.map((id) => ({
+    key: `orb-${id}`,
+    url: `/assets/combat/sprites/orb-${id}.png`,
+    sampling: 'nearest' as const,
+  })),
   { key: 'orb-temporary', url: '/assets/combat/sprites/projectile-temporary.png', sampling: 'nearest' },
   { key: 'enemy-bullet', url: '/assets/combat/sprites/projectile-enemy.png', sampling: 'nearest' },
   { key: 'boss-basic-bullet', url: '/assets/combat/sprites/projectile-boss.png', sampling: 'nearest' },
