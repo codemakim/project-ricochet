@@ -6,6 +6,7 @@ import {
   STAGES,
   validateStageContent,
 } from './stageDefinitions';
+import { FORMATION_COLUMNS } from './formationGrid';
 
 describe('stage content', () => {
   it('defines three ordered boss stages without increasing descent speed', () => {
@@ -93,20 +94,20 @@ describe('stage content', () => {
         return cells;
       }, new Set<string>());
       expect(Math.max(...template.slots.map((slot) => slot.column + slot.width)))
-        .toBeLessThanOrEqual(5);
-      expect(occupied.size).toBeLessThan(template.rows * 5);
+        .toBeLessThanOrEqual(FORMATION_COLUMNS);
+      expect(occupied.size).toBeLessThan(template.rows * FORMATION_COLUMNS);
     }
     expect(() => validateStageContent()).not.toThrow();
   });
 
-  it('rejects a template footprint outside five columns', () => {
+  it('rejects a template footprint outside the configured columns', () => {
     const invalid = {
       id: 'invalid',
       mode: 'fixed',
       rows: 2,
       minStage: 1,
       weight: 1,
-      slots: [{ kind: 'basic', column: 4, row: 0, width: 2, height: 1 }],
+      slots: [{ kind: 'basic', column: FORMATION_COLUMNS, row: 0, width: 1, height: 1 }],
     } as const;
 
     expect(() => validateStageContent(

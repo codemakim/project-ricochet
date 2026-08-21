@@ -80,7 +80,7 @@ function sharedBottomPassageColumns(
 }
 
 describe('multi-cell formation generation', () => {
-  it('is deterministic and emits non-overlapping footprints within five rows', () => {
+  it('is deterministic and emits non-overlapping footprints within the grid', () => {
     const first = createReinforcementFormation(recipe(1, 1), 0, 91);
     const repeated = createReinforcementFormation(recipe(1, 1), 0, 91);
     const cells = occupiedCells(first.enemies);
@@ -90,7 +90,7 @@ describe('multi-cell formation generation', () => {
     expect(first.enemies.every(({ column, row, width, height }) => (
       column >= 0
       && row >= 0
-      && column + width <= 5
+      && column + width <= FORMATION_COLUMNS
       && row + height <= 5
     ))).toBe(true);
     expect(first.populationCost).toBe(cells.length);
@@ -196,15 +196,17 @@ describe('multi-cell formation generation', () => {
   });
 
   it('applies stage filters, caps, HP, and descent multipliers', () => {
+    const base = recipe();
     const result = createReinforcementFormation({
-      ...recipe(),
+      ...base,
+      profile: { ...base.profile, proceduralWeight: 1, templateWeights: {} },
       enemyWeightMultipliers: { basic: 1, armored: 100, shooter: 0, splitter: 0 },
       maxPerFormationOverrides: { armored: 1, shooter: 0, splitter: 0 },
       powerBand: {
         expectedOrbCount: 2,
         normalHpMultiplier: 2,
         eliteHpMultiplier: 3,
-        largeEnemyRatio: 0.12,
+        largeEnemyRatio: 1,
       },
       descentSpeedMultiplier: 1.5,
     }, 0, 808);

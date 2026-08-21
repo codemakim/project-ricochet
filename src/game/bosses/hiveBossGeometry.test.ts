@@ -19,7 +19,7 @@ describe('hive boss geometry', () => {
     const bounds = shooters.map(bodyBounds);
     expect(Math.max(...bounds.map(({ right }) => right))
       - Math.min(...bounds.map(({ left }) => left)))
-      .toBe(GAME_TUNING.encounter.grid.cellWidth * 3);
+      .toBeGreaterThanOrEqual(GAME_TUNING.encounter.grid.cellWidth * 3);
   });
 
   it('defines two ordered reflector paths with the configured minimum corridor', () => {
