@@ -9,6 +9,9 @@ COMBAT_ART_ASSETS=(
   'enemy-splitter|sprites/enemy-splitter.png|70x30|140x60|12|yes|140x60'
   'enemy-fragment-left|sprites/enemy-fragment-left.png|35x30|70x60|12|yes|70x60'
   'enemy-fragment-right|sprites/enemy-fragment-right.png|35x30|70x60|12|yes|70x60'
+  'orb-echo|sprites/orb-echo.png|16x16|32x32|10|yes|-'
+  'orb-corrosion|sprites/orb-corrosion.png|16x16|32x32|10|yes|-'
+  'orb-conduction|sprites/orb-conduction.png|16x16|32x32|10|yes|-'
 )
 
 select_art_assets() {

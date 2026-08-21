@@ -13,6 +13,9 @@ These PNGs are final source art, manually re-authored from approved concept mast
 | `enemy-splitter` | `70 × 30` | `140 × 60px` |
 | `enemy-fragment-left` | `35 × 30` | `70 × 60px` |
 | `enemy-fragment-right` | `35 × 30` | `70 × 60px` |
+| `orb-echo` | `16 × 16` | `32 × 32px` |
+| `orb-corrosion` | `16 × 16` | `32 × 32px` |
+| `orb-conduction` | `16 × 16` | `32 × 32px` |
 
 Run all registered assets:
 

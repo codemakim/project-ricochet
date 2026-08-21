@@ -548,16 +548,16 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
     })
   ));
   expect(dimensions).toEqual([
-    { key: 'player', width: 96, height: 96 },
-    { key: 'enemy-basic', width: 84, height: 72 },
-    { key: 'enemy-armored', width: 168, height: 144 },
-    { key: 'enemy-shooter', width: 84, height: 72 },
+    { key: 'player', width: 82, height: 82 },
+    { key: 'enemy-basic', width: 70, height: 60 },
+    { key: 'enemy-armored', width: 140, height: 120 },
+    { key: 'enemy-shooter', width: 70, height: 60 },
     { key: 'boss-body', width: 252, height: 144 },
     { key: 'boss-left-weakpoint', width: 56, height: 120 },
     { key: 'boss-core', width: 64, height: 64 },
-    { key: 'orb-echo', width: 40, height: 40 },
-    { key: 'orb-corrosion', width: 40, height: 40 },
-    { key: 'orb-conduction', width: 40, height: 40 },
+    { key: 'orb-echo', width: 32, height: 32 },
+    { key: 'orb-corrosion', width: 32, height: 32 },
+    { key: 'orb-conduction', width: 32, height: 32 },
     { key: 'orb-inertia', width: 40, height: 40 },
     { key: 'orb-split', width: 40, height: 40 },
     { key: 'orb-explosion', width: 40, height: 40 },
@@ -580,8 +580,8 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
     };
   });
   expect(liveGeometry).toEqual({
-    player: { width: 96, height: 96, bodyWidth: 64, bodyHeight: 64 },
-    orb: { width: 40, height: 40, bodyWidth: 40, bodyHeight: 40 },
+    player: { width: 82, height: 82, bodyWidth: 56, bodyHeight: 56 },
+    orb: { width: 32, height: 32, bodyWidth: 32, bodyHeight: 32 },
   });
   expect(failedAssets).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });

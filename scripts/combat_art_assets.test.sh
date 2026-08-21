@@ -13,7 +13,10 @@ fail() {
 [[ "$(select_art_assets player enemy-basic | cut -d'|' -f1 | paste -sd, -)" == 'player,enemy-basic' ]] \
   || fail 'explicit selection must preserve requested key order'
 
-[[ "$(select_art_assets | wc -l | tr -d ' ')" == '7' ]] \
+[[ "$(select_art_assets orb-echo orb-corrosion orb-conduction | cut -d'|' -f1 | paste -sd, -)" == 'orb-echo,orb-corrosion,orb-conduction' ]] \
+  || fail 'representative base orbs must be registered'
+
+[[ "$(select_art_assets | wc -l | tr -d ' ')" == '10' ]] \
   || fail 'no-argument selection must include every registered asset'
 
 if select_art_assets unknown >/dev/null 2>&1; then
