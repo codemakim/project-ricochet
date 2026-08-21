@@ -113,12 +113,12 @@ class FakeSprite {
     this.x = x;
     this.y = y;
     [this.width, this.height] = ({
-      'enemy-basic': [84, 72],
-      'enemy-armored': [168, 144],
-      'enemy-shooter': [84, 72],
-      'enemy-splitter': [168, 72],
-      'enemy-fragment-left': [84, 72],
-      'enemy-fragment-right': [84, 72],
+      'enemy-basic': [70, 60],
+      'enemy-armored': [140, 120],
+      'enemy-shooter': [70, 60],
+      'enemy-splitter': [140, 60],
+      'enemy-fragment-left': [70, 60],
+      'enemy-fragment-right': [70, 60],
       'enemy-bullet': [20, 20],
     } as Record<string, [number, number]>)[texture] ?? [0, 0];
   }
@@ -327,10 +327,10 @@ describe('EnemyManager', () => {
       bodyHeight: sprite.body.height,
       velocityY: sprite.body.velocity.y,
     }).toEqual({
-      displayWidth: 168,
-      displayHeight: 144,
-      bodyWidth: 168,
-      bodyHeight: 144,
+      displayWidth: 140,
+      displayHeight: 120,
+      bodyWidth: 140,
+      bodyHeight: 120,
       velocityY: 8,
     });
     manager.update();
@@ -482,8 +482,8 @@ describe('EnemyManager', () => {
     colliders[0]!.trigger(orb, splitter);
 
     expect(manager.getSnapshot().enemies).toEqual([
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 183, y: 180 } }),
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 267, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 190, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 260, y: 180 } }),
     ]);
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
     expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
@@ -539,8 +539,8 @@ describe('EnemyManager', () => {
 
     expect(manager.getSnapshot().enemies.map(({ kind, position }) => ({ kind, position }))).toEqual([
       { kind: 'basic', position: { x: 225, y: 180 } },
-      { kind: 'fragment', position: { x: 183, y: 180 } },
-      { kind: 'fragment', position: { x: 267, y: 180 } },
+      { kind: 'fragment', position: { x: 190, y: 180 } },
+      { kind: 'fragment', position: { x: 260, y: 180 } },
     ]);
   });
 

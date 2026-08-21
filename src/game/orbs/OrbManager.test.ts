@@ -519,7 +519,7 @@ describe('OrbStore', () => {
     store.update(0, 0, player, up);
     expect(store.getSnapshot().map((orb) => orb.state)).toEqual(['active']);
     expect(store.getSnapshot()[0]).toMatchObject({
-      position: { x: 100, y: 144 },
+      position: { x: 100, y: 149 },
       velocity: { x: 0, y: -ORB_SPEED },
     });
 
@@ -619,7 +619,7 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()[0]).toMatchObject({
       state: 'active',
       charges: 3,
-      position: { x: 156, y: player.y },
+      position: { x: 151, y: player.y },
       velocity: { x: ORB_SPEED, y: 0 },
     });
   });
@@ -799,7 +799,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.upgradeOrb(0, 'inertia')).toBe(true);
     expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
     expect(sprites[0]?.displayWidth).toBe(GAME_TUNING.visual.friendly.permanentOrb.width);
-    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(20);
+    expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(ORB_RADIUS);
   });
 
   it('keeps an expanded permanent orb visible up to its collision edge', () => {
@@ -964,7 +964,7 @@ describe('OrbManager Phaser adapter', () => {
     const sprite = sprites[0]!;
     const callsAfterLaunch = sprite.setPositionCalls;
 
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 144 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 149 });
     expect(sprite.body.enable).toBe(true);
 
     // World.update has advanced the authoritative body, while the sprite still
@@ -979,7 +979,7 @@ describe('OrbManager Phaser adapter', () => {
       velocity: { x: 40, y: -300 },
     });
     expect(sprite.setPositionCalls).toBe(callsAfterLaunch);
-    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 144 });
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 100, y: 149 });
   });
 
   it('owns bottom world-bound recall and disables the body immediately from the exact contact position', () => {

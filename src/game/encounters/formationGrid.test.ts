@@ -20,10 +20,10 @@ describe('formation grid', () => {
     )).toThrow('formation footprints overlap');
   });
 
-  it('rejects footprints outside five columns or the chunk rows', () => {
-    expect(FORMATION_COLUMNS).toBe(5);
+  it('rejects footprints outside six columns or the chunk rows', () => {
+    expect(FORMATION_COLUMNS).toBe(6);
     expect(() => validateFootprint(
-      { column: 4, row: 0, width: 2, height: 1 },
+      { column: 5, row: 0, width: 2, height: 1 },
       3,
     )).toThrow('formation footprint is outside the grid');
   });
@@ -32,7 +32,7 @@ describe('formation grid', () => {
     expect(footprintWorldRect(
       { column: 1, row: 2, width: 2, height: 1 },
       80,
-    )).toEqual({ x: 183, y: 260, width: 168, height: 72 });
+    )).toEqual({ x: 155, y: 230, width: 140, height: 60 });
 
     const left = footprintWorldRect({ column: 0, row: 0, width: 1, height: 1 }, 0);
     const right = footprintWorldRect({ column: 1, row: 0, width: 1, height: 1 }, 0);

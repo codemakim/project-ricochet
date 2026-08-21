@@ -16,7 +16,7 @@ function mutableTuning(): Mutable<GameTuning> {
 describe('GAME_TUNING', () => {
   it('defines the approved global boss, enemy, and encounter values once', () => {
     expect(GAME_TUNING.world).toEqual({ width: 450, height: 800 });
-    expect(GAME_TUNING.player.visual).toEqual({ width: 96, height: 96, hurtRadius: 32 });
+    expect(GAME_TUNING.player.visual).toEqual({ width: 82, height: 82, hurtRadius: 28 });
     expect(GAME_TUNING.boss.body).toEqual({ width: 252, height: 144 });
     expect(GAME_TUNING.boss.weakpoint).toEqual({
       visual: { width: 56, height: 120 },
@@ -44,10 +44,10 @@ describe('GAME_TUNING', () => {
       padding: 8,
     });
     expect(GAME_TUNING.encounter.grid).toEqual({
-      columns: 5,
+      columns: 6,
       left: 15,
-      cellWidth: 84,
-      cellHeight: 72,
+      cellWidth: 70,
+      cellHeight: 60,
       gap: 0,
     });
     expect(GAME_TUNING.rewardFlow).toEqual({
@@ -112,12 +112,12 @@ describe('GAME_TUNING', () => {
       split: { chance: 0.25, cooldownMs: 120, count: 2 },
     });
     expect(GAME_TUNING.temporaryOrbs).toEqual({
-      radius: 12, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
+      radius: 10, speed: 440, cap: 30, lifetimeMs: 1500, hitCooldownMs: 80,
       baseDamage: 0.65,
     });
     expect(GAME_TUNING.visual.friendly).toEqual({
-      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 40, height: 40 },
-      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24 },
+      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 32, height: 32 },
+      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20 },
     });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
@@ -183,7 +183,7 @@ describe('GAME_TUNING', () => {
   it('uses shape and palette separation for friendly and hostile projectiles', () => {
     const { friendly, hostile } = GAME_TUNING.visual;
     expect(friendly.temporaryOrb).toEqual({
-      fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24,
+      fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20,
     });
     expect(hostile.enemyBullet).toEqual({
       fill: 0xff4d5a, accent: 0x4a0710, width: 10, height: 10,
@@ -369,7 +369,7 @@ describe('GAME_TUNING', () => {
 
   it.each([
     ['non-positive enemy speed', (value: Mutable<GameTuning>) => { value.enemies.descentSpeed = 0; }],
-    ['non-five-column formation grid', (value: Mutable<GameTuning>) => {
+    ['non-six-column formation grid', (value: Mutable<GameTuning>) => {
       value.encounter.grid.columns = 4;
     }],
     ['formation gap outside its cells', (value: Mutable<GameTuning>) => {

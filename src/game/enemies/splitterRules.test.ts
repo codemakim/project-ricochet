@@ -8,11 +8,11 @@ describe('splitter rules', () => {
       x: 225, y: 180, column: 3, row: 2, speed: 8,
     })).toEqual([
       {
-        kind: 'fragment', side: 'left', hp: 2, x: 309, y: 180,
+        kind: 'fragment', side: 'left', hp: 2, x: 260, y: 180,
         column: 3, row: 2, width: 1, height: 1, speed: 8,
       },
       {
-        kind: 'fragment', side: 'right', hp: 2, x: 393, y: 180,
+        kind: 'fragment', side: 'right', hp: 2, x: 330, y: 180,
         column: 4, row: 2, width: 1, height: 1, speed: 8,
       },
     ]);
@@ -21,28 +21,28 @@ describe('splitter rules', () => {
   it('keeps fragments inside the left and right edges', () => {
     expect(fragmentSpecsFor({
       x: 0, y: 180, column: 0, row: 2, speed: 8,
-    }).map(({ x }) => x)).toEqual([57, 141]);
+    }).map(({ x }) => x)).toEqual([50, 120]);
     const right = fragmentSpecsFor({
       x: 450, y: 180, column: 6, row: 2, speed: 8,
     });
-    expect(right.map(({ x }) => x)).toEqual([309, 393]);
-    expect(right.map(({ column }) => column)).toEqual([3, 4]);
+    expect(right.map(({ x }) => x)).toEqual([330, 400]);
+    expect(right.map(({ column }) => column)).toEqual([4, 5]);
   });
 
-  it('places rowless fragments side by side inside the five-column arena', () => {
+  it('places rowless fragments side by side inside the six-column arena', () => {
     const fragments = fragmentSpecsFor({
       x: 225, y: 180, column: -1, row: -1, speed: 8,
     });
 
-    expect(fragments.map(({ x }) => x)).toEqual([183, 267]);
+    expect(fragments.map(({ x }) => x)).toEqual([190, 260]);
     expect(fragments[1]!.x - fragments[0]!.x)
       .toBe(GAME_TUNING.encounter.grid.cellWidth);
     expect(fragmentSpecsFor({
       x: 0, y: 180, column: -1, row: -1, speed: 8,
-    }).map(({ x }) => x)).toEqual([42, 126]);
+    }).map(({ x }) => x)).toEqual([35, 105]);
     expect(fragmentSpecsFor({
       x: 450, y: 180, column: -1, row: -1, speed: 8,
-    }).map(({ x }) => x)).toEqual([324, 408]);
+    }).map(({ x }) => x)).toEqual([345, 415]);
   });
 
   it('counts splitters as two population and fragments as one', () => {

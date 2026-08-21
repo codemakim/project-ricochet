@@ -498,7 +498,7 @@ const ORB_CORE_LEVEL_TUNING = {
 
 export const GAME_TUNING = {
   world: { width: 450, height: 800 },
-  player: { visual: { width: 96, height: 96, hurtRadius: 32 } },
+  player: { visual: { width: 82, height: 82, hurtRadius: 28 } },
   boss: {
     y: 120,
     body: { width: 252, height: 144 },
@@ -521,7 +521,7 @@ export const GAME_TUNING = {
   },
   encounter: {
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
-    grid: { columns: 5, left: 15, cellWidth: 84, cellHeight: 72, gap: 0 },
+    grid: { columns: 6, left: 15, cellWidth: 70, cellHeight: 60, gap: 0 },
   },
   rewardFlow: {
     resumeGameplayMs: 300,
@@ -819,7 +819,7 @@ export const GAME_TUNING = {
     },
   },
   temporaryOrbs: {
-    radius: 12,
+    radius: 10,
     speed: 440,
     cap: 30,
     lifetimeMs: 1500,
@@ -871,8 +871,8 @@ export const GAME_TUNING = {
   },
   visual: {
     friendly: {
-      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 40, height: 40 },
-      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 24, height: 24 },
+      permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 32, height: 32 },
+      temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20 },
     },
     coreFeedback: {
       corrosionFieldAlpha: 0.16,
@@ -1031,8 +1031,8 @@ export function validateGameTuning(tuning: GameTuning): void {
   positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
   positiveInteger(encounter.grid.cellHeight, 'encounter.grid.cellHeight');
   nonNegativeInteger(encounter.grid.gap, 'encounter.grid.gap');
-  if (encounter.grid.columns !== 5) {
-    throw new RangeError('encounter.grid.columns must equal five');
+  if (encounter.grid.columns !== 6) {
+    throw new RangeError('encounter.grid.columns must equal six');
   }
   if (encounter.grid.gap >= encounter.grid.cellWidth
     || encounter.grid.gap >= encounter.grid.cellHeight) {
