@@ -18,6 +18,9 @@ At `1×` mobile size, every visible cluster must describe silhouette, material s
 | `orb-echo` | `16 × 16` | `32 × 32px` |
 | `orb-corrosion` | `16 × 16` | `32 × 32px` |
 | `orb-conduction` | `16 × 16` | `32 × 32px` |
+| `orb-inertia` | `16 × 16` | `32 × 32px` |
+| `orb-split` | `16 × 16` | `32 × 32px` |
+| `orb-explosion` | `16 × 16` | `32 × 32px` |
 
 Run all registered assets:
 

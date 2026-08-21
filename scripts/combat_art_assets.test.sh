@@ -16,7 +16,10 @@ fail() {
 [[ "$(select_art_assets orb-echo orb-corrosion orb-conduction | cut -d'|' -f1 | paste -sd, -)" == 'orb-echo,orb-corrosion,orb-conduction' ]] \
   || fail 'representative base orbs must be registered'
 
-[[ "$(select_art_assets | wc -l | tr -d ' ')" == '10' ]] \
+[[ "$(select_art_assets orb-inertia orb-split orb-explosion | cut -d'|' -f1 | paste -sd, -)" == 'orb-inertia,orb-split,orb-explosion' ]] \
+  || fail 'remaining base orbs must be registered'
+
+[[ "$(select_art_assets | wc -l | tr -d ' ')" == '13' ]] \
   || fail 'no-argument selection must include every registered asset'
 
 if select_art_assets unknown >/dev/null 2>&1; then

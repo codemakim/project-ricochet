@@ -12,6 +12,9 @@ COMBAT_ART_ASSETS=(
   'orb-echo|sprites/orb-echo.png|16x16|32x32|10|yes|-'
   'orb-corrosion|sprites/orb-corrosion.png|16x16|32x32|10|yes|-'
   'orb-conduction|sprites/orb-conduction.png|16x16|32x32|10|yes|-'
+  'orb-inertia|sprites/orb-inertia.png|16x16|32x32|10|yes|-'
+  'orb-split|sprites/orb-split.png|16x16|32x32|10|yes|-'
+  'orb-explosion|sprites/orb-explosion.png|16x16|32x32|10|yes|-'
 )
 
 select_art_assets() {
