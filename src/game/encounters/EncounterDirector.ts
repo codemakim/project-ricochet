@@ -56,13 +56,18 @@ export class EncounterDirector {
   private spawnSequence = 0;
   private lastFormationId: string | null = null;
   private pendingFormation: PendingFormation | null = null;
+  private progressionLevel = 0;
 
   constructor(private readonly runSeed = 0) {}
 
-  update(deltaMs: number, enemyState: EncounterEnemyState): EncounterUpdate {
+  update(deltaMs: number, enemyState: EncounterEnemyState, progressionLevel = 0): EncounterUpdate {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
       throw new RangeError('deltaMs must be finite and non-negative');
     }
+    if (!Number.isInteger(progressionLevel) || progressionLevel < 0) {
+      throw new RangeError('progressionLevel must be a non-negative integer');
+    }
+    this.progressionLevel = progressionLevel;
     this.elapsedMs += deltaMs;
 
     if (this.state === 'bossWarning') {
@@ -96,7 +101,7 @@ export class EncounterDirector {
       };
     }
 
-    const phase = phaseAt(stage, this.stageElapsedMs);
+    const phase = phaseAt(stage, this.stageElapsedMs, this.progressionLevel);
     if (!reinforcementWindowOpen({
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
       spawnIntervalMs: phase.definition.spawnIntervalMs,
@@ -184,7 +189,7 @@ export class EncounterDirector {
 
   getSnapshot() {
     const stage = this.activeStage();
-    const phase = phaseAt(stage, this.stageElapsedMs).index;
+    const phase = phaseAt(stage, this.stageElapsedMs, this.progressionLevel).index;
     return {
       elapsedMs: this.elapsedMs,
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
@@ -228,7 +233,14 @@ function formationRecipe(
       : {}),
     enemyWeightMultipliers: phase.enemyWeightMultipliers,
     maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    powerBand: stage.powerBand,
-    descentSpeedMultiplier: stage.descentSpeedMultiplier,
+    powerBand: {
+      ...stage.powerBand,
+      normalHpMultiplier: stage.powerBand.normalHpMultiplier
+        * (phase.normalHpMultiplier ?? 1),
+      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier
+        * (phase.eliteHpMultiplier ?? 1),
+    },
+    descentSpeedMultiplier: stage.descentSpeedMultiplier
+      * (phase.descentSpeedMultiplier ?? 1),
   };
 }

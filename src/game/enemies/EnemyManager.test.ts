@@ -101,6 +101,7 @@ class FakeSprite {
   active = true;
   destroyed = false;
   tint?: number;
+  angle = 0;
   hp = 0;
   displayWidth = 0;
   displayHeight = 0;
@@ -144,6 +145,7 @@ class FakeSprite {
   setCircle(radius: number): this { this.circle = radius; return this; }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
+  setAngle(angle: number): this { this.angle = angle; return this; }
   setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
 
   destroy(): void {
@@ -300,6 +302,21 @@ function createBoundary(
 }
 
 describe('EnemyManager', () => {
+  it('rocks enemy art without moving or resizing its collision body', () => {
+    const { manager, groups, gameplayClock } = createBoundary([{
+      kind: 'basic', hp: 3, x: 160, y: 120, column: 0, speed: 8,
+    }]);
+    const sprite = groups[0]!.children[0]!;
+    const before = { x: sprite.x, y: sprite.y, width: sprite.body.width, height: sprite.body.height };
+
+    gameplayClock.now = 300;
+    manager.update();
+
+    expect(sprite.angle).not.toBe(0);
+    expect({ x: sprite.x, y: sprite.y, width: sprite.body.width, height: sprite.body.height })
+      .toEqual(before);
+  });
+
   it('sizes a multi-cell enemy body and keeps constant pixel descent', () => {
     const { manager, groups } = createBoundary([{
       kind: 'armored',

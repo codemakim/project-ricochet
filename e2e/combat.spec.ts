@@ -145,6 +145,10 @@ interface DevelopmentScene {
       y?: number;
       displayWidth?: number;
       displayHeight?: number;
+      angle?: number;
+      rotation?: number;
+      alpha?: number;
+      visible?: boolean;
       texture?: { key?: string };
       orbId?: number;
       text?: string;
@@ -163,6 +167,7 @@ interface DevelopmentScene {
   player: {
     displayWidth: number;
     displayHeight: number;
+    angle: number;
     body?: { width?: number; height?: number };
     setPosition(x: number, y: number): void;
   };
@@ -651,6 +656,50 @@ test('@desktop moves, retains mouse aim, and launches one permanent orb', async 
   expect(after.orbs).toHaveLength(1);
   expect(after.orbs.every((orb) => orb.state !== 'stored')).toBe(true);
   expect(box.height).toBeGreaterThan(box.width);
+});
+
+test('@desktop animates combat art without changing collision bodies', async ({ page }) => {
+  const { box } = await loadCanvas(page);
+  const before = await sceneCall(page, (scene) => {
+    const orb = scene.children.list.find((child) => child.orbId === 0)!;
+    const enemy = scene.children.list.find((child) => child.texture?.key?.startsWith('enemy-'))!;
+    return {
+      playerBody: { width: scene.player.body?.width, height: scene.player.body?.height },
+      orbBody: { width: orb.body?.width, height: orb.body?.height },
+      enemyBody: { width: enemy.body?.width, height: enemy.body?.height },
+    };
+  });
+  const state = await snapshot(page);
+  const aimPoint = clientPoint(box, { x: state.player.x + 100, y: state.player.y - 100 });
+
+  await page.mouse.move(aimPoint.x, aimPoint.y);
+  await page.waitForTimeout(180);
+
+  const after = await sceneCall(page, (scene) => {
+    const orb = scene.children.list.find((child) => child.orbId === 0)!;
+    const enemy = scene.children.list.find((child) => child.texture?.key?.startsWith('enemy-'))!;
+    const aura = scene.children.list.find((child) => child.name === 'orb-aura-0')!;
+    return {
+      playerAngle: scene.player.angle,
+      enemyAngle: enemy.angle,
+      orbRotation: orb.rotation,
+      aura: { alpha: aura.alpha, visible: aura.visible, hasBody: Boolean(aura.body) },
+      playerBody: { width: scene.player.body?.width, height: scene.player.body?.height },
+      orbBody: { width: orb.body?.width, height: orb.body?.height },
+      enemyBody: { width: enemy.body?.width, height: enemy.body?.height },
+    };
+  });
+
+  expect(Math.abs(after.playerAngle)).toBeGreaterThan(0);
+  expect(Math.abs(after.enemyAngle ?? 0)).toBeGreaterThan(0);
+  expect(Math.abs(after.orbRotation ?? 0)).toBeGreaterThan(0);
+  expect(after.aura).toMatchObject({ visible: true, hasBody: false });
+  expect(after.aura.alpha).toBeGreaterThan(0);
+  expect({
+    playerBody: after.playerBody,
+    orbBody: after.orbBody,
+    enemyBody: after.enemyBody,
+  }).toEqual(before);
 });
 
 test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {

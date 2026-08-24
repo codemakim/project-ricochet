@@ -72,6 +72,15 @@ describe('EncounterDirector', () => {
     expect(director.getSnapshot().phase).toBe(1);
   });
 
+  it('uses the stronger stage-one recipe from progression level three', () => {
+    const director = new EncounterDirector(1234);
+
+    director.update(5_000, { activePopulation: 1, topmostEnemyY: 120 }, 3);
+
+    expect(createFormationSpy).toHaveBeenCalledWith(recipeAt(0, 1), 0, 1234);
+    expect(director.getSnapshot().phase).toBe(1);
+  });
+
   it('uses each phase reinforcement release line', () => {
     const director = new EncounterDirector(7);
     const upperEnemies = { activePopulation: 1, topmostEnemyY: 25 };
@@ -272,7 +281,14 @@ function recipeAt(stageIndex: number, phaseIndex: number): FormationRecipe {
     profile: FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId)!,
     enemyWeightMultipliers: phase.enemyWeightMultipliers,
     maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    powerBand: stage.powerBand,
-    descentSpeedMultiplier: stage.descentSpeedMultiplier,
+    powerBand: {
+      ...stage.powerBand,
+      normalHpMultiplier: stage.powerBand.normalHpMultiplier
+        * (phase.normalHpMultiplier ?? 1),
+      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier
+        * (phase.eliteHpMultiplier ?? 1),
+    },
+    descentSpeedMultiplier: stage.descentSpeedMultiplier
+      * (phase.descentSpeedMultiplier ?? 1),
   };
 }

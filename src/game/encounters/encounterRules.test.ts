@@ -25,6 +25,11 @@ describe('encounter rules', () => {
     }
   });
 
+  it('pulls stage-one pressure forward when the run reaches level three', () => {
+    expect(phaseAt(STAGES[0], 20_000, 2).index).toBe(0);
+    expect(phaseAt(STAGES[0], 20_000, 3).index).toBe(1);
+  });
+
   it('requires interval, top clearance, and capacity together', () => {
     const ready = {
       elapsedSinceSpawnMs: 8_000,

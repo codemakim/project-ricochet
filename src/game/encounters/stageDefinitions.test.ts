@@ -37,6 +37,13 @@ describe('stage content', () => {
         largeEnemyRatio: 0.32,
       },
     ]);
+    expect(STAGES[0].phases[1]).toMatchObject({
+      startsAtLevel: 3,
+      normalHpMultiplier: expect.any(Number),
+      descentSpeedMultiplier: expect.any(Number),
+    });
+    expect(STAGES[0].phases[1].normalHpMultiplier).toBeGreaterThan(1);
+    expect(STAGES[0].phases[1].descentSpeedMultiplier).toBeGreaterThan(1);
     expect(STAGES.map(({ phases }) => phases.map((phase) => ({
       activeCap: phase.activeCap,
       spawnIntervalMs: phase.spawnIntervalMs,
@@ -46,8 +53,8 @@ describe('stage content', () => {
     })))).toEqual([
       [
         { activeCap: 12, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
-        { activeCap: 18, spawnIntervalMs: 5_500, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
-        { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 18, spawnIntervalMs: 4_800, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
+        { activeCap: 22, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
       ],
       [
         { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },

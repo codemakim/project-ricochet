@@ -435,7 +435,20 @@ export interface GameTuning {
   };
   visual: {
     friendly: { permanentOrb: ProjectileVisualTuning; temporaryOrb: ProjectileVisualTuning };
-    permanentOrbPresentation: { haloPadding: number; radiansPerPixel: number };
+    permanentOrbPresentation: {
+      haloPadding: number;
+      radiansPerPixel: number;
+      auraPadding: number;
+      auraAlphaMinimum: number;
+      auraAlphaMaximum: number;
+      auraPulsePeriodMs: number;
+    };
+    motion: {
+      playerRockDegrees: number;
+      playerRockPeriodMs: number;
+      enemyRockDegrees: number;
+      enemyRockPeriodMs: number;
+    };
     coreFeedback: {
       corrosionFieldAlpha: number;
       corrosionLineAlpha: number;
@@ -877,7 +890,20 @@ export const GAME_TUNING = {
       permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 32, height: 32 },
       temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20 },
     },
-    permanentOrbPresentation: { haloPadding: 10, radiansPerPixel: 0.014 },
+    permanentOrbPresentation: {
+      haloPadding: 10,
+      radiansPerPixel: 0.014,
+      auraPadding: 12,
+      auraAlphaMinimum: 0.08,
+      auraAlphaMaximum: 0.22,
+      auraPulsePeriodMs: 520,
+    },
+    motion: {
+      playerRockDegrees: 1.2,
+      playerRockPeriodMs: 1_400,
+      enemyRockDegrees: 1.5,
+      enemyRockPeriodMs: 1_200,
+    },
     coreFeedback: {
       corrosionFieldAlpha: 0.16,
       corrosionLineAlpha: 0.7,
@@ -1734,6 +1760,21 @@ export function validateGameTuning(tuning: GameTuning): void {
     visual.permanentOrbPresentation.radiansPerPixel,
     'visual.permanentOrbPresentation.radiansPerPixel',
   );
+  nonNegative(
+    visual.permanentOrbPresentation.auraPadding,
+    'visual.permanentOrbPresentation.auraPadding',
+  );
+  const aura = visual.permanentOrbPresentation;
+  probability(aura.auraAlphaMinimum, 'visual.permanentOrbPresentation.auraAlphaMinimum');
+  probability(aura.auraAlphaMaximum, 'visual.permanentOrbPresentation.auraAlphaMaximum');
+  if (aura.auraAlphaMinimum > aura.auraAlphaMaximum) {
+    throw new RangeError('visual.permanentOrbPresentation aura alpha range must be ordered');
+  }
+  positive(aura.auraPulsePeriodMs, 'visual.permanentOrbPresentation.auraPulsePeriodMs');
+  nonNegative(visual.motion.playerRockDegrees, 'visual.motion.playerRockDegrees');
+  positive(visual.motion.playerRockPeriodMs, 'visual.motion.playerRockPeriodMs');
+  nonNegative(visual.motion.enemyRockDegrees, 'visual.motion.enemyRockDegrees');
+  positive(visual.motion.enemyRockPeriodMs, 'visual.motion.enemyRockPeriodMs');
   const feedback = visual.coreFeedback;
   for (const [name, alpha] of Object.entries({
     corrosionFieldAlpha: feedback.corrosionFieldAlpha,

@@ -608,6 +608,10 @@ export class CombatScene extends Phaser.Scene {
       this.build?.playerSpeed(),
     );
     this.player.setPosition(next.x, next.y);
+    const motion = GAME_TUNING.visual.motion;
+    this.player.setAngle(Math.sin(
+      this.gameplayElapsedMs / motion.playerRockPeriodMs * Math.PI * 2,
+    ) * motion.playerRockDegrees);
     this.aim = resolveAim(this.aim, this.playerInput.aimCandidate);
     if (!this.aimQueueActivated && this.playerInput.aimActivated) {
       this.aimQueueActivated = true;
@@ -2321,7 +2325,7 @@ export class CombatScene extends Phaser.Scene {
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
       activePopulation: enemies.activePopulation,
       topmostEnemyY: enemies.topmostEnemyY,
-    });
+    }, this.progression?.getSnapshot().level ?? 0);
     if (formation) this.enemyManager.spawnFormation(formation);
     if (transition) {
       this.activeBossKind = bossKindAfterTransition(

@@ -22,9 +22,16 @@ export function reinforcementWindowOpen(
 export function phaseAt(
   stage: StageDefinition,
   elapsedMs: number,
+  progressionLevel = 0,
 ): { index: number; definition: StagePhaseDefinition } {
-  let index = stage.phases.length - 1;
-  while (index > 0 && elapsedMs < stage.phases[index]!.startsAtMs) index -= 1;
+  let index = 0;
+  for (let candidate = 1; candidate < stage.phases.length; candidate += 1) {
+    const phase = stage.phases[candidate]!;
+    if (elapsedMs >= phase.startsAtMs
+      || (phase.startsAtLevel !== undefined && progressionLevel >= phase.startsAtLevel)) {
+      index = candidate;
+    }
+  }
   return { index, definition: stage.phases[index]! };
 }
 

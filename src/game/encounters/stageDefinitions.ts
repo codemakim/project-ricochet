@@ -57,10 +57,14 @@ export interface FormationProfile {
 
 export interface StagePhaseDefinition {
   startsAtMs: number;
+  startsAtLevel?: number;
   activeCap: number;
   spawnIntervalMs: number;
   reinforcementReleaseY: number;
   formationProfileId: string;
+  normalHpMultiplier?: number;
+  eliteHpMultiplier?: number;
+  descentSpeedMultiplier?: number;
   allowedTags?: readonly EnemyTag[];
   excludedKinds?: readonly EnemyKind[];
   enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
@@ -221,6 +225,9 @@ const phase = (
   formationProfileId: string,
   enemyWeightMultipliers: Readonly<Partial<Record<EnemyKind, number>>>,
   maxPerFormationOverrides: Readonly<Partial<Record<EnemyKind, number>>>,
+  scaling: Pick<StagePhaseDefinition,
+    'startsAtLevel' | 'normalHpMultiplier' | 'eliteHpMultiplier' | 'descentSpeedMultiplier'
+  > = {},
 ): StagePhaseDefinition => ({
   startsAtMs,
   activeCap,
@@ -229,6 +236,7 @@ const phase = (
   formationProfileId,
   enemyWeightMultipliers,
   maxPerFormationOverrides,
+  ...scaling,
 });
 
 export const STAGES = [
@@ -245,8 +253,8 @@ export const STAGES = [
     descentSpeedMultiplier: 1,
     phases: [
       phase(0, 12, 5_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
-      phase(60_000, 18, 5_500, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
-      phase(120_000, 22, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
+      phase(60_000, 18, 4_800, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }, { startsAtLevel: 3, normalHpMultiplier: 1.18, eliteHpMultiplier: 1.12, descentSpeedMultiplier: 1.08 }),
+      phase(120_000, 22, 4_500, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }, { startsAtLevel: 5, normalHpMultiplier: 1.28, eliteHpMultiplier: 1.2, descentSpeedMultiplier: 1.12 }),
     ],
     boss: { kind: 'sentinel', minimumMs: 120_000, scoreTarget: 70, hardMaximumMs: 210_000, warningMs: 2_000 },
   },
@@ -427,6 +435,7 @@ export function validateStageContent(
       throw new RangeError(`${stage.id} must start at zero`);
     }
     let previousStart = -1;
+    let previousLevel = 0;
     for (const stagePhase of stage.phases) {
       finiteNonNegative(stagePhase.startsAtMs, `${stage.id}.startsAtMs`);
       finiteNonNegative(
@@ -437,6 +446,22 @@ export function validateStageContent(
         throw new RangeError(`${stage.id} phase times must increase`);
       }
       previousStart = stagePhase.startsAtMs;
+      if (stagePhase.startsAtLevel !== undefined) {
+        positiveInteger(stagePhase.startsAtLevel, `${stage.id}.startsAtLevel`);
+        if (stagePhase.startsAtLevel <= previousLevel) {
+          throw new RangeError(`${stage.id} phase levels must increase`);
+        }
+        previousLevel = stagePhase.startsAtLevel;
+      }
+      for (const [name, multiplier] of Object.entries({
+        normalHpMultiplier: stagePhase.normalHpMultiplier,
+        eliteHpMultiplier: stagePhase.eliteHpMultiplier,
+        descentSpeedMultiplier: stagePhase.descentSpeedMultiplier,
+      })) {
+        if (multiplier !== undefined && (!Number.isFinite(multiplier) || multiplier <= 0)) {
+          throw new RangeError(`${stage.id}.${name} must be positive`);
+        }
+      }
       const profile = profileById.get(stagePhase.formationProfileId);
       if (!profile) throw new RangeError(`${stage.id} phase profile must exist`);
       if (stagePhase.activeCap < profile.cellMaximum) {

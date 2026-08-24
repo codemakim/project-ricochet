@@ -676,6 +676,7 @@ export class OrbManager {
   private readonly store: OrbStore;
   private sprites: OrbSprite[];
   private readonly spriteIds = new Map<OrbSprite, number>();
+  private readonly auras = new Map<number, Phaser.GameObjects.Image>();
   private readonly world: Phaser.Physics.Arcade.World;
   private readonly scene: Phaser.Scene;
   private readonly textureKey: string;
@@ -779,6 +780,8 @@ export class OrbManager {
       this.sprites = this.sprites.filter((sprite) => sprite !== removed);
       removed.destroy();
     }
+    this.auras.get(secondId)?.destroy();
+    this.auras.delete(secondId);
     this.synchronizeSprites();
     return true;
   }
@@ -810,6 +813,7 @@ export class OrbManager {
         * Math.max(0, deltaMs) / 1000
         * GAME_TUNING.visual.permanentOrbPresentation.radiansPerPixel;
     }
+    this.animateAuras(nowMs, states);
   }
 
   beginProximityRecovery(orb: OrbSprite | number): boolean {
@@ -904,7 +908,9 @@ export class OrbManager {
     this.world.off('worldbounds', this.onWorldBounds);
     this.store.destroy();
     for (const sprite of this.sprites) sprite.destroy();
+    for (const aura of this.auras.values()) aura.destroy();
     this.spriteIds.clear();
+    this.auras.clear();
     this.orbAddedListeners.clear();
   }
 
@@ -929,6 +935,15 @@ export class OrbManager {
         (sprite.height - sourceRadius * 2) / 2,
       );
       const activeBodyOwnsPosition = state.state === 'active' && body.enable;
+      const aura = this.auras.get(state.id);
+      aura?.setTexture(textureKey)
+        .setDisplaySize(
+          diameter + GAME_TUNING.visual.permanentOrbPresentation.auraPadding,
+          diameter + GAME_TUNING.visual.permanentOrbPresentation.auraPadding,
+        )
+        .setPosition(sprite.x, sprite.y)
+        .setRotation(sprite.rotation)
+        .setVisible(visible);
       sprite.setVisible(visible);
       if (!activeBodyOwnsPosition) sprite.setPosition(state.position.x, state.position.y);
       body.enable = state.collisionEnabled;
@@ -946,7 +961,26 @@ export class OrbManager {
       .setVisible(false);
     (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
     this.spriteIds.set(sprite, id);
+    this.auras.set(id, this.scene.add.image(0, 0, this.textureKey)
+      .setName(`orb-aura-${id}`)
+      .setBlendMode('ADD')
+      .setDepth(-1)
+      .setVisible(false));
     return sprite;
+  }
+
+  private animateAuras(nowMs: number, states: readonly OrbSnapshot[]): void {
+    const visual = GAME_TUNING.visual.permanentOrbPresentation;
+    for (const state of states) {
+      const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === state.id);
+      const aura = this.auras.get(state.id);
+      if (!sprite || !aura || !aura.visible) continue;
+      const pulse = (Math.sin(nowMs / visual.auraPulsePeriodMs * Math.PI * 2 + state.id) + 1) / 2;
+      aura.setPosition(sprite.x, sprite.y)
+        .setRotation(sprite.rotation)
+        .setAlpha(visual.auraAlphaMinimum
+          + (visual.auraAlphaMaximum - visual.auraAlphaMinimum) * pulse);
+    }
   }
 
   private synchronizeOwnedSprite(sprite: OrbSprite, id: number): void {

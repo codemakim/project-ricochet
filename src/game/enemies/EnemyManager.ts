@@ -268,7 +268,14 @@ export class EnemyManager {
 
   update(): void {
     if (this.destroyed) return;
+    const motion = GAME_TUNING.visual.motion;
+    const elapsedMs = this.options.getGameplayElapsedMs();
     for (const enemy of this.enemies.values()) {
+      if (enemy.active) {
+        enemy.setAngle(Math.sin(
+          elapsedMs / motion.enemyRockPeriodMs * Math.PI * 2 + enemy.enemyId * 0.73,
+        ) * motion.enemyRockDegrees);
+      }
       if (enemy.active && enemy.y >= GAME_HEIGHT - PLAYER_RADIUS) {
         const kind = enemy.kind;
         this.destroyEnemy(enemy);

@@ -99,6 +99,34 @@ class FakeSprite {
   destroy(): void { this.destroyed = true; }
 }
 
+class FakeAura {
+  x = 0;
+  y = 0;
+  visible = false;
+  alpha = 0;
+  rotation = 0;
+  displayWidth = 0;
+  displayHeight = 0;
+  destroyed = false;
+  textureKey: string;
+
+  constructor(textureKey: string) { this.textureKey = textureKey; }
+  setName(): this { return this; }
+  setTexture(textureKey: string): this { this.textureKey = textureKey; return this; }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    return this;
+  }
+  setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
+  setVisible(visible: boolean): this { this.visible = visible; return this; }
+  setAlpha(alpha: number): this { this.alpha = alpha; return this; }
+  setRotation(rotation: number): this { this.rotation = rotation; return this; }
+  setBlendMode(): this { return this; }
+  setDepth(): this { return this; }
+  destroy(): void { this.destroyed = true; }
+}
+
 function createManager(
   homeOnBottomHit = true,
   hasFixedTerrainLineOfSight: () => boolean = () => false,
@@ -112,7 +140,15 @@ function createManager(
 ) {
   const world = new FakeWorld();
   const sprites: FakeSprite[] = [];
+  const auras: FakeAura[] = [];
   const scene = {
+    add: {
+      image: (_x: number, _y: number, textureKey: string) => {
+        const aura = new FakeAura(textureKey);
+        auras.push(aura);
+        return aura;
+      },
+    },
     physics: {
       world,
       add: {
@@ -133,7 +169,7 @@ function createManager(
     getOrbRadius,
     getRecoveryRadius,
   });
-  return { manager, sprites, world };
+  return { manager, sprites, auras, world };
 }
 
 describe('OrbStore', () => {
@@ -843,6 +879,25 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites[0]?.rotation).toBe(0);
     manager.update(100, 100, player, up);
     expect(sprites[0]?.rotation).toBeGreaterThan(0);
+  });
+
+  it('animates a collision-free aura around every active energy orb', () => {
+    const { manager, sprites, auras } = createManager();
+    expect(auras).toHaveLength(1);
+    expect(auras[0]?.visible).toBe(false);
+
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+    manager.update(200, 200, player, up);
+
+    expect(auras[0]).toMatchObject({
+      visible: true,
+      x: sprites[0]?.x,
+      y: sprites[0]?.y,
+      textureKey: 'orb-echo',
+    });
+    expect(auras[0]!.displayWidth).toBeGreaterThan(sprites[0]!.displayWidth);
+    expect(auras[0]!.alpha).toBeGreaterThan(0);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {
