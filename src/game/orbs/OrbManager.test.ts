@@ -108,10 +108,13 @@ class FakeAura {
   displayWidth = 0;
   displayHeight = 0;
   destroyed = false;
+  name = '';
+  frame: string | number = 0;
   textureKey: string;
+  readonly texture = { getFrameNames: () => ['0', '1', '2', '3'] };
 
   constructor(textureKey: string) { this.textureKey = textureKey; }
-  setName(): this { return this; }
+  setName(name: string): this { this.name = name; return this; }
   setTexture(textureKey: string): this { this.textureKey = textureKey; return this; }
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
@@ -124,6 +127,7 @@ class FakeAura {
   setRotation(rotation: number): this { this.rotation = rotation; return this; }
   setBlendMode(): this { return this; }
   setDepth(): this { return this; }
+  setFrame(frame: string | number): this { this.frame = frame; return this; }
   destroy(): void { this.destroyed = true; }
 }
 
@@ -144,6 +148,11 @@ function createManager(
   const scene = {
     add: {
       image: (_x: number, _y: number, textureKey: string) => {
+        const aura = new FakeAura(textureKey);
+        auras.push(aura);
+        return aura;
+      },
+      sprite: (_x: number, _y: number, textureKey: string) => {
         const aura = new FakeAura(textureKey);
         auras.push(aura);
         return aura;
@@ -896,23 +905,27 @@ describe('OrbManager Phaser adapter', () => {
     expect(sprites[0]?.rotation).toBeGreaterThan(0);
   });
 
-  it('animates a collision-free aura around every active energy orb', () => {
+  it('animates collision-free body and declared layers around every active energy orb', () => {
     const { manager, sprites, auras } = createManager();
-    expect(auras).toHaveLength(1);
-    expect(auras[0]?.visible).toBe(false);
+    expect(auras).toHaveLength(3);
+    expect(auras.every(({ visible }) => !visible)).toBe(true);
 
     manager.activateAim();
     manager.update(0, 0, player, up);
     manager.update(200, 200, player, up);
 
-    expect(auras[0]).toMatchObject({
-      visible: true,
-      x: sprites[0]?.x,
-      y: sprites[0]?.y,
-      textureKey: 'orb-echo',
-    });
-    expect(auras[0]!.displayWidth).toBeGreaterThan(sprites[0]!.displayWidth);
-    expect(auras[0]!.alpha).toBeGreaterThan(0);
+    expect(auras.map(({ textureKey }) => textureKey)).toEqual([
+      'orb-visual-echo', 'orb-echo-lens', 'orb-echo-ring',
+    ]);
+    expect(auras.every((visual) => (
+      visual.visible
+      && visual.x === sprites[0]?.x
+      && visual.y === sprites[0]?.y
+      && visual.displayWidth > 0
+      && !('body' in visual)
+    ))).toBe(true);
+    expect(auras.some(({ alpha }) => alpha > 0)).toBe(true);
+    expect(sprites[0]?.visible).toBe(false);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {

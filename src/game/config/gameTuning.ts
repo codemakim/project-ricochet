@@ -438,10 +438,13 @@ export interface GameTuning {
     permanentOrbPresentation: {
       haloPadding: number;
       radiansPerPixel: number;
-      auraPadding: number;
-      auraAlphaMinimum: number;
-      auraAlphaMaximum: number;
-      auraPulsePeriodMs: number;
+    };
+    orbAnimation: {
+      maximumLayersPerOrb: number;
+      maximumParticlesPerOrb: number;
+      mobileMaximumOrbVisualObjects: number;
+      trailIntervalMs: number;
+      trailLifetimeMs: number;
     };
     motion: {
       playerRockDegrees: number;
@@ -893,10 +896,13 @@ export const GAME_TUNING = {
     permanentOrbPresentation: {
       haloPadding: 10,
       radiansPerPixel: 0.014,
-      auraPadding: 12,
-      auraAlphaMinimum: 0.08,
-      auraAlphaMaximum: 0.22,
-      auraPulsePeriodMs: 520,
+    },
+    orbAnimation: {
+      maximumLayersPerOrb: 4,
+      maximumParticlesPerOrb: 3,
+      mobileMaximumOrbVisualObjects: 48,
+      trailIntervalMs: 48,
+      trailLifetimeMs: 180,
     },
     motion: {
       playerRockDegrees: 1.2,
@@ -1760,17 +1766,9 @@ export function validateGameTuning(tuning: GameTuning): void {
     visual.permanentOrbPresentation.radiansPerPixel,
     'visual.permanentOrbPresentation.radiansPerPixel',
   );
-  nonNegative(
-    visual.permanentOrbPresentation.auraPadding,
-    'visual.permanentOrbPresentation.auraPadding',
-  );
-  const aura = visual.permanentOrbPresentation;
-  probability(aura.auraAlphaMinimum, 'visual.permanentOrbPresentation.auraAlphaMinimum');
-  probability(aura.auraAlphaMaximum, 'visual.permanentOrbPresentation.auraAlphaMaximum');
-  if (aura.auraAlphaMinimum > aura.auraAlphaMaximum) {
-    throw new RangeError('visual.permanentOrbPresentation aura alpha range must be ordered');
+  for (const [name, value] of Object.entries(visual.orbAnimation)) {
+    positiveInteger(value, `visual.orbAnimation.${name}`);
   }
-  positive(aura.auraPulsePeriodMs, 'visual.permanentOrbPresentation.auraPulsePeriodMs');
   nonNegative(visual.motion.playerRockDegrees, 'visual.motion.playerRockDegrees');
   positive(visual.motion.playerRockPeriodMs, 'visual.motion.playerRockPeriodMs');
   nonNegative(visual.motion.enemyRockDegrees, 'visual.motion.enemyRockDegrees');

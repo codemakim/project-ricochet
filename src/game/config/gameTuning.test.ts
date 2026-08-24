@@ -119,6 +119,13 @@ describe('GAME_TUNING', () => {
       permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 32, height: 32 },
       temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20 },
     });
+    expect(GAME_TUNING.visual.orbAnimation).toEqual({
+      maximumLayersPerOrb: 4,
+      maximumParticlesPerOrb: 3,
+      mobileMaximumOrbVisualObjects: 48,
+      trailIntervalMs: 48,
+      trailLifetimeMs: 180,
+    });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
       core: {
@@ -466,6 +473,12 @@ describe('GAME_TUNING', () => {
     }],
     ['non-finite hostile color', (value: Mutable<GameTuning>) => {
       value.visual.hostile.enemyBullet.accent = Number.POSITIVE_INFINITY;
+    }],
+    ['invalid orb visual layer cap', (value: Mutable<GameTuning>) => {
+      value.visual.orbAnimation.maximumLayersPerOrb = 1.5;
+    }],
+    ['invalid orb trail lifetime', (value: Mutable<GameTuning>) => {
+      value.visual.orbAnimation.trailLifetimeMs = 0;
     }],
     ['boss wider than the game', (value: Mutable<GameTuning>) => { value.boss.body.width = 450; }],
     ['identical friendly and hostile palette', (value: Mutable<GameTuning>) => {

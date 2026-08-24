@@ -40,6 +40,8 @@ import {
   type FusionOrbId,
   type OrbTypeId,
 } from './orbFusionRules';
+import { OrbVisuals } from '../visuals/OrbVisuals';
+import { orbVisualProfile } from '../visuals/orbVisualProfiles';
 
 export { ORB_RADIUS } from '../constants';
 const ATTRACTION_DURATION_MS = 100;
@@ -678,7 +680,7 @@ export class OrbManager {
   private readonly store: OrbStore;
   private sprites: OrbSprite[];
   private readonly spriteIds = new Map<OrbSprite, number>();
-  private readonly auras = new Map<number, Phaser.GameObjects.Image>();
+  private readonly visuals: OrbVisuals;
   private readonly world: Phaser.Physics.Arcade.World;
   private readonly scene: Phaser.Scene;
   private readonly textureKey: string;
@@ -727,7 +729,10 @@ export class OrbManager {
       this.store.configureStartingCores(options.startingCoreTypes);
     }
     this.world = scene.physics.world;
-    this.sprites = this.store.getSnapshot().map(({ id }) => this.createSprite(id));
+    this.visuals = new OrbVisuals(scene);
+    this.sprites = this.store.getSnapshot().map(({ id, coreType }) => (
+      this.createSprite(id, coreType)
+    ));
     this.world.on('worldbounds', this.onWorldBounds);
     this.synchronizeSprites();
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
@@ -755,7 +760,10 @@ export class OrbManager {
   ): boolean {
     if (this.destroyed) return false;
     const changed = this.store.configureStartingCores(types);
-    if (changed) this.synchronizeSprites();
+    if (changed) {
+      for (const { id, coreType } of this.store.getSnapshot()) this.replaceVisual(id, coreType);
+      this.synchronizeSprites();
+    }
     return changed;
   }
 
@@ -763,7 +771,7 @@ export class OrbManager {
     if (this.destroyed) return false;
     if (!this.store.addOrb(coreType)) return false;
     const id = this.store.getSnapshot().at(-1)!.id;
-    const sprite = this.createSprite(id);
+    const sprite = this.createSprite(id, coreType);
     this.sprites.push(sprite);
     this.synchronizeSprites();
     for (const listener of this.orbAddedListeners) listener(sprite);
@@ -782,8 +790,8 @@ export class OrbManager {
       this.sprites = this.sprites.filter((sprite) => sprite !== removed);
       removed.destroy();
     }
-    this.auras.get(secondId)?.destroy();
-    this.auras.delete(secondId);
+    this.visuals.remove(secondId);
+    this.replaceVisual(firstId, fusionType);
     this.synchronizeSprites();
     return true;
   }
@@ -815,7 +823,14 @@ export class OrbManager {
         * Math.max(0, deltaMs) / 1000
         * GAME_TUNING.visual.permanentOrbPresentation.radiansPerPixel;
     }
-    this.animateAuras(nowMs, states);
+    this.visuals.update(nowMs, states.map((state) => {
+      const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === state.id);
+      return {
+        id: state.id,
+        visible: state.state !== 'stored' && state.state !== 'queued',
+        rotation: sprite?.rotation ?? 0,
+      };
+    }));
   }
 
   beginProximityRecovery(orb: OrbSprite | number): boolean {
@@ -910,9 +925,8 @@ export class OrbManager {
     this.world.off('worldbounds', this.onWorldBounds);
     this.store.destroy();
     for (const sprite of this.sprites) sprite.destroy();
-    for (const aura of this.auras.values()) aura.destroy();
+    this.visuals.clear();
     this.spriteIds.clear();
-    this.auras.clear();
     this.orbAddedListeners.clear();
   }
 
@@ -920,7 +934,6 @@ export class OrbManager {
     for (const state of this.store.getSnapshot()) {
       const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === state.id);
       if (!sprite) continue;
-      const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
       const textureKey = `orb-${state.coreType}`;
       const diameter = this.currentOrbRadius() * 2
@@ -937,16 +950,7 @@ export class OrbManager {
         (sprite.height - sourceRadius * 2) / 2,
       );
       const activeBodyOwnsPosition = state.state === 'active' && body.enable;
-      const aura = this.auras.get(state.id);
-      aura?.setTexture(textureKey)
-        .setDisplaySize(
-          diameter + GAME_TUNING.visual.permanentOrbPresentation.auraPadding,
-          diameter + GAME_TUNING.visual.permanentOrbPresentation.auraPadding,
-        )
-        .setPosition(sprite.x, sprite.y)
-        .setRotation(sprite.rotation)
-        .setVisible(visible);
-      sprite.setVisible(visible);
+      sprite.setVisible(false);
       if (!activeBodyOwnsPosition) sprite.setPosition(state.position.x, state.position.y);
       body.enable = state.collisionEnabled;
       if (state.collisionEnabled) body.setVelocity(state.velocity.x, state.velocity.y);
@@ -954,7 +958,7 @@ export class OrbManager {
     }
   }
 
-  private createSprite(id: number): OrbSprite {
+  private createSprite(id: number, coreType: OrbTypeId): OrbSprite {
     const sprite = this.scene.physics.add.sprite(0, 0, this.textureKey) as OrbSprite;
     sprite.orbId = id;
     sprite.setCircle(this.currentOrbRadius())
@@ -963,26 +967,13 @@ export class OrbManager {
       .setVisible(false);
     (sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
     this.spriteIds.set(sprite, id);
-    this.auras.set(id, this.scene.add.image(0, 0, this.textureKey)
-      .setName(`orb-aura-${id}`)
-      .setBlendMode('ADD')
-      .setDepth(-1)
-      .setVisible(false));
+    this.visuals.add(id, sprite, orbVisualProfile(coreType));
     return sprite;
   }
 
-  private animateAuras(nowMs: number, states: readonly OrbSnapshot[]): void {
-    const visual = GAME_TUNING.visual.permanentOrbPresentation;
-    for (const state of states) {
-      const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === state.id);
-      const aura = this.auras.get(state.id);
-      if (!sprite || !aura || !aura.visible) continue;
-      const pulse = (Math.sin(nowMs / visual.auraPulsePeriodMs * Math.PI * 2 + state.id) + 1) / 2;
-      aura.setPosition(sprite.x, sprite.y)
-        .setRotation(sprite.rotation)
-        .setAlpha(visual.auraAlphaMinimum
-          + (visual.auraAlphaMaximum - visual.auraAlphaMinimum) * pulse);
-    }
+  private replaceVisual(id: number, coreType: OrbTypeId): void {
+    const sprite = this.sprites.find((candidate) => this.spriteIds.get(candidate) === id);
+    if (sprite) this.visuals.add(id, sprite, orbVisualProfile(coreType));
   }
 
   private synchronizeOwnedSprite(sprite: OrbSprite, id: number): void {

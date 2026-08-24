@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_TUNING } from '../config/gameTuning';
 import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
 import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
 import { REQUIRED_COMBAT_VFX_IDS } from './combatVfxIds';
@@ -19,5 +20,15 @@ describe('orb visual profiles', () => {
       expect(registered.has(profile.hitVfx)).toBe(true);
       expect(registered.has(profile.procVfx)).toBe(true);
     }
+  });
+
+  it('keeps every orb within the central mobile visual budget', () => {
+    const { maximumLayersPerOrb, mobileMaximumOrbVisualObjects } =
+      GAME_TUNING.visual.orbAnimation;
+    expect(Object.values(ORB_VISUAL_PROFILES).every(({ layers }) => (
+      layers.length <= maximumLayersPerOrb
+    ))).toBe(true);
+    expect(GAME_TUNING.build.basicGrowth.maximumOrbs * (maximumLayersPerOrb + 1))
+      .toBeLessThanOrEqual(mobileMaximumOrbVisualObjects);
   });
 });

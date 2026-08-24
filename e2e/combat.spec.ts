@@ -686,14 +686,14 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
     const enemy = scene.children.list.find((child) => (
       child.texture?.key?.startsWith('actor-enemy-') && child.body
     ))!;
-    const aura = scene.children.list.find((child) => child.name === 'orb-aura-0')!;
+    const layer = scene.children.list.find((child) => child.name === 'orb-layer-0-lens')!;
     return {
       playerAngle: scene.player.angle,
       enemyAngle: enemy.angle,
       playerAnimation: scene.player.anims.currentAnim?.key,
       enemyAnimation: enemy.anims?.currentAnim?.key,
       orbRotation: orb.rotation,
-      aura: { alpha: aura.alpha, visible: aura.visible, hasBody: Boolean(aura.body) },
+      layer: { alpha: layer.alpha, visible: layer.visible, hasBody: Boolean(layer.body) },
       playerBody: { width: scene.player.body?.width, height: scene.player.body?.height },
       orbBody: { width: orb.body?.width, height: orb.body?.height },
       enemyBody: { width: enemy.body?.width, height: enemy.body?.height },
@@ -703,8 +703,8 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
   expect(Math.abs(after.playerAngle)).toBeGreaterThan(0);
   expect(Math.abs(after.enemyAngle ?? 0)).toBeGreaterThan(0);
   expect(Math.abs(after.orbRotation ?? 0)).toBeGreaterThan(0);
-  expect(after.aura).toMatchObject({ visible: true, hasBody: false });
-  expect(after.aura.alpha).toBeGreaterThan(0);
+  expect(after.layer).toMatchObject({ visible: true, hasBody: false });
+  expect(after.layer.alpha).toBeGreaterThan(0);
   expect(before.playerAnimation).toBe('actor:player:default:idle');
   expect(before.enemyAnimation).toMatch(/^actor:enemy-.+:default:idle$/);
   expect(after.playerAnimation).toBe('actor:player:default:launch');
