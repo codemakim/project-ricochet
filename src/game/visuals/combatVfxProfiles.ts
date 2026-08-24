@@ -1,12 +1,14 @@
 import type { CombatVfxId } from './combatVfxIds';
 import { REQUIRED_COMBAT_VFX_IDS } from './combatVfxIds';
 
+export const COMBAT_VFX_DISPLAY_FRAME_SIZE = 64;
+
 export interface CombatVfxProfile {
   id: CombatVfxId;
   textureKey: string;
   url: string;
-  frameWidth: 64;
-  frameHeight: 64;
+  frameWidth: 256;
+  frameHeight: 256;
   frameCount: 4 | 8;
   frameRate: number;
   durationMs: number;
@@ -61,8 +63,8 @@ export const COMBAT_VFX_PROFILES = Object.fromEntries(
       id,
       textureKey: `vfx-${id}`,
       url: `/assets/combat/vfx/${id}.png`,
-      frameWidth: 64,
-      frameHeight: 64,
+      frameWidth: 256,
+      frameHeight: 256,
       frameCount,
       frameRate: 1000 / durationMs * frameCount,
       durationMs,

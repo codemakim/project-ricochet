@@ -75,7 +75,7 @@ const orbit = (id: string, periodMs: number, phase: number): Layer => ({
 
 const frames = (id: string, frameRate = 10): Layer => ({
   id,
-  frameConfig: { frameWidth: 64, frameHeight: 64 },
+  frameConfig: { frameWidth: 256, frameHeight: 256 },
   motion: { kind: 'frames', frameRate },
   blendMode: 'ADD',
   scale: 1,

@@ -27,8 +27,10 @@ fail() {
 
 while IFS='|' read -r key runtime_path _master_size _runtime_size _colors _alpha _bounds; do
   [[ "$key" == orb-* ]] || continue
-  [[ "$(magick identify -format '%wx%h' "$ROOT/public/assets/combat/$runtime_path")" == '64x64' ]] \
-    || fail "$key must ship as a 64x64 smooth energy asset"
+  [[ "$(magick identify -format '%wx%h' "$ROOT/public/assets/combat/$runtime_path")" == '256x256' ]] \
+    || fail "$key must ship at its authored 256x256 resolution"
+  cmp "$ROOT/assets-source/combat/orbs-hd/$key.png" "$ROOT/public/assets/combat/$runtime_path" \
+    || fail "$key runtime asset must equal its authored source"
 done < <(select_art_assets)
 
 if select_art_assets unknown >/dev/null 2>&1; then
@@ -64,8 +66,11 @@ bash "$ROOT/scripts/render_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TM
 bash "$ROOT/scripts/verify_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
 [[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/actors/player/default.png")" == '164x82' ]] \
   || fail 'actor fixture must export at exact 2x size'
-[[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/orbs/conduction/arc.png")" == '128x64' ]] \
-  || fail 'smooth framed fixture must preserve two 64px frames'
+[[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/orbs/conduction/arc.png")" == '512x256' ]] \
+  || fail 'smooth framed fixture must preserve two authored 256px frames'
+cmp "$ANIMATION_TMP/source/orbs-hd/conduction/arc.png" \
+  "$ANIMATION_TMP/public/orbs/conduction/arc.png" \
+  || fail 'smooth framed fixture must ship without resampling'
 [[ ! -e "$ANIMATION_TMP/public/orbs/orb-legacy.png" ]] \
   || fail 'legacy root masters must not be treated as animation assets'
 cp "$ANIMATION_TMP/public/actors/player/default.png" "$ANIMATION_TMP/expected-actor.png"

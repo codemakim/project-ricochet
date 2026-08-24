@@ -2,7 +2,10 @@ import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import type { Vector } from '../math/vector';
 import type { CombatVfxId } from './combatVfxIds';
-import { COMBAT_VFX_PROFILES } from './combatVfxProfiles';
+import {
+  COMBAT_VFX_DISPLAY_FRAME_SIZE,
+  COMBAT_VFX_PROFILES,
+} from './combatVfxProfiles';
 
 interface PlayCombatVfxOptions {
   position: Vector;
@@ -54,7 +57,10 @@ export class CombatVfxPlayer {
     const rotation = options.direction
       ? Math.atan2(options.direction.y, options.direction.x)
       : 0;
-    const scale = Math.max(0.1, options.scale ?? 1) * profile.scale;
+    const scale = Math.max(0.1, options.scale ?? 1)
+      * profile.scale
+      * COMBAT_VFX_DISPLAY_FRAME_SIZE
+      / profile.frameWidth;
     const sprite = this.scene.add.sprite(
       options.position.x,
       options.position.y,

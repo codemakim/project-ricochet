@@ -22,6 +22,16 @@ describe('orb visual profiles', () => {
     }
   });
 
+  it('loads animated orb layers at authored 256px frame resolution', () => {
+    for (const profile of Object.values(ORB_VISUAL_PROFILES)) {
+      for (const layer of profile.layers) {
+        if (layer.motion.kind === 'frames') {
+          expect(layer.frameConfig).toEqual({ frameWidth: 256, frameHeight: 256 });
+        }
+      }
+    }
+  });
+
   it('keeps every orb within the central mobile visual budget', () => {
     const { maximumLayersPerOrb, mobileMaximumOrbVisualObjects } =
       GAME_TUNING.visual.orbAnimation;

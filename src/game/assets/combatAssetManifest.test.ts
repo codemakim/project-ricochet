@@ -57,7 +57,7 @@ describe('combat asset manifest', () => {
     expect(spritesheet).toHaveBeenCalledWith(
       'orb-conduction-arc',
       '/assets/combat/orbs/conduction/arc.png',
-      { frameWidth: 64, frameHeight: 64 },
+      { frameWidth: 256, frameHeight: 256 },
     );
     expect(image).toHaveBeenCalledWith(
       'orb-conduction-flow',

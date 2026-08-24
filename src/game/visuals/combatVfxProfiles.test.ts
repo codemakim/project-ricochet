@@ -18,8 +18,8 @@ describe('combat VFX profiles', () => {
       expect(COMBAT_VFX_PROFILES[id]).toMatchObject({
         id,
         textureKey: `vfx-${id}`,
-        frameWidth: 64,
-        frameHeight: 64,
+        frameWidth: 256,
+        frameHeight: 256,
         frameCount: authoredIds.has(id) ? 8 : 4,
       });
       expect(COMBAT_VFX_PROFILES[id].frameRate).toBeGreaterThan(0);

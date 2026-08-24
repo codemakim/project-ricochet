@@ -27,7 +27,7 @@ render_animation_assets() {
       echo "$source_file: smooth source must contain horizontal 256px frames" >&2
       return 1
     }
-    magick "$source_file" -filter Lanczos -resize 25% -depth 8 -strip "$output_file"
+    cp "$source_file" "$output_file"
   done <<< "$selection"
 }
 
@@ -59,7 +59,7 @@ while IFS='|' read -r key runtime_path master_size runtime_size colors _alpha _b
   }
   mkdir -p "$(dirname "$output_file")"
   if [[ "$colors" == '-' ]]; then
-    magick "$source_file" -filter Lanczos -resize "$runtime_size" -strip "$output_file"
+    cp "$source_file" "$output_file"
   else
     magick "$source_file" -filter point -resize 200% -strip "$output_file"
   fi

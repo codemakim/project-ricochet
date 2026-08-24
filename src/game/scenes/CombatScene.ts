@@ -144,7 +144,10 @@ import {
   registerActorAnimations,
 } from '../visuals/registerActorAnimations';
 import { CombatVfxPlayer } from '../visuals/CombatVfxPlayer';
-import { COMBAT_VFX_PROFILES } from '../visuals/combatVfxProfiles';
+import {
+  COMBAT_VFX_DISPLAY_FRAME_SIZE,
+  COMBAT_VFX_PROFILES,
+} from '../visuals/combatVfxProfiles';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
@@ -2199,7 +2202,7 @@ export class CombatScene extends Phaser.Scene {
         position: { x: (position.x + target.x) / 2, y: (position.y + target.y) / 2 },
         direction,
         scaleX: Math.hypot(direction.x, direction.y)
-          / COMBAT_VFX_PROFILES['conduction-arc'].frameWidth,
+          / COMBAT_VFX_DISPLAY_FRAME_SIZE,
       });
     }
     const { conduction } = GAME_TUNING.orbCores;

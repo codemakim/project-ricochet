@@ -107,6 +107,10 @@ describe('CombatVfxPlayer', () => {
       position: { x: 20, y: 40 }, direction: { x: 0, y: 1 }, scaleX: 3, scaleY: 1,
     });
 
-    expect(objects[0]).toMatchObject({ rotation: Math.PI / 2, scale: 3.75, scaleY: 1.25 });
+    expect(COMBAT_VFX_PROFILES['conduction-arc']).toMatchObject({
+      frameWidth: 256,
+      frameHeight: 256,
+    });
+    expect(objects[0]).toMatchObject({ rotation: Math.PI / 2, scale: 0.9375, scaleY: 0.3125 });
   });
 });

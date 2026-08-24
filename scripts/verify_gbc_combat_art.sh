@@ -29,7 +29,7 @@ verify_animation_assets() {
       echo "$source_file: smooth source must contain horizontal 256px frames" >&2
       return 1
     }
-    expected="$((width / 4))x$((height / 4))"
+    expected="${width}x${height}"
     check_file "$runtime_file" "$expected" - yes
     [[ "$(magick "$runtime_file" -format '%[pixel:p{0,0}]' info:)" == *',0)' ]] || {
       echo "$runtime_file: smooth animation corner must be transparent" >&2
