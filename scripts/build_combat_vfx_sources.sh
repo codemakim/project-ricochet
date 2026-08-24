@@ -44,7 +44,7 @@ shape() {
 
 for id in "${ids[@]}"; do
   case "$id" in
-    explosion-burst|conduction-arc|enemy-hit|orb-direct-hit|corrosion-cloud|split-burst|boss-defeat) continue ;;
+    player-launch|player-recover|player-hit|player-defeat|orb-ricochet|enemy-break|explosion-burst|conduction-arc|enemy-hit|orb-direct-hit|corrosion-cloud|split-burst|boss-defeat) continue ;;
   esac
   color="$(palette "$id")"
   kind="$(shape "$id")"

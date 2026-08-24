@@ -1338,6 +1338,35 @@ test('@desktop renders the second authored VFX batch in live combat', async ({ p
   await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-2.png') });
 });
 
+test('@desktop renders player feedback and break VFX in live combat', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('player-defeat', { position: { x: 110, y: 300 } });
+    scene.combatVfx.play('enemy-break', { position: { x: 340, y: 300 } });
+  });
+  await page.waitForTimeout(250);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('player-launch', { position: { x: 65, y: 480 } });
+    scene.combatVfx.play('player-recover', { position: { x: 170, y: 480 } });
+    scene.combatVfx.play('player-hit', { position: { x: 280, y: 480 } });
+    scene.combatVfx.play('orb-ricochet', { position: { x: 385, y: 480 } });
+  });
+  await page.waitForTimeout(180);
+
+  const names = await sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name?.startsWith('production-vfx-'))
+    .map((child) => child.name));
+  expect(names).toEqual(expect.arrayContaining([
+    'production-vfx-player-launch',
+    'production-vfx-player-recover',
+    'production-vfx-player-hit',
+    'production-vfx-player-defeat',
+    'production-vfx-orb-ricochet',
+    'production-vfx-enemy-break',
+  ]));
+  await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-3.png') });
+});
+
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
   await loadCanvas(page);
   const enemyId = await sceneCall(page, (scene) => {

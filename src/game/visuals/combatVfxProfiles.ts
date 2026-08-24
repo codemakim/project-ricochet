@@ -28,6 +28,12 @@ const LARGE = new Set<CombatVfxId>([
 ]);
 
 const AUTHORED_MOTION = {
+  'player-launch': { frameCount: 8, durationMs: 420, scale: 1.3 },
+  'player-recover': { frameCount: 8, durationMs: 520, scale: 1.4 },
+  'player-hit': { frameCount: 8, durationMs: 480, scale: 1.3 },
+  'player-defeat': { frameCount: 8, durationMs: 900, scale: 1.8 },
+  'orb-ricochet': { frameCount: 8, durationMs: 380, scale: 1.25 },
+  'enemy-break': { frameCount: 8, durationMs: 680, scale: 1.5 },
   'enemy-hit': { frameCount: 8, durationMs: 360, scale: 1.25 },
   'orb-direct-hit': { frameCount: 8, durationMs: 400, scale: 1.4 },
   'corrosion-cloud': { frameCount: 8, durationMs: 800, scale: 1.6 },

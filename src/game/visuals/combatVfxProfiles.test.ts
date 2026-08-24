@@ -5,6 +5,8 @@ import { COMBAT_VFX_PROFILES } from './combatVfxProfiles';
 describe('combat VFX profiles', () => {
   it('defines exactly one complete bounded profile for every semantic ID', () => {
     const authoredIds = new Set([
+      'player-launch', 'player-recover', 'player-hit', 'player-defeat',
+      'orb-ricochet', 'enemy-break',
       'enemy-hit', 'orb-direct-hit', 'corrosion-cloud', 'split-burst', 'boss-defeat',
       'conduction-arc', 'explosion-burst',
     ]);
@@ -26,6 +28,24 @@ describe('combat VFX profiles', () => {
   });
 
   it('gives authored phenomena enough frames for readable motion', () => {
+    expect(COMBAT_VFX_PROFILES['player-launch']).toMatchObject({
+      frameCount: 8, durationMs: 420, scale: 1.3,
+    });
+    expect(COMBAT_VFX_PROFILES['player-recover']).toMatchObject({
+      frameCount: 8, durationMs: 520, scale: 1.4,
+    });
+    expect(COMBAT_VFX_PROFILES['player-hit']).toMatchObject({
+      frameCount: 8, durationMs: 480, scale: 1.3,
+    });
+    expect(COMBAT_VFX_PROFILES['player-defeat']).toMatchObject({
+      frameCount: 8, durationMs: 900, scale: 1.8,
+    });
+    expect(COMBAT_VFX_PROFILES['orb-ricochet']).toMatchObject({
+      frameCount: 8, durationMs: 380, scale: 1.25,
+    });
+    expect(COMBAT_VFX_PROFILES['enemy-break']).toMatchObject({
+      frameCount: 8, durationMs: 680, scale: 1.5,
+    });
     expect(COMBAT_VFX_PROFILES['enemy-hit']).toMatchObject({
       frameCount: 8, durationMs: 360, scale: 1.25,
     });
