@@ -1,5 +1,7 @@
 import type Phaser from 'phaser';
 import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
+import { ACTOR_SKIN_PROFILES } from '../visuals/actorVisualProfiles';
+import { ORB_VISUAL_PROFILES } from '../visuals/orbVisualProfiles';
 
 export type CombatTextureSampling = 'nearest' | 'linear';
 
@@ -14,12 +16,18 @@ export interface CombatImageAsset {
   sampling: CombatTextureSampling;
 }
 
+export interface CombatSheetAsset extends CombatImageAsset {
+  frameConfig: { frameWidth: number; frameHeight: number };
+}
+
+export type CombatRasterAsset = CombatImageAsset | CombatSheetAsset;
+
 export interface CombatAudioAsset {
   key: string;
   urls: readonly [ogg: string, mp3: string];
 }
 
-export const COMBAT_IMAGE_ASSETS = [
+export const COMBAT_STATIC_IMAGE_ASSETS = [
   { key: 'combat-background', url: '/assets/combat/backgrounds/scrapyard-arena.webp', sampling: 'nearest' },
   { key: 'player', url: '/assets/combat/sprites/player.png', sampling: 'nearest' },
   { key: 'enemy-basic', url: '/assets/combat/sprites/enemy-basic.png', sampling: 'nearest' },
@@ -52,10 +60,49 @@ export const COMBAT_IMAGE_ASSETS = [
   { key: 'hud-boss-frame', url: '/assets/combat/sprites/hud-boss-frame.png', sampling: 'nearest' },
 ] as const satisfies readonly CombatImageAsset[];
 
+const ACTOR_SHEET_ASSETS: readonly CombatSheetAsset[] = ACTOR_SKIN_PROFILES.map((profile) => ({
+  key: profile.textureKey,
+  url: profile.url,
+  sampling: 'nearest',
+  frameConfig: {
+    frameWidth: profile.frameWidth,
+    frameHeight: profile.frameHeight,
+  },
+}));
+
+const ORB_PRESENTATION_ASSETS: readonly CombatRasterAsset[] = Object.values(
+  ORB_VISUAL_PROFILES,
+).flatMap((profile) => [
+  {
+    key: profile.bodyTextureKey,
+    url: profile.bodyUrl,
+    sampling: 'linear' as const,
+  },
+  ...profile.layers.map((layer): CombatRasterAsset => ({
+    key: layer.textureKey,
+    url: layer.url,
+    sampling: 'linear',
+    ...(layer.frameConfig ? { frameConfig: layer.frameConfig } : {}),
+  })),
+]);
+
+export const COMBAT_IMAGE_ASSETS: readonly CombatRasterAsset[] = [
+  ...COMBAT_STATIC_IMAGE_ASSETS,
+  ...ACTOR_SHEET_ASSETS,
+  ...ORB_PRESENTATION_ASSETS,
+];
+
 export const COMBAT_AUDIO_ASSETS: readonly CombatAudioAsset[] = [];
 
+function isSheet(asset: CombatRasterAsset): asset is CombatSheetAsset {
+  return 'frameConfig' in asset;
+}
+
 export function preloadCombatAssets(scene: Phaser.Scene): void {
-  for (const { key, url } of COMBAT_IMAGE_ASSETS) scene.load.image(key, url);
+  for (const asset of COMBAT_IMAGE_ASSETS) {
+    if (isSheet(asset)) scene.load.spritesheet(asset.key, asset.url, asset.frameConfig);
+    else scene.load.image(asset.key, asset.url);
+  }
   for (const { key, urls } of COMBAT_AUDIO_ASSETS) scene.load.audio(key, [...urls]);
 }
 

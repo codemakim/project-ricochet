@@ -47,4 +47,30 @@ if bash "$ROOT/scripts/verify_gbc_combat_art.sh" unknown >/dev/null 2>&1; then
   fail 'verifier must propagate unknown-key failure'
 fi
 
+ANIMATION_TMP="$(mktemp -d -t ricochet-animation.XXXXXX)"
+trap 'rm -rf "$ANIMATION_TMP"' EXIT
+mkdir -p \
+  "$ANIMATION_TMP/source/actors/player" \
+  "$ANIMATION_TMP/source/orbs-hd/conduction"
+magick -size 82x41 xc:none -fill '#39d9ff' \
+  -draw 'rectangle 4,4 36,36 rectangle 45,4 77,36' \
+  "$ANIMATION_TMP/source/actors/player/default.png"
+magick -size 512x256 xc:none -fill '#c58cff80' \
+  -draw 'circle 128,128 128,32 circle 384,128 384,48' \
+  "$ANIMATION_TMP/source/orbs-hd/conduction/arc.png"
+
+bash "$ROOT/scripts/render_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
+bash "$ROOT/scripts/verify_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
+[[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/actors/player/default.png")" == '164x82' ]] \
+  || fail 'actor fixture must export at exact 2x size'
+[[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/orbs/conduction/arc.png")" == '128x64' ]] \
+  || fail 'smooth framed fixture must preserve two 64px frames'
+cp "$ANIMATION_TMP/public/actors/player/default.png" "$ANIMATION_TMP/expected-actor.png"
+cp "$ANIMATION_TMP/public/orbs/conduction/arc.png" "$ANIMATION_TMP/expected-layer.png"
+bash "$ROOT/scripts/render_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
+cmp "$ANIMATION_TMP/expected-actor.png" "$ANIMATION_TMP/public/actors/player/default.png" \
+  || fail 'actor export must be deterministic'
+cmp "$ANIMATION_TMP/expected-layer.png" "$ANIMATION_TMP/public/orbs/conduction/arc.png" \
+  || fail 'smooth export must be deterministic'
+
 echo 'combat art asset selection verified'

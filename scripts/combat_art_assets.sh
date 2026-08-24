@@ -53,3 +53,46 @@ select_art_assets() {
     selected="${selected}${key}|"
   done
 }
+
+select_animation_assets() {
+  local source_root="$1" scope="$2" file relative role orb_id
+  case "$scope" in
+    actor-core|actor-boss|orb-base|orb-fusion|vfx|all) ;;
+    *) echo "unknown animation asset scope: $scope" >&2; return 1 ;;
+  esac
+
+  if [[ "$scope" == actor-core || "$scope" == actor-boss || "$scope" == all ]]; then
+    while IFS= read -r file; do
+      relative="${file#"$source_root/"}"
+      role="${relative#actors/}"
+      role="${role%%/*}"
+      if [[ "$scope" == actor-core && "$role" != player && "$role" != enemy-* ]]; then continue; fi
+      if [[ "$scope" == actor-boss && "$role" != sentinel-* && "$role" != hive-* && "$role" != siege-* ]]; then continue; fi
+      printf 'actor|%s|%s\n' "$relative" "$relative"
+    done < <(find "$source_root/actors" -type f -name '*.png' 2>/dev/null | LC_ALL=C sort)
+  fi
+
+  if [[ "$scope" == orb-base || "$scope" == orb-fusion || "$scope" == all ]]; then
+    while IFS= read -r file; do
+      relative="${file#"$source_root/"}"
+      orb_id="${relative#orbs-hd/}"
+      orb_id="${orb_id%%/*}"
+      case "$orb_id" in
+        echo|corrosion|conduction|inertia|split|explosion)
+          [[ "$scope" == orb-fusion ]] && continue
+          ;;
+        *)
+          [[ "$scope" == orb-base ]] && continue
+          ;;
+      esac
+      printf 'smooth|%s|orbs/%s\n' "$relative" "${relative#orbs-hd/}"
+    done < <(find "$source_root/orbs-hd" -type f -name '*.png' 2>/dev/null | LC_ALL=C sort)
+  fi
+
+  if [[ "$scope" == vfx || "$scope" == all ]]; then
+    while IFS= read -r file; do
+      relative="${file#"$source_root/"}"
+      printf 'smooth|%s|%s\n' "$relative" "$relative"
+    done < <(find "$source_root/vfx" -type f -name '*.png' 2>/dev/null | LC_ALL=C sort)
+  fi
+}

@@ -70,9 +70,10 @@
 - `public/assets/combat/orbs/<orb-id>/*.png` — 64px runtime body/layers.
 - `assets-source/combat/vfx/<event-id>.png` — transparent smooth VFX sheet masters.
 - `public/assets/combat/vfx/<event-id>.png` — runtime VFX sheets.
-- `scripts/render_combat_animation_assets.sh` — 2× nearest actor export and Lanczos orb/VFX export.
-- `scripts/verify_combat_animation_assets.sh` — dimensions, frame divisibility, alpha, sampling source, and asset coverage.
-- `scripts/combat_animation_assets.test.sh` — runnable pipeline contract.
+- `scripts/render_gbc_combat_art.sh` — extend the existing exporter with 2× nearest actor and Lanczos orb/VFX modes.
+- `scripts/verify_gbc_combat_art.sh` — extend existing dimensions, alpha, block, and asset coverage checks.
+- `scripts/combat_art_assets.sh` — add centralized animation source/runtime selection.
+- `scripts/combat_art_assets.test.sh` — add deterministic animation fixture coverage.
 
 ---
 
@@ -294,9 +295,10 @@ Expected: PASS.
 **Files:**
 - Modify: `src/game/assets/combatAssetManifest.ts`
 - Modify: `src/game/assets/combatAssetManifest.test.ts`
-- Create: `scripts/render_combat_animation_assets.sh`
-- Create: `scripts/verify_combat_animation_assets.sh`
-- Create: `scripts/combat_animation_assets.test.sh`
+- Modify: `scripts/render_gbc_combat_art.sh`
+- Modify: `scripts/verify_gbc_combat_art.sh`
+- Modify: `scripts/combat_art_assets.sh`
+- Modify: `scripts/combat_art_assets.test.sh`
 
 **Interfaces:**
 - Consumes: `ACTOR_SKIN_PROFILES`, `ORB_VISUAL_PROFILES`.
@@ -359,11 +361,11 @@ Build profile-derived asset arrays with `flatMap`, then combine them with the ex
 
 - [ ] **Step 4: Write the pipeline contract before the scripts**
 
-`scripts/combat_animation_assets.test.sh` must validate one generated actor-sheet fixture and one smooth-layer fixture in a temporary directory, then assert deterministic output:
+`scripts/combat_art_assets.test.sh` must validate one generated actor-sheet fixture and one smooth-layer fixture in a temporary directory, then assert deterministic output through the existing pipeline:
 
 ```bash
-rtk bash scripts/render_combat_animation_assets.sh --fixture-directory "$FIXTURE_DIRECTORY"
-rtk bash scripts/verify_combat_animation_assets.sh --fixture-directory "$FIXTURE_DIRECTORY"
+rtk bash scripts/render_gbc_combat_art.sh --fixture-directory "$FIXTURE_DIRECTORY"
+rtk bash scripts/verify_gbc_combat_art.sh --fixture-directory "$FIXTURE_DIRECTORY"
 rtk cmp "$EXPECTED_ACTOR" "$ACTUAL_ACTOR"
 rtk cmp "$EXPECTED_LAYER" "$ACTUAL_LAYER"
 ```
@@ -386,8 +388,8 @@ For every orb layer and VFX profile, verify declared runtime dimensions, alpha, 
 
 ```bash
 rtk npx vitest run src/game/assets/combatAssetManifest.test.ts
-rtk bash scripts/combat_animation_assets.test.sh
-rtk git add src/game/assets/combatAssetManifest.ts src/game/assets/combatAssetManifest.test.ts scripts/render_combat_animation_assets.sh scripts/verify_combat_animation_assets.sh scripts/combat_animation_assets.test.sh
+rtk bash scripts/combat_art_assets.test.sh
+rtk git add src/game/assets/combatAssetManifest.ts src/game/assets/combatAssetManifest.test.ts src/game/visuals/orbVisualProfiles.ts scripts/render_gbc_combat_art.sh scripts/verify_gbc_combat_art.sh scripts/combat_art_assets.sh scripts/combat_art_assets.test.sh
 rtk git commit -m "build(visuals): add animation asset pipeline"
 ```
 
@@ -430,7 +432,7 @@ Assert these frame totals and required state slices:
 
 ```bash
 rtk npx vitest run src/game/visuals/actorVisualProfiles.test.ts
-rtk bash scripts/verify_combat_animation_assets.sh --scope actor-core
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope actor-core
 ```
 
 Expected: FAIL listing the missing core-cast actor sheets.
@@ -451,8 +453,8 @@ Motion requirements:
 - [ ] **Step 4: Normalize and export**
 
 ```bash
-rtk bash scripts/render_combat_animation_assets.sh
-rtk bash scripts/verify_combat_animation_assets.sh --scope actor-core
+rtk bash scripts/render_gbc_combat_art.sh --animation-scope actor-core
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope actor-core
 ```
 
 Inspect every sheet at runtime 1×. Reject a frame if limbs leave the collision footprint, neighboring animation frames change the outer body size, or the visor becomes unreadable.
@@ -498,7 +500,7 @@ Assert each profile frame size equals its current visible part size and each req
 
 ```bash
 rtk npx vitest run src/game/visuals/actorVisualProfiles.test.ts
-rtk bash scripts/verify_combat_animation_assets.sh --scope actor-boss
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope actor-boss
 ```
 
 Expected: FAIL listing each missing boss sheet.
@@ -517,8 +519,8 @@ Part rules:
 - [ ] **Step 4: Export, verify, and inspect**
 
 ```bash
-rtk bash scripts/render_combat_animation_assets.sh
-rtk bash scripts/verify_combat_animation_assets.sh --scope actor-boss
+rtk bash scripts/render_gbc_combat_art.sh --animation-scope actor-boss
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope actor-boss
 ```
 
 Create intact, partially broken, and core-only montages for all three bosses. Inspect at `450 × 800` game size.
@@ -753,7 +755,7 @@ Add equivalent assertions for echo ring/pulse, inertia counter-spin, split dual 
 
 ```bash
 rtk npx vitest run src/game/visuals/orbVisualProfiles.test.ts src/game/assets/combatAssetManifest.test.ts
-rtk bash scripts/verify_combat_animation_assets.sh --scope orb-base
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope orb-base
 ```
 
 Expected: FAIL listing missing base-orb layer files.
@@ -774,8 +776,8 @@ Each layer must remain readable at 42px display size and stay inside the configu
 - [ ] **Step 4: Export and inspect at game size**
 
 ```bash
-rtk bash scripts/render_combat_animation_assets.sh
-rtk bash scripts/verify_combat_animation_assets.sh --scope orb-base
+rtk bash scripts/render_gbc_combat_art.sh --animation-scope orb-base
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope orb-base
 ```
 
 Render one six-orb montage at 42px display size and reject any pair that reads as the same motion. Runtime browser coverage waits until all 15 profiles exist in Task 8.
@@ -826,7 +828,7 @@ const required = {
 
 ```bash
 rtk npx vitest run src/game/visuals/orbVisualProfiles.test.ts src/game/assets/combatAssetManifest.test.ts
-rtk bash scripts/verify_combat_animation_assets.sh --scope orb-fusion
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope orb-fusion
 ```
 
 Expected: FAIL listing missing fusion layer files.
@@ -838,8 +840,8 @@ Create only broad transparent energy layers matching section 6.2 of the spec. Us
 - [ ] **Step 4: Export and run the second browser checkpoint**
 
 ```bash
-rtk bash scripts/render_combat_animation_assets.sh
-rtk bash scripts/verify_combat_animation_assets.sh --scope orb-fusion
+rtk bash scripts/render_gbc_combat_art.sh --animation-scope orb-fusion
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope orb-fusion
 rtk npm run test:e2e -- --project=desktop-chromium --grep "fusion orb animation identities"
 ```
 
@@ -956,7 +958,7 @@ Keep persistent corrosion fields, photon trails, nano seeds, cluster fields, mir
 
 ```bash
 rtk npx vitest run src/game/visuals/combatVfxProfiles.test.ts src/game/visuals/CombatVfxPlayer.test.ts src/game/scenes/combatSceneRules.test.ts src/game/enemies/EnemyManager.test.ts src/game/bosses/BossManager.test.ts src/game/bosses/HiveBossManager.test.ts
-rtk bash scripts/verify_combat_animation_assets.sh --scope vfx
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope vfx
 ```
 
 Expected: PASS with no missing VFX files.
@@ -1023,8 +1025,7 @@ Reject any scene where an effect hides hostile ownership, a moving frame changes
 rtk npm test
 rtk npm run build
 rtk bash scripts/combat_art_assets.test.sh
-rtk bash scripts/combat_animation_assets.test.sh
-rtk bash scripts/verify_combat_animation_assets.sh --scope all
+rtk bash scripts/verify_gbc_combat_art.sh --animation-scope all
 rtk git diff --check
 ```
 

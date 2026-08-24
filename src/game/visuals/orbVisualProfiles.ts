@@ -39,7 +39,7 @@ function profile(
   return {
     id,
     identity,
-    bodyTextureKey: `orb-${id}`,
+    bodyTextureKey: `orb-visual-${id}`,
     bodyUrl: `/assets/combat/orbs/${id}/body.png`,
     layers: layers.map((layer) => ({
       ...layer,

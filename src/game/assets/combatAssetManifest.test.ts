@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   COMBAT_AUDIO_ASSETS,
   COMBAT_IMAGE_ASSETS,
+  COMBAT_STATIC_IMAGE_ASSETS,
   COMBAT_TEXTURE_FILTER,
   applyCombatTextureSampling,
   preloadCombatAssets,
@@ -34,18 +35,50 @@ describe('combat asset manifest', () => {
 
   it('preloads images and audio through Phaser loader methods', () => {
     const image = vi.fn();
+    const spritesheet = vi.fn();
     const audio = vi.fn();
-    preloadCombatAssets({ load: { image, audio } } as never);
-    expect(image).toHaveBeenCalledTimes(COMBAT_IMAGE_ASSETS.length);
+    preloadCombatAssets({ load: { image, spritesheet, audio } } as never);
+    const sheetCount = COMBAT_IMAGE_ASSETS.filter((asset) => 'frameConfig' in asset).length;
+    expect(image).toHaveBeenCalledTimes(COMBAT_IMAGE_ASSETS.length - sheetCount);
+    expect(spritesheet).toHaveBeenCalledTimes(sheetCount);
     expect(audio).toHaveBeenCalledTimes(COMBAT_AUDIO_ASSETS.length);
   });
 
-  it('uses linear sampling only for permanent energy orbs', () => {
+  it('loads actors and framed orb layers as sheets while static layers stay images', () => {
+    const image = vi.fn();
+    const spritesheet = vi.fn();
+    preloadCombatAssets({ load: { image, spritesheet, audio: vi.fn() } } as never);
+
+    expect(spritesheet).toHaveBeenCalledWith(
+      'actor-player-default',
+      '/assets/combat/actors/player/default.png',
+      { frameWidth: 82, frameHeight: 82 },
+    );
+    expect(spritesheet).toHaveBeenCalledWith(
+      'orb-conduction-arc',
+      '/assets/combat/orbs/conduction/arc.png',
+      { frameWidth: 64, frameHeight: 64 },
+    );
+    expect(image).toHaveBeenCalledWith(
+      'orb-conduction-flow',
+      '/assets/combat/orbs/conduction/flow.png',
+    );
+  });
+
+  it('uses nearest actor sheets and linear permanent-orb presentation', () => {
     expect(COMBAT_TEXTURE_FILTER).toEqual({ linear: 0, nearest: 1 });
     const permanentKeys = new Set([...ORB_CORE_IDS, ...FUSION_ORB_IDS].map((id) => `orb-${id}`));
-    expect(COMBAT_IMAGE_ASSETS.every(({ key, sampling }) => (
-      sampling === (permanentKeys.has(key) ? 'linear' : 'nearest')
-    ))).toBe(true);
+    for (const asset of COMBAT_IMAGE_ASSETS) {
+      if (asset.key.startsWith('actor-')) expect(asset.sampling).toBe('nearest');
+      if (asset.key.startsWith('orb-visual-') || permanentKeys.has(asset.key)) {
+        expect(asset.sampling).toBe('linear');
+      }
+    }
+  });
+
+  it('declares every runtime texture key exactly once', () => {
+    const keys = COMBAT_IMAGE_ASSETS.map(({ key }) => key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it('applies sampling only to loaded production textures', () => {
@@ -66,7 +99,7 @@ describe('combat asset manifest', () => {
 
   it('ships every declared production image', () => {
     const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/**/*')));
-    for (const { url } of COMBAT_IMAGE_ASSETS) {
+    for (const { url } of COMBAT_STATIC_IMAGE_ASSETS) {
       expect(shippedAssets.has(`/public${url}`), url).toBe(true);
     }
   });
