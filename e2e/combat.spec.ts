@@ -147,6 +147,8 @@ interface DevelopmentScene {
       displayHeight?: number;
       angle?: number;
       rotation?: number;
+      scaleX?: number;
+      scaleY?: number;
       alpha?: number;
       frame?: { name?: string | number };
       visible?: boolean;
@@ -182,7 +184,14 @@ interface DevelopmentScene {
   anims: { exists(key: string): boolean };
   aimGuide: { visible: boolean };
   combatVfx: {
-    play(id: string, options: { position: Vector; intensity?: number }): boolean;
+    play(id: string, options: {
+      position: Vector;
+      direction?: Vector;
+      intensity?: number;
+      scale?: number;
+      scaleX?: number;
+      scaleY?: number;
+    }): boolean;
     activeCount(): number;
   };
   enemyManager: {
@@ -1262,6 +1271,43 @@ test('@desktop keeps permanent and temporary conduction feedback source namespac
   });
 
   expect(feedbackCount).toBe(2);
+});
+
+test('@desktop spans authored lightning between the orb and every chained target', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  const arcs = await sceneCall(page, (scene) => {
+    const feedbackScene = scene as unknown as {
+      drawConductionFeedback(
+        position: Vector,
+        targets: readonly Vector[],
+        sourceOrbId: number,
+        source: 'permanent' | 'temporary',
+      ): void;
+    };
+    feedbackScene.drawConductionFeedback(
+      { x: 100, y: 200 },
+      [{ x: 196, y: 200 }, { x: 100, y: 296 }],
+      19,
+      'permanent',
+    );
+    scene.combatVfx.play('explosion-burst', { position: { x: 290, y: 360 } });
+    return scene.children.list
+      .filter((child) => child.active && child.name === 'production-vfx-conduction-arc')
+      .map((child) => ({
+        x: child.x,
+        y: child.y,
+        rotation: child.rotation,
+        scaleX: child.scaleX ?? 1,
+        scaleY: child.scaleY ?? 1,
+      }));
+  });
+
+  expect(arcs).toHaveLength(2);
+  expect(arcs[0]).toMatchObject({ x: 148, y: 200, rotation: 0 });
+  expect(arcs[1]).toMatchObject({ x: 100, y: 248, rotation: Math.PI / 2 });
+  expect(arcs.every(({ scaleX, scaleY }) => scaleX > scaleY)).toBe(true);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: testInfo.outputPath('authored-lightning-explosion.png') });
 });
 
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {

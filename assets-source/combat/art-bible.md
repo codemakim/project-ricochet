@@ -62,6 +62,16 @@ Color reinforces identity but never replaces silhouette or internal construction
 - Aura, trail, proc, and impact layers remain separate from collision art.
 - Inspect every asset at `1×` mobile display size before approval.
 
+## Production VFX
+
+- 전투 현상은 픽셀 캐릭터와 분리된 고해상도 반투명 스프라이트로 제작한다.
+- 번개는 불규칙한 주 가지, 가는 분기, 백색 고온 코어와 청색 글로우로 읽혀야 한다. 직선·지그재그 도형으로 대체하지 않는다.
+- 폭발은 점화, 팽창하는 화염핵, 충격파, 연기·불티, 소멸의 시간 순서를 가진다. 원·십자 아이콘으로 대체하지 않는다.
+- 프레임마다 중심과 진행 방향을 유지한다. 런타임에서 회전·길이 조절해도 시작점과 타격점이 어긋나지 않아야 한다.
+- 원본은 큰 명암 덩어리와 자연스러운 비대칭을 우선한다. 작은 장식선이나 반복 문양은 금지한다.
+- 검정 배경 원화는 빌드 단계에서 광량을 알파로 변환한다. 런타임 시트는 투명 모서리와 색상 채널을 모두 보존한다.
+- 대표 효과를 실제 전투 크기에서 승인한 뒤 같은 물리성·광량 기준을 나머지 효과에 적용한다.
+
 ## Runtime dimensions
 
 | Asset | Authored master | Runtime |

@@ -144,6 +144,7 @@ import {
   registerActorAnimations,
 } from '../visuals/registerActorAnimations';
 import { CombatVfxPlayer } from '../visuals/CombatVfxPlayer';
+import { COMBAT_VFX_PROFILES } from '../visuals/combatVfxProfiles';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
@@ -2189,12 +2190,18 @@ export class CombatScene extends Phaser.Scene {
     source: DirectHitEvent['source'],
   ): void {
     if (!this.acceptsFeedbackFrame('conduction', source, sourceOrbId)) return;
-    this.combatVfx?.play('conduction-arc', {
-      position,
-      direction: targets[0]
-        ? { x: targets[0].x - position.x, y: targets[0].y - position.y }
-        : undefined,
-    });
+    if (targets.length === 0) {
+      this.combatVfx?.play('conduction-arc', { position });
+    }
+    for (const target of targets) {
+      const direction = { x: target.x - position.x, y: target.y - position.y };
+      this.combatVfx?.play('conduction-arc', {
+        position: { x: (position.x + target.x) / 2, y: (position.y + target.y) / 2 },
+        direction,
+        scaleX: Math.hypot(direction.x, direction.y)
+          / COMBAT_VFX_PROFILES['conduction-arc'].frameWidth,
+      });
+    }
     const { conduction } = GAME_TUNING.orbCores;
     const pulse = this.add.graphics()
       .setData('sourceOrbId', sourceOrbId)
@@ -2203,15 +2210,6 @@ export class CombatScene extends Phaser.Scene {
       .setDepth(4)
       .setName('core-feedback-conduction');
     for (const target of targets) {
-      const middle = {
-        x: (position.x + target.x) / 2 + (target.y - position.y) * 0.08,
-        y: (position.y + target.y) / 2 - (target.x - position.x) * 0.08,
-      };
-      pulse.beginPath()
-        .moveTo(position.x, position.y)
-        .lineTo(middle.x, middle.y)
-        .lineTo(target.x, target.y)
-        .strokePath();
       pulse.strokeCircle(target.x, target.y, 5);
     }
     this.time.delayedCall(

@@ -15,13 +15,14 @@ class FakeSprite {
   alpha = 0;
   rotation = 0;
   scale = 0;
+  scaleY = 0;
   name = '';
   animation = '';
   constructor(public x: number, public y: number, readonly textureKey: string) {}
   setName(value: string): this { this.name = value; return this; }
   setDepth(): this { return this; }
   setBlendMode(): this { return this; }
-  setScale(value: number): this { this.scale = value; return this; }
+  setScale(x: number, y = x): this { this.scale = x; this.scaleY = y; return this; }
   setAlpha(value: number): this { this.alpha = value; return this; }
   setRotation(value: number): this { this.rotation = value; return this; }
   play(value: string): this { this.animation = value; return this; }
@@ -96,5 +97,16 @@ describe('CombatVfxPlayer', () => {
     expect(objects[0]?.destroyed).toBe(true);
     expect(timers[0]?.removed).toBe(true);
     expect(player.play('player-hit', { position: { x: 1, y: 2 }, intensity: 1 })).toBe(false);
+  });
+
+  it('stretches directional lightning without thickening it', () => {
+    const { scene, objects } = boundary();
+    const player = new CombatVfxPlayer(scene);
+
+    player.play('conduction-arc', {
+      position: { x: 20, y: 40 }, direction: { x: 0, y: 1 }, scaleX: 3, scaleY: 1,
+    });
+
+    expect(objects[0]).toMatchObject({ rotation: Math.PI / 2, scale: 3.75, scaleY: 1.25 });
   });
 });

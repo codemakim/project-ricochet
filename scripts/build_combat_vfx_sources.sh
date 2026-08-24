@@ -6,6 +6,7 @@ SOURCE="$ROOT/assets-source/combat/vfx"
 TMP="$(mktemp -d -t ricochet-vfx.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$SOURCE"
+bash "$ROOT/scripts/build_authored_vfx_sources.sh"
 
 ids=(
   player-launch player-recover player-hit player-defeat orb-ricochet orb-direct-hit
@@ -16,6 +17,9 @@ ids=(
   reactor-blast cluster-projectile cluster-impact mirror-node mirror-intersection
   meltdown-eruption vector-blade
 )
+
+# explosion-burst and conduction-arc are authored from image masters by
+# build_authored_vfx_sources.sh; never overwrite them with geometric fallbacks.
 
 palette() {
   case "$1" in
@@ -39,6 +43,7 @@ shape() {
 }
 
 for id in "${ids[@]}"; do
+  [[ "$id" == explosion-burst || "$id" == conduction-arc ]] && continue
   color="$(palette "$id")"
   kind="$(shape "$id")"
   frames=()

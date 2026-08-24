@@ -12,12 +12,21 @@ describe('combat VFX profiles', () => {
         textureKey: `vfx-${id}`,
         frameWidth: 64,
         frameHeight: 64,
-        frameCount: 4,
+        frameCount: id === 'conduction-arc' || id === 'explosion-burst' ? 8 : 4,
       });
       expect(COMBAT_VFX_PROFILES[id].frameRate).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].durationMs).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].scale).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].maximumConcurrent).toBeGreaterThan(0);
     }
+  });
+
+  it('gives authored lightning and explosion enough frames for readable motion', () => {
+    expect(COMBAT_VFX_PROFILES['conduction-arc']).toMatchObject({
+      frameCount: 8, durationMs: 500, scale: 1.25,
+    });
+    expect(COMBAT_VFX_PROFILES['explosion-burst']).toMatchObject({
+      frameCount: 8, durationMs: 560, scale: 1.5,
+    });
   });
 });

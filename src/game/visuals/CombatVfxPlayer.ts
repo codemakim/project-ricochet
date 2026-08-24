@@ -9,6 +9,8 @@ interface PlayCombatVfxOptions {
   direction?: Vector;
   intensity?: number;
   scale?: number;
+  scaleX?: number;
+  scaleY?: number;
 }
 
 interface ActiveVfx {
@@ -52,6 +54,7 @@ export class CombatVfxPlayer {
     const rotation = options.direction
       ? Math.atan2(options.direction.y, options.direction.x)
       : 0;
+    const scale = Math.max(0.1, options.scale ?? 1) * profile.scale;
     const sprite = this.scene.add.sprite(
       options.position.x,
       options.position.y,
@@ -59,7 +62,10 @@ export class CombatVfxPlayer {
     ).setName(`production-vfx-${id}`)
       .setDepth(profile.depth)
       .setBlendMode(profile.blendMode)
-      .setScale(profile.scale * Math.max(0.1, options.scale ?? 1))
+      .setScale(
+        scale * Math.max(0.1, options.scaleX ?? 1),
+        scale * Math.max(0.1, options.scaleY ?? 1),
+      )
       .setAlpha(alpha)
       .setRotation(rotation)
       .play(animationKey);
