@@ -18,7 +18,7 @@ render_animation_assets() {
     output_file="$output_root/$runtime_path"
     mkdir -p "$(dirname "$output_file")"
     if [[ "$kind" == actor ]]; then
-      magick "$source_file" -filter point -resize 200% -strip "$output_file"
+      magick "$source_file" -filter point -resize 200% -depth 8 -strip "$output_file"
       continue
     fi
     dimensions="$(magick identify -format '%w %h' "$source_file")"
@@ -27,7 +27,7 @@ render_animation_assets() {
       echo "$source_file: smooth source must contain horizontal 256px frames" >&2
       return 1
     }
-    magick "$source_file" -filter Lanczos -resize 25% -strip "$output_file"
+    magick "$source_file" -filter Lanczos -resize 25% -depth 8 -strip "$output_file"
   done <<< "$selection"
 }
 

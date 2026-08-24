@@ -41,6 +41,29 @@ const BOSS_PART_STATES = ['idle', 'attack', 'hurt', 'broken'] as const;
 const BOSS_CORE_STATES = ['idle', 'exposed', 'enraged', 'defeated'] as const;
 const HIVE_SHOOTER_STATES = ['idle', 'charge', 'fire', 'hurt', 'broken'] as const;
 
+const CORE_CAST_STATE_FRAMES: Partial<
+  Record<ActorRole, Partial<Record<ActorState, readonly number[]>>>
+> = {
+  player: {
+    idle: [0, 1, 2, 3], move: [4, 5, 6, 7], launch: [8, 9, 10],
+    recover: [11, 12, 13], hurt: [14, 15], defeated: [16, 17, 18, 19],
+  },
+  'enemy-basic': { idle: [0, 1, 2], hurt: [3, 4], destroyed: [5, 6, 7, 8] },
+  'enemy-armored': {
+    idle: [0, 1, 2], brace: [3, 4], hurt: [5, 6], destroyed: [7, 8, 9, 10],
+  },
+  'enemy-shooter': {
+    idle: [0, 1, 2], charge: [3, 4, 5], fire: [6, 7, 8],
+    hurt: [9, 10], destroyed: [11, 12, 13, 14],
+  },
+  'enemy-splitter': {
+    idle: [0, 1, 2], fracture: [3, 4, 5], split: [6, 7, 8, 9],
+    destroyed: [10, 11, 12, 13],
+  },
+  'enemy-fragment-left': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
+  'enemy-fragment-right': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
+};
+
 export const REQUIRED_ACTOR_STATES = {
   player: PLAYER_STATES,
   'enemy-basic': BASIC_STATES,
@@ -119,26 +142,40 @@ const ROLE_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
   },
 };
 
+const ROLE_FRAME_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
+  ...ROLE_DIMENSIONS,
+  'enemy-armored': {
+    width: GAME_TUNING.encounter.grid.cellWidth * 2,
+    height: GAME_TUNING.encounter.grid.cellHeight * 2,
+  },
+};
+
 function statesFor(role: ActorRole): ActorSkinProfile['states'] {
+  const frames = CORE_CAST_STATE_FRAMES[role];
   return Object.fromEntries(REQUIRED_ACTOR_STATES[role].map((state) => [
     state,
-    { frames: [0], frameRate: 1, repeat: state === 'idle' || state === 'move' ? -1 : 0 },
+    {
+      frames: frames?.[state] ?? [0],
+      frameRate: state === 'idle' ? 6 : 10,
+      repeat: state === 'idle' || state === 'move' ? -1 : 0,
+    },
   ]));
 }
 
 export const ACTOR_SKIN_PROFILES: readonly ActorSkinProfile[] = (
   Object.keys(REQUIRED_ACTOR_STATES) as ActorRole[]
 ).map((role) => {
-  const { width, height } = ROLE_DIMENSIONS[role];
+  const display = ROLE_DIMENSIONS[role];
+  const frame = ROLE_FRAME_DIMENSIONS[role];
   return {
     role,
     skinId: 'default',
     textureKey: `actor-${role}-default`,
     url: `/assets/combat/actors/${role}/default.png`,
-    frameWidth: width,
-    frameHeight: height,
-    displayWidth: width,
-    displayHeight: height,
+    frameWidth: frame.width,
+    frameHeight: frame.height,
+    displayWidth: display.width,
+    displayHeight: display.height,
     states: statesFor(role),
   };
 });
