@@ -7,6 +7,8 @@ describe('combat VFX profiles', () => {
     const authoredIds = new Set([
       'player-launch', 'player-recover', 'player-hit', 'player-defeat',
       'orb-ricochet', 'enemy-break',
+      'shooter-charge', 'shooter-fire', 'armored-brace', 'splitter-fracture',
+      'boss-module-break', 'boss-core-rage',
       'enemy-hit', 'orb-direct-hit', 'corrosion-cloud', 'split-burst', 'boss-defeat',
       'conduction-arc', 'explosion-burst',
     ]);
@@ -45,6 +47,24 @@ describe('combat VFX profiles', () => {
     });
     expect(COMBAT_VFX_PROFILES['enemy-break']).toMatchObject({
       frameCount: 8, durationMs: 680, scale: 1.5,
+    });
+    expect(COMBAT_VFX_PROFILES['shooter-charge']).toMatchObject({
+      frameCount: 8, durationMs: 720, scale: 1.6,
+    });
+    expect(COMBAT_VFX_PROFILES['shooter-fire']).toMatchObject({
+      frameCount: 8, durationMs: 420, scale: 1.4,
+    });
+    expect(COMBAT_VFX_PROFILES['armored-brace']).toMatchObject({
+      frameCount: 8, durationMs: 600, scale: 1.6,
+    });
+    expect(COMBAT_VFX_PROFILES['splitter-fracture']).toMatchObject({
+      frameCount: 8, durationMs: 600, scale: 1.5,
+    });
+    expect(COMBAT_VFX_PROFILES['boss-module-break']).toMatchObject({
+      frameCount: 8, durationMs: 760, scale: 1.8,
+    });
+    expect(COMBAT_VFX_PROFILES['boss-core-rage']).toMatchObject({
+      frameCount: 8, durationMs: 900, scale: 1.5,
     });
     expect(COMBAT_VFX_PROFILES['enemy-hit']).toMatchObject({
       frameCount: 8, durationMs: 360, scale: 1.25,

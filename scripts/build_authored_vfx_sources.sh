@@ -38,6 +38,7 @@ build_strip() {
 mkdir -p "$SOURCE"
 for id in \
   player-launch player-recover player-hit player-defeat orb-ricochet enemy-break \
+  shooter-charge shooter-fire armored-brace splitter-fracture boss-module-break boss-core-rage \
   explosion-burst conduction-arc enemy-hit orb-direct-hit corrosion-cloud split-burst boss-defeat
 do
   build_strip "$id"

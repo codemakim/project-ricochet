@@ -1367,6 +1367,32 @@ test('@desktop renders player feedback and break VFX in live combat', async ({ p
   await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-3.png') });
 });
 
+test('@desktop renders enemy role and boss state VFX in live combat', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('shooter-charge', { position: { x: 65, y: 290 } });
+    scene.combatVfx.play('shooter-fire', { position: { x: 175, y: 290 } });
+    scene.combatVfx.play('armored-brace', { position: { x: 330, y: 290 } });
+    scene.combatVfx.play('splitter-fracture', { position: { x: 80, y: 470 } });
+    scene.combatVfx.play('boss-module-break', { position: { x: 225, y: 470 } });
+    scene.combatVfx.play('boss-core-rage', { position: { x: 370, y: 470 } });
+  });
+  await page.waitForTimeout(220);
+
+  const names = await sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name?.startsWith('production-vfx-'))
+    .map((child) => child.name));
+  expect(names).toEqual(expect.arrayContaining([
+    'production-vfx-shooter-charge',
+    'production-vfx-shooter-fire',
+    'production-vfx-armored-brace',
+    'production-vfx-splitter-fracture',
+    'production-vfx-boss-module-break',
+    'production-vfx-boss-core-rage',
+  ]));
+  await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-4.png') });
+});
+
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
   await loadCanvas(page);
   const enemyId = await sceneCall(page, (scene) => {

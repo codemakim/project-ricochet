@@ -13,5 +13,11 @@
 - `player-defeat-grid.png`: 청색·앰버 에너지 봉쇄가 깨지고 연기로 꺼지는 사망.
 - `orb-ricochet-grid.png`: 청자색 전단 초승달과 반동 필라멘트로 보이는 벽 반사.
 - `enemy-break-grid.png`: 금속 파편·주황 불티·청록 잔류 전기의 일반 적 파괴.
+- `shooter-charge-grid.png`: 적색 필라멘트가 주황색 발사핵으로 압축되는 충전.
+- `shooter-fire-grid.png`: 백색 섬광·주황 플라즈마·연기 반동으로 보이는 발사.
+- `armored-brace-grid.png`: 청자색 반구 방어막의 응축·충격 변형·복원.
+- `splitter-fracture-grid.png`: 산호색 에너지 덩어리가 두 불균형 잔체로 찢어지는 분열.
+- `boss-module-break-grid.png`: 보라색 압력체·중금속 파편·화염이 섞인 대형 파츠 파괴.
+- `boss-core-rage-grid.png`: 백색 핵과 적자색 전기 코로나가 지속되는 격노.
 - 두 원화는 순수 검정 배경을 사용한다. `scripts/build_authored_vfx_sources.sh`가 광량을 알파로 바꾸고 8프레임 투명 시트를 만든다.
 - 프레임 순서·격자·해상도를 바꾸지 않는다. 교체 원화도 `1536×1024`, 4열×2행을 유지한다.
