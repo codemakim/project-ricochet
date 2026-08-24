@@ -31,4 +31,17 @@ describe('orb visual profiles', () => {
     expect(GAME_TUNING.build.basicGrowth.maximumOrbs * (maximumLayersPerOrb + 1))
       .toBeLessThanOrEqual(mobileMaximumOrbVisualObjects);
   });
+
+  it.each([
+    ['echo', [['lens', 'pulse'], ['ring', 'pulse']]],
+    ['corrosion', [['bubbles', 'frames'], ['gas', 'spin']]],
+    ['conduction', [['arc', 'frames'], ['flow', 'spin']]],
+    ['inertia', [['flywheel', 'spin'], ['shell', 'spin']]],
+    ['split', [['nucleus-a', 'orbit'], ['nucleus-b', 'orbit']]],
+    ['explosion', [['heat', 'pulse'], ['sparks', 'frames']]],
+  ] as const)('locks %s to its readable base motion identity', (id, expected) => {
+    expect(orbVisualProfile(id).layers.map(({ id: layerId, motion }) => (
+      [layerId, motion.kind]
+    ))).toEqual(expected);
+  });
 });
