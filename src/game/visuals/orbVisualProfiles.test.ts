@@ -44,4 +44,25 @@ describe('orb visual profiles', () => {
       [layerId, motion.kind]
     ))).toEqual(expected);
   });
+
+  it('locks every fusion core to its own declared layer pair', () => {
+    const required = {
+      'photon-orbit': ['halo', 'axis'],
+      'resonant-swarm': ['nuclei', 'phase'],
+      'nano-proliferator': ['branches', 'growth'],
+      'mass-collapse': ['gravity-ring', 'shadow'],
+      'reactor-orb': ['channels', 'charge'],
+      'cluster-bombardment': ['pods', 'sequence'],
+      'mirror-circuit': ['mirror', 'circuit'],
+      'meltdown-core': ['molten-band', 'heat'],
+      'vector-blade': ['blade-axis', 'direction'],
+    } as const;
+    expect(Object.fromEntries(Object.entries(required).map(([id, layerIds]) => [
+      id,
+      orbVisualProfile(id as keyof typeof required).layers.map(({ id: layerId }) => layerId),
+    ]))).toEqual(required);
+    expect(new Set(Object.keys(required).map((id) => (
+      orbVisualProfile(id as keyof typeof required).identity
+    ))).size).toBe(Object.keys(required).length);
+  });
 });

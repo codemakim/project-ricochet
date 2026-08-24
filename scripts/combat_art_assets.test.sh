@@ -58,6 +58,7 @@ magick -size 82x41 xc:none -fill '#39d9ff' \
 magick -size 512x256 xc:none -fill '#c58cff80' \
   -draw 'circle 128,128 128,32 circle 384,128 384,48' \
   "$ANIMATION_TMP/source/orbs-hd/conduction/arc.png"
+magick -size 256x256 xc:none "$ANIMATION_TMP/source/orbs-hd/orb-legacy.png"
 
 bash "$ROOT/scripts/render_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
 bash "$ROOT/scripts/verify_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"
@@ -65,6 +66,8 @@ bash "$ROOT/scripts/verify_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TM
   || fail 'actor fixture must export at exact 2x size'
 [[ "$(magick identify -format '%wx%h' "$ANIMATION_TMP/public/orbs/conduction/arc.png")" == '128x64' ]] \
   || fail 'smooth framed fixture must preserve two 64px frames'
+[[ ! -e "$ANIMATION_TMP/public/orbs/orb-legacy.png" ]] \
+  || fail 'legacy root masters must not be treated as animation assets'
 cp "$ANIMATION_TMP/public/actors/player/default.png" "$ANIMATION_TMP/expected-actor.png"
 cp "$ANIMATION_TMP/public/orbs/conduction/arc.png" "$ANIMATION_TMP/expected-layer.png"
 bash "$ROOT/scripts/render_gbc_combat_art.sh" --fixture-directory "$ANIMATION_TMP"

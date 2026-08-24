@@ -148,6 +148,7 @@ interface DevelopmentScene {
       angle?: number;
       rotation?: number;
       alpha?: number;
+      frame?: { name?: string | number };
       visible?: boolean;
       texture?: { key?: string };
       anims?: { currentAnim?: { key?: string }; isPlaying?: boolean };
@@ -719,6 +720,67 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
     enemyBody: before.enemyBody,
   });
   await page.screenshot({ path: testInfo.outputPath('actor-animation-runtime.png') });
+});
+
+test('@desktop fusion orb animation identities stay visual-only', async ({ page }, testInfo) => {
+  const cases = [
+    ['photon-orbit', 'Digit4', 'conduction'],
+    ['resonant-swarm', 'Digit3', 'split'],
+    ['nano-proliferator', 'Digit5', 'corrosion'],
+    ['mass-collapse', 'Digit2', 'inertia'],
+    ['reactor-orb', 'Digit1', 'explosion'],
+    ['cluster-bombardment', 'Digit6', 'split'],
+    ['mirror-circuit', 'Digit1', 'conduction'],
+    ['meltdown-core', 'Digit6', 'corrosion'],
+    ['vector-blade', 'Digit4', 'echo'],
+  ] as const;
+
+  for (const [fusionType, startingKey, partner] of cases) {
+    const { box } = await loadCanvas(page, '', startingKey);
+    const orbId = await sceneCall(page, (scene, input) => {
+      if (!scene.debugAddOrb(input.partner)) throw new Error(`failed to add ${input.partner}`);
+      const orbs = scene.getDebugSnapshot().orbs;
+      const firstId = orbs[0]!.id;
+      const secondId = orbs.find(({ id }) => id !== firstId)!.id;
+      if (!scene.debugFuseOrbs(firstId, secondId, input.fusionType)) {
+        throw new Error(`failed to fuse ${input.fusionType}`);
+      }
+      return firstId;
+    }, { fusionType, partner });
+    const state = await snapshot(page);
+    const aim = clientPoint(box, { x: state.player.x, y: state.player.y - 100 });
+    await page.mouse.move(aim.x, aim.y);
+    await expect.poll(async () => (
+      await snapshot(page)
+    ).orbs.find(({ id }) => id === orbId)?.state).toBe('active');
+
+    const readLayers = () => sceneCall(page, (scene, input) => scene.children.list
+      .filter((child) => child.active && child.name?.startsWith(`orb-layer-${input}-`))
+      .map((child) => ({
+        name: child.name,
+        x: child.x,
+        y: child.y,
+        rotation: child.rotation,
+        alpha: child.alpha,
+        frame: child.frame?.name,
+        hasBody: Boolean(child.body),
+      })), orbId);
+    const before = await readLayers();
+    await page.waitForTimeout(260);
+    const after = await readLayers();
+
+    expect(before).toHaveLength(2);
+    expect(before.every(({ hasBody }) => !hasBody)).toBe(true);
+    expect(after.some((layer, index) => (
+      layer.x !== before[index]?.x
+      || layer.y !== before[index]?.y
+      || layer.rotation !== before[index]?.rotation
+      || layer.alpha !== before[index]?.alpha
+      || layer.frame !== before[index]?.frame
+    ))).toBe(true);
+  }
+
+  await page.screenshot({ path: testInfo.outputPath('fusion-animation-runtime.png') });
 });
 
 test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {

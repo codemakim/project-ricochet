@@ -75,6 +75,7 @@ select_animation_assets() {
   if [[ "$scope" == orb-base || "$scope" == orb-fusion || "$scope" == all ]]; then
     while IFS= read -r file; do
       relative="${file#"$source_root/"}"
+      [[ "$relative" == orbs-hd/*/* ]] || continue
       orb_id="${relative#orbs-hd/}"
       orb_id="${orb_id%%/*}"
       case "$orb_id" in
