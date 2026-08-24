@@ -235,6 +235,7 @@ export interface OrbVisualLayerProfile {
   id: string;
   textureKey: string;
   url: string;
+  frameConfig?: { frameWidth: number; frameHeight: number };
   motion: OrbLayerMotion;
   blendMode: 'ADD' | 'NORMAL';
   scale: number;
@@ -304,7 +305,7 @@ Expected: PASS.
 - [ ] **Step 1: Write failing loader tests**
 
 ```ts
-it('loads actor profiles as sprite sheets and smooth layers as images', () => {
+it('loads actor and framed layer profiles as sprite sheets, and static layers as images', () => {
   const image = vi.fn();
   const spritesheet = vi.fn();
   preloadCombatAssets({ load: { image, spritesheet, audio: vi.fn() } } as never);
@@ -314,14 +315,15 @@ it('loads actor profiles as sprite sheets and smooth layers as images', () => {
     '/assets/combat/actors/player/default.png',
     { frameWidth: 82, frameHeight: 82 },
   );
-  expect(image).toHaveBeenCalledWith(
+  expect(spritesheet).toHaveBeenCalledWith(
     'orb-conduction-arc',
     '/assets/combat/orbs/conduction/arc.png',
+    { frameWidth: 64, frameHeight: 64 },
   );
 });
 ```
 
-Keep existing sampling assertions and add: every actor asset is `nearest`; every orb layer and VFX asset is `linear`.
+Keep existing sampling assertions and add: every actor asset is `nearest`; every orb layer and VFX asset is `linear`. A layer with `frameConfig` is loaded through `spritesheet` while retaining linear texture filtering.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
