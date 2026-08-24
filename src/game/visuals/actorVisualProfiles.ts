@@ -62,6 +62,50 @@ const CORE_CAST_STATE_FRAMES: Partial<
   },
   'enemy-fragment-left': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
   'enemy-fragment-right': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
+  'sentinel-body': {
+    idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+  },
+  'sentinel-left-weakpoint': {
+    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+  },
+  'sentinel-right-weakpoint': {
+    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+  },
+  'sentinel-core': {
+    idle: [0, 1, 2], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
+    defeated: [10, 11, 12, 13],
+  },
+  'hive-core': {
+    idle: [0, 1, 2], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
+    defeated: [10, 11, 12, 13],
+  },
+  'hive-left-shooter': {
+    idle: [0, 1], charge: [2, 3, 4], fire: [5, 6, 7],
+    hurt: [8, 9], broken: [10, 11, 12, 13],
+  },
+  'hive-right-shooter': {
+    idle: [0, 1], charge: [2, 3, 4], fire: [5, 6, 7],
+    hurt: [8, 9], broken: [10, 11, 12, 13],
+  },
+  'hive-left-reflector': {
+    idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+  },
+  'hive-right-reflector': {
+    idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+  },
+  'siege-body': {
+    idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+  },
+  'siege-left-weakpoint': {
+    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+  },
+  'siege-right-weakpoint': {
+    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+  },
+  'siege-core': {
+    idle: [0, 1, 2], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
+    defeated: [10, 11, 12, 13],
+  },
 };
 
 export const REQUIRED_ACTOR_STATES = {

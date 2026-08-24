@@ -77,4 +77,56 @@ describe('actor visual profiles', () => {
       expect(shipped.has(`/public${actorSkinProfile(role).url}`), role).toBe(true);
     }
   });
+
+  it('declares the exact boss-family frame maps', () => {
+    const body = {
+      idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+    } as const;
+    const weakpoint = {
+      idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+    } as const;
+    const core = {
+      idle: [0, 1, 2], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
+      defeated: [10, 11, 12, 13],
+    } as const;
+    const hiveShooter = {
+      idle: [0, 1], charge: [2, 3, 4], fire: [5, 6, 7],
+      hurt: [8, 9], broken: [10, 11, 12, 13],
+    } as const;
+    const expected = {
+      'sentinel-body': body,
+      'sentinel-left-weakpoint': weakpoint,
+      'sentinel-right-weakpoint': weakpoint,
+      'sentinel-core': core,
+      'hive-core': core,
+      'hive-left-shooter': hiveShooter,
+      'hive-right-shooter': hiveShooter,
+      'hive-left-reflector': body,
+      'hive-right-reflector': body,
+      'siege-body': body,
+      'siege-left-weakpoint': weakpoint,
+      'siege-right-weakpoint': weakpoint,
+      'siege-core': core,
+    } as const;
+
+    for (const [role, states] of Object.entries(expected)) {
+      const profile = actorSkinProfile(role as keyof typeof expected);
+      expect(Object.fromEntries(Object.entries(profile.states).map(([state, animation]) => (
+        [state, animation?.frames]
+      )))).toEqual(states);
+    }
+  });
+
+  it('ships one runtime sheet for every boss-family profile', () => {
+    const shipped = new Set(Object.keys(import.meta.glob('/public/assets/combat/actors/**/*')));
+    const coreRoles = new Set([
+      'player', 'enemy-basic', 'enemy-armored', 'enemy-shooter',
+      'enemy-splitter', 'enemy-fragment-left', 'enemy-fragment-right',
+    ]);
+    for (const role of Object.keys(REQUIRED_ACTOR_STATES)) {
+      if (coreRoles.has(role)) continue;
+      expect(shipped.has(`/public${actorSkinProfile(role as keyof typeof REQUIRED_ACTOR_STATES).url}`), role)
+        .toBe(true);
+    }
+  });
 });
