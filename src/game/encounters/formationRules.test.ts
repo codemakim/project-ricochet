@@ -185,10 +185,11 @@ describe('multi-cell formation generation', () => {
   });
 
   it('keeps the initial chunk dense but non-grid and world-aligned', () => {
-    const result = createInitialFormation(321);
+    const results = Array.from({ length: 32 }, (_, seed) => createInitialFormation(seed));
+    const result = results[0]!;
 
     expect(result.style).not.toBe('grid');
-    expect(occupiedCells(result.enemies).length).toBeGreaterThanOrEqual(7);
+    expect(results.every(({ enemies }) => occupiedCells(enemies).length >= 9)).toBe(true);
     expect(result.enemies.every(({ speed }) =>
       speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
     expect(result.enemies.every(({ x, y }) =>

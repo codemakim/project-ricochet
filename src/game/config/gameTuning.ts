@@ -48,6 +48,7 @@ export interface GameTuning {
     };
   };
   encounter: {
+    emptyRespawnMs: number;
     bossEntry: {
       cleanupMode: 'corridor' | 'all';
       padding: number;
@@ -434,6 +435,7 @@ export interface GameTuning {
   };
   visual: {
     friendly: { permanentOrb: ProjectileVisualTuning; temporaryOrb: ProjectileVisualTuning };
+    permanentOrbPresentation: { haloPadding: number; radiansPerPixel: number };
     coreFeedback: {
       corrosionFieldAlpha: number;
       corrosionLineAlpha: number;
@@ -520,6 +522,7 @@ export const GAME_TUNING = {
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
+    emptyRespawnMs: 800,
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 6, left: 15, cellWidth: 70, cellHeight: 60, gap: 0 },
   },
@@ -874,6 +877,7 @@ export const GAME_TUNING = {
       permanentOrb: { fill: 0xffffff, accent: 0x4ddcff, width: 32, height: 32 },
       temporaryOrb: { fill: 0x8cf7ff, accent: 0x167d9a, width: 20, height: 20 },
     },
+    permanentOrbPresentation: { haloPadding: 10, radiansPerPixel: 0.014 },
     coreFeedback: {
       corrosionFieldAlpha: 0.16,
       corrosionLineAlpha: 0.7,
@@ -1026,6 +1030,7 @@ export function validateGameTuning(tuning: GameTuning): void {
     throw new RangeError('encounter.bossEntry.cleanupMode must be corridor or all');
   }
   nonNegative(encounter.bossEntry.padding, 'encounter.bossEntry.padding');
+  positive(encounter.emptyRespawnMs, 'encounter.emptyRespawnMs');
   positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
   nonNegative(encounter.grid.left, 'encounter.grid.left');
   positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
@@ -1721,6 +1726,14 @@ export function validateGameTuning(tuning: GameTuning): void {
     positive(friendly.width, `visual.friendly.${name}.width`);
     positive(friendly.height, `visual.friendly.${name}.height`);
   }
+  nonNegative(
+    visual.permanentOrbPresentation.haloPadding,
+    'visual.permanentOrbPresentation.haloPadding',
+  );
+  positive(
+    visual.permanentOrbPresentation.radiansPerPixel,
+    'visual.permanentOrbPresentation.radiansPerPixel',
+  );
   const feedback = visual.coreFeedback;
   for (const [name, alpha] of Object.entries({
     corrosionFieldAlpha: feedback.corrosionFieldAlpha,

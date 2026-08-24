@@ -25,6 +25,12 @@ fail() {
 [[ "$(select_art_assets | wc -l | tr -d ' ')" == '22' ]] \
   || fail 'no-argument selection must include every registered asset'
 
+while IFS='|' read -r key runtime_path _master_size _runtime_size _colors _alpha _bounds; do
+  [[ "$key" == orb-* ]] || continue
+  [[ "$(magick identify -format '%wx%h' "$ROOT/public/assets/combat/$runtime_path")" == '64x64' ]] \
+    || fail "$key must ship as a 64x64 smooth energy asset"
+done < <(select_art_assets)
+
 if select_art_assets unknown >/dev/null 2>&1; then
   fail 'unknown asset key must fail'
 fi

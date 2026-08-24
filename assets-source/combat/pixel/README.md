@@ -4,7 +4,7 @@ These PNGs are final source art, manually re-authored from approved concept mast
 
 At `1×` mobile size, every visible cluster must describe silhouette, material separation, or a role device. Surface marks that read only as noise are removed at concept stage; palette compliance alone is not approval.
 
-`scripts/render_gbc_combat_art.sh` exports each master at exactly `200%` with nearest-neighbor sampling. `scripts/verify_gbc_combat_art.sh` checks dimensions, palette size, alpha, `2×` pixel blocks, and collision-filling opaque bounds.
+`scripts/render_gbc_combat_art.sh` exports each master at exactly `200%` with nearest-neighbor sampling. `scripts/verify_gbc_combat_art.sh` checks dimensions, palette size, alpha, `2×` pixel blocks, and collision-filling opaque bounds. Smooth energy-orb masters live in `../orbs-hd` and share the same asset commands.
 
 | Key | Master | Runtime |
 | --- | ---: | ---: |
@@ -15,21 +15,6 @@ At `1×` mobile size, every visible cluster must describe silhouette, material s
 | `enemy-splitter` | `70 × 30` | `140 × 60px` |
 | `enemy-fragment-left` | `35 × 30` | `70 × 60px` |
 | `enemy-fragment-right` | `35 × 30` | `70 × 60px` |
-| `orb-echo` | `16 × 16` | `32 × 32px` |
-| `orb-corrosion` | `16 × 16` | `32 × 32px` |
-| `orb-conduction` | `16 × 16` | `32 × 32px` |
-| `orb-inertia` | `16 × 16` | `32 × 32px` |
-| `orb-split` | `16 × 16` | `32 × 32px` |
-| `orb-explosion` | `16 × 16` | `32 × 32px` |
-| `orb-photon-orbit` | `16 × 16` | `32 × 32px` |
-| `orb-resonant-swarm` | `16 × 16` | `32 × 32px` |
-| `orb-nano-proliferator` | `16 × 16` | `32 × 32px` |
-| `orb-mass-collapse` | `16 × 16` | `32 × 32px` |
-| `orb-reactor-orb` | `16 × 16` | `32 × 32px` |
-| `orb-cluster-bombardment` | `16 × 16` | `32 × 32px` |
-| `orb-mirror-circuit` | `16 × 16` | `32 × 32px` |
-| `orb-meltdown-core` | `16 × 16` | `32 × 32px` |
-| `orb-vector-blade` | `16 × 16` | `32 × 32px` |
 
 Run all registered assets:
 

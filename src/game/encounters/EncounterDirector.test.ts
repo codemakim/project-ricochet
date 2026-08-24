@@ -27,8 +27,9 @@ describe('EncounterDirector', () => {
     };
 
     const interval = STAGES[0].phases[0].spawnIntervalMs;
-    expect(director.update(interval - 1, clearTop).formation).toBeNull();
-    expect(director.update(1, { activePopulation: 0, topmostEnemyY: 49 }).formation).toBeNull();
+    expect(director.update(interval - 1, { activePopulation: 1, topmostEnemyY: 120 }).formation)
+      .toBeNull();
+    expect(director.update(1, { activePopulation: 1, topmostEnemyY: 49 }).formation).toBeNull();
     expect(createFormationSpy).not.toHaveBeenCalled();
 
     expect(director.update(0, blocked).formation).toBeNull();
@@ -43,6 +44,14 @@ describe('EncounterDirector', () => {
       spawnSequence: 1,
       expectedOrbCount: 3,
     });
+  });
+
+  it('refills an empty battlefield within the configured emergency delay', () => {
+    const director = new EncounterDirector(1234);
+    const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
+
+    expect(director.update(799, empty).formation).toBeNull();
+    expect(director.update(1, empty).formation).not.toBeNull();
   });
 
   it('rebuilds a pending formation from the next stage-local phase', () => {
@@ -65,7 +74,7 @@ describe('EncounterDirector', () => {
 
   it('uses each phase reinforcement release line', () => {
     const director = new EncounterDirector(7);
-    const upperEnemies = { activePopulation: 0, topmostEnemyY: 25 };
+    const upperEnemies = { activePopulation: 1, topmostEnemyY: 25 };
 
     expect(director.update(8_000, upperEnemies).formation).toBeNull();
 

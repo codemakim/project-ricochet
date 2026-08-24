@@ -244,7 +244,7 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 12, 8_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
+      phase(0, 12, 5_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
       phase(60_000, 18, 5_500, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }),
       phase(120_000, 22, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
     ],

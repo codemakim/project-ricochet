@@ -557,12 +557,12 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
     { key: 'boss-body', width: 252, height: 144 },
     { key: 'boss-left-weakpoint', width: 56, height: 120 },
     { key: 'boss-core', width: 64, height: 64 },
-    { key: 'orb-echo', width: 32, height: 32 },
-    { key: 'orb-corrosion', width: 32, height: 32 },
-    { key: 'orb-conduction', width: 32, height: 32 },
-    { key: 'orb-inertia', width: 32, height: 32 },
-    { key: 'orb-split', width: 32, height: 32 },
-    { key: 'orb-explosion', width: 32, height: 32 },
+    { key: 'orb-echo', width: 64, height: 64 },
+    { key: 'orb-corrosion', width: 64, height: 64 },
+    { key: 'orb-conduction', width: 64, height: 64 },
+    { key: 'orb-inertia', width: 64, height: 64 },
+    { key: 'orb-split', width: 64, height: 64 },
+    { key: 'orb-explosion', width: 64, height: 64 },
   ]);
   const liveGeometry = await sceneCall(page, (scene) => {
     const orb = scene.children.list.find((child) => child.orbId === 0)!;
@@ -583,7 +583,7 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
   });
   expect(liveGeometry).toEqual({
     player: { width: 82, height: 82, bodyWidth: 56, bodyHeight: 56 },
-    orb: { width: 32, height: 32, bodyWidth: 32, bodyHeight: 32 },
+    orb: { width: 42, height: 42, bodyWidth: 32, bodyHeight: 32 },
   });
   expect(failedAssets).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });

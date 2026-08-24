@@ -45,7 +45,7 @@ describe('stage content', () => {
       shooterMaximum: phase.maxPerFormationOverrides?.shooter,
     })))).toEqual([
       [
-        { activeCap: 12, spawnIntervalMs: 8_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
+        { activeCap: 12, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
         { activeCap: 18, spawnIntervalMs: 5_500, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
         { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
       ],

@@ -29,6 +29,7 @@ describe('encounter rules', () => {
     const ready = {
       elapsedSinceSpawnMs: 8_000,
       spawnIntervalMs: 8_000,
+      emptyRespawnMs: 800,
       topmostEnemyY: 120,
       requiredTopmostY: 98,
       activeEnemies: 21,
@@ -41,5 +42,21 @@ describe('encounter rules', () => {
     expect(canSpawnReinforcement({ ...ready, topmostEnemyY: 97 })).toBe(false);
     expect(canSpawnReinforcement({ ...ready, activeEnemies: 22 })).toBe(false);
     expect(canSpawnReinforcement({ ...ready, topmostEnemyY: Number.POSITIVE_INFINITY })).toBe(true);
+  });
+
+  it('releases an empty battlefield after the emergency delay', () => {
+    const empty = {
+      elapsedSinceSpawnMs: 799,
+      spawnIntervalMs: 5_000,
+      emptyRespawnMs: 800,
+      topmostEnemyY: Number.POSITIVE_INFINITY,
+      requiredTopmostY: 50,
+      activeEnemies: 0,
+      incomingEnemies: 9,
+      activeCap: 12,
+    };
+
+    expect(canSpawnReinforcement(empty)).toBe(false);
+    expect(canSpawnReinforcement({ ...empty, elapsedSinceSpawnMs: 800 })).toBe(true);
   });
 });

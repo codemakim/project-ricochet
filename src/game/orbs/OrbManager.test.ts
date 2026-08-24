@@ -45,6 +45,8 @@ class FakeBody {
   reset(x: number, y: number): void {
     this.center = { x, y };
   }
+
+  updateBounds(): void {}
 }
 
 class FakeSprite {
@@ -62,6 +64,7 @@ class FakeSprite {
   displayHeight = 16;
   scaleX = 1;
   scaleY = 1;
+  rotation = 0;
   readonly body = new FakeBody(this);
 
   constructor(textureKey = '') {
@@ -798,7 +801,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.configureStartingCores(['inertia'])).toBe(true);
     expect(manager.upgradeOrb(0, 'inertia')).toBe(true);
     expect(sprites.map((sprite) => sprite.textureKey)).toEqual(['orb-inertia']);
-    expect(sprites[0]?.displayWidth).toBe(GAME_TUNING.visual.friendly.permanentOrb.width);
+    expect(sprites[0]?.displayWidth).toBe(42);
     expect(sprites[0]!.circle * sprites[0]!.scaleX).toBe(ORB_RADIUS);
   });
 
@@ -827,9 +830,19 @@ describe('OrbManager Phaser adapter', () => {
 
     manager.refreshCombatModifiers();
 
-    expect(sprites[0]?.displayWidth).toBe(radius * 2);
-    expect(sprites[0]?.displayHeight).toBe(radius * 2);
+    expect(sprites[0]?.displayWidth).toBe(radius * 2 + 10);
+    expect(sprites[0]?.displayHeight).toBe(radius * 2 + 10);
     expect(sprites[0]!.circle * sprites[0]!.scaleX).toBeCloseTo(radius);
+  });
+
+  it('rotates an active energy orb as it travels', () => {
+    const { manager, sprites } = createManager();
+    manager.activateAim();
+    manager.update(0, 0, player, up);
+
+    expect(sprites[0]?.rotation).toBe(0);
+    manager.update(100, 100, player, up);
+    expect(sprites[0]?.rotation).toBeGreaterThan(0);
   });
 
   it('creates a runtime sprite for a newly added queued orb', () => {

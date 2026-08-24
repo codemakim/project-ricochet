@@ -3,11 +3,20 @@ import type { StageDefinition, StagePhaseDefinition } from './stageDefinitions';
 export interface SpawnGateInput {
   elapsedSinceSpawnMs: number;
   spawnIntervalMs: number;
+  emptyRespawnMs: number;
   topmostEnemyY: number;
   requiredTopmostY: number;
   activeEnemies: number;
   incomingEnemies: number;
   activeCap: number;
+}
+
+export function reinforcementWindowOpen(
+  input: Omit<SpawnGateInput, 'incomingEnemies' | 'activeCap'>,
+): boolean {
+  return input.activeEnemies === 0 && input.elapsedSinceSpawnMs >= input.emptyRespawnMs
+    || input.elapsedSinceSpawnMs >= input.spawnIntervalMs
+      && input.topmostEnemyY >= input.requiredTopmostY;
 }
 
 export function phaseAt(
@@ -20,7 +29,6 @@ export function phaseAt(
 }
 
 export function canSpawnReinforcement(input: SpawnGateInput): boolean {
-  return input.elapsedSinceSpawnMs >= input.spawnIntervalMs
-    && input.topmostEnemyY >= input.requiredTopmostY
+  return reinforcementWindowOpen(input)
     && input.activeEnemies + input.incomingEnemies <= input.activeCap;
 }

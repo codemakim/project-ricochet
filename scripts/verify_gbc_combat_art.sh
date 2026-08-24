@@ -20,10 +20,12 @@ check_file() {
     echo "$file: expected $expected, got $dimensions" >&2
     exit 1
   }
-  (( colors <= maximum_colors )) || {
-    echo "$file: $colors colors exceeds $maximum_colors" >&2
-    exit 1
-  }
+  if [[ "$maximum_colors" != '-' ]]; then
+    (( colors <= maximum_colors )) || {
+      echo "$file: $colors colors exceeds $maximum_colors" >&2
+      exit 1
+    }
+  fi
   if [[ "$alpha" == yes ]]; then
     [[ "$channels" == *a* ]] || { echo "$file: alpha channel missing" >&2; exit 1; }
     [[ "$(magick "$file" -format '%[pixel:p{0,0}]' info:)" == *',0)' ]] || {
@@ -56,8 +58,8 @@ check_opaque_bounds() {
 while IFS='|' read -r _key runtime_path _master_size runtime_size colors alpha bounds; do
   file="$PUBLIC/$runtime_path"
   check_file "$file" "$runtime_size" "$colors" "$alpha"
-  check_blocks "$file"
+  [[ "$colors" == '-' ]] || check_blocks "$file"
   [[ "$bounds" == '-' ]] || check_opaque_bounds "$file" "$bounds"
 done <<< "$selection"
 
-echo 'combat pixel art verified'
+echo 'combat art verified'

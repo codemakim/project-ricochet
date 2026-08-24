@@ -801,6 +801,15 @@ export class OrbManager {
     }
     this.store.update(nowMs, deltaMs, playerPosition, aim);
     this.synchronizeSprites();
+    const states = this.store.getSnapshot();
+    for (const sprite of this.sprites) {
+      const id = this.spriteIds.get(sprite);
+      const state = states.find((candidate) => candidate.id === id);
+      if (state?.state !== 'active') continue;
+      sprite.rotation += Math.hypot(state.velocity.x, state.velocity.y)
+        * Math.max(0, deltaMs) / 1000
+        * GAME_TUNING.visual.permanentOrbPresentation.radiansPerPixel;
+    }
   }
 
   beginProximityRecovery(orb: OrbSprite | number): boolean {
@@ -906,11 +915,13 @@ export class OrbManager {
       const visible = state.state !== 'stored' && state.state !== 'queued';
       const body = sprite.body as Phaser.Physics.Arcade.Body;
       const textureKey = `orb-${state.coreType}`;
-      const diameter = this.currentOrbRadius() * 2;
+      const diameter = this.currentOrbRadius() * 2
+        + GAME_TUNING.visual.permanentOrbPresentation.haloPadding;
       sprite.setTexture(textureKey).setDisplaySize(
         diameter,
         diameter,
       );
+      body.updateBounds();
       const sourceRadius = this.currentOrbRadius() / Math.abs(sprite.scaleX);
       sprite.setCircle(
         sourceRadius,

@@ -13,6 +13,7 @@ import {
   missingCombatTextureKeys,
 } from './createCombatFallbackTextures';
 import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
+import { ORB_CORE_IDS } from '../orbs/orbCoreRules';
 
 describe('combat asset manifest', () => {
   it('uses one unique runtime path per production image key', () => {
@@ -39,9 +40,12 @@ describe('combat asset manifest', () => {
     expect(audio).toHaveBeenCalledTimes(COMBAT_AUDIO_ASSETS.length);
   });
 
-  it('assigns nearest sampling to pixel art and keeps linear available for smooth effects', () => {
+  it('uses linear sampling only for permanent energy orbs', () => {
     expect(COMBAT_TEXTURE_FILTER).toEqual({ linear: 0, nearest: 1 });
-    expect(COMBAT_IMAGE_ASSETS.every(({ sampling }) => sampling === 'nearest')).toBe(true);
+    const permanentKeys = new Set([...ORB_CORE_IDS, ...FUSION_ORB_IDS].map((id) => `orb-${id}`));
+    expect(COMBAT_IMAGE_ASSETS.every(({ key, sampling }) => (
+      sampling === (permanentKeys.has(key) ? 'linear' : 'nearest')
+    ))).toBe(true);
   });
 
   it('applies sampling only to loaded production textures', () => {
@@ -72,7 +76,7 @@ describe('combat asset manifest', () => {
       expect(COMBAT_IMAGE_ASSETS).toContainEqual({
         key: `orb-${id}`,
         url: `/assets/combat/sprites/orb-${id}.png`,
-        sampling: 'nearest',
+        sampling: 'linear',
       });
     }
   });
