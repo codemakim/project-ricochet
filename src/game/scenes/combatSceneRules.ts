@@ -26,6 +26,37 @@ import {
   type VectorBladeProfile,
 } from '../combat/FusionCombatState';
 import type { ExplosionProfile, SplitProfile } from '../orbs/orbCoreRules';
+import type { CombatVfxId } from '../visuals/combatVfxIds';
+
+const FEEDBACK_VFX: readonly [needle: string, id: CombatVfxId][] = [
+  ['photon-intersection', 'photon-intersection'],
+  ['photon-beam', 'photon-beam'],
+  ['mirror-intersection', 'mirror-intersection'],
+  ['mirror-node', 'mirror-node'],
+  ['reactor-blast', 'reactor-blast'],
+  ['reactor-charge', 'reactor-charge'],
+  ['resonant-final', 'resonant-final'],
+  ['resonant-spawn', 'resonant-spawn'],
+  ['nano-spawn', 'nano-seed'],
+  ['nano-tick', 'nano-spread'],
+  ['mass-collapse', 'mass-collapse'],
+  ['cluster-projectile', 'cluster-projectile'],
+  ['cluster-impact', 'cluster-impact'],
+  ['cluster-field', 'cluster-impact'],
+  ['meltdown-eruption', 'meltdown-eruption'],
+  ['meltdown-tick', 'meltdown-eruption'],
+  ['vector', 'vector-blade'],
+  ['inertia', 'inertia-compression'],
+  ['split', 'split-burst'],
+  ['explosion', 'explosion-burst'],
+  ['destruction', 'explosion-burst'],
+  ['shockwave', 'echo-ring'],
+  ['micro-missile', 'cluster-impact'],
+];
+
+export function combatVfxIdForFeedbackName(name: string): CombatVfxId {
+  return FEEDBACK_VFX.find(([needle]) => name.includes(needle))?.[1] ?? 'echo-ring';
+}
 
 export function recordDiscovery<T extends string>(
   current: ReadonlySet<T>,

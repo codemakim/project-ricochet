@@ -126,6 +126,13 @@ describe('GAME_TUNING', () => {
       trailIntervalMs: 48,
       trailLifetimeMs: 180,
     });
+    expect(GAME_TUNING.visual.productionVfx).toEqual({
+      mobileMaximumTotal: 64,
+      desktopMaximumTotal: 96,
+      minimumAlpha: 0.08,
+      maximumAlpha: 0.9,
+      maximumLifetimeMs: 2500,
+    });
     expect(GAME_TUNING.bossAreaDamage).toEqual({ secondaryDamageScale: 0.5, maxSecondaryTargets: 1 });
     expect(GAME_TUNING.hiveBoss).toMatchObject({
       core: {

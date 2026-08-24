@@ -446,6 +446,13 @@ export interface GameTuning {
       trailIntervalMs: number;
       trailLifetimeMs: number;
     };
+    productionVfx: {
+      mobileMaximumTotal: number;
+      desktopMaximumTotal: number;
+      minimumAlpha: number;
+      maximumAlpha: number;
+      maximumLifetimeMs: number;
+    };
     motion: {
       playerRockDegrees: number;
       playerRockPeriodMs: number;
@@ -903,6 +910,13 @@ export const GAME_TUNING = {
       mobileMaximumOrbVisualObjects: 48,
       trailIntervalMs: 48,
       trailLifetimeMs: 180,
+    },
+    productionVfx: {
+      mobileMaximumTotal: 64,
+      desktopMaximumTotal: 96,
+      minimumAlpha: 0.08,
+      maximumAlpha: 0.9,
+      maximumLifetimeMs: 2500,
     },
     motion: {
       playerRockDegrees: 1.2,
@@ -1769,6 +1783,15 @@ export function validateGameTuning(tuning: GameTuning): void {
   for (const [name, value] of Object.entries(visual.orbAnimation)) {
     positiveInteger(value, `visual.orbAnimation.${name}`);
   }
+  const productionVfx = visual.productionVfx;
+  positiveInteger(productionVfx.mobileMaximumTotal, 'visual.productionVfx.mobileMaximumTotal');
+  positiveInteger(productionVfx.desktopMaximumTotal, 'visual.productionVfx.desktopMaximumTotal');
+  probability(productionVfx.minimumAlpha, 'visual.productionVfx.minimumAlpha');
+  probability(productionVfx.maximumAlpha, 'visual.productionVfx.maximumAlpha');
+  if (productionVfx.minimumAlpha > productionVfx.maximumAlpha) {
+    throw new RangeError('visual.productionVfx alpha range must be ordered');
+  }
+  positive(productionVfx.maximumLifetimeMs, 'visual.productionVfx.maximumLifetimeMs');
   nonNegative(visual.motion.playerRockDegrees, 'visual.motion.playerRockDegrees');
   positive(visual.motion.playerRockPeriodMs, 'visual.motion.playerRockPeriodMs');
   nonNegative(visual.motion.enemyRockDegrees, 'visual.motion.enemyRockDegrees');

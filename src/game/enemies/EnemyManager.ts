@@ -77,6 +77,7 @@ export interface DirectHitEvent {
   source: 'permanent' | 'temporary';
   sourceOrbId: number;
   enemyId: number;
+  enemyKind: EnemyKind;
   position: Vector;
   charged: boolean;
   direction: Vector;
@@ -128,6 +129,7 @@ export interface EnemyManagerOptions {
   onEnemyKilled?: (event: EnemyKilledEvent) => void;
   onDirectHit?: (event: DirectHitEvent) => void;
   onSecondaryDamage?: (event: EnemySecondaryDamageEvent) => void;
+  onShooterState?: (state: 'charge' | 'fire', position: Vector) => void;
   getExternalBulletCount?: () => number;
   textureKeys?: Partial<Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>>;
 }
@@ -658,6 +660,7 @@ export class EnemyManager {
       source,
       sourceOrbId,
       enemyId: enemy.enemyId,
+      enemyKind: enemy.kind,
       position: { ...killEvent.position },
       charged: result.charged,
       direction,
@@ -726,6 +729,7 @@ export class EnemyManager {
       this.activeShooters.add(shooter.enemyId);
       shooter.setTint(0xffff66);
       playActorState(shooter, 'enemy-shooter', 'charge');
+      this.options.onShooterState?.('charge', { x: shooter.x, y: shooter.y });
       const timer = this.scene.time.delayedCall(
         GAME_TUNING.enemies.shooter.warningMs,
         () => this.finishShooterAttack(shooter),
@@ -743,6 +747,7 @@ export class EnemyManager {
     const activeBullets = this.getBulletCount() + (this.options.getExternalBulletCount?.() ?? 0);
     if (!canFire(activeOthers, activeBullets)) return;
     playActorState(shooter, 'enemy-shooter', 'fire');
+    this.options.onShooterState?.('fire', { x: shooter.x, y: shooter.y });
 
     const bullet = this.bulletGroup.create(shooter.x, shooter.y, this.bulletTextureKey) as Phaser.Physics.Arcade.Sprite;
     const direction = normalize({

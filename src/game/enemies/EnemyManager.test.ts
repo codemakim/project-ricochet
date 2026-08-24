@@ -913,6 +913,7 @@ describe('EnemyManager', () => {
       source: 'temporary',
       sourceOrbId: 7,
       enemyId: target.id,
+      enemyKind: 'basic',
       position: target.position,
       charged: false,
       direction: { x: 0.6, y: -0.8 },

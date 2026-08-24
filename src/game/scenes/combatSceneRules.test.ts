@@ -4,6 +4,7 @@ import { BossBuild } from '../progression/BossBuild';
 import {
   bossHudRatio,
   bossKindAfterTransition,
+  combatVfxIdForFeedbackName,
   createBossForKind,
   finalizeCombatLifecycle,
   inactiveBossSnapshot,
@@ -18,6 +19,17 @@ import {
 } from './combatSceneRules';
 
 describe('combat scene rules', () => {
+  it.each([
+    ['core-feedback-split', 'split-burst'],
+    ['core-feedback-inertia-explosion', 'inertia-compression'],
+    ['fusion-feedback-photon-intersection', 'photon-intersection'],
+    ['fusion-feedback-reactor-blast', 'reactor-blast'],
+    ['fusion-feedback-mirror-node', 'mirror-node'],
+    ['trigger-feedback-micro-missile-impact', 'cluster-impact'],
+  ] as const)('maps %s to semantic production VFX %s', (name, expected) => {
+    expect(combatVfxIdForFeedbackName(name)).toBe(expected);
+  });
+
   it('clamps the combined boss-part health into a HUD ratio', () => {
     expect(bossHudRatio({ left: 0, right: 14, core: 36 }, 64)).toBeCloseTo(50 / 64);
     expect(bossHudRatio(null, 64)).toBe(0);

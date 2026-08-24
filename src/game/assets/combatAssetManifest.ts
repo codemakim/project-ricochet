@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
 import { ACTOR_SKIN_PROFILES } from '../visuals/actorVisualProfiles';
+import { COMBAT_VFX_PROFILES } from '../visuals/combatVfxProfiles';
 import { ORB_VISUAL_PROFILES } from '../visuals/orbVisualProfiles';
 
 export type CombatTextureSampling = 'nearest' | 'linear';
@@ -86,10 +87,20 @@ const ORB_PRESENTATION_ASSETS: readonly CombatRasterAsset[] = Object.values(
   })),
 ]);
 
+const COMBAT_VFX_ASSETS: readonly CombatSheetAsset[] = Object.values(
+  COMBAT_VFX_PROFILES,
+).map((profile) => ({
+  key: profile.textureKey,
+  url: profile.url,
+  sampling: 'linear',
+  frameConfig: { frameWidth: profile.frameWidth, frameHeight: profile.frameHeight },
+}));
+
 export const COMBAT_IMAGE_ASSETS: readonly CombatRasterAsset[] = [
   ...COMBAT_STATIC_IMAGE_ASSETS,
   ...ACTOR_SHEET_ASSETS,
   ...ORB_PRESENTATION_ASSETS,
+  ...COMBAT_VFX_ASSETS,
 ];
 
 export const COMBAT_AUDIO_ASSETS: readonly CombatAudioAsset[] = [];
