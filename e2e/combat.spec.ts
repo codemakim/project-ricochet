@@ -151,7 +151,11 @@ interface DevelopmentScene {
       frame?: { name?: string | number };
       visible?: boolean;
       texture?: { key?: string };
-      anims?: { currentAnim?: { key?: string }; isPlaying?: boolean };
+      anims?: {
+        currentAnim?: { key?: string };
+        isPlaying?: boolean;
+        play?(key: string): void;
+      };
       orbId?: number;
       text?: string;
       getData?(key: string): unknown;
@@ -170,10 +174,21 @@ interface DevelopmentScene {
     displayWidth: number;
     displayHeight: number;
     angle: number;
-    anims: { currentAnim?: { key?: string }; isPlaying?: boolean };
+    anims: { currentAnim?: { key?: string }; isPlaying?: boolean; play?(key: string): void };
     body?: { width?: number; height?: number };
     setPosition(x: number, y: number): void;
   };
+  physics: { pause(): void };
+  anims: { exists(key: string): boolean };
+  aimGuide: { visible: boolean };
+  combatVfx: {
+    play(id: string, options: { position: Vector; intensity?: number }): boolean;
+    activeCount(): number;
+  };
+  enemyManager: {
+    spawnFormation(formation: Array<Record<string, unknown>>): void;
+  };
+  scene: { restart(): void };
   update(time: number, delta: number): void;
   getDebugSnapshot(): CombatSnapshot;
   debugPlaceOrb(id: number, position: Vector): boolean;
@@ -190,9 +205,11 @@ interface DevelopmentScene {
   debugDamageBossPart(
     partId:
       | 'leftWeakpoint' | 'rightWeakpoint' | 'core'
-      | 'leftShooter' | 'rightShooter' | 'leftReflector' | 'rightReflector',
+      | 'leftShooter' | 'rightShooter' | 'leftReflector' | 'rightReflector'
+      | 'defenseModule',
     damage: number,
   ): void;
+  startBoss(kind: 'sentinel' | 'hive' | 'siege'): void;
   debugSetBossPosition(x: number): void;
   debugAdvanceHiveCycle(deltaMs: number): void;
   debugPlaceTemporaryOrb(id: number, position: Vector): boolean;
@@ -722,8 +739,44 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
   await page.screenshot({ path: testInfo.outputPath('actor-animation-runtime.png') });
 });
 
-test('@desktop fusion orb animation identities stay visual-only', async ({ page }, testInfo) => {
+test('@desktop renders all actor states without collision drift', async ({ page }) => {
+  await loadCanvas(page);
+  const result = await sceneCall(page, (scene) => {
+    scene.physics.pause();
+    const states = [
+      'idle', 'launch', 'recover', 'hurt', 'defeated', 'charge', 'fire',
+      'broken', 'attack', 'exposed', 'enraged',
+    ];
+    let checked = 0;
+    let stable = true;
+    for (const actor of scene.children.list.filter((child) => (
+      child.active && child.body && child.texture?.key?.startsWith('actor-')
+    ))) {
+      const role = actor.texture!.key!.replace(/^actor-/, '').replace(/-default$/, '');
+      const body = actor.body!;
+      const expected = { width: body.width, height: body.height };
+      for (const state of states) {
+        const key = `actor:${role}:default:${state}`;
+        if (!scene.anims.exists(key)) continue;
+        actor.anims?.play?.(key);
+        checked += 1;
+        stable = stable && body.width === expected.width && body.height === expected.height;
+      }
+    }
+    return { checked, stable };
+  });
+  expect(result.checked).toBeGreaterThan(5);
+  expect(result.stable).toBe(true);
+});
+
+test('@desktop renders all 15 orb animation identities', async ({ page }, testInfo) => {
   const cases = [
+    ['echo', 'Digit1', null],
+    ['inertia', 'Digit2', null],
+    ['split', 'Digit3', null],
+    ['conduction', 'Digit4', null],
+    ['corrosion', 'Digit5', null],
+    ['explosion', 'Digit6', null],
     ['photon-orbit', 'Digit4', 'conduction'],
     ['resonant-swarm', 'Digit3', 'split'],
     ['nano-proliferator', 'Digit5', 'corrosion'],
@@ -738,11 +791,16 @@ test('@desktop fusion orb animation identities stay visual-only', async ({ page 
   for (const [fusionType, startingKey, partner] of cases) {
     const { box } = await loadCanvas(page, '', startingKey);
     const orbId = await sceneCall(page, (scene, input) => {
+      if (!input.partner) return scene.getDebugSnapshot().orbs[0]!.id;
       if (!scene.debugAddOrb(input.partner)) throw new Error(`failed to add ${input.partner}`);
       const orbs = scene.getDebugSnapshot().orbs;
       const firstId = orbs[0]!.id;
       const secondId = orbs.find(({ id }) => id !== firstId)!.id;
-      if (!scene.debugFuseOrbs(firstId, secondId, input.fusionType)) {
+      if (!scene.debugFuseOrbs(
+        firstId,
+        secondId,
+        input.fusionType as Extract<OrbSnapshot['coreType'], `${string}-${string}`>,
+      )) {
         throw new Error(`failed to fuse ${input.fusionType}`);
       }
       return firstId;
@@ -781,6 +839,118 @@ test('@desktop fusion orb animation identities stay visual-only', async ({ page 
   }
 
   await page.screenshot({ path: testInfo.outputPath('fusion-animation-runtime.png') });
+});
+
+test('@desktop clears production visual objects on scene shutdown', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await loadCanvas(page);
+  const before = await sceneCall(page, (scene) => {
+    scene.combatVfx.play('player-hit', { position: { x: 225, y: 600 } });
+    const count = scene.combatVfx.activeCount();
+    scene.scene.restart();
+    return count;
+  });
+  expect(before).toBe(1);
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.filter(
+    (child) => child.active && child.name?.startsWith('production-vfx-'),
+  ).length)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('@mobile keeps hostile bullets readable during dense production VFX', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
+    scene.enemyManager.spawnFormation([{
+      kind: 'shooter', hp: 100, x: 225, y: 220, column: 2, row: 0,
+      footprintWidth: 1, footprintHeight: 1, speed: 0,
+    }]);
+  });
+  await expect.poll(async () => (await snapshot(page)).bullets, { timeout: 4_000 })
+    .toBeGreaterThan(0);
+  const result = await sceneCall(page, (scene) => {
+    const ids = [
+      'orb-direct-hit', 'explosion-burst', 'corrosion-cloud', 'conduction-arc',
+      'split-burst', 'photon-intersection', 'reactor-blast', 'meltdown-eruption',
+    ];
+    const bodies = scene.children.list.filter((child) => child.active && child.body)
+      .map((child) => ({ width: child.body!.width, height: child.body!.height }));
+    for (let index = 0; index < 100; index += 1) {
+      scene.combatVfx.play(ids[index % ids.length]!, {
+        position: { x: 80 + index % 8 * 40, y: 180 + index % 5 * 50 },
+      });
+    }
+    const bullets = scene.children.list.filter((child) => (
+      child.active && child.texture?.key === 'enemy-bullet'
+    ));
+    const afterBodies = scene.children.list.filter((child) => child.active && child.body)
+      .map((child) => ({ width: child.body!.width, height: child.body!.height }));
+    return {
+      bullets: bullets.map(({ visible, alpha, body }) => ({ visible, alpha, hasBody: Boolean(body) })),
+      aimVisible: scene.aimGuide.visible,
+      activeVfx: scene.combatVfx.activeCount(),
+      stableBodies: JSON.stringify(bodies) === JSON.stringify(afterBodies),
+    };
+  });
+  expect(result.bullets.length).toBeGreaterThan(0);
+  expect(result.bullets.every(({ visible, alpha, hasBody }) => (
+    visible !== false && (alpha ?? 1) > 0 && hasBody
+  ))).toBe(true);
+  expect(result.aimVisible).toBe(true);
+  expect(result.activeVfx).toBeLessThanOrEqual(GAME_TUNING.visual.productionVfx.mobileMaximumTotal);
+  expect(result.stableBodies).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('production-vfx-mobile.png') });
+});
+
+test('@mobile keeps total visual objects under the configured cap', async ({ page }) => {
+  await loadCanvas(page);
+  const count = await sceneCall(page, (scene) => {
+    for (let index = 0; index < 200; index += 1) {
+      scene.combatVfx.play('orb-direct-hit', {
+        position: { x: 225, y: 300 }, intensity: 1,
+      });
+    }
+    return scene.combatVfx.activeCount();
+  });
+  expect(count).toBeLessThanOrEqual(GAME_TUNING.visual.productionVfx.mobileMaximumTotal);
+});
+
+test('@desktop captures production player and boss states', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.player.anims.play?.('actor:player:default:launch');
+    scene.combatVfx.play('player-launch', { position: scene.getDebugSnapshot().player });
+  });
+  await page.screenshot({ path: testInfo.outputPath('production-player-launch.png') });
+  await sceneCall(page, (scene) => {
+    scene.player.anims.play?.('actor:player:default:recover');
+    scene.combatVfx.play('player-recover', { position: scene.getDebugSnapshot().player });
+  });
+  await page.screenshot({ path: testInfo.outputPath('production-player-recover.png') });
+  await sceneCall(page, (scene) => scene.debugDamage(1));
+  await page.screenshot({ path: testInfo.outputPath('production-player-hurt.png') });
+
+  await sceneCall(page, (scene) => scene.startBoss('sentinel'));
+  await page.screenshot({ path: testInfo.outputPath('production-sentinel-intact.png') });
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('leftWeakpoint', 14));
+  await page.screenshot({ path: testInfo.outputPath('production-sentinel-damaged.png') });
+
+  await sceneCall(page, (scene) => scene.startBoss('hive'));
+  await page.screenshot({ path: testInfo.outputPath('production-hive-intact.png') });
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+    scene.update(0, 40);
+  });
+  await page.screenshot({ path: testInfo.outputPath('production-hive-enraged.png') });
+
+  await sceneCall(page, (scene) => scene.startBoss('siege'));
+  await page.screenshot({ path: testInfo.outputPath('production-siege-intact.png') });
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('defenseModule', 60));
+  await page.screenshot({ path: testInfo.outputPath('production-siege-damaged.png') });
 });
 
 test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {

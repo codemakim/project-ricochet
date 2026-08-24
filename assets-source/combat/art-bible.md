@@ -73,6 +73,14 @@ Color reinforces identity but never replaces silhouette or internal construction
 | Permanent orb | `16 × 16` | `32 × 32px` |
 | Temporary orb | `10 × 10` | `20 × 20px` |
 
+## Skin frame boxes
+
+- 한 역할의 모든 스킨과 상태 프레임은 `actorVisualProfiles.ts`에 선언된 동일 프레임 박스를 사용한다.
+- 스프라이트시트는 상태별 프레임을 가로로 배치하고, 새 스킨도 `REQUIRED_ACTOR_STATES`를 빠짐없이 제공한다.
+- 실루엣은 프레임 박스와 기존 충돌 외곽 안에 머문다. 애니메이션 때문에 표시 크기·원점·물리 바디를 바꾸지 않는다.
+- 파괴·분열·격파 연출은 원본 물리 스프라이트가 아니라 비물리 종료 스프라이트에서 1회 재생한다.
+- 플레이어·적·보스 스킨 추가는 프로필과 에셋 등록만으로 끝내며 전투 매니저에 스킨 분기를 추가하지 않는다.
+
 ## Production gate
 
 1. Design each family in high resolution.

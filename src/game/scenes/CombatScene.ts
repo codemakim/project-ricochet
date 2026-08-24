@@ -2873,6 +2873,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private readonly handleShutdown = (): void => {
+    const ownsPhaserObjects = this.sys.isActive();
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.massCollapse.clear();
     this.reactorCharges.clear();
@@ -2882,18 +2883,24 @@ export class CombatScene extends Phaser.Scene {
     this.vectorBlades.clear();
     this.feedbackFrames.clear();
     this.clearClusterProjectiles();
-    this.combatVfx?.destroy();
-    this.applyLifecycle('shutdown');
-    this.enemyManager?.destroy();
-    this.temporaryOrbManager?.destroy();
-    this.orbManager?.destroy();
-    this.playerInput?.destroy();
-    this.levelUpOverlay?.destroy();
-    this.orbLoadoutOverlay?.destroy();
-    this.orbUpgradeOverlay?.destroy();
-    this.orbFusionOverlay?.destroy();
-    this.bossRewardOverlay?.destroy();
-    this.runCompleteOverlay?.destroy();
+    if (ownsPhaserObjects) {
+      this.combatVfx?.destroy();
+      this.applyLifecycle('shutdown');
+      this.enemyManager?.destroy();
+      this.temporaryOrbManager?.destroy();
+      this.orbManager?.destroy();
+      this.playerInput?.destroy();
+      this.levelUpOverlay?.destroy();
+      this.orbLoadoutOverlay?.destroy();
+      this.orbUpgradeOverlay?.destroy();
+      this.orbFusionOverlay?.destroy();
+      this.bossRewardOverlay?.destroy();
+      this.runCompleteOverlay?.destroy();
+    } else {
+      this.activeBoss = undefined;
+      this.activeBossKind = undefined;
+      this.bossBuild = new BossBuild();
+    }
     this.bossDefeatPending = false;
     this.enemyManager = undefined;
     this.encounterDirector = undefined;

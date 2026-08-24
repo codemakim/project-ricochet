@@ -33,6 +33,24 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 융합 구슬 9종 Lv1~Lv9 수치 | `GAME_TUNING.orbFusions` |
 | 코어 호환 보스 유물 | `GAME_TUNING.relics` |
 | 코어 해금 비용 | `META_TUNING.corePrices` |
+| 액터 상태 프레임·속도·반복 | `src/game/visuals/actorVisualProfiles.ts`의 `ACTOR_SKIN_PROFILES` |
+| 구슬 레이어 회전·맥동·궤도·프레임 속도 | `src/game/visuals/orbVisualProfiles.ts`의 `ORB_VISUAL_PROFILES` |
+| 구슬 레이어·파티클·모바일 오브젝트 상한 | `GAME_TUNING.visual.orbAnimation` |
+| 제작 VFX 투명도·전체 상한·최대 수명 | `GAME_TUNING.visual.productionVfx` |
+| VFX별 수명·크기·동시 상한 | `src/game/visuals/combatVfxProfiles.ts`의 `COMBAT_VFX_PROFILES` |
+
+## 모션·VFX 기본값
+
+| 범위 | 값 |
+| --- | --- |
+| 액터 대기/이동 | `6fps`, 반복 |
+| 액터 반응 상태 | `10fps`, 1회 재생; 2~4프레임이라 `0.2~0.4초` |
+| 구슬 레이어 | 프로필별 회전 `0.7~2.2rad/s`, 맥동 `480~840ms`, 궤도 `680~760ms`, 프레임 `7~12fps` |
+| 구슬 시각 상한 | 구슬당 레이어 4, 파티클 3, 모바일 전체 48 |
+| 제작 VFX | 알파 `0.08~0.9`, 모바일 64, 데스크톱 96, 최대 수명 `2500ms` |
+| VFX 프로필 | 일반 `320ms/동시 8`, 지속형 `640ms/동시 4` |
+
+액터 모션과 VFX는 판정·피해·발동 타이밍을 소유하지 않는다. 밸런스는 기존 전투 소유자에서, 표현 상한과 수명만 위 위치에서 조정한다.
 
 ## 2026-08-10 플레이 조정 기준
 
