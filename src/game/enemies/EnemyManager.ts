@@ -23,6 +23,11 @@ import {
   type FragmentSide,
 } from './enemyRules';
 import { fragmentSpecsFor, populationCostForEnemy } from './splitterRules';
+import type { ActorRole } from '../visuals/actorVisualProfiles';
+import {
+  createActorExitVisual,
+  playActorState,
+} from '../visuals/registerActorAnimations';
 
 const CONTACT_SEPARATION = 6;
 const BULLET_MARGIN = 16;
@@ -37,6 +42,13 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   footprintHeight: number;
   side?: FragmentSide;
 };
+
+function actorRoleForEnemy(kind: EnemyKind, side?: FragmentSide): ActorRole {
+  if (kind === 'fragment') {
+    return side === 'right' ? 'enemy-fragment-right' : 'enemy-fragment-left';
+  }
+  return `enemy-${kind}`;
+}
 
 export interface EnemySnapshot {
   id: number;
@@ -248,6 +260,7 @@ export class EnemyManager {
       this.nextEnemyId += 1;
       enemy.kind = spec.kind;
       enemy.side = spec.side;
+      playActorState(enemy, actorRoleForEnemy(spec.kind, spec.side), 'idle');
       enemy.hp = spec.hp;
       enemy.column = spec.column;
       enemy.row = spec.row ?? -1;
@@ -712,6 +725,7 @@ export class EnemyManager {
       if (!canFire(this.activeShooters.size, bulletCount)) break;
       this.activeShooters.add(shooter.enemyId);
       shooter.setTint(0xffff66);
+      playActorState(shooter, 'enemy-shooter', 'charge');
       const timer = this.scene.time.delayedCall(
         GAME_TUNING.enemies.shooter.warningMs,
         () => this.finishShooterAttack(shooter),
@@ -728,6 +742,7 @@ export class EnemyManager {
     const activeOthers = this.activeShooters.size;
     const activeBullets = this.getBulletCount() + (this.options.getExternalBulletCount?.() ?? 0);
     if (!canFire(activeOthers, activeBullets)) return;
+    playActorState(shooter, 'enemy-shooter', 'fire');
 
     const bullet = this.bulletGroup.create(shooter.x, shooter.y, this.bulletTextureKey) as Phaser.Physics.Arcade.Sprite;
     const direction = normalize({
@@ -790,6 +805,12 @@ export class EnemyManager {
         speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
       })
       : [];
+    createActorExitVisual(
+      this.scene,
+      enemy,
+      actorRoleForEnemy(enemy.kind, enemy.side),
+      enemy.kind === 'splitter' ? 'fracture' : 'destroyed',
+    );
     this.destroyEnemy(enemy);
     this.options.onEnemyKilled?.(event);
     if (!this.destroyed) this.spawnFormation(fragments);
@@ -819,6 +840,13 @@ export class EnemyManager {
       0,
       enemy.hp - damage * (1 + stacks * vulnerability.damageBonusPerStack),
     );
+    if (enemy.hp > 0 && previousHp > enemy.hp) {
+      playActorState(
+        enemy,
+        actorRoleForEnemy(enemy.kind, enemy.side),
+        enemy.kind === 'armored' ? 'brace' : 'hurt',
+      );
+    }
     return previousHp - enemy.hp;
   }
 }

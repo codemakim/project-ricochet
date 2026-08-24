@@ -35,6 +35,10 @@ class FakeSprite {
   tint?: number;
   scale = 1;
   depth = 0;
+  angle = 0;
+  displayWidth = 32;
+  displayHeight = 32;
+  animationKey = '';
   readonly body: FakeBody;
 
   constructor(public x: number, public y: number, readonly texture: string) {
@@ -49,6 +53,12 @@ class FakeSprite {
   }
   setImmovable(): this { return this; }
   setDepth(depth: number): this { this.depth = depth; return this; }
+  setAngle(angle: number): this { this.angle = angle; return this; }
+  setDisplaySize(width: number, height: number): this {
+    this.displayWidth = width;
+    this.displayHeight = height;
+    return this;
+  }
   setSize(width: number, height: number): this {
     this.body.isCircle = false;
     this.body.halfWidth = width / 2;
@@ -69,6 +79,8 @@ class FakeSprite {
     this.body.center = { x, y };
     return this;
   }
+  play(key: string): this { this.animationKey = key; return this; }
+  once(): this { return this; }
   destroy(): void {
     this.active = false;
     this.destroyed = true;
@@ -159,7 +171,7 @@ function createBoundary() {
       return overlap;
     },
   };
-  const scene = { physics: { add } } as unknown as Phaser.Scene;
+  const scene = { physics: { add }, add: { sprite: add.sprite } } as unknown as Phaser.Scene;
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 140, 'orb') as FakeSprite & { orbId: number };
   orb.orbId = 0;
@@ -275,6 +287,9 @@ describe('HiveBossManager', () => {
       warnings: 0,
     });
     expect(boundary.groups).toHaveLength(5);
+    expect(boundary.sprite('hive-core').animationKey).toBe('actor:hive-core:default:idle');
+    expect(boundary.sprite('hive-left-shooter').animationKey)
+      .toBe('actor:hive-left-shooter:default:idle');
   });
 
   it('keeps modules deployed and moving through the whole shield cycle', () => {
@@ -327,6 +342,8 @@ describe('HiveBossManager', () => {
       leftShooter: 14,
       rightShooter: 16.5,
     });
+    expect(boundary.sprite('hive-left-shooter').animationKey)
+      .toBe('actor:hive-left-shooter:default:hurt');
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'hive',
       targetId: 'leftShooter',
@@ -357,6 +374,7 @@ describe('HiveBossManager', () => {
     expect(boundary.updateAt(5499).phase).toBe('telegraph');
     expect(boundary.updateAt(5500).phase).toBe('exposed');
     expect(boundary.sprite('hive-core-warning').active).toBe(false);
+    expect(boundary.sprite('hive-core').animationKey).toBe('actor:hive-core:default:exposed');
     boundary.gameplay.now = 5501;
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(true);
     expect(boundary.manager.getSnapshot().parts?.core).toBe(117);
@@ -394,6 +412,12 @@ describe('HiveBossManager', () => {
     );
     expect(boundary.sprite('hive-left-shooter')).toMatchObject({ visible: false });
     expect(boundary.sprite('hive-left-shooter').body.enable).toBe(false);
+    expect(boundary.sprites).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        texture: 'actor-hive-left-shooter-default',
+        animationKey: 'actor:hive-left-shooter:default:broken',
+      }),
+    ]));
 
     boundary.updateAt(4000);
     boundary.updateAt(5500);
@@ -407,6 +431,7 @@ describe('HiveBossManager', () => {
     }
     expect(boundary.manager.getSnapshot().phase).toBe('permanentlyExposed');
     expect(boundary.sprite('hive-core').body.enable).toBe(true);
+    expect(boundary.sprite('hive-core').animationKey).toBe('actor:hive-core:default:enraged');
     boundary.updateAt(100_000);
     expect(boundary.manager.getSnapshot().phase).toBe('permanentlyExposed');
   });
@@ -608,8 +633,12 @@ describe('HiveBossManager', () => {
     expect(boundary.updateAt(5500)).toMatchObject({ phase: 'exposed', warnings: 0, bullets: 5 });
 
     expect(boundary.updateAt(6900).warnings).toBe(1);
+    expect(boundary.sprite('hive-left-shooter').animationKey)
+      .toBe('actor:hive-left-shooter:default:charge');
     expect(boundary.updateAt(7200).projectiles.filter(({ kind }) => kind === 'hiveShooter'))
       .toHaveLength(1);
+    expect(boundary.sprite('hive-left-shooter').animationKey)
+      .toBe('actor:hive-left-shooter:default:fire');
 
     expect(boundary.updateAt(11_900).warnings).toBe(2);
     expect(boundary.updateAt(12_500)).toMatchObject({

@@ -150,6 +150,7 @@ interface DevelopmentScene {
       alpha?: number;
       visible?: boolean;
       texture?: { key?: string };
+      anims?: { currentAnim?: { key?: string }; isPlaying?: boolean };
       orbId?: number;
       text?: string;
       getData?(key: string): unknown;
@@ -168,6 +169,7 @@ interface DevelopmentScene {
     displayWidth: number;
     displayHeight: number;
     angle: number;
+    anims: { currentAnim?: { key?: string }; isPlaying?: boolean };
     body?: { width?: number; height?: number };
     setPosition(x: number, y: number): void;
   };
@@ -658,15 +660,19 @@ test('@desktop moves, retains mouse aim, and launches one permanent orb', async 
   expect(box.height).toBeGreaterThan(box.width);
 });
 
-test('@desktop animates combat art without changing collision bodies', async ({ page }) => {
+test('@desktop animates combat art without changing collision bodies', async ({ page }, testInfo) => {
   const { box } = await loadCanvas(page);
   const before = await sceneCall(page, (scene) => {
     const orb = scene.children.list.find((child) => child.orbId === 0)!;
-    const enemy = scene.children.list.find((child) => child.texture?.key?.startsWith('enemy-'))!;
+    const enemy = scene.children.list.find((child) => (
+      child.texture?.key?.startsWith('actor-enemy-') && child.body
+    ))!;
     return {
       playerBody: { width: scene.player.body?.width, height: scene.player.body?.height },
       orbBody: { width: orb.body?.width, height: orb.body?.height },
       enemyBody: { width: enemy.body?.width, height: enemy.body?.height },
+      playerAnimation: scene.player.anims.currentAnim?.key,
+      enemyAnimation: enemy.anims?.currentAnim?.key,
     };
   });
   const state = await snapshot(page);
@@ -677,11 +683,15 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
 
   const after = await sceneCall(page, (scene) => {
     const orb = scene.children.list.find((child) => child.orbId === 0)!;
-    const enemy = scene.children.list.find((child) => child.texture?.key?.startsWith('enemy-'))!;
+    const enemy = scene.children.list.find((child) => (
+      child.texture?.key?.startsWith('actor-enemy-') && child.body
+    ))!;
     const aura = scene.children.list.find((child) => child.name === 'orb-aura-0')!;
     return {
       playerAngle: scene.player.angle,
       enemyAngle: enemy.angle,
+      playerAnimation: scene.player.anims.currentAnim?.key,
+      enemyAnimation: enemy.anims?.currentAnim?.key,
       orbRotation: orb.rotation,
       aura: { alpha: aura.alpha, visible: aura.visible, hasBody: Boolean(aura.body) },
       playerBody: { width: scene.player.body?.width, height: scene.player.body?.height },
@@ -695,11 +705,20 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
   expect(Math.abs(after.orbRotation ?? 0)).toBeGreaterThan(0);
   expect(after.aura).toMatchObject({ visible: true, hasBody: false });
   expect(after.aura.alpha).toBeGreaterThan(0);
+  expect(before.playerAnimation).toBe('actor:player:default:idle');
+  expect(before.enemyAnimation).toMatch(/^actor:enemy-.+:default:idle$/);
+  expect(after.playerAnimation).toBe('actor:player:default:launch');
+  expect(after.enemyAnimation).toMatch(/^actor:enemy-.+:default:idle$/);
   expect({
     playerBody: after.playerBody,
     orbBody: after.orbBody,
     enemyBody: after.enemyBody,
-  }).toEqual(before);
+  }).toEqual({
+    playerBody: before.playerBody,
+    orbBody: before.orbBody,
+    enemyBody: before.enemyBody,
+  });
+  await page.screenshot({ path: testInfo.outputPath('actor-animation-runtime.png') });
 });
 
 test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {
@@ -708,7 +727,7 @@ test('@desktop aligns enemy physics bodies with their visible bounds', async ({ 
   const bounds = await sceneCall(page, (scene) => (
     scene.children.list.filter((child) => (
       child.active
-      && child.texture?.key?.startsWith('enemy-')
+      && child.texture?.key?.startsWith('actor-enemy-')
       && child.texture.key !== 'enemy-bullet'
     ))
       .map((child) => ({
@@ -1840,7 +1859,7 @@ test('@desktop midboss movement is constrained by enemies and expands after obst
   await enterMidbossByScore(page);
   const bodySize = await sceneCall(page, (scene) => {
     const body = scene.children.list.find(
-      (child) => child.active && child.texture?.key === 'boss-body',
+      (child) => child.active && child.texture?.key === 'actor-sentinel-body-default',
     );
     return { width: body?.displayWidth, height: body?.displayHeight };
   });
@@ -2347,7 +2366,7 @@ test('@desktop hive permanent exposure moves, fires both enrage patterns, and re
   await enterHiveByScore(page);
   const entered = await sceneCall(page, (scene) => {
     const core = scene.children.list.find(
-      (child) => child.active && child.texture?.key === 'hive-core',
+      (child) => child.active && child.texture?.key === 'actor-hive-core-default',
     );
     scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
     const startX = scene.getDebugSnapshot().boss.position!.x;
@@ -2413,7 +2432,7 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
   const reflector = (await snapshot(page)).boss.partPositions!.leftReflector!;
   await sceneCall(page, (scene) => {
     const wall = scene.children.list.find(
-      (child) => child.active && child.texture?.key === 'hive-left-reflector',
+      (child) => child.active && child.texture?.key === 'actor-hive-left-reflector-default',
     )!;
     scene.debugPlaceOrb(0, { x: wall.x!, y: wall.y! + wall.displayHeight! / 2 + 12 });
   });

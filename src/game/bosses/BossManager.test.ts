@@ -54,6 +54,8 @@ class FakeSprite {
   visible = true;
   tint?: number;
   depth = 0;
+  angle = 0;
+  animationKey = '';
   readonly body: FakeBody;
   width: number;
   height: number;
@@ -77,6 +79,7 @@ class FakeSprite {
   }
   setImmovable(): this { return this; }
   setDepth(depth: number): this { this.depth = depth; return this; }
+  setAngle(angle: number): this { this.angle = angle; return this; }
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
     this.displayHeight = height;
@@ -101,6 +104,8 @@ class FakeSprite {
     return this;
   }
   setVelocity(x: number, y: number): this { this.body.setVelocity(x, y); return this; }
+  play(key: string): this { this.animationKey = key; return this; }
+  once(): this { return this; }
 
   destroy(): void {
     this.active = false;
@@ -195,7 +200,11 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
       return overlap;
     },
   };
-  const scene = { physics: { add }, time: { now: 50_000 } } as unknown as Phaser.Scene;
+  const scene = {
+    physics: { add },
+    add: { sprite: add.sprite },
+    time: { now: 50_000 },
+  } as unknown as Phaser.Scene;
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 120, 'orb') as FakeSprite & { orbId: number };
   orb.orbId = 0;
@@ -409,6 +418,9 @@ describe('BossManager', () => {
     expect(left.depth).toBeGreaterThan(body.depth);
     expect(right.depth).toBe(left.depth);
     expect(core.depth).toBe(left.depth);
+    expect(body.animationKey).toBe('actor:sentinel-body:default:idle');
+    expect(left.animationKey).toBe('actor:sentinel-left-weakpoint:default:idle');
+    expect(core.animationKey).toBe('actor:sentinel-core:default:idle');
 
     boundary.gameplay.now = 3_400;
     boundary.manager.update();
@@ -494,10 +506,24 @@ describe('BossManager', () => {
     const boundary = createBoundary();
     const left = boundary.colliderFor('boss-left-weakpoint');
     const right = boundary.colliderFor('boss-right-weakpoint');
+    const leftSprite = left.second as FakeSprite;
+    const bodyBefore = {
+      width: leftSprite.body.halfWidth,
+      height: leftSprite.body.halfHeight,
+      x: leftSprite.body.center.x,
+      y: leftSprite.body.center.y,
+    };
 
     expect(left.trigger(boundary.orb, left.second as FakeSprite)).toBe(true);
     expect(right.trigger(boundary.orb, right.second as FakeSprite)).toBe(false);
     expect(boundary.manager.getSnapshot().parts).toMatchObject({ leftWeakpoint: 11, rightWeakpoint: 14 });
+    expect(leftSprite.animationKey).toBe('actor:sentinel-left-weakpoint:default:hurt');
+    expect({
+      width: leftSprite.body.halfWidth,
+      height: leftSprite.body.halfHeight,
+      x: leftSprite.body.center.x,
+      y: leftSprite.body.center.y,
+    }).toEqual(bodyBefore);
     expect(boundary.onDirectHit).toHaveBeenCalledWith(expect.objectContaining({
       bossKind: 'sentinel', targetId: 'leftWeakpoint', source: 'permanent', charged: true,
       coreType: 'conduction', conductionTriggered: true,
@@ -515,6 +541,8 @@ describe('BossManager', () => {
 
     expect(boundary.manager.getSnapshot().phase).toBe('core');
     expect((core.second as FakeSprite).visible).toBe(true);
+    expect((core.second as FakeSprite).animationKey)
+      .toBe('actor:sentinel-core:default:exposed');
     boundary.gameplay.now += 1;
     expect(core.trigger(boundary.orb, core.second as FakeSprite)).toBe(true);
   });
@@ -853,6 +881,12 @@ describe('BossManager', () => {
     boundary.manager.applyAreaDamage({ x: 225, y: 120 }, 1, 72);
 
     expect(boundary.onDefeated).toHaveBeenCalledOnce();
+    expect(boundary.sprites).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        texture: 'actor-sentinel-core-default',
+        animationKey: 'actor:sentinel-core:default:defeated',
+      }),
+    ]));
     expect(boundary.manager.getSnapshot()).toMatchObject({
       phase: 'defeated',
       basicBullets: 0,

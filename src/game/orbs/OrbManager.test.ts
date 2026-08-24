@@ -173,6 +173,21 @@ function createManager(
 }
 
 describe('OrbStore', () => {
+  it('reports each queued orb only when it actually launches', () => {
+    const onLaunch = vi.fn();
+    const store = new OrbStore(EXPERIMENT_DEFAULTS, { onLaunch });
+
+    store.activateAim();
+    expect(onLaunch).not.toHaveBeenCalled();
+
+    store.update(0, 0, player, up);
+    expect(onLaunch).toHaveBeenCalledOnce();
+    expect(onLaunch).toHaveBeenCalledWith(0);
+
+    store.update(1, 1, player, up);
+    expect(onLaunch).toHaveBeenCalledOnce();
+  });
+
   it('stores an independent level on every permanent orb', () => {
     const store = new OrbStore(EXPERIMENT_DEFAULTS);
 

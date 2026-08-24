@@ -76,6 +76,7 @@ export interface PermanentHitResult extends HitResult {
 
 export interface OrbCallbacks {
   onEnemyDamage?: (enemyId: number, damage: number, reflect: boolean) => void;
+  onLaunch?: (orbId: number) => void;
   onRecovery?: (orbId: number, source: RecoverySource) => void;
   onCoreWallBounce?: (event: {
     orbId: number;
@@ -597,6 +598,7 @@ export class OrbStore {
     record.damageEnabled = true;
     record.activeSinceMs = nowMs;
     record.enemyHits.clear();
+    this.callbacks.onLaunch?.(record.id);
   }
 
   private requireRecord(id: number): OrbRecord {

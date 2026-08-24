@@ -31,6 +31,11 @@ import {
   type HivePartId,
   type HivePhase,
 } from './hiveBossRules';
+import type { ActorRole } from '../visuals/actorVisualProfiles';
+import {
+  createActorExitVisual,
+  playActorState,
+} from '../visuals/registerActorAnimations';
 
 const PART_DEPTH = -2;
 const WARNING_DEPTH = 1;
@@ -54,6 +59,13 @@ const PART_ORDER = [
 
 function isReflector(partId: HivePartId): boolean {
   return partId === 'leftReflector' || partId === 'rightReflector';
+}
+
+function actorRoleForHivePart(partId: HivePartId): ActorRole {
+  if (partId === 'core') return 'hive-core';
+  if (partId === 'leftShooter') return 'hive-left-shooter';
+  if (partId === 'rightShooter') return 'hive-right-shooter';
+  return partId === 'leftReflector' ? 'hive-left-reflector' : 'hive-right-reflector';
 }
 
 type BossSprite = Phaser.Physics.Arcade.Sprite;
@@ -185,6 +197,9 @@ export class HiveBossManager implements BossEncounter {
         reflectors.rightReflector.height,
       ),
     };
+    for (const partId of PART_ORDER) {
+      playActorState(this.parts[partId], actorRoleForHivePart(partId), 'idle');
+    }
     this.reflectorMotion = {
       leftReflector: { x: leftReflectorX, direction: 1 },
       rightReflector: { x: rightReflectorX, direction: -1 },
@@ -561,7 +576,19 @@ export class HiveBossManager implements BossEncounter {
 
   private damagePart(partId: HivePartId, damage: number): void {
     const previousPhase = this.state.phase;
+    const previousHp = this.state.parts[partId];
     this.state = damageHivePart(this.state, partId, damage);
+    const nextHp = this.state.parts[partId];
+    if (nextHp > 0 && nextHp < previousHp) {
+      playActorState(this.parts[partId], actorRoleForHivePart(partId), 'hurt');
+    } else if (previousHp > 0 && nextHp === 0) {
+      createActorExitVisual(
+        this.scene,
+        this.parts[partId],
+        actorRoleForHivePart(partId),
+        partId === 'core' ? 'defeated' : 'broken',
+      );
+    }
     if (this.state.phase !== previousPhase) {
       this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();
     }
@@ -620,6 +647,7 @@ export class HiveBossManager implements BossEncounter {
       now + GAME_TUNING.hiveBoss.timing.telegraphMs,
     );
     if (this.state.phase === 'permanentlyExposed') {
+      playActorState(this.parts.core, 'hive-core', 'enraged');
       this.cancelCoreWarnings();
       this.cancelAllShooterWarnings();
       this.stopShooterSchedules();
@@ -628,6 +656,7 @@ export class HiveBossManager implements BossEncounter {
       this.enrageFanCount = 0;
     }
     if (this.state.phase === 'exposed') {
+      playActorState(this.parts.core, 'hive-core', 'exposed');
       this.restartShooterSchedules(now);
     }
     if (this.state.phase === 'shielded' && previousPhase === 'exposed') {
@@ -735,6 +764,7 @@ export class HiveBossManager implements BossEncounter {
   }
 
   private createShooterWarning(moduleId: ShooterPartId, now: number): void {
+    playActorState(this.parts[moduleId], actorRoleForHivePart(moduleId), 'charge');
     const target = { x: this.options.player.x, y: this.options.player.y };
     const marker = (this.warningGroup.create(
       target.x,
@@ -818,6 +848,7 @@ export class HiveBossManager implements BossEncounter {
   }
 
   private fireShooter(moduleId: ShooterPartId, target: Vector): void {
+    playActorState(this.parts[moduleId], actorRoleForHivePart(moduleId), 'fire');
     const tuning = GAME_TUNING.projectiles.hiveShooter;
     const origin = this.parts[moduleId];
     const shot = aimedShot(origin, target, tuning.speed, { x: 0, y: -1 });

@@ -138,6 +138,10 @@ import {
   shouldFinalizeBossReward,
 } from './combatSceneRules';
 import { parseExperimentSettings } from './experimentSettings';
+import {
+  playActorState,
+  registerActorAnimations,
+} from '../visuals/registerActorAnimations';
 
 const INVULNERABILITY_MS = 600;
 const AIM_REFLECTION_LENGTH = 90;
@@ -378,6 +382,7 @@ export class CombatScene extends Phaser.Scene {
     this.runCompleteOverlay = new RunCompleteOverlay(this);
     createCombatFallbackTextures(this);
     applyCombatTextureSampling(this);
+    registerActorAnimations(this);
     if (this.textures.exists('combat-background')) {
       this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
         .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
@@ -386,6 +391,7 @@ export class CombatScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     this.player = this.physics.add.sprite(GAME_WIDTH / 2, 690, 'player');
+    playActorState(this.player, 'player', 'idle');
     this.player.setDisplaySize(
       GAME_TUNING.player.visual.width,
       GAME_TUNING.player.visual.height,
@@ -417,7 +423,9 @@ export class CombatScene extends Phaser.Scene {
       getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
       getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
       getOrbLimit: () => GAME_TUNING.build.basicGrowth.maximumOrbs,
+      onLaunch: () => playActorState(this.player, 'player', 'launch'),
       onRecovery: (orbId, source) => {
+        playActorState(this.player, 'player', 'recover');
         this.combatProcs?.resetOrbFlight(orbId);
         this.handleOrbRecovery(source);
       },
@@ -608,6 +616,18 @@ export class CombatScene extends Phaser.Scene {
       this.build?.playerSpeed(),
     );
     this.player.setPosition(next.x, next.y);
+    const playerAnimation = this.player.anims.currentAnim?.key;
+    if (
+      !this.player.anims.isPlaying
+      || playerAnimation?.endsWith(':idle')
+      || playerAnimation?.endsWith(':move')
+    ) {
+      playActorState(
+        this.player,
+        'player',
+        this.playerInput.movement.x !== 0 || this.playerInput.movement.y !== 0 ? 'move' : 'idle',
+      );
+    }
     const motion = GAME_TUNING.visual.motion;
     this.player.setAngle(Math.sin(
       this.gameplayElapsedMs / motion.playerRockPeriodMs * Math.PI * 2,
@@ -2651,6 +2671,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated || !canTakeDamage(this.time.now, this.invulnerableUntil)) return;
     this.invulnerableUntil = this.time.now + INVULNERABILITY_MS;
     this.health = applyDamage(this.health, amount);
+    playActorState(this.player, 'player', this.health.defeated ? 'defeated' : 'hurt');
     this.updateHealthText();
     this.cameras.main.flash(80, 170, 35, 60);
     if (this.health.defeated) this.showDefeat();

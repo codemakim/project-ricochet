@@ -36,6 +36,11 @@ import {
   type BossPhase,
   type BossState,
 } from './bossRules';
+import type { ActorRole } from '../visuals/actorVisualProfiles';
+import {
+  createActorExitVisual,
+  playActorState,
+} from '../visuals/registerActorAnimations';
 
 const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
@@ -169,6 +174,7 @@ export class BossManager implements BossEncounter {
       GAME_TUNING.boss.y,
       `${texturePrefix}-body`,
     );
+    playActorState(this.body, this.bodyActorRole(), 'idle');
     this.body.setDisplaySize(GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height);
     setWorldBodySize(this.body, GAME_TUNING.boss.body.width, GAME_TUNING.boss.body.height);
     this.body.setImmovable(true).setDepth(BOSS_BODY_DEPTH);
@@ -185,6 +191,9 @@ export class BossManager implements BossEncounter {
       ),
       core: scene.physics.add.sprite(this.motion.x, GAME_TUNING.boss.y, `${texturePrefix}-core`),
     };
+    for (const partId of this.partIds()) {
+      playActorState(this.partSprites[partId], this.partActorRole(partId), 'idle');
+    }
     for (const weakpoint of [this.partSprites.leftWeakpoint, this.partSprites.rightWeakpoint]) {
       weakpoint.setDisplaySize(
         GAME_TUNING.boss.weakpoint.visual.width,
@@ -647,14 +656,36 @@ export class BossManager implements BossEncounter {
     const scaledDamage = damage
       * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1);
     if (partId === 'defenseModule') {
+      const previousHp = this.defenseHp;
       this.defenseHp = Math.max(0, this.defenseHp - scaledDamage);
+      if (this.defenseHp > 0 && this.defenseHp < previousHp) {
+        playActorState(this.body, 'siege-body', 'hurt');
+      } else if (previousHp > 0 && this.defenseHp === 0) {
+        createActorExitVisual(this.scene, this.body, 'siege-body', 'broken');
+      }
       this.synchronizePartBodies();
       return false;
     }
     const previousPhase = bossPhase(this.state);
+    const previousHp = this.partHp(partId);
+    const sprite = this.spriteFor(partId);
+    const role = this.partActorRole(partId);
     this.state = damageBossPart(this.state, partId, scaledDamage);
     const phase = bossPhase(this.state);
+    const nextHp = this.partHp(partId);
+    if (nextHp > 0 && nextHp < previousHp) playActorState(sprite, role, 'hurt');
+    else if (previousHp > 0 && nextHp === 0) {
+      createActorExitVisual(
+        this.scene,
+        sprite,
+        role,
+        partId === 'core' ? 'defeated' : 'broken',
+      );
+    }
     this.synchronizePartBodies();
+    if (phase === 'core' && previousPhase !== 'core') {
+      playActorState(this.partSprites.core, this.partActorRole('core'), 'exposed');
+    }
     if (phase !== previousPhase && phase !== 'defeated') {
       this.nextAttackAt = this.options.getGameplayElapsedMs() + nextBossAttack(this.state).intervalMs;
     }
@@ -750,6 +781,7 @@ export class BossManager implements BossEncounter {
   }
 
   private beginBasicWarning(dueAt: number): void {
+    playActorState(this.body, this.bodyActorRole(), 'attack');
     const marker = this.warningGroup.create(
       this.motion.x,
       GAME_TUNING.boss.y,
@@ -777,6 +809,7 @@ export class BossManager implements BossEncounter {
   }
 
   private beginAimedWarning(startsAt: number): number {
+    playActorState(this.body, this.bodyActorRole(), 'attack');
     const dueAt = startsAt + GAME_TUNING.projectiles.bossAimed.warningMs;
     const target = { x: this.options.player.x, y: this.options.player.y };
     const marker = this.warningGroup.create(
@@ -795,6 +828,7 @@ export class BossManager implements BossEncounter {
   }
 
   private beginSupportWarnings(startsAt: number, attackIndex: number): number {
+    playActorState(this.body, this.bodyActorRole(), 'attack');
     const dueAt = startsAt + GAME_TUNING.projectiles.bossSupport.warningMs;
     const anchorX = clamp(this.options.player.x, 24, GAME_WIDTH - 24);
     for (const x of fallingOrigins(
@@ -1015,6 +1049,19 @@ export class BossManager implements BossEncounter {
 
   private partIds(): BossPartId[] {
     return ['leftWeakpoint', 'rightWeakpoint', 'core'];
+  }
+
+  private bodyActorRole(): ActorRole {
+    return this.options.kind === 'siege' ? 'siege-body' : 'sentinel-body';
+  }
+
+  private partActorRole(partId: BossPartId): ActorRole {
+    const prefix = this.options.kind === 'siege' ? 'siege' : 'sentinel';
+    return `${prefix}-${partId === 'leftWeakpoint'
+      ? 'left-weakpoint'
+      : partId === 'rightWeakpoint'
+        ? 'right-weakpoint'
+        : 'core'}`;
   }
 
   private bodyPartId(): ManagedPartId | null {

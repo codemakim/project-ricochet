@@ -102,6 +102,8 @@ class FakeSprite {
   destroyed = false;
   tint?: number;
   angle = 0;
+  depth = 0;
+  animationKey = '';
   hp = 0;
   displayWidth = 0;
   displayHeight = 0;
@@ -147,6 +149,9 @@ class FakeSprite {
   clearTint(): this { this.tint = undefined; return this; }
   setAngle(angle: number): this { this.angle = angle; return this; }
   setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
+  setDepth(depth: number): this { this.depth = depth; return this; }
+  play(key: string): this { this.animationKey = key; return this; }
+  once(): this { return this; }
 
   destroy(): void {
     this.active = false;
@@ -206,6 +211,7 @@ function createBoundary(
   options: Partial<Pick<EnemyManagerOptions, 'onSecondaryDamage'>> = {},
 ) {
   const groups: FakeGroup[] = [];
+  const visuals: FakeSprite[] = [];
   const colliders: FakeCollider[] = [];
   const overlaps: FakeCollider[] = [];
   const time = new FakeTime();
@@ -229,7 +235,17 @@ function createBoundary(
       },
     },
   };
-  const scene = { physics, time } as unknown as Phaser.Scene;
+  const scene = {
+    physics,
+    time,
+    add: {
+      sprite: (x: number, y: number, texture: string) => {
+        const sprite = new FakeSprite(x, y, texture);
+        visuals.push(sprite);
+        return sprite;
+      },
+    },
+  } as unknown as Phaser.Scene;
   const player = new FakeSprite(225, 690, 'player');
   const orb = new FakeSprite(120, 120, 'orb');
   (orb as FakeSprite & { orbId: number }).orbId = 0;
@@ -287,6 +303,7 @@ function createBoundary(
     onEnemyKilled,
     onDirectHit,
     groups,
+    visuals,
     colliders,
     overlaps,
     time,
@@ -308,6 +325,8 @@ describe('EnemyManager', () => {
     }]);
     const sprite = groups[0]!.children[0]!;
     const before = { x: sprite.x, y: sprite.y, width: sprite.body.width, height: sprite.body.height };
+
+    expect(sprite.animationKey).toBe('actor:enemy-basic:default:idle');
 
     gameplayClock.now = 300;
     manager.update();
@@ -491,7 +510,7 @@ describe('EnemyManager', () => {
     const formation: EnemySpec[] = [
       { kind: 'splitter', hp: 3, x: 225, y: 180, column: 0, speed: 0 },
     ];
-    const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary(formation);
+    const { manager, orb, handleEnemyHit, groups, colliders, visuals } = createBoundary(formation);
     const splitter = groups[0]!.children[0]!;
     handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
 
@@ -505,6 +524,9 @@ describe('EnemyManager', () => {
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
     expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
       .toEqual(['enemy-fragment-left', 'enemy-fragment-right']);
+    expect(visuals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ animationKey: 'actor:enemy-splitter:default:fracture' }),
+    ]));
   });
 
   it('uses an area-damage snapshot before splitting, then kills fragments on the next event', () => {
@@ -682,6 +704,10 @@ describe('EnemyManager', () => {
     time.advance(1300);
     expect(manager.getSnapshot().activeShooters).toBe(2);
     expect(groups[0]!.children.filter((enemy) => enemy.tint !== undefined)).toHaveLength(2);
+    expect(groups[0]!.children.filter((enemy) => enemy.tint !== undefined))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ animationKey: 'actor:enemy-shooter:default:charge' }),
+      ]));
     time.advance(349);
     expect(manager.getSnapshot().bullets).toBe(0);
     player.setPosition(300, 700);
@@ -691,6 +717,7 @@ describe('EnemyManager', () => {
     const firstShooter = groups[0]!.children.find(
       (enemy) => enemy.x === firstBullet.x && enemy.y === firstBullet.y,
     )!;
+    expect(firstShooter.animationKey).toBe('actor:enemy-shooter:default:fire');
     expect(Math.sign(firstBullet.body.velocity.x)).toBe(Math.sign(player.x - firstShooter.x));
     expect(Math.hypot(
       groups[1]!.children[0]!.body.velocity.x,
@@ -751,7 +778,7 @@ describe('EnemyManager', () => {
   });
 
   it('applies each accepted orb hit once and honors pass-through versus reflection', () => {
-    const { manager, orb, handleEnemyHit, groups, colliders } = createBoundary();
+    const { manager, orb, handleEnemyHit, groups, colliders, visuals } = createBoundary();
     const basicIds = manager.getSnapshot().enemies
       .filter(({ kind }) => kind === 'basic')
       .map(({ id }) => id);
@@ -769,6 +796,7 @@ describe('EnemyManager', () => {
     expect(handleEnemyHit).toHaveBeenCalledOnce();
     expect(orb.body.velocity).toEqual({ x: 50, y: -100 });
     expect(enemy.destroyed).toBe(true);
+    expect(visuals[0]?.animationKey).toBe('actor:enemy-basic:default:destroyed');
 
     const reflectedEnemy = groups[0]!.children[basicIds[1]!]!;
     handleEnemyHit.mockReturnValueOnce({
@@ -817,6 +845,33 @@ describe('EnemyManager', () => {
       enemyId: target.id,
       position: target.position,
     }));
+  });
+
+  it('braces an armored enemy on damage without changing its body', () => {
+    const boundary = createBoundary([{
+      kind: 'armored', hp: 10, x: 225, y: 180, column: 0,
+      width: 2, height: 2, speed: 0,
+    }]);
+    const armored = boundary.groups[0]!.children[0]!;
+    const before = {
+      width: armored.body.width,
+      height: armored.body.height,
+      x: armored.body.center.x,
+      y: armored.body.center.y,
+    };
+    boundary.handleEnemyHit.mockReturnValueOnce({
+      charged: true, charges: 2, damage: 1, reflect: false,
+    });
+
+    boundary.colliders[0]!.trigger(boundary.orb, armored);
+
+    expect(armored.animationKey).toBe('actor:enemy-armored:default:brace');
+    expect({
+      width: armored.body.width,
+      height: armored.body.height,
+      x: armored.body.center.x,
+      y: armored.body.center.y,
+    }).toEqual(before);
   });
 
   it('applies reflected temporary hits once with a prefixed pending key and uncharged event', () => {
