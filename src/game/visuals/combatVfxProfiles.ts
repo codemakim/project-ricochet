@@ -28,6 +28,11 @@ const LARGE = new Set<CombatVfxId>([
 ]);
 
 const AUTHORED_MOTION = {
+  'enemy-hit': { frameCount: 8, durationMs: 360, scale: 1.25 },
+  'orb-direct-hit': { frameCount: 8, durationMs: 400, scale: 1.4 },
+  'corrosion-cloud': { frameCount: 8, durationMs: 800, scale: 1.6 },
+  'split-burst': { frameCount: 8, durationMs: 520, scale: 1.5 },
+  'boss-defeat': { frameCount: 8, durationMs: 900, scale: 2.5 },
   'conduction-arc': { frameCount: 8, durationMs: 500, scale: 1.25 },
   'explosion-burst': { frameCount: 8, durationMs: 560, scale: 1.5 },
 } as const satisfies Partial<Record<

@@ -1310,6 +1310,34 @@ test('@desktop spans authored lightning between the orb and every chained target
   await page.screenshot({ path: testInfo.outputPath('authored-lightning-explosion.png') });
 });
 
+test('@desktop renders the second authored VFX batch in live combat', async ({ page }, testInfo) => {
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('corrosion-cloud', { position: { x: 110, y: 300 } });
+    scene.combatVfx.play('boss-defeat', { position: { x: 330, y: 300 } });
+  });
+  await page.waitForTimeout(250);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('enemy-hit', { position: { x: 90, y: 470 } });
+    scene.combatVfx.play('orb-direct-hit', { position: { x: 220, y: 470 } });
+    scene.combatVfx.play('split-burst', { position: { x: 350, y: 470 } });
+  });
+  await page.waitForTimeout(150);
+
+  const effects = await sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name?.startsWith('production-vfx-'))
+    .map((child) => ({ name: child.name, frame: child.frame?.name })));
+  expect(effects.map(({ name }) => name)).toEqual(expect.arrayContaining([
+    'production-vfx-enemy-hit',
+    'production-vfx-orb-direct-hit',
+    'production-vfx-corrosion-cloud',
+    'production-vfx-split-burst',
+    'production-vfx-boss-defeat',
+  ]));
+  expect(effects.every(({ frame }) => Number(frame) > 0)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-2.png') });
+});
+
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
   await loadCanvas(page);
   const enemyId = await sceneCall(page, (scene) => {

@@ -18,7 +18,7 @@ ids=(
   meltdown-eruption vector-blade
 )
 
-# explosion-burst and conduction-arc are authored from image masters by
+# These effects are authored from image masters by
 # build_authored_vfx_sources.sh; never overwrite them with geometric fallbacks.
 
 palette() {
@@ -43,7 +43,9 @@ shape() {
 }
 
 for id in "${ids[@]}"; do
-  [[ "$id" == explosion-burst || "$id" == conduction-arc ]] && continue
+  case "$id" in
+    explosion-burst|conduction-arc|enemy-hit|orb-direct-hit|corrosion-cloud|split-burst|boss-defeat) continue ;;
+  esac
   color="$(palette "$id")"
   kind="$(shape "$id")"
   frames=()

@@ -18,7 +18,7 @@ build_strip() {
   for frame in {0..7}; do
     row=$((frame / 4)); column=$((frame % 4)); x=$((column * 384)); y=$((row * 512))
     magick "$input" -crop "384x512+$x+$y" +repage \
-      -alpha on -channel A -fx 'max(r,max(g,b))' +channel \
+      -alpha on -channel A -fx 'max(r,max(g,b)) <= 0.01 ? 0 : max(r,max(g,b))' +channel \
       -filter Lanczos -resize 192x256 \
       -background none -gravity center -extent 256x256 \
       -depth 8 -strip "$TMP/$id-$frame.png"
@@ -36,7 +36,10 @@ build_strip() {
 }
 
 mkdir -p "$SOURCE"
-build_strip explosion-burst
-build_strip conduction-arc
+for id in \
+  explosion-burst conduction-arc enemy-hit orb-direct-hit corrosion-cloud split-burst boss-defeat
+do
+  build_strip "$id"
+done
 
 echo 'authored combat VFX sources built'
