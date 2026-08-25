@@ -25,9 +25,7 @@ export function bossProgressForKill(kind: EnemyKind): number {
 
 export function bossEntryReady(
   entry: StageBossDefinition,
-  elapsedMs: number,
   score: number,
 ): boolean {
-  return elapsedMs >= entry.hardMaximumMs
-    || (elapsedMs >= entry.minimumMs && score >= entry.scoreTarget);
+  return score >= entry.scoreTarget;
 }

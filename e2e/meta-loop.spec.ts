@@ -130,17 +130,19 @@ async function combatSceneReady(page: Page): Promise<boolean> {
   });
 }
 
-async function enterBoss(page: Page, hardMaximumMs: number, kind: string) {
-  await page.evaluate(({ hardMaximumMs }) => {
+async function enterBoss(page: Page, scoreTarget: number, kind: string) {
+  await page.evaluate(({ scoreTarget }) => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
       scene: { getScene(key: string): {
         debugAdvanceEncounter(deltaMs: number): void;
+        debugRecordEnemyKill(kind: 'basic'): void;
       } };
     } }).__RICHOCHET_GAME__!;
     const scene = game.scene.getScene('combat');
-    scene.debugAdvanceEncounter(hardMaximumMs);
+    for (let score = 0; score < scoreTarget; score += 1) scene.debugRecordEnemyKill('basic');
+    scene.debugAdvanceEncounter(0);
     scene.debugAdvanceEncounter(2_000);
-  }, { hardMaximumMs });
+  }, { scoreTarget });
   await expect.poll(async () => {
     const boss = (await combatSnapshot(page)).boss;
     return boss.active ? boss.kind : null;
@@ -167,19 +169,19 @@ test('@desktop completes all three bosses without a final combat reward', async 
   await page.keyboard.press('Digit1');
   await page.keyboard.press('Enter');
 
-  await enterBoss(page, 210_000, 'sentinel');
+  await enterBoss(page, 70, 'sentinel');
   await defeatParts(page, ['leftWeakpoint', 'rightWeakpoint', 'core']);
   await expect.poll(async () => (await combatSnapshot(page)).bossRewardVisible).toBe(true);
   await page.keyboard.press('Digit1');
   await expect.poll(async () => (await combatSnapshot(page)).encounter.stageId).toBe('default-2');
 
-  await enterBoss(page, 210_000, 'hive');
+  await enterBoss(page, 110, 'hive');
   await defeatParts(page, ['leftShooter', 'rightShooter', 'leftReflector', 'rightReflector', 'core']);
   await expect.poll(async () => (await combatSnapshot(page)).bossRewardVisible).toBe(true);
   await page.keyboard.press('Digit1');
   await expect.poll(async () => (await combatSnapshot(page)).encounter.stageId).toBe('default-3');
 
-  await enterBoss(page, 210_000, 'siege');
+  await enterBoss(page, 140, 'siege');
   await defeatParts(page, ['leftWeakpoint', 'rightWeakpoint', 'defenseModule', 'core']);
   await expect.poll(async () => (await combatSnapshot(page)).runCompleteVisible).toBe(true);
   const complete = await combatSnapshot(page);

@@ -17,13 +17,10 @@ describe('encounter progression rules', () => {
   });
 
   it.each(STAGES)(
-    'uses the exact stage-local boss gates for $id',
+    'uses the exact stage-local boss score for $id',
     ({ boss }) => {
-      expect(bossEntryReady(boss, boss.minimumMs - 1, boss.scoreTarget)).toBe(false);
-      expect(bossEntryReady(boss, boss.minimumMs, boss.scoreTarget - 1)).toBe(false);
-      expect(bossEntryReady(boss, boss.minimumMs, boss.scoreTarget)).toBe(true);
-      expect(bossEntryReady(boss, boss.hardMaximumMs - 1, 0)).toBe(false);
-      expect(bossEntryReady(boss, boss.hardMaximumMs, 0)).toBe(true);
+      expect(bossEntryReady(boss, boss.scoreTarget - 1)).toBe(false);
+      expect(bossEntryReady(boss, boss.scoreTarget)).toBe(true);
     },
   );
 

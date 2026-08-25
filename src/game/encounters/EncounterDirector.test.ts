@@ -94,20 +94,19 @@ describe('EncounterDirector', () => {
     };
 
     director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
-    director.update(
-      60_000 - STAGES[0].phases[0].spawnIntervalMs,
-      blocked,
-    );
+    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
+    director.update(0, blocked);
 
     expect(createFormationSpy).toHaveBeenNthCalledWith(1, recipeAt(0, 0), 0, 1234);
     expect(createFormationSpy).toHaveBeenNthCalledWith(2, recipeAt(0, 1), 0, 1234);
     expect(director.getSnapshot().phase).toBe(1);
   });
 
-  it('uses the stronger stage-one recipe from progression level three', () => {
+  it('uses the stronger stage-one recipe from kill score', () => {
     const director = new EncounterDirector(1234);
+    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
 
-    director.update(5_000, { activePopulation: 1, topmostEnemyY: 120 }, 3);
+    director.update(5_000, { activePopulation: 1, topmostEnemyY: 120 });
 
     expect(createFormationSpy).toHaveBeenCalledWith(recipeAt(0, 1), 0, 1234);
     expect(director.getSnapshot().phase).toBe(1);
@@ -119,7 +118,8 @@ describe('EncounterDirector', () => {
 
     expect(director.update(8_000, upperEnemies).formation).toBeNull();
 
-    const pressure = director.update(52_000, upperEnemies);
+    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
+    const pressure = director.update(0, upperEnemies);
     expect(director.getSnapshot().phase).toBe(1);
     expect(pressure.formation).not.toBeNull();
   });
@@ -142,28 +142,28 @@ describe('EncounterDirector', () => {
     });
   });
 
-  it('uses the active stage boss score and exact time gates', () => {
+  it('uses the active stage boss score without a time gate', () => {
     const director = new EncounterDirector(1234);
-    for (let index = 0; index < STAGES[0].boss.scoreTarget; index += 1) {
-      director.recordEnemyKill('basic');
-    }
+    recordBasicKills(director, STAGES[0].boss.scoreTarget - 1);
 
-    expect(director.update(STAGES[0].boss.minimumMs - 1, clearTop).transition).toBeNull();
-    expect(director.update(1, clearTop).transition).toEqual({
+    expect(director.update(999_999, clearTop).transition).toBeNull();
+    director.recordEnemyKill('basic');
+    expect(director.update(0, clearTop).transition).toEqual({
       type: 'bossWarningStarted',
       bossKind: STAGES[0].boss.kind,
     });
     expect(director.getSnapshot()).toMatchObject({
       state: 'bossWarning',
-      stageElapsedMs: STAGES[0].boss.minimumMs,
+      stageElapsedMs: 999_999,
       bossScore: STAGES[0].boss.scoreTarget,
     });
   });
 
   it('starts the active stage boss after its warning', () => {
     const director = new EncounterDirector(1234);
+    recordBasicKills(director, STAGES[0].boss.scoreTarget);
 
-    expect(director.update(STAGES[0].boss.hardMaximumMs, clearTop).transition).toEqual({
+    expect(director.update(0, clearTop).transition).toEqual({
       type: 'bossWarningStarted',
       bossKind: 'sentinel',
     });
@@ -181,14 +181,9 @@ describe('EncounterDirector', () => {
     };
     director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
     expect(createFormationSpy).toHaveBeenCalledTimes(1);
-    for (let index = 0; index < STAGES[0].boss.scoreTarget; index += 1) {
-      director.recordEnemyKill('basic');
-    }
+    recordBasicKills(director, STAGES[0].boss.scoreTarget);
 
-    expect(director.update(
-      STAGES[0].boss.minimumMs - STAGES[0].phases[0].spawnIntervalMs,
-      blocked,
-    ).transition?.type).toBe('bossWarningStarted');
+    expect(director.update(0, blocked).transition?.type).toBe('bossWarningStarted');
     expect(director.update(STAGES[0].boss.warningMs, clearTop).transition?.type)
       .toBe('bossStarted');
     expect(director.update(60_000, clearTop).formation).toBeNull();
@@ -223,8 +218,7 @@ describe('EncounterDirector', () => {
     const director = startStageTwo();
     for (let index = 0; index < 55; index += 1) director.recordEnemyKill('armored');
 
-    expect(director.update(STAGES[1].boss.minimumMs - 1, clearTop).transition).toBeNull();
-    expect(director.update(1, clearTop).transition).toEqual({
+    expect(director.update(0, clearTop).transition).toEqual({
       type: 'bossWarningStarted',
       bossKind: 'hive',
     });
@@ -283,7 +277,8 @@ describe('EncounterDirector', () => {
 
   function finishActiveBoss(director: EncounterDirector) {
     const stage = STAGES[director.getSnapshot().stageIndex]!;
-    director.update(stage.boss.hardMaximumMs, clearTop);
+    recordBasicKills(director, stage.boss.scoreTarget);
+    director.update(0, clearTop);
     director.update(stage.boss.warningMs, clearTop);
     return director.markBossDefeated();
   }
@@ -303,6 +298,10 @@ describe('EncounterDirector', () => {
     return director;
   }
 });
+
+function recordBasicKills(director: EncounterDirector, count: number): void {
+  for (let index = 0; index < count; index += 1) director.recordEnemyKill('basic');
+}
 
 function recipeAt(stageIndex: number, phaseIndex: number): FormationRecipe {
   const stage = STAGES[stageIndex]!;

@@ -38,7 +38,7 @@ describe('stage content', () => {
       },
     ]);
     expect(STAGES[0].phases[1]).toMatchObject({
-      startsAtLevel: 3,
+      startsAtScore: 25,
       normalHpMultiplier: expect.any(Number),
       descentSpeedMultiplier: expect.any(Number),
     });
@@ -52,18 +52,18 @@ describe('stage content', () => {
       shooterMaximum: phase.maxPerFormationOverrides?.shooter,
     })))).toEqual([
       [
-        { activeCap: 12, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
-        { activeCap: 18, spawnIntervalMs: 4_800, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
-        { activeCap: 22, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 16, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
+        { activeCap: 22, spawnIntervalMs: 4_800, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
+        { activeCap: 26, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
       ],
       [
-        { activeCap: 22, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
-        { activeCap: 26, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
+        { activeCap: 26, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
+        { activeCap: 30, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
       ],
       [
-        { activeCap: 24, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
-        { activeCap: 28, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
-        { activeCap: 30, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
+        { activeCap: 28, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
+        { activeCap: 32, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
+        { activeCap: 34, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
       ],
     ]);
   });
@@ -84,7 +84,7 @@ describe('stage content', () => {
     ))).toBe(true);
     expect(FORMATION_PROFILES.map(({ cellMinimum, cellMaximum }) => (
       [cellMinimum, cellMaximum]
-    ))).toEqual([[5, 8], [7, 11], [9, 14], [11, 17]]);
+    ))).toEqual([[7, 10], [9, 13], [11, 16], [13, 19]]);
     expect(FORMATION_TEMPLATES.map(({ id }) => id)).toEqual([
       'staggered-lanes',
       'side-fort',

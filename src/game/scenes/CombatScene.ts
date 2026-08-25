@@ -2400,7 +2400,7 @@ export class CombatScene extends Phaser.Scene {
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
       activePopulation: enemies.activePopulation,
       topmostEnemyY: enemies.topmostEnemyY,
-    }, this.progression?.getSnapshot().level ?? 0);
+    });
     if (formation) this.enemyManager.spawnFormation(formation);
     if (transition) {
       this.activeBossKind = bossKindAfterTransition(

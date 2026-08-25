@@ -8,26 +8,26 @@ describe('encounter rules', () => {
     const stage: StageDefinition = {
       ...STAGES[0],
       phases: [
-        { ...STAGES[0].phases[0], startsAtMs: 0 },
-        { ...STAGES[0].phases[0], startsAtMs: 10 },
-        { ...STAGES[0].phases[0], startsAtMs: 20 },
-        { ...STAGES[0].phases[0], startsAtMs: 30 },
+        { ...STAGES[0].phases[0], startsAtScore: 0 },
+        { ...STAGES[0].phases[0], startsAtScore: 10 },
+        { ...STAGES[0].phases[0], startsAtScore: 20 },
+        { ...STAGES[0].phases[0], startsAtScore: 30 },
       ],
     };
 
-    for (const [elapsedMs, index] of [
+    for (const [score, index] of [
       [0, 0], [9, 0], [10, 1], [19, 1], [20, 2], [29, 2], [30, 3], [999, 3],
     ] as const) {
-      expect(phaseAt(stage, elapsedMs)).toEqual({
+      expect(phaseAt(stage, score)).toEqual({
         index,
         definition: stage.phases[index],
       });
     }
   });
 
-  it('pulls stage-one pressure forward when the run reaches level three', () => {
-    expect(phaseAt(STAGES[0], 20_000, 2).index).toBe(0);
-    expect(phaseAt(STAGES[0], 20_000, 3).index).toBe(1);
+  it('pulls stage-one pressure forward at its kill-score boundary', () => {
+    expect(phaseAt(STAGES[0], 24).index).toBe(0);
+    expect(phaseAt(STAGES[0], 25).index).toBe(1);
   });
 
   it('requires interval, top clearance, and capacity together', () => {

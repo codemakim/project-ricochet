@@ -56,8 +56,7 @@ export interface FormationProfile {
 }
 
 export interface StagePhaseDefinition {
-  startsAtMs: number;
-  startsAtLevel?: number;
+  startsAtScore: number;
   activeCap: number;
   spawnIntervalMs: number;
   reinforcementReleaseY: number;
@@ -73,9 +72,7 @@ export interface StagePhaseDefinition {
 
 export interface StageBossDefinition {
   kind: BossKind;
-  minimumMs: number;
   scoreTarget: number;
-  hardMaximumMs: number;
   warningMs: number;
 }
 
@@ -197,28 +194,28 @@ export const FORMATION_TEMPLATES = [
 export const FORMATION_PROFILES = [
   {
     id: 'opening', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 5, cellMaximum: 8,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 7, cellMaximum: 10,
     rowMinimum: 2, rowMaximum: 3, allowedTags: [],
   },
   {
     id: 'pressure', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 7, cellMaximum: 11,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 9, cellMaximum: 13,
     rowMinimum: 3, rowMaximum: 4, allowedTags: [],
   },
   {
     id: 'assault', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 9, cellMaximum: 14,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 11, cellMaximum: 16,
     rowMinimum: 3, rowMaximum: 5, allowedTags: [],
   },
   {
     id: 'onslaught', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 11, cellMaximum: 17,
+    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 13, cellMaximum: 19,
     rowMinimum: 4, rowMaximum: 5, allowedTags: [],
   },
 ] as const satisfies readonly FormationProfile[];
 
 const phase = (
-  startsAtMs: number,
+  startsAtScore: number,
   activeCap: number,
   spawnIntervalMs: number,
   reinforcementReleaseY: number,
@@ -226,10 +223,10 @@ const phase = (
   enemyWeightMultipliers: Readonly<Partial<Record<EnemyKind, number>>>,
   maxPerFormationOverrides: Readonly<Partial<Record<EnemyKind, number>>>,
   scaling: Pick<StagePhaseDefinition,
-    'startsAtLevel' | 'normalHpMultiplier' | 'eliteHpMultiplier' | 'descentSpeedMultiplier'
+    'normalHpMultiplier' | 'eliteHpMultiplier' | 'descentSpeedMultiplier'
   > = {},
 ): StagePhaseDefinition => ({
-  startsAtMs,
+  startsAtScore,
   activeCap,
   spawnIntervalMs,
   reinforcementReleaseY,
@@ -252,11 +249,11 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 12, 5_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
-      phase(60_000, 18, 4_800, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }, { startsAtLevel: 3, normalHpMultiplier: 1.18, eliteHpMultiplier: 1.12, descentSpeedMultiplier: 1.08 }),
-      phase(120_000, 22, 4_500, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }, { startsAtLevel: 5, normalHpMultiplier: 1.28, eliteHpMultiplier: 1.2, descentSpeedMultiplier: 1.12 }),
+      phase(0, 16, 5_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
+      phase(25, 22, 4_800, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }, { normalHpMultiplier: 1.18, eliteHpMultiplier: 1.12, descentSpeedMultiplier: 1.08 }),
+      phase(50, 26, 4_500, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }, { normalHpMultiplier: 1.28, eliteHpMultiplier: 1.2, descentSpeedMultiplier: 1.12 }),
     ],
-    boss: { kind: 'sentinel', minimumMs: 120_000, scoreTarget: 70, hardMaximumMs: 210_000, warningMs: 2_000 },
+    boss: { kind: 'sentinel', scoreTarget: 70, warningMs: 2_000 },
   },
   {
     id: 'default-2',
@@ -270,10 +267,10 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 22, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
-      phase(60_000, 26, 4_500, 0, 'onslaught', { basic: 21, armored: 3, shooter: 5, splitter: 2 }, { armored: 3, shooter: 4, splitter: 2 }),
+      phase(0, 26, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
+      phase(55, 30, 4_500, 0, 'onslaught', { basic: 21, armored: 3, shooter: 5, splitter: 2 }, { armored: 3, shooter: 4, splitter: 2 }),
     ],
-    boss: { kind: 'hive', minimumMs: 150_000, scoreTarget: 110, hardMaximumMs: 210_000, warningMs: 2_000 },
+    boss: { kind: 'hive', scoreTarget: 110, warningMs: 2_000 },
   },
   {
     id: 'default-3',
@@ -287,11 +284,11 @@ export const STAGES = [
     },
     descentSpeedMultiplier: 1,
     phases: [
-      phase(0, 24, 5_500, 50, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
-      phase(60_000, 28, 5_000, 50, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
-      phase(120_000, 30, 4_500, 50, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
+      phase(0, 28, 5_500, 50, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
+      phase(50, 32, 5_000, 50, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
+      phase(100, 34, 4_500, 50, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
     ],
-    boss: { kind: 'siege', minimumMs: 150_000, scoreTarget: 140, hardMaximumMs: 210_000, warningMs: 2_000 },
+    boss: { kind: 'siege', scoreTarget: 140, warningMs: 2_000 },
   },
 ] as const satisfies readonly StageDefinition[];
 
@@ -431,27 +428,24 @@ export function validateStageContent(
     if (!Number.isFinite(stage.descentSpeedMultiplier) || stage.descentSpeedMultiplier <= 0) {
       throw new RangeError(`${stage.id}.descentSpeedMultiplier must be positive`);
     }
-    if (stage.phases.length === 0 || stage.phases[0]!.startsAtMs !== 0) {
+    positiveInteger(stage.boss.scoreTarget, `${stage.id}.boss.scoreTarget`);
+    finiteNonNegative(stage.boss.warningMs, `${stage.id}.boss.warningMs`);
+    if (stage.phases.length === 0 || stage.phases[0]!.startsAtScore !== 0) {
       throw new RangeError(`${stage.id} must start at zero`);
     }
     let previousStart = -1;
-    let previousLevel = 0;
     for (const stagePhase of stage.phases) {
-      finiteNonNegative(stagePhase.startsAtMs, `${stage.id}.startsAtMs`);
+      finiteNonNegative(stagePhase.startsAtScore, `${stage.id}.startsAtScore`);
       finiteNonNegative(
         stagePhase.reinforcementReleaseY,
         `${stage.id}.reinforcementReleaseY`,
       );
-      if (stagePhase.startsAtMs <= previousStart) {
-        throw new RangeError(`${stage.id} phase times must increase`);
+      if (stagePhase.startsAtScore <= previousStart) {
+        throw new RangeError(`${stage.id} phase scores must increase`);
       }
-      previousStart = stagePhase.startsAtMs;
-      if (stagePhase.startsAtLevel !== undefined) {
-        positiveInteger(stagePhase.startsAtLevel, `${stage.id}.startsAtLevel`);
-        if (stagePhase.startsAtLevel <= previousLevel) {
-          throw new RangeError(`${stage.id} phase levels must increase`);
-        }
-        previousLevel = stagePhase.startsAtLevel;
+      previousStart = stagePhase.startsAtScore;
+      if (stagePhase.startsAtScore >= stage.boss.scoreTarget) {
+        throw new RangeError(`${stage.id} phase score must precede its boss`);
       }
       for (const [name, multiplier] of Object.entries({
         normalHpMultiplier: stagePhase.normalHpMultiplier,

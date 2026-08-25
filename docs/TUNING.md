@@ -21,7 +21,8 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 적 기본 하강 속도와 기본 체력 | `GAME_TUNING.enemies` |
 | 단계별 체력 배율 | `STAGES[].powerBand.normalHpMultiplier`, `eliteHpMultiplier` |
 | 증원 간격·활성 적 상한·증원선·슈터 가중치/상한 | `STAGES[].phases` |
-| 보스 진입 시간·처치 점수 | `STAGES[].boss` |
+| 페이즈·보스 진입 처치 점수 | `STAGES[].phases[].startsAtScore`, `STAGES[].boss.scoreTarget` |
+| 빈 전장 재보급 지연·고속 진입 깊이/속도 | `GAME_TUNING.encounter.emptyRespawnMs`, `emergencyIngress` |
 | 하이브 코어 이동·장애물 여유·펄스 | `GAME_TUNING.hiveBoss.core.enrage` |
 | 하이브 격노 공격 간격·탄 수·탄 상한 | `GAME_TUNING.projectiles.hiveEnrage` |
 | 일반 능력 수치 | `GAME_TUNING.build` |
@@ -78,6 +79,7 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 4. `expectedOrbCount`는 혼합 XP 보상의 목표 구슬 성장 속도를 반영한다.
 5. 수치 변경 뒤 단위 테스트, 빌드, 관련 E2E 순서로 검증한다.
 6. 최초 편성은 별도 레시피를 사용하므로 단계별 증원 수치 변경의 영향을 받지 않는다.
+7. 일반전 페이즈와 보스 진입은 시간 제한 없이 처치 점수만 사용한다. 기본 적 `1`, 장갑·슈터·분열 적 `2`, 분열 잔체 `0`점이다.
 
 ## 융합 레시피
 

@@ -58,21 +58,16 @@ export class EncounterDirector {
   private spawnSequence = 0;
   private lastFormationId: string | null = null;
   private pendingFormation: PendingFormation | null = null;
-  private progressionLevel = 0;
 
   constructor(
     private readonly runSeed = 0,
     private readonly developmentBalance?: DevelopmentBalanceSettings,
   ) {}
 
-  update(deltaMs: number, enemyState: EncounterEnemyState, progressionLevel = 0): EncounterUpdate {
+  update(deltaMs: number, enemyState: EncounterEnemyState): EncounterUpdate {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
       throw new RangeError('deltaMs must be finite and non-negative');
     }
-    if (!Number.isInteger(progressionLevel) || progressionLevel < 0) {
-      throw new RangeError('progressionLevel must be a non-negative integer');
-    }
-    this.progressionLevel = progressionLevel;
     this.elapsedMs += deltaMs;
 
     if (this.state === 'bossWarning') {
@@ -94,7 +89,7 @@ export class EncounterDirector {
     const stage = this.activeStage();
     this.stageElapsedMs += deltaMs;
     this.elapsedSinceSpawnMs += deltaMs;
-    if (bossEntryReady(stage.boss, this.stageElapsedMs, this.bossScore)) {
+    if (bossEntryReady(stage.boss, this.bossScore)) {
       this.state = 'bossWarning';
       this.pendingBossKind = stage.boss.kind;
       this.pendingBossWarningMs = stage.boss.warningMs;
@@ -106,7 +101,7 @@ export class EncounterDirector {
       };
     }
 
-    const phase = phaseAt(stage, this.stageElapsedMs, this.progressionLevel);
+    const phase = phaseAt(stage, this.bossScore);
     const intervalMultiplier = this.developmentBalance?.reinforcementIntervalMultiplier ?? 1;
     const spawnIntervalMs = phase.definition.spawnIntervalMs * intervalMultiplier;
     const emptyRespawnMs = GAME_TUNING.encounter.emptyRespawnMs * intervalMultiplier;
@@ -202,7 +197,7 @@ export class EncounterDirector {
 
   getSnapshot() {
     const stage = this.activeStage();
-    const phase = phaseAt(stage, this.stageElapsedMs, this.progressionLevel).index;
+    const phase = phaseAt(stage, this.bossScore).index;
     return {
       elapsedMs: this.elapsedMs,
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
