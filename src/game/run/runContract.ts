@@ -1,4 +1,5 @@
 import type { BossKind } from '../config/gameTuning';
+import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
 import { FUSION_ORB_IDS, type FusionOrbId } from '../orbs/orbFusionRules';
 import type { AbilityRanks } from '../progression/progressionRules';
@@ -18,6 +19,7 @@ export interface RunConfig {
   unlockedCoreTypes: OrbCoreId[];
   discoveredCoreTypes: OrbCoreId[];
   discoveredFusionTypes: FusionOrbId[];
+  developmentBalance?: DevelopmentBalanceSettings;
 }
 
 export interface RunResult extends RunConfig {
@@ -81,6 +83,9 @@ export function createRunResult(
     unlockedCoreTypes: [...config.unlockedCoreTypes],
     discoveredCoreTypes: [...discoveredCoreTypes],
     discoveredFusionTypes: [...discoveredFusionTypes],
+    ...(config.developmentBalance
+      ? { developmentBalance: { ...config.developmentBalance } }
+      : {}),
     success,
     durationMs,
     defeatedBossIds: [...defeatedBossIds],

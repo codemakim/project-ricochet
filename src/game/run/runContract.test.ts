@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import { createEmptyAbilityRanks } from '../progression/progressionRules';
 import { createRunConfig, createRunResult } from './runContract';
 
@@ -68,5 +69,26 @@ describe('run contract', () => {
     const config = createRunConfig(['echo'], 1, 'run-2');
     expect(() => createRunResult(config, true, 10, ['sentinel'], createEmptyAbilityRanks()))
       .toThrow('successful run must defeat siege');
+  });
+
+  it('keeps development balance isolated to explicitly configured runs', () => {
+    const standard = createRunConfig(['echo'], 1, 'standard');
+    expect(standard.developmentBalance).toBeUndefined();
+
+    const developmentBalance = {
+      ...createDefaultDevelopmentBalanceSettings(9),
+      playerDamageMultiplier: 2,
+    };
+    const configured = { ...standard, developmentBalance };
+    const result = createRunResult(
+      configured,
+      false,
+      10,
+      [],
+      createEmptyAbilityRanks(),
+    );
+
+    expect(result.developmentBalance).toEqual(developmentBalance);
+    expect(result.developmentBalance).not.toBe(developmentBalance);
   });
 });
