@@ -9,7 +9,7 @@ export interface DevelopmentBalanceSettings {
   seed: number;
 }
 
-export const DEVELOPMENT_BALANCE_STORAGE_KEY = 'project-ricochet.dev-balance';
+export const DEVELOPMENT_BALANCE_STORAGE_KEY = 'project-ricochet.dev-balance.v2';
 
 const RANGES = {
   normalEnemyHpMultiplier: [0.1, 10],
@@ -26,12 +26,12 @@ export function createDefaultDevelopmentBalanceSettings(
   seed: number,
 ): DevelopmentBalanceSettings {
   return {
-    normalEnemyHpMultiplier: 1.3,
-    specialEnemyHpMultiplier: 1.2,
-    descentSpeedMultiplier: 1.2,
+    normalEnemyHpMultiplier: 1,
+    specialEnemyHpMultiplier: 1,
+    descentSpeedMultiplier: 1,
     reinforcementIntervalMultiplier: 1,
     playerDamageMultiplier: 1,
-    orbSpeedMultiplier: 1.3,
+    orbSpeedMultiplier: 1,
     startingOrbCount: 1,
     seed,
   };

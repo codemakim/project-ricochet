@@ -124,9 +124,9 @@ async function activeSceneTexts(page: Page): Promise<string[]> {
 async function combatSceneReady(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const game = (window as typeof window & { __RICHOCHET_GAME__?: {
-      scene: { getScene(key: string): { debugGrantXp?: unknown } };
+      scene: { getScene(key: string): { debugGrantXp?: unknown } | null };
     } }).__RICHOCHET_GAME__;
-    return typeof game?.scene.getScene('combat').debugGrantXp === 'function';
+    return typeof game?.scene.getScene('combat')?.debugGrantXp === 'function';
   });
 }
 

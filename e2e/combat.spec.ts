@@ -2067,9 +2067,9 @@ test('@desktop six-column density uses shipped enemy stats and exact reinforceme
   const initial = await snapshot(page);
   const { left, cellWidth } = GAME_TUNING.encounter.grid;
   expect(initial.enemies.length).toBeGreaterThan(0);
-  expect(initial.enemies.every(({ speed }) => speed === 8)).toBe(true);
+  expect(initial.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
   expect(initial.enemies.every(({ kind, hp }) => (
-    hp === { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 }[kind]
+    hp === GAME_TUNING.enemies.hp[kind]
   ))).toBe(true);
   expect(initial.enemies.every(({ footprint, position }) => (
     footprint !== undefined

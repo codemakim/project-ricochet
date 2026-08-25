@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORB_RADIUS } from '../constants';
+import { ORB_RADIUS, ORB_SPEED } from '../constants';
 import { BuildState } from './BuildState';
 
 describe('BuildState', () => {
@@ -15,7 +15,7 @@ describe('BuildState', () => {
     }
     for (let rank = 1; rank <= 3; rank += 1) {
       build.upgrade('kinetic');
-      expect(build.chargedSpeed()).toBeCloseTo(400 * (1 + rank * 0.07));
+      expect(build.chargedSpeed()).toBeCloseTo(ORB_SPEED * (1 + rank * 0.07));
     }
     expect(() => build.upgrade('kinetic')).toThrow('kinetic is already rank 3');
   });
@@ -65,12 +65,12 @@ describe('BuildState', () => {
     expect(build.conditionalDirectDamageBonus({
       distanceFromPlayer: 150,
       wallHits: 0,
-      speed: 480,
+      speed: ORB_SPEED * 1.2,
     })).toBeCloseTo(0.62);
     expect(build.conditionalDirectDamageBonus({
       distanceFromPlayer: 151,
       wallHits: 1,
-      speed: 400,
+      speed: ORB_SPEED,
     })).toBe(0);
   });
 
@@ -124,7 +124,7 @@ describe('BuildState', () => {
     expect(build.conditionalDirectDamageBonus({
       distanceFromPlayer: 999,
       wallHits: 1,
-      speed: 400,
+      speed: ORB_SPEED,
       firstHitAfterProximity: true,
       consecutiveHits: 3,
       killOverclockActive: true,

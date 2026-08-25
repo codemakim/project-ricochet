@@ -539,8 +539,8 @@ export const GAME_TUNING = {
     majorIntervalsMs: { twoWeakpoints: 2800, oneWeakpoint: 2300, core: 1900 },
   },
   enemies: {
-    descentSpeed: 8,
-    hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
+    descentSpeed: 9.6,
+    hp: { basic: 3.9, shooter: 5.2, armored: 12, splitter: 9.1, fragment: 2.6 },
     shooter: { intervalMs: 1300, warningMs: 350, bulletSpeed: 180, damage: 1 },
     splitter: { width: 38, height: 30, populationCost: 2, score: 2, xp: 1, breachDamage: 3 },
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },

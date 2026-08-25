@@ -22,12 +22,12 @@ describe('development balance settings', () => {
     const storage = new MemoryStorage();
     const defaults = loadDevelopmentBalanceSettings(storage, 17);
     expect(defaults).toEqual({
-      normalEnemyHpMultiplier: 1.3,
-      specialEnemyHpMultiplier: 1.2,
-      descentSpeedMultiplier: 1.2,
+      normalEnemyHpMultiplier: 1,
+      specialEnemyHpMultiplier: 1,
+      descentSpeedMultiplier: 1,
       reinforcementIntervalMultiplier: 1,
       playerDamageMultiplier: 1,
-      orbSpeedMultiplier: 1.3,
+      orbSpeedMultiplier: 1,
       startingOrbCount: 1,
       seed: 17,
     });

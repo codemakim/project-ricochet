@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ORB_SPEED } from '../constants';
 import { GAME_TUNING, validateGameTuning, type GameTuning } from './gameTuning';
 
 type Mutable<T> = T extends readonly [unknown, ...unknown[]]
@@ -27,14 +28,15 @@ describe('GAME_TUNING', () => {
     expect(GAME_TUNING.boss.core).toEqual({ visualSize: 64, hitboxSize: 56, hp: 36 });
     expect(GAME_TUNING.boss.movement.maxSpeed).toBe(35);
     expect(GAME_TUNING.enemies).toMatchObject({
-      descentSpeed: 8,
-      hp: { basic: 3, shooter: 4, armored: 10, splitter: 7, fragment: 2 },
+      descentSpeed: 9.6,
+      hp: { basic: 3.9, shooter: 5.2, armored: 12, splitter: 9.1, fragment: 2.6 },
       splitter: {
         width: 38, height: 30,
         populationCost: 2, score: 2, xp: 1, breachDamage: 3,
       },
       fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
     });
+    expect(ORB_SPEED).toBe(520);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'initialFormation')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'reinforcementReleaseY')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);

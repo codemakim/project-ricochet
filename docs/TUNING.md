@@ -40,6 +40,8 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 제작 VFX 투명도·전체 상한·최대 수명 | `GAME_TUNING.visual.productionVfx` |
 | VFX별 수명·크기·동시 상한 | `src/game/visuals/combatVfxProfiles.ts`의 `COMBAT_VFX_PROFILES` |
 
+현재 실제 게임 기준값은 일반 적 HP `3.9/5.2/9.1/2.6`, 장갑 적 HP `12`, 적 하강 `9.6px/s`, 영구 구슬 속도 `520px/s`다. 개발자 모드의 `1`은 이 기준값 그대로를 뜻한다.
+
 ## 모션·VFX 기본값
 
 | 범위 | 값 |

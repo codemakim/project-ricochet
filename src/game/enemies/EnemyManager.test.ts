@@ -593,8 +593,8 @@ describe('EnemyManager', () => {
     colliders[0]!.trigger(orb, splitter);
 
     expect(manager.getSnapshot().enemies).toEqual([
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 190, y: 180 } }),
-      expect.objectContaining({ kind: 'fragment', hp: 2, position: { x: 260, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment, position: { x: 190, y: 180 } }),
+      expect.objectContaining({ kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment, position: { x: 260, y: 180 } }),
     ]);
     expect(groups[0]!.children.filter((enemy) => enemy.active)).toHaveLength(2);
     expect(groups[0]!.children.filter((enemy) => enemy.active).map(({ texture }) => texture))
@@ -612,10 +612,15 @@ describe('EnemyManager', () => {
 
     expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 1, -1)).toEqual([0]);
     expect(manager.getSnapshot().enemies.map(({ id, kind, hp }) => ({ id, kind, hp }))).toEqual([
-      { id: 1, kind: 'fragment', hp: 2 },
-      { id: 2, kind: 'fragment', hp: 2 },
+      { id: 1, kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment },
+      { id: 2, kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment },
     ]);
-    expect(manager.applyAreaDamage({ x: 225, y: 180 }, 50, 2, -1)).toEqual([1, 2]);
+    expect(manager.applyAreaDamage(
+      { x: 225, y: 180 },
+      50,
+      GAME_TUNING.enemies.hp.fragment,
+      -1,
+    )).toEqual([1, 2]);
     expect(onEnemyKilled.mock.calls.map(([event]) => event.kind))
       .toEqual(['splitter', 'fragment', 'fragment']);
   });
@@ -636,8 +641,8 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().enemies.map(({ kind, hp }) => ({ kind, hp }))).toEqual([
       { kind: 'basic', hp: 1 },
       { kind: 'armored', hp: 5 },
-      { kind: 'fragment', hp: 2 },
-      { kind: 'fragment', hp: 2 },
+      { kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment },
+      { kind: 'fragment', hp: GAME_TUNING.enemies.hp.fragment },
     ]);
   });
 

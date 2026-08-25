@@ -796,7 +796,7 @@ describe('OrbStore', () => {
 
     expect(store.handleEnemyHit(0, 1, 1, 100, false)?.speedRatio).toBe(1);
     expect(Math.hypot(...Object.values(store.getSnapshot()[0]!.velocity) as [number, number]))
-      .toBeCloseTo(480);
+      .toBeCloseTo(ORB_SPEED * 1.2);
     expect(store.handleEnemyHit(0, 2, 99, 200, false)?.damage).toBeCloseTo(1.95);
     expect(contexts.at(-1)).toMatchObject({ consecutiveHits: 1, killOverclockActive: true });
 
@@ -1196,7 +1196,7 @@ describe('OrbManager Phaser adapter', () => {
     expect(manager.synchronizeOrb(sprite as unknown as Phaser.Physics.Arcade.Sprite & { orbId: number })).toBe(true);
     const after = manager.getSnapshot()[0]!;
     expect(after.position).toEqual({ x: 88, y: 99 });
-    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(400);
+    expect(Math.hypot(after.velocity.x, after.velocity.y)).toBeCloseTo(ORB_SPEED);
     expect(after.velocity.x / after.velocity.y).toBeCloseTo(20 / 300);
   });
 
