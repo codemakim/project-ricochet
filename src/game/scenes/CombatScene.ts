@@ -175,6 +175,7 @@ export interface CombatDebugSnapshot {
   activeShooters: number;
   bullets: number;
   experiment: ExperimentSettings;
+  developmentBalance?: RunConfig['developmentBalance'];
   encounter: ReturnType<EncounterDirector['getSnapshot']>;
   progression: ProgressionSnapshot;
   buildRanks: AbilityRanks;
@@ -715,6 +716,9 @@ export class CombatScene extends Phaser.Scene {
       activeShooters: enemySnapshot.activeShooters,
       bullets: enemySnapshot.bullets,
       experiment: { ...this.experiment },
+      ...(this.runConfig?.developmentBalance
+        ? { developmentBalance: { ...this.runConfig.developmentBalance } }
+        : {}),
       encounter: this.encounterDirector?.getSnapshot() ?? {
         elapsedMs: 0,
         elapsedSinceSpawnMs: 0,

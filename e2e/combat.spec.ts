@@ -591,12 +591,12 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
     { key: 'boss-body', width: 252, height: 144 },
     { key: 'boss-left-weakpoint', width: 56, height: 120 },
     { key: 'boss-core', width: 64, height: 64 },
-    { key: 'orb-echo', width: 64, height: 64 },
-    { key: 'orb-corrosion', width: 64, height: 64 },
-    { key: 'orb-conduction', width: 64, height: 64 },
-    { key: 'orb-inertia', width: 64, height: 64 },
-    { key: 'orb-split', width: 64, height: 64 },
-    { key: 'orb-explosion', width: 64, height: 64 },
+    { key: 'orb-echo', width: 256, height: 256 },
+    { key: 'orb-corrosion', width: 256, height: 256 },
+    { key: 'orb-conduction', width: 256, height: 256 },
+    { key: 'orb-inertia', width: 256, height: 256 },
+    { key: 'orb-split', width: 256, height: 256 },
+    { key: 'orb-explosion', width: 256, height: 256 },
   ]);
   const liveGeometry = await sceneCall(page, (scene) => {
     const orb = scene.children.list.find((child) => child.orbId === 0)!;

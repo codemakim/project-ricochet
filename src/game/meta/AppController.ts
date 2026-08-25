@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
+import { renderDevelopmentBalancePanel } from '../dev/DevelopmentBalancePanel';
+import {
+  loadDevelopmentBalanceSettings,
+  saveDevelopmentBalanceSettings,
+  type DevelopmentBalanceSettings,
+} from '../dev/developmentBalanceSettings';
 import {
   ORB_CORE_DEFINITIONS,
   ORB_CORE_IDS,
@@ -43,6 +49,8 @@ export class AppController {
   private progress: MetaProgress;
   private game?: Phaser.Game;
   private workshopMediaCleanup?: () => void;
+  private developmentBalance?: DevelopmentBalanceSettings;
+  private developmentLoadout?: [OrbCoreId];
 
   constructor(
     private readonly root: HTMLElement,
@@ -75,6 +83,7 @@ export class AppController {
         </div>
         <button class="primary" data-action="deploy">출격</button>
         <button data-action="workshop">코어 작업장</button>
+        ${developmentBuild() ? '<button data-action="development-balance">밸런스 테스트</button>' : ''}
       </section>
     `;
     this.progress.loadout.forEach((core, index) => {
@@ -83,11 +92,15 @@ export class AppController {
     });
     this.root.querySelector('[data-action="deploy"]')?.addEventListener('click', () => this.deploy());
     this.root.querySelector('[data-action="workshop"]')?.addEventListener('click', () => this.renderWorkshop());
+    this.root.querySelector('[data-action="development-balance"]')
+      ?.addEventListener('click', () => {
+        this.developmentLoadout = this.selectedLoadout();
+        this.renderDevelopmentBalance();
+      });
   }
 
   private deploy(): void {
-    const loadout = [...this.root.querySelectorAll<HTMLSelectElement>('[data-loadout-slot]')]
-      .map(({ value }) => value as OrbCoreId);
+    const loadout = this.selectedLoadout();
     this.progress = setLoadout(this.progress, loadout);
     this.store.save(this.progress);
     const config = createRunConfig(
@@ -102,6 +115,68 @@ export class AppController {
     this.game = createCombatGame('game-root', config);
     this.game.events.once(RUN_ENDED_EVENT, (result: RunResult) => this.finish(result));
     exposeDevelopmentGame(this.game);
+  }
+
+  private selectedLoadout(): [OrbCoreId] {
+    const selected = this.root.querySelector<HTMLSelectElement>('[data-loadout-slot]')?.value;
+    return [(selected as OrbCoreId | undefined) ?? this.progress.loadout[0]];
+  }
+
+  private renderDevelopmentBalance(): void {
+    if (!developmentBuild()) return;
+    const settings = loadDevelopmentBalanceSettings(localStorage, Date.now() >>> 0);
+    renderDevelopmentBalancePanel(this.root, settings, {
+      onStart: (next) => this.deployDevelopment(next),
+      onBack: () => this.renderDeploy(),
+    });
+  }
+
+  private deployDevelopment(settings: DevelopmentBalanceSettings): void {
+    const loadout = this.developmentLoadout ?? [...this.progress.loadout] as [OrbCoreId];
+    this.developmentBalance = { ...settings };
+    this.developmentLoadout = [...loadout];
+    saveDevelopmentBalanceSettings(localStorage, settings);
+    const config: RunConfig = {
+      ...createRunConfig(
+        loadout,
+        settings.seed,
+        undefined,
+        this.progress.unlockedCores,
+        this.progress.discoveredCores,
+        this.progress.discoveredFusions,
+      ),
+      developmentBalance: { ...settings },
+    };
+    this.root.innerHTML = '<main id="game-root" aria-label="Project Ricochet game"></main>';
+    this.game = createCombatGame('game-root', config);
+    this.game.events.once(RUN_ENDED_EVENT, (result: RunResult) => this.finishDevelopment(result));
+    exposeDevelopmentGame(this.game);
+  }
+
+  private finishDevelopment(result: RunResult): void {
+    this.game?.destroy(true);
+    this.game = undefined;
+    const seconds = Math.floor(result.durationMs / 1000);
+    this.root.innerHTML = `
+      <section class="meta-screen result">
+        <p class="eyebrow">DEVELOPMENT ONLY</p>
+        <h1>테스트 런 종료</h1>
+        <dl>
+          <div><dt>전투 시간</dt><dd>${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}</dd></div>
+          <div><dt>시드</dt><dd>${this.developmentBalance?.seed ?? '-'}</dd></div>
+        </dl>
+        <button class="primary" data-action="restart-development">같은 설정 재시작</button>
+        <button data-action="edit-development">수치 수정</button>
+        <button data-action="normal-deploy">일반 출격 화면</button>
+      </section>
+    `;
+    this.root.querySelector('[data-action="restart-development"]')?.addEventListener('click', () => {
+      if (this.developmentBalance) this.deployDevelopment(this.developmentBalance);
+    });
+    this.root.querySelector('[data-action="edit-development"]')
+      ?.addEventListener('click', () => this.renderDevelopmentBalance());
+    this.root.querySelector('[data-action="normal-deploy"]')
+      ?.addEventListener('click', () => this.renderDeploy());
   }
 
   private finish(result: RunResult): void {
@@ -311,4 +386,8 @@ export function exposeDevelopmentGame(game: Phaser.Game): void {
   if (!(import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) return;
   const developmentWindow = window as typeof window & { __RICHOCHET_GAME__?: Phaser.Game };
   developmentWindow.__RICHOCHET_GAME__ = game;
+}
+
+function developmentBuild(): boolean {
+  return (import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV;
 }

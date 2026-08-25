@@ -62,6 +62,19 @@ select, button {
   font: inherit;
 }
 
+input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #34557f;
+  border-radius: 10px;
+  padding: 0 12px;
+  color: #eaf8ff;
+  background: #101d35;
+  font: inherit;
+}
+
+input:invalid { border-color: #ff6d7a; }
+
 button { cursor: pointer; }
 button:hover:not(:disabled) { border-color: #65f6ff; }
 button:disabled { cursor: not-allowed; opacity: .45; }
@@ -82,6 +95,29 @@ button.primary { color: #04101c; background: #65f6ff; border-color: #65f6ff; fon
 .result dl { display: grid; gap: 8px; margin: 0; }
 .result dt { color: #8da5c2; }
 .result dd { margin: 0; font-weight: 700; }
+
+.development-balance-screen {
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.development-note { color: #9bb3cf; }
+
+.development-balance-screen form,
+.development-field,
+.development-actions { display: grid; gap: 10px; }
+
+.development-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.development-field > span { color: #eaf8ff; font-weight: 700; }
+.development-field small { min-height: 1.2em; color: #8da5c2; }
+.development-field .field-error { color: #ff8792; }
+.development-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .workshop-screen {
   width: min(960px, 100%);
@@ -168,6 +204,8 @@ button.primary { color: #04101c; background: #65f6ff; border-color: #65f6ff; fon
 .workshop-sheet-close { float: right; min-height: 36px; }
 
 @media (max-width: 640px) {
+  .development-balance-screen { padding: 18px 14px; }
+  .development-balance-grid, .development-actions { grid-template-columns: 1fr; }
   .workshop-screen { padding: 18px 12px; }
   .workshop-layout { display: block; }
   .workshop-detail { display: none; }

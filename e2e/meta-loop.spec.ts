@@ -11,7 +11,8 @@ async function combatSnapshot(page: Page) {
       loadoutVisible: boolean;
       bossRewardVisible: boolean;
       runCompleteVisible: boolean;
-      encounter: { state: string; stageId: string };
+      encounter: { state: string; stageId: string; runSeed: number };
+      orbs: unknown[];
       boss: { kind: string; active: boolean };
       progression: {
         choices: Array<
@@ -24,9 +25,87 @@ async function combatSnapshot(page: Page) {
       levelUpVisible: boolean;
       discoveredCoreTypes: OrbCoreId[];
       discoveredFusionTypes: string[];
+      developmentBalance?: {
+        normalEnemyHpMultiplier: number;
+        specialEnemyHpMultiplier: number;
+        descentSpeedMultiplier: number;
+        activePopulationMultiplier: number;
+        reinforcementIntervalMultiplier: number;
+        playerDamageMultiplier: number;
+        startingOrbCount: number;
+        seed: number;
+      };
     };
   });
 }
+
+test('@desktop configures and repeats an isolated development balance run', async ({ page }) => {
+  await page.goto('/');
+  const metaBefore = await page.evaluate(() => localStorage.getItem('project-ricochet.meta'));
+  await page.getByRole('button', { name: '밸런스 테스트' }).click();
+  await page.getByLabel('일반 적 HP').fill('2');
+  await page.getByLabel('특수 적 HP').fill('3');
+  await page.getByLabel('적 하강 속도').fill('0.5');
+  await page.getByLabel('적 수').fill('1.5');
+  await page.getByLabel('증원 간격').fill('0.5');
+  await page.getByLabel('플레이어 피해').fill('2');
+  await page.getByLabel('시작 구슬 수').fill('4');
+  await page.getByLabel('시드').fill('77');
+  await page.getByRole('button', { name: '테스트 시작' }).click();
+  await expect.poll(() => combatSceneReady(page)).toBe(true);
+  await expect.poll(async () => (await combatSnapshot(page)).orbs.length).toBe(4);
+
+  const first = await combatSnapshot(page);
+  expect(first.developmentBalance).toMatchObject({
+    normalEnemyHpMultiplier: 2,
+    specialEnemyHpMultiplier: 3,
+    descentSpeedMultiplier: 0.5,
+    activePopulationMultiplier: 1.5,
+    reinforcementIntervalMultiplier: 0.5,
+    playerDamageMultiplier: 2,
+    startingOrbCount: 4,
+    seed: 77,
+  });
+  expect(first.orbs).toHaveLength(4);
+  expect(first.encounter.runSeed).toBe(77);
+
+  await page.evaluate(() => {
+    const game = (window as typeof window & { __RICHOCHET_GAME__?: {
+      events: { emit(event: string, result: unknown): void };
+    } }).__RICHOCHET_GAME__!;
+    game.events.emit('ricochet:run-ended', {
+      identity: { runId: 'dev-e2e-1', battlefieldId: 'default', threatId: 'normal', seed: 77 },
+      loadout: ['echo'], unlockedCoreTypes: ['echo'], discoveredCoreTypes: ['echo'],
+      discoveredFusionTypes: [], developmentBalance: firstBalance(), success: false,
+      durationMs: 1_000, defeatedBossIds: [], buildRanks: {},
+    });
+    function firstBalance() {
+      return {
+        normalEnemyHpMultiplier: 2, specialEnemyHpMultiplier: 3,
+        descentSpeedMultiplier: 0.5, activePopulationMultiplier: 1.5,
+        reinforcementIntervalMultiplier: 0.5, playerDamageMultiplier: 2,
+        startingOrbCount: 4, seed: 77,
+      };
+    }
+  });
+  await expect(page.getByRole('heading', { name: '테스트 런 종료' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('project-ricochet.meta'))).toBe(metaBefore);
+
+  await page.getByRole('button', { name: '같은 설정 재시작' }).click();
+  await expect.poll(() => combatSceneReady(page)).toBe(true);
+  await expect.poll(async () => (await combatSnapshot(page)).encounter.runSeed).toBe(77);
+});
+
+test('@mobile development balance form stays scrollable and validates ranges', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '밸런스 테스트' }).click();
+  await page.getByLabel('시작 구슬 수').fill('9');
+  await expect(page.getByRole('button', { name: '테스트 시작' })).toBeDisabled();
+  await page.getByLabel('시작 구슬 수').fill('6');
+  await expect(page.getByRole('button', { name: '테스트 시작' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '취소' })).toBeVisible();
+});
 
 async function activeSceneTexts(page: Page): Promise<string[]> {
   return page.evaluate(() => {
