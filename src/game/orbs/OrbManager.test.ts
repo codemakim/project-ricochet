@@ -704,6 +704,26 @@ describe('OrbStore', () => {
     expect(store.getSnapshot()[0]!.position.y).toBeLessThan(700);
   });
 
+  it('uses the current permanent-orb speed for floor recall', () => {
+    const store = new OrbStore(
+      EXPERIMENT_DEFAULTS,
+      {},
+      () => false,
+      () => 0,
+      () => 520,
+    );
+    store.activateAim();
+    store.update(0, 0, player, up);
+    store.synchronizeActive(0, { x: 100, y: 700 }, { x: 0, y: 520 });
+
+    store.beginFloorRecall(0);
+    store.update(1, 100, player, up);
+
+    const returning = store.getSnapshot()[0]!;
+    expect(returning.position.y).toBeCloseTo(648);
+    expect(Math.hypot(returning.velocity.x, returning.velocity.y)).toBeCloseTo(520);
+  });
+
   it('enforces an 80ms per-orb/per-enemy hit cooldown and emits damage decisions', () => {
     const onEnemyDamage = vi.fn();
     const store = new OrbStore(EXPERIMENT_DEFAULTS, { onEnemyDamage });

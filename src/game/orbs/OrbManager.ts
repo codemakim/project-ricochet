@@ -45,7 +45,6 @@ import { orbVisualProfile } from '../visuals/orbVisualProfiles';
 
 export { ORB_RADIUS } from '../constants';
 const ATTRACTION_DURATION_MS = 100;
-const RECALL_SPEED = ORB_SPEED;
 const HIT_COOLDOWN_MS = 80;
 const DEFAULT_RESTORED_CHARGES = 3;
 
@@ -526,14 +525,15 @@ export class OrbStore {
       y: playerPosition.y - record.position.y,
     };
     const distance = Math.hypot(offset.x, offset.y);
-    const step = RECALL_SPEED * Math.max(0, deltaMs) / 1000;
+    const recallSpeed = this.getChargedSpeed();
+    const step = recallSpeed * Math.max(0, deltaMs) / 1000;
     if (distance <= Math.max(ORB_RADIUS, step)) {
       record.position = { ...playerPosition };
       this.arrive(record);
       return;
     }
     const direction = normalize(offset);
-    record.velocity = { x: direction.x * RECALL_SPEED, y: direction.y * RECALL_SPEED };
+    record.velocity = { x: direction.x * recallSpeed, y: direction.y * recallSpeed };
     record.position = {
       x: record.position.x + direction.x * step,
       y: record.position.y + direction.y * step,

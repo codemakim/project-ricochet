@@ -141,10 +141,7 @@ export class EncounterDirector {
       requiredTopmostY: phase.definition.reinforcementReleaseY,
       activeEnemies: enemyState.activePopulation,
       incomingEnemies: formation.populationCost,
-      activeCap: Math.max(1, Math.round(
-        phase.definition.activeCap
-          * (this.developmentBalance?.activePopulationMultiplier ?? 1),
-      )),
+      activeCap: phase.definition.activeCap,
     })) return NO_UPDATE;
 
     this.elapsedSinceSpawnMs = 0;

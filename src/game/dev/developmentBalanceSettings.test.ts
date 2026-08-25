@@ -22,13 +22,12 @@ describe('development balance settings', () => {
     const storage = new MemoryStorage();
     const defaults = loadDevelopmentBalanceSettings(storage, 17);
     expect(defaults).toEqual({
-      normalEnemyHpMultiplier: 1,
-      specialEnemyHpMultiplier: 1,
-      descentSpeedMultiplier: 1,
-      activePopulationMultiplier: 1,
+      normalEnemyHpMultiplier: 1.3,
+      specialEnemyHpMultiplier: 1.2,
+      descentSpeedMultiplier: 1.2,
       reinforcementIntervalMultiplier: 1,
       playerDamageMultiplier: 1,
-      orbSpeedMultiplier: 1,
+      orbSpeedMultiplier: 1.3,
       startingOrbCount: 1,
       seed: 17,
     });
@@ -59,8 +58,6 @@ describe('development balance settings', () => {
     expect(() => parseDevelopmentBalanceSettings({ ...valid, normalEnemyHpMultiplier: 0 }))
       .toThrow(RangeError);
     expect(() => parseDevelopmentBalanceSettings({ ...valid, descentSpeedMultiplier: 6 }))
-      .toThrow(RangeError);
-    expect(() => parseDevelopmentBalanceSettings({ ...valid, activePopulationMultiplier: 0.2 }))
       .toThrow(RangeError);
     expect(() => parseDevelopmentBalanceSettings({ ...valid, reinforcementIntervalMultiplier: 0 }))
       .toThrow(RangeError);

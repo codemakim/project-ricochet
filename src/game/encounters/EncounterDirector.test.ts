@@ -55,16 +55,15 @@ describe('EncounterDirector', () => {
     expect(director.update(1, empty).formation).not.toBeNull();
   });
 
-  it('scales reinforcement timing and active population for one run', () => {
+  it('scales reinforcement timing for one run', () => {
     const balance = {
       ...createDefaultDevelopmentBalanceSettings(7),
       reinforcementIntervalMultiplier: 0.5,
-      activePopulationMultiplier: 2,
     };
     const director = new EncounterDirector(7, balance);
     const interval = STAGES[0].phases[0].spawnIntervalMs * 0.5;
 
-    expect(director.update(interval, { activePopulation: 12, topmostEnemyY: 120 }).formation)
+    expect(director.update(interval, clearTop).formation)
       .not.toBeNull();
   });
 

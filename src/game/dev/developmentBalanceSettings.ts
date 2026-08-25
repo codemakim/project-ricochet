@@ -2,7 +2,6 @@ export interface DevelopmentBalanceSettings {
   normalEnemyHpMultiplier: number;
   specialEnemyHpMultiplier: number;
   descentSpeedMultiplier: number;
-  activePopulationMultiplier: number;
   reinforcementIntervalMultiplier: number;
   playerDamageMultiplier: number;
   orbSpeedMultiplier: number;
@@ -16,7 +15,6 @@ const RANGES = {
   normalEnemyHpMultiplier: [0.1, 10],
   specialEnemyHpMultiplier: [0.1, 10],
   descentSpeedMultiplier: [0, 5],
-  activePopulationMultiplier: [0.25, 4],
   reinforcementIntervalMultiplier: [0.1, 4],
   playerDamageMultiplier: [0.1, 10],
   orbSpeedMultiplier: [0.25, 4],
@@ -28,13 +26,12 @@ export function createDefaultDevelopmentBalanceSettings(
   seed: number,
 ): DevelopmentBalanceSettings {
   return {
-    normalEnemyHpMultiplier: 1,
-    specialEnemyHpMultiplier: 1,
-    descentSpeedMultiplier: 1,
-    activePopulationMultiplier: 1,
+    normalEnemyHpMultiplier: 1.3,
+    specialEnemyHpMultiplier: 1.2,
+    descentSpeedMultiplier: 1.2,
     reinforcementIntervalMultiplier: 1,
     playerDamageMultiplier: 1,
-    orbSpeedMultiplier: 1,
+    orbSpeedMultiplier: 1.3,
     startingOrbCount: 1,
     seed,
   };

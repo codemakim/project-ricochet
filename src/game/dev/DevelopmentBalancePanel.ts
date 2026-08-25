@@ -18,8 +18,6 @@ const FIELDS = [
     `기준 장갑 ${GAME_TUNING.enemies.hp.armored}`],
   ['descentSpeedMultiplier', '적 하강 속도', 0, 5, 0.1,
     `기준 ${GAME_TUNING.enemies.descentSpeed}px/s`],
-  ['activePopulationMultiplier', '적 수', 0.25, 4, 0.05,
-    `1단계 초기 동시 인구 ${STAGES[0].phases[0].activeCap}`],
   ['reinforcementIntervalMultiplier', '증원 간격', 0.1, 4, 0.1,
     `1단계 초기 ${STAGES[0].phases[0].spawnIntervalMs / 1000}초 / 빈 전장 ${GAME_TUNING.encounter.emptyRespawnMs / 1000}초`],
   ['playerDamageMultiplier', '플레이어 피해', 0.1, 10, 0.1,
