@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
+import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import { clamp, distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
   OrbManager,
@@ -122,6 +123,7 @@ export interface EnemyManagerOptions {
   orbManager: OrbManager;
   temporaryOrbManager?: TemporaryOrbManager;
   getGameplayElapsedMs(): number;
+  developmentBalance?: DevelopmentBalanceSettings;
   formation?: readonly EnemySpec[];
   onContact: (damage: number) => void;
   onBreach: (kind: EnemyKind) => void;
@@ -263,7 +265,9 @@ export class EnemyManager {
       enemy.kind = spec.kind;
       enemy.side = spec.side;
       playActorState(enemy, actorRoleForEnemy(spec.kind, spec.side), 'idle');
-      enemy.hp = spec.hp;
+      enemy.hp = spec.hp * (spec.kind === 'armored'
+        ? (this.options.developmentBalance?.specialEnemyHpMultiplier ?? 1)
+        : (this.options.developmentBalance?.normalEnemyHpMultiplier ?? 1));
       enemy.column = spec.column;
       enemy.row = spec.row ?? -1;
       enemy.footprintWidth = spec.width ?? 1;
@@ -276,7 +280,9 @@ export class EnemyManager {
       const body = enemy.body as Phaser.Physics.Arcade.Body;
       body.setSize(enemy.width, enemy.height, false);
       body.reset(spec.x, spec.y);
-      enemy.setImmovable(true).setVelocityY(spec.speed);
+      enemy.setImmovable(true).setVelocityY(
+        spec.speed * (this.options.developmentBalance?.descentSpeedMultiplier ?? 1),
+      );
       this.enemies.set(enemy.enemyId, enemy);
     }
   }
@@ -801,13 +807,15 @@ export class EnemyManager {
   }
 
   private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
+    const descentSpeedMultiplier = this.options.developmentBalance?.descentSpeedMultiplier ?? 1;
+    const currentSpeed = (enemy.body as Phaser.Physics.Arcade.Body).velocity.y;
     const fragments = enemy.kind === 'splitter'
       ? fragmentSpecsFor({
         x: enemy.x,
         y: enemy.y,
         column: enemy.column,
         row: enemy.row,
-        speed: (enemy.body as Phaser.Physics.Arcade.Body).velocity.y,
+        speed: descentSpeedMultiplier === 0 ? 0 : currentSpeed / descentSpeedMultiplier,
       })
       : [];
     createActorExitVisual(

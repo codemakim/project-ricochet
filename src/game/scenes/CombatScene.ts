@@ -316,6 +316,9 @@ export class CombatScene extends Phaser.Scene {
       unlockedCoreTypes: [...config.unlockedCoreTypes],
       discoveredCoreTypes: [...config.discoveredCoreTypes],
       discoveredFusionTypes: [...config.discoveredFusionTypes],
+      ...(config.developmentBalance
+        ? { developmentBalance: { ...config.developmentBalance } }
+        : {}),
     };
     return this;
   }
@@ -326,6 +329,7 @@ export class CombatScene extends Phaser.Scene {
 
   create(): void {
     const runSeed = this.runConfig?.identity.seed ?? formationRunSeed;
+    const developmentBalance = this.runConfig?.developmentBalance;
     if (!this.runConfig) formationRunSeed = (formationRunSeed + 1) >>> 0;
     this.health = createHealth();
     this.experiment = parseExperimentSettings(window.location.search);
@@ -451,13 +455,14 @@ export class CombatScene extends Phaser.Scene {
       getLifetimeMs: () => build.temporaryLifetimeMs(GAME_TUNING.temporaryOrbs.lifetimeMs),
       onExpired: (event) => this.handleTemporaryOrbExpired(event),
     });
-    this.encounterDirector = new EncounterDirector(runSeed);
+    this.encounterDirector = new EncounterDirector(runSeed, developmentBalance);
     const initialFormation = createInitialFormation(runSeed).enemies;
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
+      developmentBalance,
       formation: initialFormation,
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
@@ -591,6 +596,11 @@ export class CombatScene extends Phaser.Scene {
     if (this.runConfig) {
       if (!this.orbManager.configureStartingCores(this.runConfig.loadout)) {
         throw new Error('run configuration contains an invalid core loadout');
+      }
+      for (let count = 1; count < (developmentBalance?.startingOrbCount ?? 1); count += 1) {
+        if (!this.orbManager.addOrb(this.runConfig.loadout[0])) {
+          throw new Error('development starting orb count exceeds the runtime limit');
+        }
       }
     } else {
       this.pause.add('loadout');

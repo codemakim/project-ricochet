@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 
 const createFormationSpy = vi.hoisted(() => vi.fn());
 
@@ -51,6 +52,31 @@ describe('EncounterDirector', () => {
     const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
 
     expect(director.update(799, empty).formation).toBeNull();
+    expect(director.update(1, empty).formation).not.toBeNull();
+  });
+
+  it('scales reinforcement timing and active population for one run', () => {
+    const balance = {
+      ...createDefaultDevelopmentBalanceSettings(7),
+      reinforcementIntervalMultiplier: 0.5,
+      activePopulationMultiplier: 2,
+    };
+    const director = new EncounterDirector(7, balance);
+    const interval = STAGES[0].phases[0].spawnIntervalMs * 0.5;
+
+    expect(director.update(interval, { activePopulation: 12, topmostEnemyY: 120 }).formation)
+      .not.toBeNull();
+  });
+
+  it('scales the empty battlefield refill delay', () => {
+    const balance = {
+      ...createDefaultDevelopmentBalanceSettings(7),
+      reinforcementIntervalMultiplier: 0.5,
+    };
+    const director = new EncounterDirector(7, balance);
+    const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
+
+    expect(director.update(399, empty).formation).toBeNull();
     expect(director.update(1, empty).formation).not.toBeNull();
   });
 

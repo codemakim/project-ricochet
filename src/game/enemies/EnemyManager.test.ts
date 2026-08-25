@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import { GAME_TUNING } from '../config/gameTuning';
+import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import { createInitialFormation } from '../encounters/formationRules';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
@@ -208,7 +209,7 @@ function createBoundary(
   formation?: readonly EnemySpec[],
   withTemporaryOrbs = false,
   getExternalBulletCount: () => number = () => 0,
-  options: Partial<Pick<EnemyManagerOptions, 'onSecondaryDamage'>> = {},
+  options: Partial<Pick<EnemyManagerOptions, 'onSecondaryDamage' | 'developmentBalance'>> = {},
 ) {
   const groups: FakeGroup[] = [];
   const visuals: FakeSprite[] = [];
@@ -371,6 +372,27 @@ describe('EnemyManager', () => {
     });
     manager.update();
     expect(sprite.y).toBe(128);
+  });
+
+  it('applies per-run HP classes and descent speed once at spawn', () => {
+    const developmentBalance = {
+      ...createDefaultDevelopmentBalanceSettings(1),
+      normalEnemyHpMultiplier: 2,
+      specialEnemyHpMultiplier: 3,
+      descentSpeedMultiplier: 0.5,
+    };
+    const { manager } = createBoundary([
+      { kind: 'basic', hp: 3, x: 90, y: 120, column: 0, speed: 8 },
+      { kind: 'armored', hp: 10, x: 180, y: 120, column: 1, speed: 8 },
+      { kind: 'shooter', hp: 4, x: 270, y: 120, column: 2, speed: 8 },
+    ], false, () => 0, { developmentBalance });
+
+    expect(manager.getSnapshot().enemies.map(({ hp, speed }) => ({ hp, speed })))
+      .toEqual([
+        { hp: 6, speed: 4 },
+        { hp: 30, speed: 4 },
+        { hp: 8, speed: 4 },
+      ]);
   });
 
   it('clears all live enemies without destroying the manager', () => {

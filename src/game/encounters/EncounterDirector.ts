@@ -1,4 +1,5 @@
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
+import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { canSpawnReinforcement, phaseAt, reinforcementWindowOpen } from './encounterRules';
 import {
@@ -58,7 +59,10 @@ export class EncounterDirector {
   private pendingFormation: PendingFormation | null = null;
   private progressionLevel = 0;
 
-  constructor(private readonly runSeed = 0) {}
+  constructor(
+    private readonly runSeed = 0,
+    private readonly developmentBalance?: DevelopmentBalanceSettings,
+  ) {}
 
   update(deltaMs: number, enemyState: EncounterEnemyState, progressionLevel = 0): EncounterUpdate {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
@@ -102,10 +106,13 @@ export class EncounterDirector {
     }
 
     const phase = phaseAt(stage, this.stageElapsedMs, this.progressionLevel);
+    const intervalMultiplier = this.developmentBalance?.reinforcementIntervalMultiplier ?? 1;
+    const spawnIntervalMs = phase.definition.spawnIntervalMs * intervalMultiplier;
+    const emptyRespawnMs = GAME_TUNING.encounter.emptyRespawnMs * intervalMultiplier;
     if (!reinforcementWindowOpen({
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      spawnIntervalMs: phase.definition.spawnIntervalMs,
-      emptyRespawnMs: GAME_TUNING.encounter.emptyRespawnMs,
+      spawnIntervalMs,
+      emptyRespawnMs,
       topmostEnemyY: enemyState.topmostEnemyY,
       requiredTopmostY: phase.definition.reinforcementReleaseY,
       activeEnemies: enemyState.activePopulation,
@@ -128,13 +135,16 @@ export class EncounterDirector {
     const formation = this.pendingFormation.result;
     if (!canSpawnReinforcement({
       elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      spawnIntervalMs: phase.definition.spawnIntervalMs,
-      emptyRespawnMs: GAME_TUNING.encounter.emptyRespawnMs,
+      spawnIntervalMs,
+      emptyRespawnMs,
       topmostEnemyY: enemyState.topmostEnemyY,
       requiredTopmostY: phase.definition.reinforcementReleaseY,
       activeEnemies: enemyState.activePopulation,
       incomingEnemies: formation.populationCost,
-      activeCap: phase.definition.activeCap,
+      activeCap: Math.max(1, Math.round(
+        phase.definition.activeCap
+          * (this.developmentBalance?.activePopulationMultiplier ?? 1),
+      )),
     })) return NO_UPDATE;
 
     this.elapsedSinceSpawnMs = 0;
