@@ -14,6 +14,7 @@ export interface EnemySpec {
   height?: number;
   speed: number;
   side?: FragmentSide;
+  rapidIngressTargetY?: number;
 }
 
 export interface FormationEnemySpec extends EnemySpec {

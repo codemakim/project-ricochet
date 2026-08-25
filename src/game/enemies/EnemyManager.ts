@@ -42,7 +42,16 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   footprintWidth: number;
   footprintHeight: number;
   side?: FragmentSide;
+  normalDescentSpeed: number;
+  rapidIngressTargetY?: number;
+  ingressBatchId?: number;
 };
+
+interface RapidIngressBatch {
+  enemyIds: number[];
+  top: number;
+  bottom: number;
+}
 
 function actorRoleForEnemy(kind: EnemyKind, side?: FragmentSide): ActorRole {
   if (kind === 'fragment') {
@@ -159,6 +168,8 @@ export class EnemyManager {
   private readonly bulletTextureKey: string;
   private readonly unsubscribeOrbAdded: () => void;
   private nextEnemyId = 0;
+  private nextIngressBatchId = 0;
+  private readonly rapidIngressBatches = new Map<number, RapidIngressBatch>();
   private destroyed = false;
 
   constructor(
@@ -255,6 +266,14 @@ export class EnemyManager {
 
   spawnFormation(formation: readonly EnemySpec[]): void {
     if (this.destroyed) return;
+    const ingressBatchId = formation.some(({ rapidIngressTargetY }) => (
+      rapidIngressTargetY !== undefined
+    )) ? this.nextIngressBatchId++ : undefined;
+    const ingressBatch: RapidIngressBatch = {
+      enemyIds: [],
+      top: Number.POSITIVE_INFINITY,
+      bottom: Number.NEGATIVE_INFINITY,
+    };
     for (const spec of formation) {
       const textureKey = spec.kind === 'fragment' && spec.side
         ? this.textureKeys[spec.side === 'left' ? 'fragmentLeft' : 'fragmentRight']
@@ -280,15 +299,33 @@ export class EnemyManager {
       const body = enemy.body as Phaser.Physics.Arcade.Body;
       body.setSize(enemy.width, enemy.height, false);
       body.reset(spec.x, spec.y);
+      enemy.normalDescentSpeed = spec.speed
+        * (this.options.developmentBalance?.descentSpeedMultiplier ?? 1);
+      if (spec.rapidIngressTargetY !== undefined && ingressBatchId !== undefined) {
+        enemy.rapidIngressTargetY = spec.rapidIngressTargetY;
+        enemy.ingressBatchId = ingressBatchId;
+        ingressBatch.enemyIds.push(enemy.enemyId);
+        ingressBatch.top = Math.min(ingressBatch.top, spec.rapidIngressTargetY - pixelHeight / 2);
+        ingressBatch.bottom = Math.max(
+          ingressBatch.bottom,
+          spec.rapidIngressTargetY + pixelHeight / 2,
+        );
+      }
       enemy.setImmovable(true).setVelocityY(
-        spec.speed * (this.options.developmentBalance?.descentSpeedMultiplier ?? 1),
+        enemy.rapidIngressTargetY === undefined
+          ? enemy.normalDescentSpeed
+          : GAME_TUNING.encounter.emergencyIngress.speed,
       );
       this.enemies.set(enemy.enemyId, enemy);
+    }
+    if (ingressBatch.enemyIds.length > 0 && ingressBatchId !== undefined) {
+      this.rapidIngressBatches.set(ingressBatchId, ingressBatch);
     }
   }
 
   update(): void {
     if (this.destroyed) return;
+    this.completeRapidIngresses();
     const motion = GAME_TUNING.visual.motion;
     const elapsedMs = this.options.getGameplayElapsedMs();
     for (const enemy of this.enemies.values()) {
@@ -466,6 +503,7 @@ export class EnemyManager {
     return [...this.enemies.values()]
       .filter((enemy) => (
         enemy.active
+        && enemy.rapidIngressTargetY === undefined
         && enemy.enemyId !== excludedEnemyId
         && Math.hypot(enemy.x - origin.x, enemy.y - origin.y) <= radius
       ))
@@ -495,7 +533,8 @@ export class EnemyManager {
     maximumStacks: number,
   ): void {
     for (const enemyId of new Set(enemyIds)) {
-      if (!this.enemies.get(enemyId)?.active) continue;
+      const enemy = this.enemies.get(enemyId);
+      if (!enemy?.active || enemy.rapidIngressTargetY !== undefined) continue;
       this.vulnerabilityStacks.set(
         enemyId,
         Math.min(maximumStacks, (this.vulnerabilityStacks.get(enemyId) ?? 0) + 1),
@@ -568,6 +607,7 @@ export class EnemyManager {
     this.warningTimers.clear();
     this.activeShooters.clear();
     this.pendingReflections.clear();
+    this.rapidIngressBatches.clear();
     this.enemies.clear();
     this.enemyGroup.destroy(true);
     this.bulletGroup.destroy(true);
@@ -585,7 +625,7 @@ export class EnemyManager {
   }
 
   private processOrbHit(orb: OrbSprite, enemy: EnemySprite): boolean {
-    if (!enemy.active || !orb.active) return false;
+    if (!enemy.active || !orb.active || enemy.rapidIngressTargetY !== undefined) return false;
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       enemy.enemyId,
@@ -620,7 +660,9 @@ export class EnemyManager {
 
   private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
     const manager = this.options.temporaryOrbManager;
-    if (!manager || !enemy.active || !orb.active) return false;
+    if (!manager || !enemy.active || !orb.active || enemy.rapidIngressTargetY !== undefined) {
+      return false;
+    }
     const result = manager.handleEnemyHit(
       orb,
       enemy.enemyId,
@@ -706,7 +748,7 @@ export class EnemyManager {
   }
 
   private handleContact(player: Phaser.Physics.Arcade.Sprite, enemy: EnemySprite): void {
-    if (!enemy.active) return;
+    if (!enemy.active || enemy.rapidIngressTargetY !== undefined) return;
     const direction = normalize(
       { x: player.x - enemy.x, y: player.y - enemy.y },
       { x: 0, y: 1 },
@@ -728,7 +770,10 @@ export class EnemyManager {
     if (this.destroyed) return;
     const bulletCount = this.getBulletCount() + (this.options.getExternalBulletCount?.() ?? 0);
     const candidates = [...this.enemies.values()].filter(
-      (enemy) => enemy.active && enemy.kind === 'shooter' && !this.activeShooters.has(enemy.enemyId),
+      (enemy) => enemy.active
+        && enemy.rapidIngressTargetY === undefined
+        && enemy.kind === 'shooter'
+        && !this.activeShooters.has(enemy.enemyId),
     );
     for (const shooter of candidates) {
       if (!canFire(this.activeShooters.size, bulletCount)) break;
@@ -846,6 +891,7 @@ export class EnemyManager {
   }
 
   private damageEnemy(enemy: EnemySprite, damage: number): number {
+    if (enemy.rapidIngressTargetY !== undefined) return 0;
     const vulnerability = GAME_TUNING.orbCores.corrosion.vulnerability;
     const stacks = this.vulnerabilityStacks.get(enemy.enemyId) ?? 0;
     const previousHp = Math.max(0, enemy.hp);
@@ -863,5 +909,60 @@ export class EnemyManager {
       );
     }
     return previousHp - enemy.hp;
+  }
+
+  private completeRapidIngresses(): void {
+    for (const [batchId, batch] of this.rapidIngressBatches) {
+      const enemies = batch.enemyIds
+        .map((id) => this.enemies.get(id))
+        .filter((enemy): enemy is EnemySprite => Boolean(enemy?.active));
+      if (enemies.some((enemy) => (
+        enemy.rapidIngressTargetY !== undefined && enemy.y < enemy.rapidIngressTargetY
+      ))) continue;
+      for (const enemy of enemies) {
+        const targetY = enemy.rapidIngressTargetY;
+        if (targetY === undefined) continue;
+        enemy.setPosition(enemy.x, targetY);
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        body.reset(enemy.x, targetY);
+        enemy.setVelocityY(enemy.normalDescentSpeed);
+        delete enemy.rapidIngressTargetY;
+        delete enemy.ingressBatchId;
+      }
+      this.ejectOrbsBelow(batch.top, batch.bottom);
+      this.rapidIngressBatches.delete(batchId);
+    }
+  }
+
+  private ejectOrbsBelow(top: number, bottom: number): void {
+    for (const orb of this.options.orbManager.getSprites()) {
+      this.ejectOrb(orb, top, bottom, this.options.orbManager.orbRadius(), () => {
+        this.options.orbManager.synchronizeOrb(orb);
+      });
+    }
+    const temporary = this.options.temporaryOrbManager;
+    if (!temporary) return;
+    for (const orb of temporary.getGroup().getChildren() as TemporaryOrbSprite[]) {
+      this.ejectOrb(orb, top, bottom, GAME_TUNING.temporaryOrbs.radius, () => {
+        temporary.synchronizeOrb(orb);
+      });
+    }
+  }
+
+  private ejectOrb(
+    orb: Phaser.Physics.Arcade.Sprite,
+    top: number,
+    bottom: number,
+    radius: number,
+    synchronize: () => void,
+  ): void {
+    const body = orb.body as Phaser.Physics.Arcade.Body;
+    if (!orb.active || !body.enable || orb.y < top - radius || orb.y > bottom + radius) return;
+    const velocity = { x: body.velocity.x, y: Math.abs(body.velocity.y) };
+    const y = bottom + radius + 2;
+    orb.setPosition(orb.x, y);
+    body.reset(orb.x, y);
+    body.setVelocity(velocity.x, velocity.y);
+    synchronize();
   }
 }

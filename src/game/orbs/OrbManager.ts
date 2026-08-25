@@ -891,6 +891,10 @@ export class OrbManager {
     return this.store.getSnapshot();
   }
 
+  orbRadius(): number {
+    return this.store.orbRadius();
+  }
+
   synchronizeOrb(orb: OrbSprite): boolean {
     const owned = this.resolveOwnedOrb(orb);
     if (!owned) return false;

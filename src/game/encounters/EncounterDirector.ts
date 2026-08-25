@@ -1,4 +1,5 @@
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
+import { GAME_HEIGHT } from '../constants';
 import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
 import { canSpawnReinforcement, phaseAt, reinforcementWindowOpen } from './encounterRules';
@@ -148,7 +149,12 @@ export class EncounterDirector {
     this.spawnSequence += 1;
     this.lastFormationId = formation.id;
     this.pendingFormation = null;
-    return { formation: formation.enemies, transition: null };
+    return {
+      formation: enemyState.activePopulation === 0
+        ? withRapidIngress(formation.enemies)
+        : formation.enemies,
+      transition: null,
+    };
   }
 
   recordEnemyKill(kind: EnemyKind): void {
@@ -220,6 +226,19 @@ export class EncounterDirector {
   private activeStage(): StageDefinition {
     return STAGES[this.stageIndex]!;
   }
+}
+
+function withRapidIngress(enemies: readonly EnemySpec[]): EnemySpec[] {
+  const cellHeight = GAME_TUNING.encounter.grid.cellHeight;
+  const currentBottom = Math.max(...enemies.map((enemy) => (
+    enemy.y + (enemy.height ?? 1) * cellHeight / 2
+  )));
+  const offset = GAME_HEIGHT * GAME_TUNING.encounter.emergencyIngress.targetDepthRatio
+    - currentBottom;
+  return enemies.map((enemy) => ({
+    ...enemy,
+    rapidIngressTargetY: enemy.y + Math.max(0, offset),
+  }));
 }
 
 function formationRecipe(

@@ -260,6 +260,7 @@ function createBoundary(
     },
     handleEnemyHit,
     synchronizeOrb: vi.fn(),
+    orbRadius: () => 16,
   } as unknown as OrbManager;
   const temporaryOrb = new FakeSprite(140, 140, 'orb-temporary');
   (temporaryOrb as FakeSprite & { temporaryOrbId: number }).temporaryOrbId = 7;
@@ -398,6 +399,7 @@ describe('EnemyManager', () => {
   it('applies player damage once and gives orb kill prediction effective HP', () => {
     const developmentBalance = {
       ...createDefaultDevelopmentBalanceSettings(1),
+      normalEnemyHpMultiplier: 1,
       playerDamageMultiplier: 2,
     };
     const boundary = createBoundary([
@@ -415,6 +417,35 @@ describe('EnemyManager', () => {
 
     boundary.manager.applyDirectDamage(0, 1);
     expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(4);
+  });
+
+  it('ghosts a rapid ingress wave, then ejects orbs and restores normal descent', () => {
+    const boundary = createBoundary([
+      {
+        kind: 'basic', hp: 10, x: 160, y: -40, column: 0, speed: 8,
+        rapidIngressTargetY: 130,
+      },
+    ]);
+    const enemy = boundary.groups[0]!.children[0]!;
+    boundary.orb.setPosition(160, 100);
+    boundary.orb.body.enable = true;
+    boundary.handleEnemyHit.mockReturnValue({
+      charged: true, charges: 0, damage: 10, reflect: false,
+    });
+
+    expect(boundary.colliders[0]!.trigger(boundary.orb, enemy)).toBe(false);
+    expect(boundary.handleEnemyHit).not.toHaveBeenCalled();
+    boundary.manager.applyDirectDamage(0, 99);
+    expect(boundary.manager.getSnapshot().enemies[0]).toMatchObject({
+      hp: 10,
+      speed: GAME_TUNING.encounter.emergencyIngress.speed,
+    });
+
+    enemy.y = 130;
+    boundary.manager.update();
+
+    expect(boundary.manager.getSnapshot().enemies[0]).toMatchObject({ hp: 10, speed: 8 });
+    expect(boundary.orb.y).toBeGreaterThan(160);
   });
 
   it('clears all live enemies without destroying the manager', () => {

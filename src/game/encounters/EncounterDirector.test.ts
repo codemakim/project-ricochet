@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
+import { GAME_HEIGHT } from '../constants';
+import { GAME_TUNING } from '../config/gameTuning';
 
 const createFormationSpy = vi.hoisted(() => vi.fn());
 
@@ -14,7 +16,7 @@ import { createReinforcementFormation, type FormationRecipe } from './formationR
 import { FORMATION_PROFILES, STAGES } from './stageDefinitions';
 
 describe('EncounterDirector', () => {
-  const clearTop = { activePopulation: 0, topmostEnemyY: 120 };
+  const clearTop = { activePopulation: 1, topmostEnemyY: 120 };
 
   beforeEach(() => {
     createFormationSpy.mockClear();
@@ -52,7 +54,12 @@ describe('EncounterDirector', () => {
     const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
 
     expect(director.update(799, empty).formation).toBeNull();
-    expect(director.update(1, empty).formation).not.toBeNull();
+    const formation = director.update(1, empty).formation;
+    expect(formation).not.toBeNull();
+    expect(Math.max(...formation!.map((enemy) => (
+      enemy.rapidIngressTargetY!
+        + (enemy.height ?? 1) * GAME_TUNING.encounter.grid.cellHeight / 2
+    )))).toBeCloseTo(GAME_HEIGHT * GAME_TUNING.encounter.emergencyIngress.targetDepthRatio);
   });
 
   it('scales reinforcement timing for one run', () => {
@@ -60,7 +67,7 @@ describe('EncounterDirector', () => {
       ...createDefaultDevelopmentBalanceSettings(7),
       reinforcementIntervalMultiplier: 0.5,
     };
-    const director = new EncounterDirector(7, balance);
+    const director = new EncounterDirector(1234, balance);
     const interval = STAGES[0].phases[0].spawnIntervalMs * 0.5;
 
     expect(director.update(interval, clearTop).formation)

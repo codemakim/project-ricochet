@@ -49,6 +49,7 @@ export interface GameTuning {
   };
   encounter: {
     emptyRespawnMs: number;
+    emergencyIngress: { targetDepthRatio: number; speed: number };
     bossEntry: {
       cleanupMode: 'corridor' | 'all';
       padding: number;
@@ -546,6 +547,7 @@ export const GAME_TUNING = {
   },
   encounter: {
     emptyRespawnMs: 800,
+    emergencyIngress: { targetDepthRatio: 0.2, speed: 260 },
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 6, left: 15, cellWidth: 70, cellHeight: 60, gap: 0 },
   },
@@ -1077,6 +1079,12 @@ export function validateGameTuning(tuning: GameTuning): void {
   }
   nonNegative(encounter.bossEntry.padding, 'encounter.bossEntry.padding');
   positive(encounter.emptyRespawnMs, 'encounter.emptyRespawnMs');
+  if (!Number.isFinite(encounter.emergencyIngress.targetDepthRatio)
+    || encounter.emergencyIngress.targetDepthRatio <= 0
+    || encounter.emergencyIngress.targetDepthRatio >= 1) {
+    throw new RangeError('encounter.emergencyIngress.targetDepthRatio must be between zero and one');
+  }
+  positive(encounter.emergencyIngress.speed, 'encounter.emergencyIngress.speed');
   positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
   nonNegative(encounter.grid.left, 'encounter.grid.left');
   positiveInteger(encounter.grid.cellWidth, 'encounter.grid.cellWidth');
