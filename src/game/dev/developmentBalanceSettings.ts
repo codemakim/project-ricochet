@@ -5,6 +5,7 @@ export interface DevelopmentBalanceSettings {
   activePopulationMultiplier: number;
   reinforcementIntervalMultiplier: number;
   playerDamageMultiplier: number;
+  orbSpeedMultiplier: number;
   startingOrbCount: number;
   seed: number;
 }
@@ -18,6 +19,7 @@ const RANGES = {
   activePopulationMultiplier: [0.25, 4],
   reinforcementIntervalMultiplier: [0.1, 4],
   playerDamageMultiplier: [0.1, 10],
+  orbSpeedMultiplier: [0.25, 4],
   startingOrbCount: [1, 6],
   seed: [0, 0xffff_ffff],
 } as const satisfies Record<keyof DevelopmentBalanceSettings, readonly [number, number]>;
@@ -32,6 +34,7 @@ export function createDefaultDevelopmentBalanceSettings(
     activePopulationMultiplier: 1,
     reinforcementIntervalMultiplier: 1,
     playerDamageMultiplier: 1,
+    orbSpeedMultiplier: 1,
     startingOrbCount: 1,
     seed,
   };

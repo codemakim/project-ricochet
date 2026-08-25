@@ -32,6 +32,7 @@ async function combatSnapshot(page: Page) {
         activePopulationMultiplier: number;
         reinforcementIntervalMultiplier: number;
         playerDamageMultiplier: number;
+        orbSpeedMultiplier: number;
         startingOrbCount: number;
         seed: number;
       };
@@ -49,6 +50,7 @@ test('@desktop configures and repeats an isolated development balance run', asyn
   await page.getByLabel('적 수').fill('1.5');
   await page.getByLabel('증원 간격').fill('0.5');
   await page.getByLabel('플레이어 피해').fill('2');
+  await page.getByLabel('구슬 속도').fill('1.5');
   await page.getByLabel('시작 구슬 수').fill('4');
   await page.getByLabel('시드').fill('77');
   await page.getByRole('button', { name: '테스트 시작' }).click();
@@ -63,6 +65,7 @@ test('@desktop configures and repeats an isolated development balance run', asyn
     activePopulationMultiplier: 1.5,
     reinforcementIntervalMultiplier: 0.5,
     playerDamageMultiplier: 2,
+    orbSpeedMultiplier: 1.5,
     startingOrbCount: 4,
     seed: 77,
   });
@@ -84,6 +87,7 @@ test('@desktop configures and repeats an isolated development balance run', asyn
         normalEnemyHpMultiplier: 2, specialEnemyHpMultiplier: 3,
         descentSpeedMultiplier: 0.5, activePopulationMultiplier: 1.5,
         reinforcementIntervalMultiplier: 0.5, playerDamageMultiplier: 2,
+        orbSpeedMultiplier: 1.5,
         startingOrbCount: 4, seed: 77,
       };
     }

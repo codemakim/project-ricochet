@@ -422,7 +422,8 @@ export class CombatScene extends Phaser.Scene {
       textureKey: 'orb-charged',
       hasFixedTerrainLineOfSight: () => true,
       getDirectDamageBonus: () => build.directDamageBonus(),
-      getChargedSpeed: () => build.chargedSpeed(),
+      getChargedSpeed: () => build.chargedSpeed()
+        * (developmentBalance?.orbSpeedMultiplier ?? 1),
       getConditionalDirectDamageBonus: (context) => (
         build.conditionalDirectDamageBonus(context)
       ),

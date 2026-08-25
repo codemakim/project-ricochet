@@ -24,6 +24,8 @@ const FIELDS = [
     `1단계 초기 ${STAGES[0].phases[0].spawnIntervalMs / 1000}초 / 빈 전장 ${GAME_TUNING.encounter.emptyRespawnMs / 1000}초`],
   ['playerDamageMultiplier', '플레이어 피해', 0.1, 10, 0.1,
     '직접·범위·지속·융합·보스 피해 전체'],
+  ['orbSpeedMultiplier', '구슬 속도', 0.25, 4, 0.05,
+    '회수 후 발사되는 영구 구슬 전체'],
   ['startingOrbCount', '시작 구슬 수', 1, 6, 1, '선택한 시작 구슬로 1~6개'],
   ['seed', '시드', 0, 0xffff_ffff, 1, '같은 값이면 적 구성과 보상 순서 재현'],
 ] as const satisfies readonly [keyof DevelopmentBalanceSettings, string, number, number, number, string][];

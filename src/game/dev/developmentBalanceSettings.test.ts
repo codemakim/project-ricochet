@@ -28,6 +28,7 @@ describe('development balance settings', () => {
       activePopulationMultiplier: 1,
       reinforcementIntervalMultiplier: 1,
       playerDamageMultiplier: 1,
+      orbSpeedMultiplier: 1,
       startingOrbCount: 1,
       seed: 17,
     });
@@ -64,6 +65,8 @@ describe('development balance settings', () => {
     expect(() => parseDevelopmentBalanceSettings({ ...valid, reinforcementIntervalMultiplier: 0 }))
       .toThrow(RangeError);
     expect(() => parseDevelopmentBalanceSettings({ ...valid, playerDamageMultiplier: Infinity }))
+      .toThrow(RangeError);
+    expect(() => parseDevelopmentBalanceSettings({ ...valid, orbSpeedMultiplier: 4.1 }))
       .toThrow(RangeError);
     expect(() => parseDevelopmentBalanceSettings({ ...valid, startingOrbCount: 1.5 }))
       .toThrow(RangeError);
