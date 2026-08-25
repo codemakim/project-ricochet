@@ -104,6 +104,7 @@ export interface HiveBossManagerOptions {
   getEnemies(): readonly EnemySnapshot[];
   getEnemyBulletCount(): number;
   getGameplayElapsedMs(): number;
+  playerDamageMultiplier?: number;
   onPlayerHit(damage: number): void;
   onDirectHit(event: BossDirectHitEvent): void;
   onPhaseChanged?(phase: HivePhase): void;
@@ -435,7 +436,7 @@ export class HiveBossManager implements BossEncounter {
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
-      this.state.parts[partId],
+      this.state.parts[partId] / (this.options.playerDamageMultiplier ?? 1),
       this.options.getGameplayElapsedMs(),
       false,
       Math.hypot(
@@ -461,7 +462,7 @@ export class HiveBossManager implements BossEncounter {
     const result = this.options.temporaryOrbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
-      this.state.parts[partId],
+      this.state.parts[partId] / (this.options.playerDamageMultiplier ?? 1),
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return isReflector(partId);
@@ -577,7 +578,11 @@ export class HiveBossManager implements BossEncounter {
   private damagePart(partId: HivePartId, damage: number): void {
     const previousPhase = this.state.phase;
     const previousHp = this.state.parts[partId];
-    this.state = damageHivePart(this.state, partId, damage);
+    this.state = damageHivePart(
+      this.state,
+      partId,
+      damage * (this.options.playerDamageMultiplier ?? 1),
+    );
     const nextHp = this.state.parts[partId];
     if (nextHp > 0 && nextHp < previousHp) {
       playActorState(this.parts[partId], actorRoleForHivePart(partId), 'hurt');

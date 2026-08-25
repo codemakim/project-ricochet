@@ -143,7 +143,7 @@ function result(damage = 3, reflect = true): PermanentHitResult {
   };
 }
 
-function createBoundary() {
+function createBoundary(playerDamageMultiplier = 1) {
   const sprites: FakeSprite[] = [];
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
@@ -223,6 +223,7 @@ function createBoundary() {
     onDirectHit,
     onPhaseChanged,
     onDefeated,
+    playerDamageMultiplier,
   });
   const sprite = (texture: string) => (
     sprites.find((candidate) => candidate.texture === texture)
@@ -690,6 +691,20 @@ describe('HiveBossManager', () => {
 
     expect(encounter.applyDirectDamage('leftShooter', 4)).toBe(true);
     expect(encounter.getSnapshot().parts).toMatchObject({ leftShooter: 16 });
+  });
+
+  it('applies player damage once and gives orb kill prediction effective HP', () => {
+    const boundary = createBoundary(2);
+    const collider = boundary.colliderFor('hive-left-shooter');
+
+    collider.trigger(boundary.orb, collider.second as FakeSprite);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(
+      boundary.orb, -11, 10, 0, false, expect.any(Number),
+    );
+    expect(boundary.manager.getSnapshot().parts?.leftShooter).toBe(14);
+
+    boundary.manager.applyDirectDamage('leftShooter', 1);
+    expect(boundary.manager.getSnapshot().parts?.leftShooter).toBe(12);
   });
 
   it('chooses one nearest hive secondary by target ID when distance ties', () => {

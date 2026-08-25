@@ -589,7 +589,7 @@ export class EnemyManager {
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       enemy.enemyId,
-      enemy.hp,
+      enemy.hp / (this.options.developmentBalance?.playerDamageMultiplier ?? 1),
       this.scene.time.now,
       false,
       Math.hypot(enemy.x - this.options.player.x, enemy.y - this.options.player.y),
@@ -624,7 +624,7 @@ export class EnemyManager {
     const result = manager.handleEnemyHit(
       orb,
       enemy.enemyId,
-      enemy.hp,
+      enemy.hp / (this.options.developmentBalance?.playerDamageMultiplier ?? 1),
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return false;
@@ -851,7 +851,9 @@ export class EnemyManager {
     const previousHp = Math.max(0, enemy.hp);
     enemy.hp = Math.max(
       0,
-      enemy.hp - damage * (1 + stacks * vulnerability.damageBonusPerStack),
+      enemy.hp - damage
+        * (this.options.developmentBalance?.playerDamageMultiplier ?? 1)
+        * (1 + stacks * vulnerability.damageBonusPerStack),
     );
     if (enemy.hp > 0 && previousHp > enemy.hp) {
       playActorState(

@@ -170,7 +170,7 @@ function hitResult(damage = 3, charged = true): PermanentHitResult {
   };
 }
 
-function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
+function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel', playerDamageMultiplier = 1) {
   const sprites: FakeSprite[] = [];
   const groups: FakeGroup[] = [];
   const colliders: FakeCollider[] = [];
@@ -249,6 +249,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel') {
     onPlayerHit,
     onDirectHit,
     onDefeated,
+    playerDamageMultiplier,
   });
   const colliderFor = (texture: string, first: unknown = orb) => colliders.find(
     (collider) => collider.first === first && (collider.second as FakeSprite).texture === texture,
@@ -573,6 +574,20 @@ describe('BossManager', () => {
 
     expect(encounter.applyDirectDamage('leftWeakpoint', 4)).toBe(true);
     expect(encounter.getSnapshot().parts).toMatchObject({ leftWeakpoint: 10 });
+  });
+
+  it('applies player damage once and gives orb kill prediction effective HP', () => {
+    const boundary = createBoundary('sentinel', 2);
+    const collider = boundary.colliderFor('boss-left-weakpoint');
+
+    collider.trigger(boundary.orb, collider.second as FakeSprite);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(
+      boundary.orb, -1, 7, 0, false, expect.any(Number),
+    );
+    expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(8);
+
+    boundary.manager.applyDirectDamage('leftWeakpoint', 1);
+    expect(boundary.manager.getSnapshot().parts?.leftWeakpoint).toBe(6);
   });
 
   it('chooses one nearest sentinel secondary by target ID when distance ties', () => {

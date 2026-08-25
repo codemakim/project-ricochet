@@ -395,6 +395,28 @@ describe('EnemyManager', () => {
       ]);
   });
 
+  it('applies player damage once and gives orb kill prediction effective HP', () => {
+    const developmentBalance = {
+      ...createDefaultDevelopmentBalanceSettings(1),
+      playerDamageMultiplier: 2,
+    };
+    const boundary = createBoundary([
+      { kind: 'basic', hp: 10, x: 160, y: 120, column: 0, speed: 0 },
+    ], false, () => 0, { developmentBalance });
+    boundary.handleEnemyHit.mockReturnValue({
+      charged: true, charges: 0, damage: 2, reflect: false,
+    });
+
+    boundary.colliders[0]!.trigger(boundary.orb, boundary.groups[0]!.children[0]!);
+    expect(boundary.handleEnemyHit).toHaveBeenCalledWith(
+      boundary.orb, 0, 5, 0, false, expect.any(Number),
+    );
+    expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(6);
+
+    boundary.manager.applyDirectDamage(0, 1);
+    expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(4);
+  });
+
   it('clears all live enemies without destroying the manager', () => {
     const { manager } = createBoundary([
       { kind: 'basic', hp: 3, x: 160, y: 160, column: 0, speed: 0 },

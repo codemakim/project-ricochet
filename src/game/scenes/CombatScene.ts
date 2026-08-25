@@ -2442,6 +2442,7 @@ export class CombatScene extends Phaser.Scene {
       getEnemies: () => this.enemyManager?.getSnapshot().enemies ?? [],
       getEnemyBulletCount: () => this.enemyManager?.getBulletCount() ?? 0,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
+      playerDamageMultiplier: this.runConfig?.developmentBalance?.playerDamageMultiplier,
       onPlayerHit: (damage: number) => this.damagePlayer(damage),
       onDirectHit: (event: BossDirectHitEvent) => this.handleBossDirectHit(event),
       onPhaseChanged: (phase: string) => {

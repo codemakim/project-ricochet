@@ -108,6 +108,7 @@ export interface BossManagerOptions {
   getEnemies(): readonly EnemySnapshot[];
   getEnemyBulletCount(): number;
   getGameplayElapsedMs(): number;
+  playerDamageMultiplier?: number;
   onPlayerHit(damage: number): void;
   onDirectHit(event: BossDirectHitEvent): void;
   onDefeated(): void;
@@ -482,7 +483,7 @@ export class BossManager implements BossEncounter {
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
-      this.partHp(partId),
+      this.partHp(partId) / (this.options.playerDamageMultiplier ?? 1),
       this.options.getGameplayElapsedMs(),
       false,
       Math.hypot(
@@ -507,7 +508,7 @@ export class BossManager implements BossEncounter {
     const result = this.options.temporaryOrbManager.handleEnemyHit(
       orb,
       PART_HIT_IDS[partId],
-      this.partHp(partId),
+      this.partHp(partId) / (this.options.playerDamageMultiplier ?? 1),
       this.options.getGameplayElapsedMs(),
     );
     if (!result) return false;
@@ -654,6 +655,7 @@ export class BossManager implements BossEncounter {
 
   private damagePart(partId: ManagedPartId, damage: number, reportDefeat = true): boolean {
     const scaledDamage = damage
+      * (this.options.playerDamageMultiplier ?? 1)
       * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1);
     if (partId === 'defenseModule') {
       const previousHp = this.defenseHp;
