@@ -41,6 +41,9 @@ describe('GAME_TUNING', () => {
     expect(Object.hasOwn(GAME_TUNING.encounter, 'reinforcementReleaseY')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'bossSchedule')).toBe(false);
+    expect(GAME_TUNING.encounter.nextFormationRemainingRatio).toBe(0.35);
+    expect(GAME_TUNING.encounter.emptyRespawnMs).toBe(350);
+    expect(GAME_TUNING.encounter.emergencyIngress).toEqual({ speed: 260 });
     expect(GAME_TUNING.encounter.bossEntry).toEqual({
       cleanupMode: 'corridor',
       padding: 8,

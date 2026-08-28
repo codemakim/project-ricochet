@@ -48,8 +48,9 @@ export interface GameTuning {
     };
   };
   encounter: {
+    nextFormationRemainingRatio: number;
     emptyRespawnMs: number;
-    emergencyIngress: { targetDepthRatio: number; speed: number };
+    emergencyIngress: { speed: number };
     bossEntry: {
       cleanupMode: 'corridor' | 'all';
       padding: number;
@@ -546,8 +547,9 @@ export const GAME_TUNING = {
     fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
   },
   encounter: {
-    emptyRespawnMs: 800,
-    emergencyIngress: { targetDepthRatio: 0.2, speed: 260 },
+    nextFormationRemainingRatio: 0.35,
+    emptyRespawnMs: 350,
+    emergencyIngress: { speed: 260 },
     bossEntry: { cleanupMode: 'corridor' as 'corridor' | 'all', padding: 8 },
     grid: { columns: 6, left: 15, cellWidth: 70, cellHeight: 60, gap: 0 },
   },
@@ -1078,12 +1080,12 @@ export function validateGameTuning(tuning: GameTuning): void {
     throw new RangeError('encounter.bossEntry.cleanupMode must be corridor or all');
   }
   nonNegative(encounter.bossEntry.padding, 'encounter.bossEntry.padding');
-  positive(encounter.emptyRespawnMs, 'encounter.emptyRespawnMs');
-  if (!Number.isFinite(encounter.emergencyIngress.targetDepthRatio)
-    || encounter.emergencyIngress.targetDepthRatio <= 0
-    || encounter.emergencyIngress.targetDepthRatio >= 1) {
-    throw new RangeError('encounter.emergencyIngress.targetDepthRatio must be between zero and one');
+  if (!Number.isFinite(encounter.nextFormationRemainingRatio)
+    || encounter.nextFormationRemainingRatio <= 0
+    || encounter.nextFormationRemainingRatio >= 1) {
+    throw new RangeError('encounter.nextFormationRemainingRatio must be between zero and one');
   }
+  nonNegative(encounter.emptyRespawnMs, 'encounter.emptyRespawnMs');
   positive(encounter.emergencyIngress.speed, 'encounter.emergencyIngress.speed');
   positiveInteger(encounter.grid.columns, 'encounter.grid.columns');
   nonNegative(encounter.grid.left, 'encounter.grid.left');

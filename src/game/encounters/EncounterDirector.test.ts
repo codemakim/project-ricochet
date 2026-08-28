@@ -1,325 +1,205 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
-import { GAME_HEIGHT } from '../constants';
+import { describe, expect, it } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
+import { GAME_HEIGHT } from '../constants';
+import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
+import type { EnemySpec } from '../enemies/enemyRules';
+import { EncounterDirector, type EncounterEnemyState } from './EncounterDirector';
+import { STAGES } from './stageDefinitions';
 
-const createFormationSpy = vi.hoisted(() => vi.fn());
+const empty: EncounterEnemyState = {
+  activePopulation: 0,
+  topmostEnemyTop: Number.POSITIVE_INFINITY,
+  formationPopulations: {},
+};
 
-vi.mock('./formationRules', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./formationRules')>();
-  createFormationSpy.mockImplementation(actual.createReinforcementFormation);
-  return { ...actual, createReinforcementFormation: createFormationSpy };
-});
+function population(formation: readonly EnemySpec[]): number {
+  return formation.reduce(
+    (total, enemy) => total + (enemy.width ?? 1) * (enemy.height ?? 1),
+    0,
+  );
+}
 
-import { EncounterDirector } from './EncounterDirector';
-import { createReinforcementFormation, type FormationRecipe } from './formationRules';
-import { FORMATION_PROFILES, STAGES } from './stageDefinitions';
+function formationId(formation: readonly EnemySpec[]): string {
+  return formation[0]!.formationId!;
+}
+
+function surviving(
+  id: string,
+  remaining: number,
+  activePopulation = remaining,
+  topmostEnemyTop = 300,
+): EncounterEnemyState {
+  return {
+    activePopulation,
+    topmostEnemyTop,
+    formationPopulations: { [id]: remaining },
+  };
+}
+
+function releasedFormation(director: EncounterDirector): EnemySpec[] {
+  const formation = director.update(0, empty).formation;
+  expect(formation).not.toBeNull();
+  return formation!;
+}
+
+function releaseRemainingStageFormations(director: EncounterDirector): string[] {
+  const ids = [formationId(releasedFormation(director))];
+  while (director.getSnapshot().formationIndex < 9) {
+    const currentId = director.getSnapshot().lastFormationId!;
+    const update = director.update(0, surviving(currentId, 0, 1));
+    expect(update.formation).not.toBeNull();
+    ids.push(formationId(update.formation!));
+  }
+  return ids;
+}
+
+function startAndDefeatBoss(director: EncounterDirector) {
+  releaseRemainingStageFormations(director);
+  expect(director.update(0, surviving(director.getSnapshot().lastFormationId!, 0, 1)).transition)
+    .toBeNull();
+  const boss = STAGES[director.getSnapshot().stageIndex]!.boss;
+  expect(director.update(0, empty).transition).toEqual({
+    type: 'bossWarningStarted', bossKind: boss.kind,
+  });
+  expect(director.update(boss.warningMs, empty).transition).toEqual({
+    type: 'bossStarted', bossKind: boss.kind,
+  });
+  return director.markBossDefeated();
+}
 
 describe('EncounterDirector', () => {
-  const clearTop = { activePopulation: 1, topmostEnemyY: 120 };
-
-  beforeEach(() => {
-    createFormationSpy.mockClear();
-  });
-
-  it('keeps formation generation gated and caches a blocked stage recipe', () => {
+  it('immediately emits the first seeded opening formation at its paragraph depth', () => {
     const director = new EncounterDirector(1234);
-    const blocked = {
-      activePopulation: STAGES[0].phases[0].activeCap,
-      topmostEnemyY: 120,
-    };
+    const formation = releasedFormation(director);
+    const cellHeight = GAME_TUNING.encounter.grid.cellHeight;
 
-    const interval = STAGES[0].phases[0].spawnIntervalMs;
-    expect(director.update(interval - 1, { activePopulation: 1, topmostEnemyY: 120 }).formation)
-      .toBeNull();
-    expect(director.update(1, { activePopulation: 1, topmostEnemyY: 49 }).formation).toBeNull();
-    expect(createFormationSpy).not.toHaveBeenCalled();
-
-    expect(director.update(0, blocked).formation).toBeNull();
-    expect(director.update(16, blocked).formation).toBeNull();
-    expect(createFormationSpy).toHaveBeenCalledTimes(1);
-    expect(createFormationSpy).toHaveBeenCalledWith(recipeAt(0, 0), 0, 1234);
-
-    expect(director.update(0, clearTop).formation).not.toBeNull();
-    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+    expect(formation.every((enemy) => enemy.rapidIngressTargetY !== undefined)).toBe(true);
+    expect(Math.max(...formation.map((enemy) => (
+      enemy.rapidIngressTargetY! + (enemy.height ?? 1) * cellHeight / 2
+    )))).toBeCloseTo(GAME_HEIGHT * STAGES[0].paragraphs[0].targetDepthRatio);
     expect(director.getSnapshot()).toMatchObject({
-      phase: 0,
-      spawnSequence: 1,
-      expectedOrbCount: 3,
+      paragraphId: 'opening', paragraphIndex: 0, formationIndex: 0, spawnSequence: 1,
     });
   });
 
-  it('refills an empty battlefield within the configured emergency delay', () => {
-    const director = new EncounterDirector(1234);
-    const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
+  it('waits above 35% and releases immediately at or below it when the cap fits', () => {
+    const director = new EncounterDirector(7);
+    const first = releasedFormation(director);
+    const id = formationId(first);
+    const initial = population(first);
 
-    expect(director.update(799, empty).formation).toBeNull();
-    const formation = director.update(1, empty).formation;
-    expect(formation).not.toBeNull();
-    expect(Math.max(...formation!.map((enemy) => (
-      enemy.rapidIngressTargetY!
-        + (enemy.height ?? 1) * GAME_TUNING.encounter.grid.cellHeight / 2
-    )))).toBeCloseTo(GAME_HEIGHT * GAME_TUNING.encounter.emergencyIngress.targetDepthRatio);
+    expect(director.update(999_999, surviving(id, Math.floor(initial * 0.35) + 1)).formation)
+      .toBeNull();
+    expect(director.update(0, surviving(id, 1)).formation).not.toBeNull();
   });
 
-  it('scales reinforcement timing for one run', () => {
-    const balance = {
-      ...createDefaultDevelopmentBalanceSettings(7),
-      reinforcementIntervalMultiplier: 0.5,
-    };
-    const director = new EncounterDirector(1234, balance);
-    const interval = STAGES[0].phases[0].spawnIntervalMs * 0.5;
+  it('blocks a depleted formation until the candidate paragraph cap fits', () => {
+    const director = new EncounterDirector(7);
+    const id = formationId(releasedFormation(director));
+    const cap = STAGES[0].paragraphs[0].activeCap;
 
-    expect(director.update(interval, clearTop).formation)
-      .not.toBeNull();
+    expect(director.update(0, surviving(id, 0, cap)).formation).toBeNull();
+    expect(director.update(0, surviving(id, 0, 1)).formation).not.toBeNull();
   });
 
-  it('scales the empty battlefield refill delay', () => {
+  it('waits 350ms before refilling an empty battlefield', () => {
+    const director = new EncounterDirector(7);
+    releasedFormation(director);
+
+    expect(director.update(349, empty).formation).toBeNull();
+    expect(director.update(1, empty).formation).not.toBeNull();
+  });
+
+  it('scales the empty refill delay for development balance runs', () => {
     const balance = {
       ...createDefaultDevelopmentBalanceSettings(7),
       reinforcementIntervalMultiplier: 0.5,
     };
     const director = new EncounterDirector(7, balance);
-    const empty = { activePopulation: 0, topmostEnemyY: Number.POSITIVE_INFINITY };
+    releasedFormation(director);
 
-    expect(director.update(399, empty).formation).toBeNull();
+    expect(director.update(174, empty).formation).toBeNull();
     expect(director.update(1, empty).formation).not.toBeNull();
   });
 
-  it('rebuilds a pending formation from the next stage-local phase', () => {
-    const director = new EncounterDirector(1234);
-    const blocked = {
-      activePopulation: STAGES[0].phases[1].activeCap,
-      topmostEnemyY: 120,
-    };
-
-    director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
-    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
-    director.update(0, blocked);
-
-    expect(createFormationSpy).toHaveBeenNthCalledWith(1, recipeAt(0, 0), 0, 1234);
-    expect(createFormationSpy).toHaveBeenNthCalledWith(2, recipeAt(0, 1), 0, 1234);
-    expect(director.getSnapshot().phase).toBe(1);
-  });
-
-  it('uses the stronger stage-one recipe from kill score', () => {
-    const director = new EncounterDirector(1234);
-    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
-
-    director.update(5_000, { activePopulation: 1, topmostEnemyY: 120 });
-
-    expect(createFormationSpy).toHaveBeenCalledWith(recipeAt(0, 1), 0, 1234);
-    expect(director.getSnapshot().phase).toBe(1);
-  });
-
-  it('uses each phase reinforcement release line', () => {
+  it('places a non-empty release below both paragraph depth and older enemies', () => {
     const director = new EncounterDirector(7);
-    const upperEnemies = { activePopulation: 1, topmostEnemyY: 25 };
+    const id = formationId(releasedFormation(director));
+    const formation = director.update(0, surviving(id, 0, 1, 250)).formation!;
+    const cellHeight = GAME_TUNING.encounter.grid.cellHeight;
 
-    expect(director.update(8_000, upperEnemies).formation).toBeNull();
-
-    recordBasicKills(director, STAGES[0].phases[1].startsAtScore);
-    const pressure = director.update(0, upperEnemies);
-    expect(director.getSnapshot().phase).toBe(1);
-    expect(pressure.formation).not.toBeNull();
+    expect(Math.max(...formation.map((enemy) => (
+      enemy.rapidIngressTargetY! + (enemy.height ?? 1) * cellHeight / 2
+    )))).toBeCloseTo(250 - cellHeight);
   });
 
-  it('releases the seeded stage recipe and records global metadata', () => {
-    const director = new EncounterDirector(1234);
-    const formation = director.update(STAGES[0].phases[0].spawnIntervalMs, clearTop).formation;
-    const expected = createReinforcementFormation(recipeAt(0, 0), 0, 1234);
+  it('releases all ten formations once across opening, pressure, and climax', () => {
+    const director = new EncounterDirector(42);
+    const ids = releaseRemainingStageFormations(director);
 
-    expect(formation).toEqual(expected.enemies);
+    expect(ids).toHaveLength(10);
+    expect(new Set(ids).size).toBe(10);
     expect(director.getSnapshot()).toMatchObject({
-      elapsedMs: STAGES[0].phases[0].spawnIntervalMs,
-      runSeed: 1234,
-      lastFormationId: expected.id,
-      spawnSequence: 1,
-      elapsedSinceSpawnMs: 0,
-      stageId: 'default-1',
-      stageNumber: 1,
-      stageIndex: 0,
+      paragraphId: 'climax', paragraphIndex: 2, formationIndex: 9,
     });
   });
 
-  it('uses the active stage boss score without a time gate', () => {
-    const director = new EncounterDirector(1234);
-    recordBasicKills(director, STAGES[0].boss.scoreTarget - 1);
+  it('waits for regular survivors after formation ten before warning and boss start', () => {
+    const director = new EncounterDirector(42);
+    releaseRemainingStageFormations(director);
+    const id = director.getSnapshot().lastFormationId!;
 
-    expect(director.update(999_999, clearTop).transition).toBeNull();
-    director.recordEnemyKill('basic');
-    expect(director.update(0, clearTop).transition).toEqual({
-      type: 'bossWarningStarted',
-      bossKind: STAGES[0].boss.kind,
+    expect(director.update(10_000, surviving(id, 0, 1)).transition).toBeNull();
+    expect(director.update(0, empty).transition).toEqual({
+      type: 'bossWarningStarted', bossKind: 'sentinel',
     });
-    expect(director.getSnapshot()).toMatchObject({
-      state: 'bossWarning',
-      stageElapsedMs: 999_999,
-      bossScore: STAGES[0].boss.scoreTarget,
+    expect(director.update(STAGES[0].boss.warningMs, empty).transition).toEqual({
+      type: 'bossStarted', bossKind: 'sentinel',
     });
   });
 
-  it('starts the active stage boss after its warning', () => {
-    const director = new EncounterDirector(1234);
-    recordBasicKills(director, STAGES[0].boss.scoreTarget);
+  it('advances rewards through stage two and completes after the third boss', () => {
+    const director = new EncounterDirector(42);
 
-    expect(director.update(0, clearTop).transition).toEqual({
-      type: 'bossWarningStarted',
-      bossKind: 'sentinel',
-    });
-    expect(director.update(STAGES[0].boss.warningMs, clearTop).transition).toEqual({
-      type: 'bossStarted',
-      bossKind: 'sentinel',
-    });
-  });
-
-  it('discards a blocked pending chunk when boss warning starts', () => {
-    const director = new EncounterDirector(1234);
-    const blocked = {
-      activePopulation: STAGES[0].phases[0].activeCap,
-      topmostEnemyY: 120,
-    };
-    director.update(STAGES[0].phases[0].spawnIntervalMs, blocked);
-    expect(createFormationSpy).toHaveBeenCalledTimes(1);
-    recordBasicKills(director, STAGES[0].boss.scoreTarget);
-
-    expect(director.update(0, blocked).transition?.type).toBe('bossWarningStarted');
-    expect(director.update(STAGES[0].boss.warningMs, clearTop).transition?.type)
-      .toBe('bossStarted');
-    expect(director.update(60_000, clearTop).formation).toBeNull();
-    expect(createFormationSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('advances the first reward to stage 2 with reset stage clocks', () => {
-    const director = new EncounterDirector(1234);
-    expect(finishActiveBoss(director)).toEqual({ type: 'rewardRequired' });
-    const elapsedMs = director.getSnapshot().elapsedMs;
-
+    expect(startAndDefeatBoss(director)).toEqual({ type: 'rewardRequired' });
     expect(director.resumeAfterBossReward()).toEqual({
-      type: 'stageStarted',
-      stageId: 'default-2',
-      stageNumber: 2,
+      type: 'stageStarted', stageId: 'default-2', stageNumber: 2,
     });
-    expect(director.getSnapshot()).toMatchObject({
-      state: 'running',
-      stageIndex: 1,
-      stageId: 'default-2',
-      stageNumber: 2,
-      stageElapsedMs: 0,
-      elapsedSinceSpawnMs: 0,
-      elapsedMs,
-      bossScore: 0,
-      phase: 0,
-      bossesDefeated: 1,
-    });
-  });
-
-  it('uses the second stage boss gates after advancing', () => {
-    const director = startStageTwo();
-    for (let index = 0; index < 55; index += 1) director.recordEnemyKill('armored');
-
-    expect(director.update(0, clearTop).transition).toEqual({
-      type: 'bossWarningStarted',
-      bossKind: 'hive',
-    });
-  });
-
-  it('advances the second reward to stage 3', () => {
-    const director = startStageTwo();
-    expect(finishActiveBoss(director)).toEqual({ type: 'rewardRequired' });
-
+    expect(releasedFormation(director)[0]!.formationId).toMatch(/^s2-/);
+    while (director.getSnapshot().formationIndex < 9) {
+      director.update(0, surviving(director.getSnapshot().lastFormationId!, 0, 1));
+    }
+    expect(director.update(0, empty).transition?.type).toBe('bossWarningStarted');
+    expect(director.update(STAGES[1].boss.warningMs, empty).transition?.type).toBe('bossStarted');
+    expect(director.markBossDefeated()).toEqual({ type: 'rewardRequired' });
     expect(director.resumeAfterBossReward()).toEqual({
-      type: 'stageStarted',
-      stageId: 'default-3',
-      stageNumber: 3,
+      type: 'stageStarted', stageId: 'default-3', stageNumber: 3,
     });
+    expect(startAndDefeatBoss(director)).toEqual({ type: 'runCompleted' });
+    expect(director.getSnapshot().state).toBe('runComplete');
   });
 
-  it('completes directly when the third boss is defeated', () => {
-    const director = startStageThree();
+  it('reports scripted progress without legacy score or phase fields', () => {
+    const director = new EncounterDirector(7);
+    const first = releasedFormation(director);
+    const id = formationId(first);
+    director.update(1, surviving(id, population(first), 1));
+    const snapshot = director.getSnapshot();
 
-    expect(finishActiveBoss(director)).toEqual({ type: 'runCompleted' });
-    expect(director.getSnapshot()).toMatchObject({
-      state: 'runComplete',
-      stageIndex: 2,
-      stageId: 'default-3',
-      stageNumber: 3,
-      bossesDefeated: 3,
+    expect(snapshot).toMatchObject({
+      paragraphId: 'opening', paragraphIndex: 0, formationIndex: 0,
+      lastFormationId: id, lastFormationRemainingRatio: 1,
+      emptyElapsedMs: 0, activePopulation: 1,
+      activeCap: STAGES[0].paragraphs[0].activeCap,
     });
-    expect(director.update(999_999, clearTop)).toEqual({
-      formation: null,
-      transition: null,
-    });
+    expect(snapshot).not.toHaveProperty('phase');
+    expect(snapshot).not.toHaveProperty('bossScore');
   });
 
-  it('uses population costs for incoming stage formations', () => {
-    const director = startStageTwo();
-    const phase = STAGES[1].phases[0];
-    const generated = createReinforcementFormation(recipeAt(1, 0), 0, 1234);
-
-    createFormationSpy.mockClear();
-    expect(director.update(phase.spawnIntervalMs, {
-      activePopulation: phase.activeCap - generated.populationCost + 1,
-      topmostEnemyY: 120,
-    }).formation).toBeNull();
-    expect(createFormationSpy).toHaveBeenCalledTimes(1);
+  it('rejects invalid clocks and lifecycle calls', () => {
+    const director = new EncounterDirector(7);
+    expect(() => director.update(-1, empty)).toThrow('deltaMs must be finite and non-negative');
+    expect(() => director.markBossDefeated()).toThrow('cannot mark boss defeated');
+    expect(() => director.resumeAfterBossReward()).toThrow('cannot resume after boss reward');
   });
-
-  it('rejects invalid updates and illegal boss lifecycle transitions', () => {
-    const director = new EncounterDirector(1234);
-
-    expect(() => director.update(-1, clearTop)).toThrow('deltaMs must be finite and non-negative');
-    expect(() => director.markBossDefeated())
-      .toThrow('cannot mark boss defeated while encounter state is running');
-    expect(() => director.resumeAfterBossReward())
-      .toThrow('cannot resume after boss reward while encounter state is running');
-  });
-
-  function finishActiveBoss(director: EncounterDirector) {
-    const stage = STAGES[director.getSnapshot().stageIndex]!;
-    recordBasicKills(director, stage.boss.scoreTarget);
-    director.update(0, clearTop);
-    director.update(stage.boss.warningMs, clearTop);
-    return director.markBossDefeated();
-  }
-
-  function startStageTwo(): EncounterDirector {
-    const director = new EncounterDirector(1234);
-    finishActiveBoss(director);
-    director.resumeAfterBossReward();
-    createFormationSpy.mockClear();
-    return director;
-  }
-
-  function startStageThree(): EncounterDirector {
-    const director = startStageTwo();
-    finishActiveBoss(director);
-    director.resumeAfterBossReward();
-    return director;
-  }
 });
-
-function recordBasicKills(director: EncounterDirector, count: number): void {
-  for (let index = 0; index < count; index += 1) director.recordEnemyKill('basic');
-}
-
-function recipeAt(stageIndex: number, phaseIndex: number): FormationRecipe {
-  const stage = STAGES[stageIndex]!;
-  const phase = stage.phases[phaseIndex]!;
-  return {
-    stageNumber: stage.number,
-    battlefield: stage.battlefield,
-    profile: FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId)!,
-    enemyWeightMultipliers: phase.enemyWeightMultipliers,
-    maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    powerBand: {
-      ...stage.powerBand,
-      normalHpMultiplier: stage.powerBand.normalHpMultiplier
-        * (phase.normalHpMultiplier ?? 1),
-      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier
-        * (phase.eliteHpMultiplier ?? 1),
-    },
-    descentSpeedMultiplier: stage.descentSpeedMultiplier
-      * (phase.descentSpeedMultiplier ?? 1),
-  };
-}

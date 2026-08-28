@@ -1,37 +1,19 @@
-import type { StageDefinition, StagePhaseDefinition } from './stageDefinitions';
+import { GAME_TUNING } from '../config/gameTuning';
 
-export interface SpawnGateInput {
-  elapsedSinceSpawnMs: number;
-  spawnIntervalMs: number;
-  emptyRespawnMs: number;
-  topmostEnemyY: number;
-  requiredTopmostY: number;
-  activeEnemies: number;
-  incomingEnemies: number;
-  activeCap: number;
-}
-
-export function reinforcementWindowOpen(
-  input: Omit<SpawnGateInput, 'incomingEnemies' | 'activeCap'>,
-): boolean {
-  return input.activeEnemies === 0 && input.elapsedSinceSpawnMs >= input.emptyRespawnMs
-    || input.elapsedSinceSpawnMs >= input.spawnIntervalMs
-      && input.topmostEnemyY >= input.requiredTopmostY;
-}
-
-export function phaseAt(
-  stage: StageDefinition,
-  score: number,
-): { index: number; definition: StagePhaseDefinition } {
-  let index = 0;
-  for (let candidate = 1; candidate < stage.phases.length; candidate += 1) {
-    const phase = stage.phases[candidate]!;
-    if (score >= phase.startsAtScore) index = candidate;
+export function formationDepleted(initial: number, remaining: number): boolean {
+  if (!Number.isFinite(initial) || initial <= 0) {
+    throw new RangeError('initial population must be finite and positive');
   }
-  return { index, definition: stage.phases[index]! };
+  if (!Number.isFinite(remaining) || remaining < 0) {
+    throw new RangeError('remaining population must be finite and non-negative');
+  }
+  return remaining / initial <= GAME_TUNING.encounter.nextFormationRemainingRatio;
 }
 
-export function canSpawnReinforcement(input: SpawnGateInput): boolean {
-  return reinforcementWindowOpen(input)
-    && input.activeEnemies + input.incomingEnemies <= input.activeCap;
+export function canReleaseFormation(
+  activePopulation: number,
+  incomingPopulation: number,
+  activeCap: number,
+): boolean {
+  return activePopulation + incomingPopulation <= activeCap;
 }

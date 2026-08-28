@@ -1,37 +1,30 @@
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import { GAME_HEIGHT } from '../constants';
 import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
-import type { EnemyKind, EnemySpec } from '../enemies/enemyRules';
-import { canSpawnReinforcement, phaseAt, reinforcementWindowOpen } from './encounterRules';
+import type { EnemySpec } from '../enemies/enemyRules';
+import { canReleaseFormation, formationDepleted } from './encounterRules';
 import {
-  bossEntryReady,
-  bossProgressForKill,
+  type BossDefeatAdvance,
   type EncounterState,
   type EncounterTransition,
-  type BossDefeatAdvance,
   type StageAdvance,
 } from './encounterProgressionRules';
 import {
-  createReinforcementFormation,
-  type FormationRecipe,
+  createAuthoredFormation,
+  resolveStageFormationOrder,
   type FormationResult,
+  type ResolvedStageFormation,
 } from './formationRules';
 import {
-  FORMATION_PROFILES,
   STAGES,
   type StageDefinition,
-  type StagePhaseDefinition,
+  type StageParagraphDefinition,
 } from './stageDefinitions';
 
 export interface EncounterEnemyState {
   activePopulation: number;
-  topmostEnemyY: number;
-}
-
-interface PendingFormation {
-  phaseIndex: number;
-  sequence: number;
-  result: FormationResult;
+  topmostEnemyTop: number;
+  formationPopulations: Readonly<Record<string, number>>;
 }
 
 export interface EncounterUpdate {
@@ -39,122 +32,87 @@ export interface EncounterUpdate {
   transition: EncounterTransition | null;
 }
 
-const NO_UPDATE: EncounterUpdate = {
-  formation: null,
-  transition: null,
-};
+const NO_UPDATE: EncounterUpdate = { formation: null, transition: null };
 
 export class EncounterDirector {
   private state: EncounterState = 'running';
   private stageIndex = 0;
+  private stageOrder: readonly ResolvedStageFormation[];
+  private formationIndex = -1;
   private elapsedMs = 0;
   private stageElapsedMs = 0;
-  private elapsedSinceSpawnMs = 0;
-  private bossScore = 0;
+  private emptyElapsedMs = 0;
   private warningElapsedMs = 0;
   private pendingBossKind: BossKind | null = null;
   private pendingBossWarningMs = 0;
   private bossesDefeated = 0;
-  private spawnSequence = 0;
+  private lastFormationInitialPopulation = 0;
   private lastFormationId: string | null = null;
-  private pendingFormation: PendingFormation | null = null;
+  private lastFormationRemainingRatio: number | null = null;
+  private activePopulation = 0;
 
   constructor(
     private readonly runSeed = 0,
     private readonly developmentBalance?: DevelopmentBalanceSettings,
-  ) {}
+  ) {
+    this.stageOrder = resolveStageFormationOrder(this.activeStage(), runSeed);
+  }
 
   update(deltaMs: number, enemyState: EncounterEnemyState): EncounterUpdate {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
       throw new RangeError('deltaMs must be finite and non-negative');
     }
     this.elapsedMs += deltaMs;
+    this.activePopulation = enemyState.activePopulation;
 
     if (this.state === 'bossWarning') {
       this.warningElapsedMs += deltaMs;
-      if (this.warningElapsedMs >= this.pendingBossWarningMs) {
-        if (!this.pendingBossKind) {
-          throw new Error('boss warning has no pending boss kind');
-        }
-        this.state = 'boss';
-        return {
-          formation: null,
-          transition: { type: 'bossStarted', bossKind: this.pendingBossKind },
-        };
-      }
-      return NO_UPDATE;
+      if (this.warningElapsedMs < this.pendingBossWarningMs) return NO_UPDATE;
+      if (!this.pendingBossKind) throw new Error('boss warning has no pending boss kind');
+      this.state = 'boss';
+      return {
+        formation: null,
+        transition: { type: 'bossStarted', bossKind: this.pendingBossKind },
+      };
     }
     if (this.state !== 'running') return NO_UPDATE;
 
-    const stage = this.activeStage();
     this.stageElapsedMs += deltaMs;
-    this.elapsedSinceSpawnMs += deltaMs;
-    if (bossEntryReady(stage.boss, this.bossScore)) {
-      this.state = 'bossWarning';
-      this.pendingBossKind = stage.boss.kind;
-      this.pendingBossWarningMs = stage.boss.warningMs;
-      this.warningElapsedMs = 0;
-      this.pendingFormation = null;
-      return {
-        formation: null,
-        transition: { type: 'bossWarningStarted', bossKind: stage.boss.kind },
-      };
-    }
+    if (this.formationIndex < 0) return this.releaseFormation(0, enemyState);
 
-    const phase = phaseAt(stage, this.bossScore);
-    const intervalMultiplier = this.developmentBalance?.reinforcementIntervalMultiplier ?? 1;
-    const spawnIntervalMs = phase.definition.spawnIntervalMs * intervalMultiplier;
-    const emptyRespawnMs = GAME_TUNING.encounter.emptyRespawnMs * intervalMultiplier;
-    if (!reinforcementWindowOpen({
-      elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      spawnIntervalMs,
-      emptyRespawnMs,
-      topmostEnemyY: enemyState.topmostEnemyY,
-      requiredTopmostY: phase.definition.reinforcementReleaseY,
-      activeEnemies: enemyState.activePopulation,
-    })) {
+    const remaining = enemyState.formationPopulations[this.lastFormationId!] ?? 0;
+    this.lastFormationRemainingRatio = remaining / this.lastFormationInitialPopulation;
+    if (this.formationIndex === this.stageOrder.length - 1) {
+      return enemyState.activePopulation === 0 ? this.beginBossWarning() : NO_UPDATE;
+    }
+    if (!formationDepleted(this.lastFormationInitialPopulation, remaining)) {
+      if (enemyState.activePopulation > 0) this.emptyElapsedMs = 0;
       return NO_UPDATE;
     }
 
-    if (this.pendingFormation?.phaseIndex !== phase.index
-      || this.pendingFormation.sequence !== this.spawnSequence) {
-      this.pendingFormation = {
-        phaseIndex: phase.index,
-        sequence: this.spawnSequence,
-        result: createReinforcementFormation(
-          formationRecipe(stage, phase.definition),
-          this.spawnSequence,
-          this.runSeed,
-        ),
-      };
+    if (enemyState.activePopulation === 0) {
+      this.emptyElapsedMs += deltaMs;
+      const multiplier = this.developmentBalance?.reinforcementIntervalMultiplier ?? 1;
+      if (this.emptyElapsedMs < GAME_TUNING.encounter.emptyRespawnMs * multiplier) {
+        return NO_UPDATE;
+      }
+    } else {
+      this.emptyElapsedMs = 0;
     }
-    const formation = this.pendingFormation.result;
-    if (!canSpawnReinforcement({
-      elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      spawnIntervalMs,
-      emptyRespawnMs,
-      topmostEnemyY: enemyState.topmostEnemyY,
-      requiredTopmostY: phase.definition.reinforcementReleaseY,
-      activeEnemies: enemyState.activePopulation,
-      incomingEnemies: formation.populationCost,
-      activeCap: phase.definition.activeCap,
-    })) return NO_UPDATE;
 
-    this.elapsedSinceSpawnMs = 0;
-    this.spawnSequence += 1;
-    this.lastFormationId = formation.id;
-    this.pendingFormation = null;
-    return {
-      formation: enemyState.activePopulation === 0
-        ? withRapidIngress(formation.enemies)
-        : formation.enemies,
-      transition: null,
-    };
+    const nextIndex = this.formationIndex + 1;
+    const candidate = this.createFormation(nextIndex);
+    const paragraph = this.paragraphAt(nextIndex);
+    if (!canReleaseFormation(
+      enemyState.activePopulation,
+      candidate.populationCost,
+      paragraph.activeCap,
+    )) return NO_UPDATE;
+    return this.releaseFormation(nextIndex, enemyState, candidate);
   }
 
-  recordEnemyKill(kind: EnemyKind): void {
-    if (this.state === 'running') this.bossScore += bossProgressForKill(kind);
-  }
+  // Kept until CombatScene's legacy score callback is removed in the integration step.
+  recordEnemyKill(): void {}
 
   markBossDefeated(): BossDefeatAdvance {
     if (this.state !== 'boss') {
@@ -164,7 +122,6 @@ export class EncounterDirector {
     if (this.stageIndex + 1 >= STAGES.length) {
       this.state = 'runComplete';
       this.pendingBossKind = null;
-      this.pendingFormation = null;
       return { type: 'runCompleted' };
     }
     this.state = 'bossRewardPaused';
@@ -175,43 +132,45 @@ export class EncounterDirector {
     if (this.state !== 'bossRewardPaused') {
       throw new Error(`cannot resume after boss reward while encounter state is ${this.state}`);
     }
-    if (this.stageIndex + 1 >= STAGES.length) {
-      this.state = 'runComplete';
-      this.pendingBossKind = null;
-      this.pendingFormation = null;
-      return { type: 'runCompleted' };
-    }
-
     this.state = 'running';
     this.stageIndex += 1;
+    this.stageOrder = resolveStageFormationOrder(this.activeStage(), this.runSeed);
+    this.formationIndex = -1;
     this.stageElapsedMs = 0;
-    this.elapsedSinceSpawnMs = 0;
-    this.bossScore = 0;
+    this.emptyElapsedMs = 0;
     this.warningElapsedMs = 0;
     this.pendingBossKind = null;
     this.pendingBossWarningMs = 0;
-    this.pendingFormation = null;
+    this.lastFormationInitialPopulation = 0;
+    this.lastFormationId = null;
+    this.lastFormationRemainingRatio = null;
+    this.activePopulation = 0;
     const stage = this.activeStage();
     return { type: 'stageStarted', stageId: stage.id, stageNumber: stage.number };
   }
 
   getSnapshot() {
     const stage = this.activeStage();
-    const phase = phaseAt(stage, this.bossScore).index;
+    const order = this.stageOrder[Math.max(0, this.formationIndex)]!;
+    const paragraph = stage.paragraphs[order.paragraphIndex]!;
     return {
       elapsedMs: this.elapsedMs,
-      elapsedSinceSpawnMs: this.elapsedSinceSpawnMs,
-      phase,
-      spawnSequence: this.spawnSequence,
+      emptyElapsedMs: this.emptyElapsedMs,
+      paragraphId: order.paragraphId,
+      paragraphIndex: order.paragraphIndex,
+      formationIndex: this.formationIndex,
+      spawnSequence: this.formationIndex + 1,
       runSeed: this.runSeed,
       lastFormationId: this.lastFormationId,
+      lastFormationRemainingRatio: this.lastFormationRemainingRatio,
+      activePopulation: this.activePopulation,
+      activeCap: paragraph.activeCap,
       state: this.state,
       stageIndex: this.stageIndex,
       stageId: stage.id,
       stageNumber: stage.number,
       expectedOrbCount: stage.powerBand.expectedOrbCount,
       stageElapsedMs: this.stageElapsedMs,
-      bossScore: this.bossScore,
       warningElapsedMs: this.warningElapsedMs,
       pendingBossKind: this.pendingBossKind,
       bossesDefeated: this.bossesDefeated,
@@ -221,47 +180,61 @@ export class EncounterDirector {
   private activeStage(): StageDefinition {
     return STAGES[this.stageIndex]!;
   }
+
+  private paragraphAt(index: number): StageParagraphDefinition {
+    return this.activeStage().paragraphs[this.stageOrder[index]!.paragraphIndex]!;
+  }
+
+  private createFormation(index: number): FormationResult {
+    const order = this.stageOrder[index]!;
+    return createAuthoredFormation(this.activeStage(), this.paragraphAt(index), order.id);
+  }
+
+  private releaseFormation(
+    index: number,
+    enemyState: EncounterEnemyState,
+    formation = this.createFormation(index),
+  ): EncounterUpdate {
+    this.formationIndex = index;
+    this.emptyElapsedMs = 0;
+    this.lastFormationId = formation.id;
+    this.lastFormationInitialPopulation = formation.populationCost;
+    this.lastFormationRemainingRatio = 1;
+    return {
+      formation: withRapidIngress(formation.enemies, this.paragraphAt(index), enemyState),
+      transition: null,
+    };
+  }
+
+  private beginBossWarning(): EncounterUpdate {
+    const boss = this.activeStage().boss;
+    this.state = 'bossWarning';
+    this.pendingBossKind = boss.kind;
+    this.pendingBossWarningMs = boss.warningMs;
+    this.warningElapsedMs = 0;
+    return {
+      formation: null,
+      transition: { type: 'bossWarningStarted', bossKind: boss.kind },
+    };
+  }
 }
 
-function withRapidIngress(enemies: readonly EnemySpec[]): EnemySpec[] {
+function withRapidIngress(
+  enemies: readonly EnemySpec[],
+  paragraph: StageParagraphDefinition,
+  enemyState: EncounterEnemyState,
+): EnemySpec[] {
   const cellHeight = GAME_TUNING.encounter.grid.cellHeight;
   const currentBottom = Math.max(...enemies.map((enemy) => (
     enemy.y + (enemy.height ?? 1) * cellHeight / 2
   )));
-  const offset = GAME_HEIGHT * GAME_TUNING.encounter.emergencyIngress.targetDepthRatio
-    - currentBottom;
+  const paragraphBottom = GAME_HEIGHT * paragraph.targetDepthRatio;
+  const targetBottom = enemyState.activePopulation === 0
+    ? paragraphBottom
+    : Math.min(paragraphBottom, enemyState.topmostEnemyTop - cellHeight);
+  const offset = Math.max(0, targetBottom - currentBottom);
   return enemies.map((enemy) => ({
     ...enemy,
-    rapidIngressTargetY: enemy.y + Math.max(0, offset),
+    rapidIngressTargetY: enemy.y + offset,
   }));
-}
-
-function formationRecipe(
-  stage: StageDefinition,
-  phase: StagePhaseDefinition,
-): FormationRecipe {
-  const profile = FORMATION_PROFILES.find(({ id }) => id === phase.formationProfileId);
-  if (!profile) throw new Error(`formation profile ${phase.formationProfileId} does not exist`);
-  return {
-    stageNumber: stage.number,
-    battlefield: stage.battlefield,
-    profile,
-    ...((stage.allowedTags?.length || phase.allowedTags?.length)
-      ? { allowedTags: [...(stage.allowedTags ?? []), ...(phase.allowedTags ?? [])] }
-      : {}),
-    ...((stage.excludedKinds?.length || phase.excludedKinds?.length)
-      ? { excludedKinds: [...(stage.excludedKinds ?? []), ...(phase.excludedKinds ?? [])] }
-      : {}),
-    enemyWeightMultipliers: phase.enemyWeightMultipliers,
-    maxPerFormationOverrides: phase.maxPerFormationOverrides,
-    powerBand: {
-      ...stage.powerBand,
-      normalHpMultiplier: stage.powerBand.normalHpMultiplier
-        * (phase.normalHpMultiplier ?? 1),
-      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier
-        * (phase.eliteHpMultiplier ?? 1),
-    },
-    descentSpeedMultiplier: stage.descentSpeedMultiplier
-      * (phase.descentSpeedMultiplier ?? 1),
-  };
 }
