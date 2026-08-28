@@ -38,7 +38,7 @@ describe('authored formation rules', () => {
   it('emits catalog footprints, identity, world positions, speed, and paragraph HP', () => {
     const stage = STAGES[1];
     const paragraph = stage.paragraphs[1];
-    const formationId = paragraph.formationIds[0];
+    const formationId = paragraph.formationIds[0]!;
     const result = createAuthoredFormation(stage, paragraph, formationId);
     const cells = occupiedCells(result.enemies);
     const catalogByKind = new Map(ENEMY_CATALOG.map((entry) => [entry.kind, entry]));
@@ -55,7 +55,9 @@ describe('authored formation rules', () => {
       && enemy.y + enemy.height * GAME_TUNING.encounter.grid.cellHeight / 2 <= 0
     ))).toBe(true);
     expect(result.enemies.every((enemy) => {
-      const catalog = catalogByKind.get(enemy.kind)!;
+      const catalog = catalogByKind.get(
+        enemy.kind as (typeof ENEMY_CATALOG)[number]['kind'],
+      )!;
       return enemy.width === catalog.width && enemy.height === catalog.height;
     })).toBe(true);
     expect(result.enemies.every((enemy) => (

@@ -62,7 +62,7 @@ import {
   type ExperimentSettings,
 } from '../constants';
 import { EncounterDirector } from '../encounters/EncounterDirector';
-import { createInitialFormation } from '../encounters/formationRules';
+import { STAGES } from '../encounters/stageDefinitions';
 import {
   EnemyManager,
   type DirectHitEvent,
@@ -218,7 +218,6 @@ export class CombatScene extends Phaser.Scene {
   declare debugUpgradeAbility?: (id: AbilityId) => void;
   declare debugSetEnemy?: (id: number, position: Vector, hp: number) => boolean;
   declare debugAdvanceEncounter?: (deltaMs: number) => void;
-  declare debugRecordEnemyKill?: (kind: Parameters<EncounterDirector['recordEnemyKill']>[0]) => void;
   declare debugDamageBossPart?: (
     partId: BossPartId | HivePartId | 'defenseModule',
     damage: number,
@@ -458,14 +457,12 @@ export class CombatScene extends Phaser.Scene {
       onExpired: (event) => this.handleTemporaryOrbExpired(event),
     });
     this.encounterDirector = new EncounterDirector(runSeed, developmentBalance);
-    const initialFormation = createInitialFormation(runSeed).enemies;
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
       developmentBalance,
-      formation: initialFormation,
       onContact: (damage) => this.damagePlayer(damage),
       onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
       onBulletHit: (damage) => this.damagePlayer(damage),
@@ -483,6 +480,7 @@ export class CombatScene extends Phaser.Scene {
         fragmentRight: 'enemy-fragment-right',
       },
     });
+    this.advanceEncounter(0);
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
       this.debugPlaceOrb = (id, position) => {
@@ -526,7 +524,6 @@ export class CombatScene extends Phaser.Scene {
         if (this.defeated || this.pause.isPaused()) return;
         this.advanceEncounter(deltaMs);
       };
-      this.debugRecordEnemyKill = (kind) => this.encounterDirector?.recordEnemyKill(kind);
       this.debugDamageBossPart = (partId, damage) => {
         if (!Number.isFinite(damage) || damage <= 0) {
           throw new RangeError('boss damage must be finite and positive');
@@ -683,6 +680,8 @@ export class CombatScene extends Phaser.Scene {
       enemies: [],
       activePopulation: 0,
       topmostEnemyY: Number.POSITIVE_INFINITY,
+      formationPopulations: {},
+      topmostEnemyTop: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,
     };
@@ -708,6 +707,7 @@ export class CombatScene extends Phaser.Scene {
       enemies: enemySnapshot.enemies.map((enemy) => ({
         id: enemy.id,
         kind: enemy.kind,
+        ...(enemy.formationId === undefined ? {} : { formationId: enemy.formationId }),
         hp: enemy.hp,
         position: { ...enemy.position },
         warning: enemy.warning,
@@ -722,18 +722,22 @@ export class CombatScene extends Phaser.Scene {
         : {}),
       encounter: this.encounterDirector?.getSnapshot() ?? {
         elapsedMs: 0,
-        elapsedSinceSpawnMs: 0,
-        phase: 0,
+        emptyElapsedMs: 0,
+        paragraphId: 'opening',
+        paragraphIndex: 0,
+        formationIndex: -1,
         spawnSequence: 0,
         runSeed: 0,
         lastFormationId: null,
+        lastFormationRemainingRatio: null,
+        activePopulation: 0,
+        activeCap: STAGES[0].paragraphs[0].activeCap,
         state: 'running',
         stageIndex: 0,
         stageId: 'default-1',
         stageNumber: 1,
         expectedOrbCount: STARTING_ORB_COUNT,
         stageElapsedMs: 0,
-        bossScore: 0,
         warningElapsedMs: 0,
         pendingBossKind: null,
         bossesDefeated: 0,
@@ -787,7 +791,6 @@ export class CombatScene extends Phaser.Scene {
       event.kind === 'splitter' ? 'splitter-fracture' : 'enemy-break',
       { position: event.position },
     );
-    this.encounterDirector?.recordEnemyKill(event.kind);
     this.progression?.gainEnemyKill(event.kind);
     const spread = GAME_TUNING.orbCores.corrosion.deathSpread;
     this.corrosionFields.spreadAttachedOnDeath(
@@ -2399,7 +2402,8 @@ export class CombatScene extends Phaser.Scene {
     const enemies = this.enemyManager.getSnapshot();
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
       activePopulation: enemies.activePopulation,
-      topmostEnemyY: enemies.topmostEnemyY,
+      topmostEnemyTop: enemies.topmostEnemyTop,
+      formationPopulations: enemies.formationPopulations,
     });
     if (formation) this.enemyManager.spawnFormation(formation);
     if (transition) {
@@ -2936,7 +2940,6 @@ export class CombatScene extends Phaser.Scene {
     this.combatProcs = undefined;
     this.combatVfx = undefined;
     this.debugAdvanceEncounter = undefined;
-    this.debugRecordEnemyKill = undefined;
     this.debugDamageBossPart = undefined;
     this.debugSetBossPosition = undefined;
     this.debugAdvanceHiveCycle = undefined;

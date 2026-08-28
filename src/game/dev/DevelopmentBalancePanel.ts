@@ -1,5 +1,4 @@
 import { GAME_TUNING } from '../config/gameTuning';
-import { STAGES } from '../encounters/stageDefinitions';
 import {
   createDefaultDevelopmentBalanceSettings,
   parseDevelopmentBalanceSettings,
@@ -19,7 +18,7 @@ const FIELDS = [
   ['descentSpeedMultiplier', '적 하강 속도', 0, 5, 0.1,
     `기준 ${GAME_TUNING.enemies.descentSpeed}px/s`],
   ['reinforcementIntervalMultiplier', '증원 간격', 0.1, 4, 0.1,
-    `1단계 초기 ${STAGES[0].phases[0].spawnIntervalMs / 1000}초 / 빈 전장 ${GAME_TUNING.encounter.emptyRespawnMs / 1000}초`],
+    `편대 ${GAME_TUNING.encounter.nextFormationRemainingRatio * 100}% 잔존 / 빈 전장 ${GAME_TUNING.encounter.emptyRespawnMs / 1000}초`],
   ['playerDamageMultiplier', '플레이어 피해', 0.1, 10, 0.1,
     '직접·범위·지속·융합·보스 피해 전체'],
   ['orbSpeedMultiplier', '구슬 속도', 0.25, 4, 0.05,

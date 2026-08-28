@@ -13,7 +13,7 @@ import type { EnemySpec } from './enemyRules';
 const DEFAULT_FORMATION = createAuthoredFormation(
   STAGES[0],
   STAGES[0].paragraphs[0],
-  STAGES[0].paragraphs[0].formationIds[2],
+  STAGES[0].paragraphs[0].formationIds[2]!,
 ).enemies.map((enemy) => ({
   ...enemy,
   hp: GAME_TUNING.enemies.hp[enemy.kind],

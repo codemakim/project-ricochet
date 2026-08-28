@@ -111,9 +111,6 @@ export class EncounterDirector {
     return this.releaseFormation(nextIndex, enemyState, candidate);
   }
 
-  // Kept until CombatScene's legacy score callback is removed in the integration step.
-  recordEnemyKill(): void {}
-
   markBossDefeated(): BossDefeatAdvance {
     if (this.state !== 'boss') {
       throw new Error(`cannot mark boss defeated while encounter state is ${this.state}`);

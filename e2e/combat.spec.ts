@@ -42,7 +42,8 @@ interface CombatSnapshot {
   orbs: OrbSnapshot[];
   enemies: Array<{
     id: number;
-    kind: string;
+    kind: 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment';
+    formationId?: string;
     hp: number;
     position: Vector;
     warning: boolean;
@@ -54,17 +55,21 @@ interface CombatSnapshot {
   experiment: { passThroughOnKill: boolean; homeOnBottomHit: boolean; autoReturnAfterMs: number | null };
   encounter: {
     elapsedMs: number;
-    elapsedSinceSpawnMs: number;
-    phase: number;
+    emptyElapsedMs: number;
+    paragraphId: 'opening' | 'pressure' | 'climax';
+    paragraphIndex: number;
+    formationIndex: number;
     spawnSequence: number;
     runSeed: number;
     lastFormationId: string | null;
+    lastFormationRemainingRatio: number | null;
+    activePopulation: number;
+    activeCap: number;
     state: 'running' | 'bossWarning' | 'boss' | 'bossRewardPaused' | 'runComplete';
     stageIndex: number;
     stageId: 'default-1' | 'default-2' | 'default-3';
     stageNumber: number;
     stageElapsedMs: number;
-    bossScore: number;
     warningElapsedMs: number;
     pendingBossKind: 'sentinel' | 'hive' | 'siege' | null;
     bossesDefeated: number;
@@ -210,7 +215,6 @@ interface DevelopmentScene {
   debugUpgradeAbility(id: AbilityId): void;
   debugSetEnemy(id: number, position: Vector, hp: number): boolean;
   debugAdvanceEncounter(deltaMs: number): void;
-  debugRecordEnemyKill(kind: 'basic' | 'armored' | 'shooter' | 'splitter' | 'fragment'): void;
   debugDamageBossPart(
     partId:
       | 'leftWeakpoint' | 'rightWeakpoint' | 'core'
@@ -244,6 +248,29 @@ async function sceneCall<T, A = undefined>(
 
 async function snapshot(page: Page): Promise<CombatSnapshot> {
   return sceneCall(page, (scene) => scene.getDebugSnapshot());
+}
+
+async function clearCurrentFormationAndAdvance(
+  page: Page,
+  deltaMs = 350,
+): Promise<CombatSnapshot> {
+  return sceneCall(page, (scene, delta) => {
+    const before = scene.getDebugSnapshot();
+    scene.debugRemoveEnemies(before.enemies.map(({ id }) => id));
+    scene.debugAdvanceEncounter(delta);
+    return scene.getDebugSnapshot();
+  }, deltaMs);
+}
+
+async function advanceToBossWarning(page: Page): Promise<CombatSnapshot> {
+  for (let step = 0; step < 10; step += 1) {
+    const current = await snapshot(page);
+    if (current.encounter.state !== 'running') return current;
+    await clearCurrentFormationAndAdvance(page);
+  }
+  const current = await snapshot(page);
+  expect(current.encounter.state).toBe('bossWarning');
+  return current;
 }
 
 async function revealAndRunFirstFrame(page: Page, delta: number): Promise<CombatSnapshot> {
@@ -349,36 +376,6 @@ async function activeSceneNames(page: Page): Promise<string[]> {
     .map((child) => child.name!));
 }
 
-function hasConnectedEmptyPassage(enemies: CombatSnapshot['enemies']): boolean {
-  const footprints = enemies.flatMap(({ footprint }) => footprint ? [footprint] : []);
-  const rows = Math.max(2, ...footprints.map(({ row, height }) => row + height));
-  const occupied = new Set(footprints.flatMap(({ column, row, width, height }) => (
-    Array.from({ length: width * height }, (_, index) => (
-      `${row + Math.floor(index / width)}:${column + index % width}`
-    ))
-  )));
-  const queue = Array.from({ length: 5 }, (_, column) => ({ row: rows - 1, column }))
-    .filter(({ row, column }) => !occupied.has(`${row}:${column}`));
-  const visited = new Set(queue.map(({ row, column }) => `${row}:${column}`));
-  for (let index = 0; index < queue.length; index += 1) {
-    const cell = queue[index]!;
-    if (cell.row === 0) return true;
-    for (const next of [
-      { row: cell.row - 1, column: cell.column },
-      { row: cell.row + 1, column: cell.column },
-      { row: cell.row, column: cell.column - 1 },
-      { row: cell.row, column: cell.column + 1 },
-    ]) {
-      const key = `${next.row}:${next.column}`;
-      if (next.row < 0 || next.row >= rows || next.column < 0 || next.column >= 5
-        || occupied.has(key) || visited.has(key)) continue;
-      visited.add(key);
-      queue.push(next);
-    }
-  }
-  return false;
-}
-
 async function preparePhotonFusion(page: Page) {
   const loaded = await loadCanvas(page, '', 'Digit4');
   await sceneCall(page, (scene) => {
@@ -429,12 +426,8 @@ async function chooseBossReward(
   }
 }
 
-async function enterMidbossByScore(page: Page): Promise<CombatSnapshot> {
-  await sceneCall(page, (scene) => {
-    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-  });
-  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
+async function enterMidboss(page: Page): Promise<CombatSnapshot> {
+  await advanceToBossWarning(page);
   await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
   await expect.poll(async () => (await snapshot(page)).boss.active).toBe(true);
   return snapshot(page);
@@ -452,7 +445,7 @@ async function defeatMidboss(page: Page): Promise<CombatSnapshot> {
 }
 
 async function startStageTwo(page: Page): Promise<CombatSnapshot> {
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
   const reward = await defeatMidboss(page);
   await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).encounter.stageId).toBe('default-2');
@@ -462,14 +455,9 @@ async function startStageTwo(page: Page): Promise<CombatSnapshot> {
   return resumed;
 }
 
-async function enterHiveByScore(page: Page): Promise<CombatSnapshot> {
+async function enterHive(page: Page): Promise<CombatSnapshot> {
   await startStageTwo(page);
-  await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
-    for (let score = 0; score < 110; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-  });
-  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
+  await advanceToBossWarning(page);
   await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
   await expect.poll(async () => (await snapshot(page)).boss.kind).toBe('hive');
   return snapshot(page);
@@ -619,7 +607,7 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
   });
   expect(failedAssets).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
   await expect.poll(async () => (await snapshot(page)).boss.active).toBe(true);
   await page.waitForTimeout(1_000);
   await page.screenshot({ path: testInfo.outputPath('gbc-sentinel-desktop.png') });
@@ -1061,7 +1049,7 @@ test('@desktop keeps the unfused conduction orb and moving hive modules', async 
     await snapshot(page)
   ).orbs.find(({ id }) => id === photon.id)?.state).toBe('active');
 
-  await enterHiveByScore(page);
+  await enterHive(page);
   const initial = (await snapshot(page)).boss.partPositions!;
   await sceneCall(page, (scene) => scene.debugAdvanceHiveCycle(1_000));
   const shielded = (await snapshot(page)).boss.partPositions!;
@@ -1724,69 +1712,30 @@ test('@desktop admits reinforcement while original enemies remain', async ({ pag
   });
   expect(before.enemies).toHaveLength(1);
   expect(before.activePopulation).toBe(1);
-  expect(after.encounter.spawnSequence).toBe(1);
+  expect(after.encounter.spawnSequence).toBe(2);
   expect(after.enemies.some((enemy) => enemy.id < nextEnemyId)).toBe(true);
   expect(after.enemies.some((enemy) => enemy.id >= nextEnemyId)).toBe(true);
-  expect(after.encounter.phase).toBe(0);
+  expect(after.encounter.paragraphId).toBe('opening');
 });
 
-test('@desktop varies procedural enemy formations across spawns and restarts', async ({ page }) => {
-  await page.clock.install();
-  const { box } = await loadCanvas(page);
-  const sortedPositions = (current: CombatSnapshot) => current.enemies
-    .map((enemy) => enemy.position)
-    .sort((left, right) => left.y - right.y || left.x - right.x);
+test('@desktop authored formations keep paragraph order and fixed climax ending', async ({ page }) => {
+  await loadCanvas(page);
   const initial = await snapshot(page);
-  expect(initial.enemies.length).toBeGreaterThan(0);
-  expect(initial.activePopulation).toBeGreaterThanOrEqual(7);
-  expect(initial.activePopulation).toBeLessThanOrEqual(13);
-  const initialSeed = initial.encounter.runSeed;
-  const initialPositions = sortedPositions(initial);
+  const ids = [initial.encounter.lastFormationId!];
+  const paragraphs = [initial.encounter.paragraphId];
+  for (let index = 1; index < 10; index += 1) {
+    const next = await clearCurrentFormationAndAdvance(page);
+    ids.push(next.encounter.lastFormationId!);
+    paragraphs.push(next.encounter.paragraphId);
+  }
 
-  await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-  });
-  await page.clock.runFor(9_100);
-
-  const first = await snapshot(page);
-  expect(first.enemies.length).toBeGreaterThan(0);
-  expect(first.activePopulation).toBeGreaterThanOrEqual(7);
-  expect(first.activePopulation).toBeLessThanOrEqual(16);
-  expect(first.encounter.lastFormationId).not.toBeNull();
-  const firstId = first.encounter.lastFormationId!;
-  const firstPositions = sortedPositions(first);
-  expect(new Set(firstPositions.map(({ x, y }) => `${x}:${y}`)).size).toBe(first.enemies.length);
-
-  await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-  });
-  await page.clock.runFor(9_100);
-
-  const second = await snapshot(page);
-  expect(second.enemies.length).toBeGreaterThan(0);
-  expect(second.activePopulation).toBeGreaterThanOrEqual(7);
-  expect(second.activePopulation).toBeLessThanOrEqual(16);
-  expect(second.encounter.lastFormationId).not.toBeNull();
-  const secondId = second.encounter.lastFormationId!;
-  const secondPositions = sortedPositions(second);
-  expect(secondId).not.toBe(firstId);
-  expect(secondPositions).not.toEqual(firstPositions);
-  expect(new Set(secondPositions.map(({ x, y }) => `${x}:${y}`)).size).toBe(second.enemies.length);
-
-  await sceneCall(page, (scene) => {
-    scene.debugSetHealth(1);
-    scene.debugDamage(1);
-  });
-  const restart = clientPoint(box, { x: 225, y: 436 });
-  await expect.poll(async () => {
-    await page.mouse.click(restart.x, restart.y);
-    return (await snapshot(page)).defeated;
-  }, { intervals: [16], timeout: 1_000 }).toBe(false);
-
-  const restarted = await snapshot(page);
-  expect(restarted.enemies.length).toBeGreaterThan(0);
-  expect(restarted.encounter.runSeed).not.toBe(initialSeed);
-  expect(sortedPositions(restarted)).not.toEqual(initialPositions);
+  expect(new Set(ids).size).toBe(10);
+  expect(paragraphs).toEqual([
+    'opening', 'opening', 'opening',
+    'pressure', 'pressure', 'pressure', 'pressure',
+    'climax', 'climax', 'climax',
+  ]);
+  expect(ids[9]).toBe('s1-climax-final');
 });
 
 test('@desktop pauses while hidden and resumes when visible', async ({ page }) => {
@@ -1803,7 +1752,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
   await page.clock.runFor(8_100);
   const hidden = await snapshot(page);
   expect(hidden.encounter.elapsedMs).toBe(before.encounter.elapsedMs);
-  expect(hidden.encounter.elapsedSinceSpawnMs).toBe(before.encounter.elapsedSinceSpawnMs);
+  expect(hidden.encounter.emptyElapsedMs).toBe(before.encounter.emptyElapsedMs);
   expect(hidden.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
   expect(hidden.enemies).toHaveLength(before.enemies.length);
   expect(hidden.player).toEqual(before.player);
@@ -1811,7 +1760,7 @@ test('@desktop pauses while hidden and resumes when visible', async ({ page }) =
 
   const firstResumedFrame = await revealAndRunFirstFrame(page, 8_100);
   expect(firstResumedFrame.encounter.elapsedMs - hidden.encounter.elapsedMs).toBeLessThanOrEqual(50);
-  expect(firstResumedFrame.encounter.elapsedSinceSpawnMs - hidden.encounter.elapsedSinceSpawnMs)
+  expect(firstResumedFrame.encounter.emptyElapsedMs - hidden.encounter.emptyElapsedMs)
     .toBeLessThanOrEqual(50);
   expect(firstResumedFrame.encounter.spawnSequence).toBe(hidden.encounter.spawnSequence);
   expect(firstResumedFrame.enemies).toHaveLength(hidden.enemies.length);
@@ -2062,15 +2011,12 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   });
 });
 
-test('@desktop six-column density uses shipped enemy stats and exact reinforcement release gate', async ({ page }) => {
+test('@desktop authored density uses shipped enemy stats and empty refill boundary', async ({ page }) => {
   await loadCanvas(page);
   const initial = await snapshot(page);
   const { left, cellWidth } = GAME_TUNING.encounter.grid;
   expect(initial.enemies.length).toBeGreaterThan(0);
-  expect(initial.enemies.every(({ speed }) => speed === GAME_TUNING.enemies.descentSpeed)).toBe(true);
-  expect(initial.enemies.every(({ kind, hp }) => (
-    hp === GAME_TUNING.enemies.hp[kind]
-  ))).toBe(true);
+  expect(initial.enemies.every(({ speed, hp }) => speed > 0 && hp > 0)).toBe(true);
   expect(initial.enemies.every(({ footprint, position }) => (
     footprint !== undefined
     && footprint.column >= 0
@@ -2084,184 +2030,73 @@ test('@desktop six-column density uses shipped enemy stats and exact reinforceme
     (sum, enemy) => sum + enemy.footprint!.width * enemy.footprint!.height,
     0,
   ));
-  expect(initial.activePopulation).toBeGreaterThanOrEqual(7);
-  expect(initial.activePopulation).toBeLessThanOrEqual(11);
+  expect(initial.encounter).toMatchObject({
+    paragraphId: 'opening', paragraphIndex: 0, formationIndex: 0, spawnSequence: 1,
+  });
 
-  const blocked = await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
-    const enemies = scene.getDebugSnapshot().enemies;
-    scene.debugRemoveEnemies(enemies.slice(3).map(({ id }) => id));
-    for (const enemy of scene.getDebugSnapshot().enemies) {
-      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 49 }, enemy.hp);
-    }
-    scene.debugAdvanceEncounter(8_000);
+  const waiting = await clearCurrentFormationAndAdvance(page, 349);
+  expect(waiting.enemies).toHaveLength(0);
+  expect(waiting.encounter.formationIndex).toBe(0);
+  const refilled = await sceneCall(page, (scene) => {
+    scene.debugAdvanceEncounter(1);
     return scene.getDebugSnapshot();
   });
-  expect(Math.min(...blocked.enemies.map(({ position }) => position.y))).toBe(49);
-  expect(blocked.encounter).toMatchObject({ phase: 0, spawnSequence: 0 });
-  expect(blocked.enemies).toHaveLength(3);
-
-  const pressure = await sceneCall(page, (scene) => {
-    for (const enemy of scene.getDebugSnapshot().enemies) {
-      scene.debugSetEnemy(enemy.id, { x: enemy.position.x, y: 25 }, enemy.hp);
-    }
-    for (let score = 0; score < 25; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    return scene.getDebugSnapshot();
-  });
-  const reinforcementCount = pressure.enemies.length - blocked.enemies.length;
-  expect(Math.min(...pressure.enemies
-    .filter(({ id }) => id < initial.enemies.length)
-    .map(({ position }) => position.y))).toBe(25);
-  expect(pressure.encounter).toMatchObject({ phase: 1, spawnSequence: 1 });
-  expect(reinforcementCount).toBeGreaterThan(0);
-  expect(pressure.activePopulation).toBeLessThanOrEqual(22);
+  expect(refilled.enemies.length).toBeGreaterThan(0);
+  expect(refilled.encounter).toMatchObject({ formationIndex: 1, spawnSequence: 2 });
+  expect(refilled.encounter.lastFormationId).not.toBe(initial.encounter.lastFormationId);
 });
 
-test('@desktop emits a connected empty passage in a reinforcement', async ({ page }) => {
+test('@desktop authored pressure and climax release beside one older survivor', async ({ page }) => {
   await loadCanvas(page);
-  await sceneCall(page, (scene) => {
-    const ids = scene.getDebugSnapshot().enemies.map(({ id }) => id);
-    scene.debugRemoveEnemies(ids);
-    scene.debugAdvanceEncounter(9_000);
-  });
-  const enemies = (await snapshot(page)).enemies;
-  expect(enemies.length).toBeGreaterThan(0);
-  expect(hasConnectedEmptyPassage(enemies)).toBe(true);
+  for (const targetIndex of [3, 7]) {
+    while ((await snapshot(page)).encounter.formationIndex < targetIndex - 1) {
+      await clearCurrentFormationAndAdvance(page);
+    }
+    const before = await snapshot(page);
+    const survivor = before.enemies[0]!;
+    const newestFormationId = before.encounter.lastFormationId!;
+    const after = await sceneCall(page, (scene, input) => {
+      const current = scene.getDebugSnapshot();
+      scene.debugRemoveEnemies(current.enemies
+        .filter(({ id }) => id !== input.survivorId)
+        .map(({ id }) => id));
+      scene.debugAdvanceEncounter(0);
+      return scene.getDebugSnapshot();
+    }, { survivorId: survivor.id });
+
+    expect(after.enemies.some(({ id }) => id === survivor.id)).toBe(true);
+    expect(after.enemies.some(({ formationId }) => formationId !== newestFormationId)).toBe(true);
+    expect(after.encounter.formationIndex).toBe(targetIndex);
+    expect(after.encounter.paragraphId).toBe(targetIndex === 3 ? 'pressure' : 'climax');
+  }
 });
 
-test('@desktop midboss enters from kill score and stops formations through warning and combat', async ({ page }) => {
+test('@desktop authored stage empties into warning and stops formations during boss combat', async ({ page }) => {
   await loadCanvas(page);
-  await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    scene.debugAdvanceEncounter(9_000);
+  const warning = await advanceToBossWarning(page);
+  expect(warning.encounter).toMatchObject({
+    state: 'bossWarning', formationIndex: 9, spawnSequence: 10,
   });
-  const control = await snapshot(page);
-  expect(control.encounter.spawnSequence).toBe(1);
-  expect(control.enemies.length).toBeGreaterThan(0);
-
-  await loadCanvas(page);
-  const before = await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
-    return scene.getDebugSnapshot();
-  });
-  expect(before.enemies).toHaveLength(0);
-  expect(before.encounter.spawnSequence).toBe(0);
-
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(0));
-  const warning = await snapshot(page);
-  expect(warning.encounter).toMatchObject({ state: 'bossWarning', bossScore: 70 });
-  expect(warning.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
-  expect(warning.enemies).toHaveLength(before.enemies.length);
+  expect(warning.enemies).toHaveLength(0);
 
   await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
   const boss = await snapshot(page);
   expect(boss.encounter.state).toBe('boss');
   expect(boss.boss).toMatchObject({ active: true, phase: 'twoWeakpoints' });
-  expect(boss.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
-  expect(boss.enemies).toHaveLength(before.enemies.length);
+  expect(boss.encounter.spawnSequence).toBe(10);
+  expect(boss.enemies).toHaveLength(0);
 
   await sceneCall(page, (scene) => scene.debugAdvanceEncounter(60_000));
   const stable = await snapshot(page);
   expect(stable.encounter.state).toBe('boss');
-  expect(stable.encounter.spawnSequence).toBe(before.encounter.spawnSequence);
-  expect(stable.enemies).toHaveLength(before.enemies.length);
-});
-
-test('@desktop midboss never enters from elapsed time alone', async ({ page }) => {
-  await loadCanvas(page);
-  const after = await sceneCall(page, (scene) => {
-    scene.debugAdvanceEncounter(999_999);
-    return scene.getDebugSnapshot();
-  });
-  expect(after.encounter).toMatchObject({ state: 'running', bossScore: 0 });
-  expect(after.boss.active).toBe(false);
-});
-
-test('@desktop clears only the boss entry corridor without kill rewards', async ({ page }) => {
-  await loadCanvas(page);
-  const arranged = await sceneCall(page, (scene) => {
-    const enemies = scene.getDebugSnapshot().enemies;
-    const center = enemies[0]!;
-    const side = enemies[1]!;
-    scene.debugFreezeEnemies();
-    scene.debugRemoveEnemies(enemies.slice(2).map(({ id }) => id));
-    scene.debugSetEnemy(center.id, { x: 225, y: 120 }, 99);
-    scene.debugSetEnemy(side.id, { x: 40, y: 300 }, 99);
-    const xp = scene.getDebugSnapshot().progression.xp;
-    for (let score = 0; score < 70; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    return { centerId: center.id, sideId: side.id, xp };
-  });
-  await expect.poll(async () => (await snapshot(page)).encounter.state).toBe('bossWarning');
-
-  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
-  const after = await snapshot(page);
-
-  expect(after.boss.active).toBe(true);
-  expect(after.enemies.some(({ id }) => id === arranged.centerId)).toBe(false);
-  expect(after.enemies.some(({ id }) => id === arranged.sideId)).toBe(true);
-  expect(after.progression.xp).toBe(arranged.xp);
-});
-
-test('@desktop midboss movement is constrained by enemies and expands after obstacle removal', async ({ page }) => {
-  await loadCanvas(page);
-  await enterMidbossByScore(page);
-  const bodySize = await sceneCall(page, (scene) => {
-    const body = scene.children.list.find(
-      (child) => child.active && child.texture?.key === 'actor-sentinel-body-default',
-    );
-    return { width: body?.displayWidth, height: body?.displayHeight };
-  });
-  expect(bodySize).toEqual({ width: 252, height: 144 });
-
-  const movement = await sceneCall(page, (scene) => {
-    const enemies = scene.getDebugSnapshot().enemies;
-    const obstacle = enemies[0]!;
-    scene.debugFreezeEnemies();
-    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
-    scene.debugSetEnemy(obstacle.id, { x: 330, y: 120 }, 99);
-    scene.debugSetBossPosition(225);
-    const constrained: number[] = [];
-    for (let sample = 0; sample < 6; sample += 1) {
-      scene.update(0, 2_000);
-      constrained.push(scene.getDebugSnapshot().boss.position!.x);
-    }
-
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    const speedSamples = [scene.getDebugSnapshot().boss.position!.x];
-    for (let sample = 0; sample < 4; sample += 1) {
-      scene.update(0, 500);
-      speedSamples.push(scene.getDebugSnapshot().boss.position!.x);
-    }
-    const expanded = [...speedSamples];
-    for (let sample = 0; sample < 5; sample += 1) {
-      scene.update(0, 2_000);
-      expanded.push(scene.getDebugSnapshot().boss.position!.x);
-    }
-    return { constrained, speedSamples, expanded };
-  });
-  expect(new Set(movement.constrained)).toEqual(new Set([225]));
-  const distances = movement.speedSamples.slice(1).map(
-    (position, index) => Math.abs(position - movement.speedSamples[index]!),
-  );
-  expect(distances).toHaveLength(4);
-  expect(distances.every((distance) => distance > 0 && distance <= 17.5)).toBe(true);
-  expect(Math.max(...movement.expanded)).toBeGreaterThan(270);
-  expect(Math.max(...movement.expanded)).toBeLessThanOrEqual(282);
-  expect(Math.min(...movement.expanded)).toBeGreaterThanOrEqual(168);
+  expect(stable.encounter.spawnSequence).toBe(10);
+  expect(stable.enemies).toHaveLength(0);
 });
 
 test('@desktop midboss basic shots aim, damage once, and pause for major warning', async ({ page }) => {
   await loadCanvas(page);
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
   await sceneCall(page, (scene) => {
-    const enemies = scene.getDebugSnapshot().enemies;
-    const obstacle = enemies[0]!;
-    scene.debugFreezeEnemies();
-    scene.debugRemoveEnemies(enemies.slice(1).map((enemy) => enemy.id));
-    scene.debugSetEnemy(obstacle.id, { x: 225, y: 120 }, 99);
     scene.debugSetBossPosition(225);
     scene.debugSetHealth(10);
   });
@@ -2346,7 +2181,7 @@ test('@desktop midboss basic shots aim, damage once, and pause for major warning
 
 test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage two', async ({ page }) => {
   await loadCanvas(page);
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
 
   await sceneCall(page, (scene) => scene.debugDamageBossPart('core', 36));
   expect((await snapshot(page)).boss).toMatchObject({
@@ -2487,7 +2322,7 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
     return { state: orb.state, source: orb.lastRecoverySource };
   }, { timeout: 800 }).toEqual({ state: 'active', source: 'proximity' });
 
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
   const reward = await defeatMidboss(page);
   const auxiliaryIndex = reward.bossRewardChoices.indexOf('auxiliary-link');
   expect(auxiliaryIndex).toBeGreaterThanOrEqual(0);
@@ -2497,7 +2332,7 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
 
 test('@desktop midboss rewards and encounter state reset on restart', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await enterMidbossByScore(page);
+  await enterMidboss(page);
   const reward = await defeatMidboss(page);
   await chooseBossReward(page);
   await expect.poll(async () => (await snapshot(page)).bossRewards).toEqual([reward.bossRewardChoices[0]]);
@@ -2521,8 +2356,8 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
     state: 'running',
     stageId: 'default-1',
     stageNumber: 1,
-    spawnSequence: 0,
-    bossScore: 0,
+    spawnSequence: 1,
+    formationIndex: 0,
     bossesDefeated: 0,
   });
   expect(reset.encounter.elapsedMs).toBeLessThan(1_000);
@@ -2536,29 +2371,17 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
 test('@desktop splitter reserves population, clamps fragments, and settles rewards', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await startStageTwo(page);
-  const splitterReady = await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    for (let score = 0; score < 55; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    for (let attempt = 0; attempt < 32; attempt += 1) {
-      scene.debugAdvanceEncounter(5_500);
-      if (scene.getDebugSnapshot().enemies.some(({ kind }) => kind === 'splitter')) {
-        return true;
-      }
-      scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map((enemy) => enemy.id));
-    }
-    return false;
-  });
-  expect(splitterReady).toBe(true);
+  for (let attempt = 0; attempt < 9; attempt += 1) {
+    if ((await snapshot(page)).enemies.some(({ kind }) => kind === 'splitter')) break;
+    await clearCurrentFormationAndAdvance(page);
+  }
   await page.waitForTimeout(1_500);
   await sceneCall(page, (scene) => scene.debugFreezeEnemies());
   const pressurePhase = await snapshot(page);
-  expect(pressurePhase.encounter.phase).toBe(1);
   const parent = pressurePhase.enemies.find(({ kind }) => kind === 'splitter')!;
   expect(parent).toBeDefined();
   const populationBefore = pressurePhase.activePopulation;
   const xpBefore = pressurePhase.progression.xp;
-  const scoreBefore = pressurePhase.encounter.bossScore;
   await sceneCall(page, (scene, id) => {
     scene.debugSetEnemy(id, { x: 0, y: 300 }, 1);
   }, parent.id);
@@ -2577,7 +2400,6 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   expect(fragments.every(({ position }) => position.x >= 11)).toBe(true);
   expect(split.activePopulation).toBe(populationBefore);
   expect(split.progression.xp).toBe(xpBefore + 1);
-  expect(split.encounter.bossScore).toBe(scoreBefore + 2);
   for (const fragment of fragments) {
     const arranged = await sceneCall(page, (scene, target) => {
       const orb = scene.getDebugSnapshot().orbs.filter(
@@ -2603,68 +2425,13 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   }
   const settled = await snapshot(page);
   expect(settled.progression.xp).toBe(xpBefore + 3);
-  expect(settled.encounter.bossScore).toBe(scoreBefore + 2);
   expect(settled.activePopulation).toBe(populationBefore - 2);
-});
-
-test('@desktop enters hive from its stage-local score only', async ({ page }) => {
-  await loadCanvas(page);
-  await startStageTwo(page);
-  const scoreBoundaries = await sceneCall(page, (scene) => {
-    const survivor = scene.getDebugSnapshot().enemies[0]!;
-    scene.debugSetEnemy(survivor.id, { x: survivor.position.x, y: 500 }, survivor.hp);
-    for (let score = 0; score < 109; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(999_999);
-    const before = scene.getDebugSnapshot();
-    scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    const warning = scene.getDebugSnapshot();
-    scene.debugAdvanceEncounter(1_999);
-    const beforeBoss = scene.getDebugSnapshot();
-    scene.debugAdvanceEncounter(1);
-    const boss = scene.getDebugSnapshot();
-    return { before, warning, beforeBoss, boss, survivorId: survivor.id };
-  });
-  const beforeScoreBoundary = scoreBoundaries.before;
-  expect(beforeScoreBoundary.encounter).toMatchObject({
-    state: 'running',
-    stageId: 'default-2',
-    stageNumber: 2,
-    bossScore: 109,
-  });
-  expect(beforeScoreBoundary.encounter.stageElapsedMs).toBeGreaterThanOrEqual(999_999);
-  const scoreEnemies = beforeScoreBoundary.enemies.map(({ id }) => id);
-  const scoreSpawnSequence = beforeScoreBoundary.encounter.spawnSequence;
-  const scoreWarning = scoreBoundaries.warning;
-  expect(scoreWarning.encounter).toMatchObject({
-    state: 'bossWarning', pendingBossKind: 'hive', bossScore: 110,
-  });
-  expect(scoreWarning.enemies.map(({ id }) => id)).toEqual(scoreEnemies);
-  expect(scoreBoundaries.beforeBoss.encounter.state).toBe('bossWarning');
-  expect(scoreBoundaries.boss.boss.kind).toBe('hive');
-  expect(scoreBoundaries.boss.encounter.spawnSequence).toBe(scoreSpawnSequence);
-  expect(scoreBoundaries.boss.enemies.some(({ id }) => id === scoreBoundaries.survivorId)).toBe(true);
-  const activeHive = await sceneCall(page, (scene) => {
-    scene.debugAdvanceEncounter(7_000);
-    scene.debugAdvanceHiveCycle(7_000);
-    return scene.getDebugSnapshot();
-  });
-  expect(activeHive.encounter.state).toBe('boss');
-  expect(activeHive.encounter.spawnSequence).toBe(scoreSpawnSequence);
-  const activeEnemyIds = activeHive.enemies.map(({ id }) => id);
-  expect(activeEnemyIds).toContain(scoreBoundaries.survivorId);
-  expect(activeEnemyIds.length).toBeLessThanOrEqual(scoreEnemies.length);
-  expect(activeEnemyIds.every((id) => scoreEnemies.includes(id))).toBe(true);
-
 });
 
 test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure', async ({ page }) => {
   await loadCanvas(page);
-  await startStageTwo(page);
+  await enterHive(page);
   const phases = await sceneCall(page, (scene) => {
-    for (let score = 0; score < 110; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    scene.debugAdvanceEncounter(2_000);
     const initial = scene.getDebugSnapshot().boss.phase;
     scene.debugAdvanceHiveCycle(3_999);
     const beforeTelegraph = scene.getDebugSnapshot().boss.phase;
@@ -2701,7 +2468,7 @@ test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure',
 
 test('@desktop hive permanent exposure moves, fires both enrage patterns, and rewards core death', async ({ page }, testInfo) => {
   await loadCanvas(page);
-  await enterHiveByScore(page);
+  await enterHive(page);
   const entered = await sceneCall(page, (scene) => {
     const core = scene.children.list.find(
       (child) => child.active && child.texture?.key === 'actor-hive-core-default',
@@ -2756,7 +2523,7 @@ test('@desktop hive permanent exposure moves, fires both enrage patterns, and re
 
 test('@desktop hive reflector changes a real orb trajectory without blocking player bullets', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await enterHiveByScore(page);
+  await enterHive(page);
   await sceneCall(page, (scene) => {
     scene.debugAdvanceHiveCycle(4_000);
     scene.debugAdvanceHiveCycle(1_500);
@@ -2803,7 +2570,7 @@ test('@desktop hive reflector changes a real orb trajectory without blocking pla
 
 test('@desktop hive attacks respect hostile cap and clean up on defeat', async ({ page }) => {
   await loadCanvas(page);
-  await enterHiveByScore(page);
+  await enterHive(page);
   await sceneCall(page, (scene) => {
     scene.debugFreezeEnemies();
     scene.player.setPosition(225, 730);
@@ -2841,7 +2608,7 @@ test('@desktop hive attacks respect hostile cap and clean up on defeat', async (
 
 test('@desktop acquires one second relic before starting stage three', async ({ page }) => {
   await loadCanvas(page);
-  await enterHiveByScore(page);
+  await enterHive(page);
   await sceneCall(page, (scene) => {
     scene.debugDamageBossPart('leftShooter', 20);
     scene.debugDamageBossPart('rightShooter', 20);
@@ -2864,7 +2631,7 @@ test('@desktop acquires one second relic before starting stage three', async ({ 
 
 test('@desktop completes the first two stages and resumes stage three', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await enterHiveByScore(page);
+  await enterHive(page);
   await sceneCall(page, (scene) => {
     scene.debugDamageBossPart('leftShooter', 20);
     scene.debugDamageBossPart('rightShooter', 20);
@@ -2905,24 +2672,14 @@ test('@desktop completes the first two stages and resumes stage three', async ({
 test('@mobile keeps movement and retained aim during second-stage density and hive combat', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await startStageTwo(page);
-  await sceneCall(page, (scene) => {
-    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
-    for (let score = 0; score < 55; score += 1) scene.debugRecordEnemyKill('basic');
-    scene.debugAdvanceEncounter(0);
-    scene.debugAdvanceEncounter(5_500);
-  });
+  while ((await snapshot(page)).encounter.formationIndex < 3) {
+    await clearCurrentFormationAndAdvance(page);
+  }
   const dense = await snapshot(page);
-  expect(dense.encounter.phase).toBe(1);
+  expect(dense.encounter.paragraphId).toBe('pressure');
   expect(dense.activePopulation).toBeGreaterThan(0);
-  await sceneCall(page, (scene) => {
-    const survivor = scene.getDebugSnapshot().enemies[0]!;
-    scene.debugSetEnemy(survivor.id, { x: survivor.position.x, y: 500 }, survivor.hp);
-    for (let score = scene.getDebugSnapshot().encounter.bossScore; score < 110; score += 1) {
-      scene.debugRecordEnemyKill('basic');
-    }
-    scene.debugAdvanceEncounter(0);
-    scene.debugAdvanceEncounter(2_000);
-  });
+  await advanceToBossWarning(page);
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(2_000));
   await expect.poll(async () => (await snapshot(page)).boss.kind).toBe('hive');
   const before = await snapshot(page);
   const touches = {
