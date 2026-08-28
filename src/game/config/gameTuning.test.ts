@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORB_SPEED } from '../constants';
+import { ORB_PICKUP_RADIUS, ORB_SPEED, PLAYER_SPEED } from '../constants';
 import { GAME_TUNING, validateGameTuning, type GameTuning } from './gameTuning';
 
 type Mutable<T> = T extends readonly [unknown, ...unknown[]]
@@ -17,7 +17,7 @@ function mutableTuning(): Mutable<GameTuning> {
 describe('GAME_TUNING', () => {
   it('defines the approved global boss, enemy, and encounter values once', () => {
     expect(GAME_TUNING.world).toEqual({ width: 450, height: 800 });
-    expect(GAME_TUNING.player.visual).toEqual({ width: 82, height: 82, hurtRadius: 28 });
+    expect(GAME_TUNING.player.visual).toEqual({ width: 72, height: 72, hurtRadius: 20 });
     expect(GAME_TUNING.boss.body).toEqual({ width: 252, height: 144 });
     expect(GAME_TUNING.boss.weakpoint).toEqual({
       visual: { width: 56, height: 120 },
@@ -37,6 +37,8 @@ describe('GAME_TUNING', () => {
       fragment: { width: 22, height: 18, populationCost: 1, score: 0, xp: 1, breachDamage: 1 },
     });
     expect(ORB_SPEED).toBe(520);
+    expect(PLAYER_SPEED).toBe(420);
+    expect(ORB_PICKUP_RADIUS).toBe(50);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'initialFormation')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'reinforcementReleaseY')).toBe(false);
     expect(Object.hasOwn(GAME_TUNING.encounter, 'phases')).toBe(false);

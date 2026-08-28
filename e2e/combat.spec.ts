@@ -164,7 +164,9 @@ interface DevelopmentScene {
         play?(key: string): void;
       };
       orbId?: number;
+      bossProjectileKind?: string;
       text?: string;
+      destroy?(): void;
       getData?(key: string): unknown;
       setPosition?(x: number, y: number): void;
       body?: {
@@ -178,14 +180,16 @@ interface DevelopmentScene {
     }>;
   };
   player: {
+    x: number;
+    y: number;
     displayWidth: number;
     displayHeight: number;
     angle: number;
     anims: { currentAnim?: { key?: string }; isPlaying?: boolean; play?(key: string): void };
-    body?: { width?: number; height?: number };
+    body?: { width?: number; height?: number; reset?(x: number, y: number): void };
     setPosition(x: number, y: number): void;
   };
-  physics: { pause(): void };
+  physics: { pause(): void; world: { step(deltaSeconds: number): void } };
   anims: { exists(key: string): boolean };
   aimGuide: { visible: boolean };
   combatVfx: {
@@ -550,7 +554,7 @@ async function waitForLevelUpSelection(page: Page): Promise<void> {
   }, { intervals: [0], timeout: 1_000 }).toBe(true);
 }
 
-test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
+test('@desktop renders the GBC opening slice and player visual', async ({ page }, testInfo) => {
   const failedAssets: string[] = [];
   page.on('response', (response) => {
     if (response.url().includes('/assets/combat/') && !response.ok()) {
@@ -602,7 +606,7 @@ test('@desktop renders the GBC opening slice', async ({ page }, testInfo) => {
     };
   });
   expect(liveGeometry).toEqual({
-    player: { width: 82, height: 82, bodyWidth: 56, bodyHeight: 56 },
+    player: { width: 72, height: 72, bodyWidth: 40, bodyHeight: 40 },
     orb: { width: 42, height: 42, bodyWidth: 32, bodyHeight: 32 },
   });
   expect(failedAssets).toEqual([]);
@@ -2177,6 +2181,78 @@ test('@desktop midboss basic shots aim, damage once, and pause for major warning
     new Set([majorCycle.atWarning.boss.basicBullets]),
   );
   expect(majorCycle.resolved.boss.warnings).toBe(0);
+});
+
+test('@desktop player fits through a sentinel spread gap', async ({ page }) => {
+  await loadCanvas(page);
+  await enterMidboss(page);
+  const result = await sceneCall(page, (scene) => {
+    scene.debugSetHealth(10);
+    scene.debugSetBossPosition(225);
+    for (let elapsed = 0; elapsed < 4_000; elapsed += 50) {
+      if (scene.getDebugSnapshot().boss.aimedBullets >= 3) break;
+      scene.update(0, 50);
+    }
+    const aimedSprites = scene.children.list
+      .filter(({ active, bossProjectileKind, body }) => (
+        active && bossProjectileKind === 'aimed' && (body?.velocity?.y ?? 0) > 0
+      ))
+      .sort((left, right) => right.body!.velocity!.y - left.body!.velocity!.y)
+      .slice(0, 2);
+    if (aimedSprites.length !== 2) throw new Error('sentinel aimed volley did not fire');
+    const aimed = aimedSprites.map((sprite) => ({
+      position: { x: sprite.x!, y: sprite.y! },
+      velocity: { ...sprite.body!.velocity! },
+    }));
+    for (const child of scene.children.list) {
+      if (child.active && child.bossProjectileKind === 'basic') child.destroy?.();
+    }
+    const playerY = scene.player.y;
+    const projectedX = aimed.map(({ position, velocity }) => (
+      position.x + velocity.x * (playerY - position.y) / velocity.y
+    ));
+    const playerX = (projectedX[0]! + projectedX[1]!) / 2;
+    scene.player.setPosition(playerX, playerY);
+    scene.player.body?.reset?.(playerX, playerY);
+    const health = scene.getDebugSnapshot().health.current;
+    let stayedBetween = true;
+    let reachedPlayer = false;
+    let lastPositions: Vector[] = [];
+    for (let elapsed = 0; elapsed < 4_000; elapsed += 16) {
+      scene.update(0, 16);
+      for (const child of scene.children.list) {
+        if (child.active && child.bossProjectileKind === 'basic') child.destroy?.();
+      }
+      scene.physics.world.step(0.016);
+      const current = aimedSprites.filter(({ active }) => active);
+      lastPositions = current.map(({ body }) => ({
+        x: body!.x! + body!.width! / 2,
+        y: body!.y! + body!.height! / 2,
+      }));
+      if (current.length !== 2) break;
+      if (lastPositions.every(({ y }) => y >= playerY - 80)) {
+        const [left, right] = lastPositions.map(({ x }) => x).sort((a, b) => a - b);
+        stayedBetween &&= scene.player.x > left! && scene.player.x < right!;
+      }
+      if (lastPositions.every(({ y }) => y > playerY + 10)) {
+        reachedPlayer = true;
+        break;
+      }
+    }
+    return {
+      healthBefore: health,
+      healthAfter: scene.getDebugSnapshot().health.current,
+      playerX: scene.player.x,
+      projectedX,
+      stayedBetween,
+      reachedPlayer,
+    };
+  });
+
+  expect(result).toMatchObject({ reachedPlayer: true, stayedBetween: true });
+  expect(result.playerX).toBeGreaterThan(Math.min(...result.projectedX));
+  expect(result.playerX).toBeLessThan(Math.max(...result.projectedX));
+  expect(result.healthAfter).toBe(result.healthBefore);
 });
 
 test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage two', async ({ page }) => {

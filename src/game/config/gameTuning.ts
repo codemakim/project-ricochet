@@ -525,7 +525,7 @@ const ORB_CORE_LEVEL_TUNING = {
 
 export const GAME_TUNING = {
   world: { width: 450, height: 800 },
-  player: { visual: { width: 82, height: 82, hurtRadius: 28 } },
+  player: { visual: { width: 72, height: 72, hurtRadius: 20 } },
   boss: {
     y: 120,
     body: { width: 252, height: 144 },
