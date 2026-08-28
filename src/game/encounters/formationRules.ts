@@ -1,52 +1,24 @@
 import { GAME_TUNING } from '../config/gameTuning';
-import type { EnemyKind, FormationEnemySpec } from '../enemies/enemyRules';
-import {
-  FORMATION_COLUMNS,
-  footprintWorldRect,
-  occupyFootprint,
-  reservedPassageCells,
-  type GridFootprint,
-} from './formationGrid';
+import type { FormationEnemySpec } from '../enemies/enemyRules';
+import { AUTHORED_FORMATIONS, type ParagraphId } from './authoredFormations';
+import { footprintWorldRect } from './formationGrid';
 import {
   ENEMY_CATALOG,
-  FORMATION_TEMPLATES,
-  type BattlefieldId,
-  type EnemyCatalogEntry,
-  type EnemyTag,
-  type FormationProfile,
-  type StagePowerBand,
-  type FormationTemplate,
-  type FormationTemplateId,
+  type StageDefinition,
+  type StageParagraphDefinition,
 } from './stageDefinitions';
-
-export type FormationStyle = 'cluster' | 'pockets' | 'bands' | 'scatter' | 'grid';
 
 export interface FormationResult {
   id: string;
-  style: FormationStyle;
   enemies: FormationEnemySpec[];
   populationCost: number;
 }
 
-export interface FormationRecipe {
-  stageNumber: number;
-  battlefield: BattlefieldId;
-  profile: FormationProfile;
-  allowedTags?: readonly EnemyTag[];
-  excludedKinds?: readonly EnemyKind[];
-  enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
-  maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
-  powerBand: StagePowerBand;
-  descentSpeedMultiplier: number;
-}
-
-interface Cell {
-  row: number;
-  column: number;
-}
-
-interface Placement extends GridFootprint {
-  kind: Exclude<EnemyKind, 'fragment'>;
+export interface ResolvedStageFormation {
+  id: string;
+  paragraphId: ParagraphId;
+  paragraphIndex: number;
+  sequence: number;
 }
 
 function validateSeed(seed: number, name = 'seed'): void {
@@ -82,390 +54,71 @@ function shuffled<T>(values: readonly T[], random: () => number): T[] {
   return result;
 }
 
-function weightedChoice<T>(
-  values: readonly T[],
-  weight: (value: T) => number,
-  random: () => number,
-): T | undefined {
-  const total = values.reduce((sum, value) => sum + weight(value), 0);
-  if (total <= 0) return undefined;
-  let cursor = random() * total;
-  for (const value of values) {
-    cursor -= weight(value);
-    if (cursor < 0) return value;
-  }
-  return values.at(-1);
-}
-
-function orderedCells(
-  style: FormationStyle,
-  rows: number,
-  random: () => number,
-): Cell[] {
-  const cells = Array.from({ length: rows * FORMATION_COLUMNS }, (_, index) => ({
-    row: Math.floor(index / FORMATION_COLUMNS),
-    column: index % FORMATION_COLUMNS,
-  }));
-  if (style === 'grid') {
-    const parity = random() < 0.5 ? 0 : 1;
-    return [parity, 1 - parity].flatMap((value) =>
-      shuffled(cells.filter(({ row, column }) => (row + column) % 2 === value), random));
-  }
-  if (style === 'scatter') return shuffled(cells, random);
-  if (style === 'bands') {
-    return shuffled(Array.from({ length: rows }, (_, row) => row), random)
-      .flatMap((row) => {
-        const length = Math.min(FORMATION_COLUMNS, 3 + Math.floor(random() * 3));
-        const start = Math.floor(random() * (FORMATION_COLUMNS - length + 1));
-        return Array.from({ length }, (_, offset) => ({ row, column: start + offset }));
-      })
-      .concat(shuffled(cells, random));
-  }
-  if (style === 'pockets') {
-    const holes = shuffled(cells, random).slice(0, 2);
-    return cells.map((cell) => ({
-      cell,
-      score: Math.min(...holes.map((hole) =>
-        Math.hypot(cell.row - hole.row, cell.column - hole.column))) + random() * 0.2,
-    })).sort((left, right) => right.score - left.score).map(({ cell }) => cell);
-  }
-  const anchors = shuffled(cells, random).slice(0, random() < 0.5 ? 2 : 3);
-  return cells.map((cell) => ({
-    cell,
-    score: Math.min(...anchors.map((anchor) =>
-      Math.hypot(cell.row - anchor.row, cell.column - anchor.column))) + random() * 0.2,
-  })).sort((left, right) => left.score - right.score).map(({ cell }) => cell);
-}
-
-function eligibleCatalog(recipe: FormationRecipe): EnemyCatalogEntry[] {
-  const allowedTags = [...recipe.profile.allowedTags, ...(recipe.allowedTags ?? [])];
-  const excludedKinds = new Set([
-    ...(recipe.profile.excludedKinds ?? []),
-    ...(recipe.excludedKinds ?? []),
-  ]);
-  return ENEMY_CATALOG.filter((entry) => (
-    entry.minStage <= recipe.stageNumber
-    && entry.battlefields.includes(recipe.battlefield)
-    && allowedTags.every((tag) => entry.tags.includes(tag))
-    && !excludedKinds.has(entry.kind)
-    && entry.weight * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0
-    && (recipe.maxPerFormationOverrides?.[entry.kind]
-      ?? entry.maxPerFormation
-      ?? Number.POSITIVE_INFINITY) > 0
-  ));
-}
-
-function capFor(entry: EnemyCatalogEntry, recipe: FormationRecipe): number {
-  return recipe.maxPerFormationOverrides?.[entry.kind]
-    ?? entry.maxPerFormation
-    ?? Number.POSITIVE_INFINITY;
-}
-
-function canOccupy(
-  occupied: ReadonlySet<string>,
-  footprint: GridFootprint,
-  rows: number,
-  reserved: ReadonlySet<string>,
-): boolean {
-  if (
-    footprint.column < 0
-    || footprint.row < 0
-    || footprint.column + footprint.width > FORMATION_COLUMNS
-    || footprint.row + footprint.height > rows
-  ) return false;
-  for (let row = footprint.row; row < footprint.row + footprint.height; row += 1) {
-    for (
-      let column = footprint.column;
-      column < footprint.column + footprint.width;
-      column += 1
-    ) {
-      if (occupied.has(`${row}:${column}`) || reserved.has(`${row}:${column}`)) return false;
-    }
-  }
-  return true;
-}
-
-function pickKind(
-  candidates: readonly EnemyCatalogEntry[],
-  counts: ReadonlyMap<EnemyKind, number>,
-  recipe: FormationRecipe,
-  random: () => number,
-  footprint?: Pick<GridFootprint, 'width' | 'height'>,
-): EnemyCatalogEntry | undefined {
-  const available = candidates.filter((entry) => (
-    (counts.get(entry.kind) ?? 0) < capFor(entry, recipe)
-    && (!footprint || (entry.width === footprint.width && entry.height === footprint.height))
-  ));
-  return weightedChoice(
-    available,
-    (entry) => (
-      entry.weight
-      * (recipe.enemyWeightMultipliers?.[entry.kind] ?? 1)
-      * (entry.width * entry.height >= 4
-        ? 1 + recipe.powerBand.largeEnemyRatio * 4
-        : 1)
-    ),
-    random,
-  );
-}
-
-function addPlacement(
-  placements: Placement[],
-  occupied: Set<string>,
-  counts: Map<EnemyKind, number>,
-  entry: EnemyCatalogEntry,
-  footprint: GridFootprint,
-  rows: number,
-): void {
-  occupyFootprint(occupied, footprint, rows);
-  placements.push({ ...footprint, kind: entry.kind });
-  counts.set(entry.kind, (counts.get(entry.kind) ?? 0) + 1);
-}
-
-function fillProcedural(
-  placements: Placement[],
-  occupied: Set<string>,
-  counts: Map<EnemyKind, number>,
-  recipe: FormationRecipe,
-  rows: number,
-  targetCells: number,
-  style: FormationStyle,
-  reserved: ReadonlySet<string>,
-  random: () => number,
-): void {
-  const catalog = eligibleCatalog(recipe);
-  for (const anchor of orderedCells(style, rows, random)) {
-    if (occupied.size >= targetCells) break;
-    const fitting = catalog.filter((entry) => canOccupy(occupied, {
-      ...anchor,
-      width: entry.width,
-      height: entry.height,
-    }, rows, reserved));
-    const entry = pickKind(fitting, counts, recipe, random);
-    if (!entry) continue;
-    addPlacement(placements, occupied, counts, entry, {
-      ...anchor,
-      width: entry.width,
-      height: entry.height,
-    }, rows);
-  }
-  if (occupied.size < recipe.profile.cellMinimum) {
-    throw new RangeError('formation cannot fill its occupied-cell minimum');
-  }
-}
-
-function eligibleTemplates(recipe: FormationRecipe): FormationTemplate[] {
-  const catalogKinds = new Set(eligibleCatalog(recipe).map(({ kind }) => kind));
-  return FORMATION_TEMPLATES.filter((template) => (
-    template.minStage <= recipe.stageNumber
-    && (recipe.profile.templateWeights[template.id as FormationTemplateId] ?? 0) > 0
-    && (template.mode !== 'fixed'
-      || template.slots.every(({ kind }) => kind && catalogKinds.has(kind)))
-  ));
-}
-
-function selectSource(
-  recipe: FormationRecipe,
-  random: () => number,
-): { type: 'procedural' } | { type: 'template'; template: FormationTemplate } {
-  const templates = eligibleTemplates(recipe);
-  const sources = [
-    ...(recipe.profile.proceduralWeight > 0 ? [{ type: 'procedural' as const }] : []),
-    ...templates.map((template) => ({ type: 'template' as const, template })),
-  ];
-  const source = weightedChoice(
-    sources,
-    (candidate) => candidate.type === 'procedural'
-      ? recipe.profile.proceduralWeight
-      : recipe.profile.templateWeights[candidate.template.id as FormationTemplateId]
-        ?? candidate.template.weight,
-    random,
-  );
-  if (!source) throw new RangeError('recipe profile needs a formation source');
-  return source;
-}
-
-function placeTemplate(
-  template: FormationTemplate,
-  recipe: FormationRecipe,
-  targetCells: number,
-  style: FormationStyle,
-  reserved: ReadonlySet<string>,
-  random: () => number,
-): Placement[] {
-  const rows = template.rows;
-  const occupied = new Set<string>();
-  const placements: Placement[] = [];
-  const counts = new Map<EnemyKind, number>();
-  const catalog = eligibleCatalog(recipe);
-  const mirror = template.mode === 'mixed' && random() < 0.5;
-
-  for (const slot of template.slots) {
-    if (template.mode === 'mixed' && slot.optional && random() < 0.25) continue;
-    const footprint = {
-      column: mirror ? FORMATION_COLUMNS - slot.column - slot.width : slot.column,
-      row: slot.row,
-      width: slot.width,
-      height: slot.height,
-    };
-    const entry = slot.kind
-      ? catalog.find(({ kind }) => kind === slot.kind)
-      : pickKind(catalog, counts, recipe, random, footprint);
-    if (!entry || !canOccupy(occupied, footprint, rows, reserved)) continue;
-    addPlacement(placements, occupied, counts, entry, footprint, rows);
-  }
-  if (template.mode === 'mixed') {
-    fillProcedural(
-      placements,
-      occupied,
-      counts,
-      recipe,
-      rows,
-      targetCells,
-      style,
-      reserved,
-      random,
-    );
-  }
-  return placements;
-}
-
-function styleFor(
-  profile: FormationProfile,
-  sequence: number,
+export function resolveStageFormationOrder(
+  stage: StageDefinition,
   runSeed: number,
-): FormationStyle {
-  const bag = Object.entries(profile.styleWeights).flatMap(([style, weight]) =>
-    Array.from({ length: weight! }, () => style as FormationStyle));
-  if (bag.length === 0) return 'grid';
-  return shuffled(bag, createRandom(mix(runSeed, Math.floor(sequence / bag.length))))[
-    sequence % bag.length
-  ]!;
-}
-
-function emitEnemies(
-  placements: readonly Placement[],
-  originY: number,
-  recipe: FormationRecipe,
-): FormationEnemySpec[] {
-  return placements.map((placement) => {
-    const rect = footprintWorldRect(placement, originY);
-    return {
-      ...placement,
-      hp: GAME_TUNING.enemies.hp[placement.kind] * (
-        placement.width * placement.height >= 4
-          ? recipe.powerBand.eliteHpMultiplier
-          : recipe.powerBand.normalHpMultiplier
-      ),
-      x: rect.x,
-      y: rect.y,
-      speed: GAME_TUNING.enemies.descentSpeed * recipe.descentSpeedMultiplier,
-    };
+): ResolvedStageFormation[] {
+  validateSeed(runSeed, 'runSeed');
+  let sequence = 0;
+  return stage.paragraphs.flatMap((paragraph, paragraphIndex) => {
+    const fixedFinal = paragraph.id === 'climax' ? paragraph.formationIds.at(-1) : undefined;
+    const candidates = fixedFinal
+      ? paragraph.formationIds.slice(0, -1)
+      : paragraph.formationIds;
+    const ordered = shuffled(
+      candidates,
+      createRandom(mix(runSeed, stage.number * 31 + paragraphIndex)),
+    );
+    if (fixedFinal) ordered.push(fixedFinal);
+    return ordered.map((id) => ({
+      id,
+      paragraphId: paragraph.id,
+      paragraphIndex,
+      sequence: sequence++,
+    }));
   });
 }
 
-function createFormation(
-  recipe: FormationRecipe,
-  sequence: number,
-  runSeed: number,
-  originY?: number,
+export function createAuthoredFormation(
+  stage: StageDefinition,
+  paragraph: StageParagraphDefinition,
+  formationId: string,
 ): FormationResult {
-  const random = createRandom(mix(runSeed, sequence ^ 0x4c41594f));
-  const style = styleFor(recipe.profile, sequence, runSeed);
-  const targetCells = recipe.profile.cellMinimum
-    + Math.floor(random() * (recipe.profile.cellMaximum - recipe.profile.cellMinimum + 1));
-  const source = selectSource(recipe, random);
-  const rows = source.type === 'template'
-    ? source.template.rows
-    : recipe.profile.rowMinimum
-      + Math.floor(random() * (recipe.profile.rowMaximum - recipe.profile.rowMinimum + 1));
-  const reserved = reservedPassageCells(rows, sequence, runSeed);
-  let placements: Placement[];
-  if (source.type === 'template') {
-    placements = placeTemplate(
-      source.template,
-      recipe,
-      targetCells,
-      style,
-      reserved,
-      random,
-    );
-  } else {
-    placements = [];
-    fillProcedural(
-      placements,
-      new Set(),
-      new Map(),
-      recipe,
-      rows,
-      targetCells,
-      style,
-      reserved,
-      random,
-    );
-  }
-  const enemies = emitEnemies(
-    placements,
-    originY ?? -rows * GAME_TUNING.encounter.grid.cellHeight,
-    recipe,
-  );
-  const sourceId = source.type === 'template' ? source.template.id : style;
+  const formation = AUTHORED_FORMATIONS.find(({ id }) => id === formationId);
+  if (!formation) throw new RangeError(`authored formation ${formationId} does not exist`);
+  const catalogByKind = new Map(ENEMY_CATALOG.map((entry) => [entry.kind, entry]));
+  const originY = -formation.rows * GAME_TUNING.encounter.grid.cellHeight;
+  const enemies = formation.slots.map((slot): FormationEnemySpec => {
+    const catalog = catalogByKind.get(slot.kind);
+    if (!catalog) throw new RangeError(`${formationId} uses unknown enemy ${slot.kind}`);
+    const footprint = {
+      column: slot.column,
+      row: slot.row,
+      width: catalog.width,
+      height: catalog.height,
+    };
+    const rect = footprintWorldRect(footprint, originY);
+    const elite = catalog.width * catalog.height >= 4;
+    return {
+      ...footprint,
+      formationId,
+      kind: slot.kind,
+      hp: GAME_TUNING.enemies.hp[slot.kind] * (
+        elite
+          ? stage.powerBand.eliteHpMultiplier * paragraph.eliteHpMultiplier
+          : stage.powerBand.normalHpMultiplier * paragraph.normalHpMultiplier
+      ),
+      x: rect.x,
+      y: rect.y,
+      speed: GAME_TUNING.enemies.descentSpeed * stage.descentSpeedMultiplier,
+    };
+  });
   return {
-    id: `${runSeed}:${sequence}:${sourceId}`,
-    style,
+    id: formationId,
     enemies,
     populationCost: enemies.reduce(
       (sum, enemy) => sum + enemy.width * enemy.height,
       0,
     ),
   };
-}
-
-const INITIAL_PROFILE = {
-  id: 'initial',
-  styleWeights: { cluster: 1 },
-  proceduralWeight: 0,
-  templateWeights: { 'side-fort': 1 },
-  cellMinimum: 9,
-  cellMaximum: 13,
-  rowMinimum: 3,
-  rowMaximum: 4,
-  allowedTags: [],
-} as const satisfies FormationProfile;
-
-export function createInitialFormation(runSeed: number): FormationResult {
-  validateSeed(runSeed, 'runSeed');
-  const result = createFormation({
-    stageNumber: 1,
-    battlefield: 'default',
-    profile: INITIAL_PROFILE,
-    enemyWeightMultipliers: { basic: 12, armored: 2, shooter: 2, splitter: 0 },
-    maxPerFormationOverrides: { armored: 2, shooter: 2, splitter: 0 },
-    powerBand: {
-      expectedOrbCount: 2,
-      normalHpMultiplier: 1,
-      eliteHpMultiplier: 1,
-      largeEnemyRatio: 0.12,
-    },
-    descentSpeedMultiplier: 1,
-  }, 0, runSeed, 56);
-  let shooters = result.enemies.filter(({ kind }) => kind === 'shooter').length;
-  result.enemies = result.enemies.map((enemy) => {
-    if (shooters >= 2 || enemy.kind !== 'basic') return enemy;
-    shooters += 1;
-    return { ...enemy, kind: 'shooter', hp: GAME_TUNING.enemies.hp.shooter };
-  });
-  return result;
-}
-
-export function createReinforcementFormation(
-  recipe: FormationRecipe,
-  sequence: number,
-  runSeed: number,
-): FormationResult {
-  if (!Number.isInteger(sequence) || sequence < 0) {
-    throw new RangeError('sequence must be a non-negative integer');
-  }
-  validateSeed(runSeed, 'runSeed');
-  return createFormation(recipe, sequence, runSeed);
 }

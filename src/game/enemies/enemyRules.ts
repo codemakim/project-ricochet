@@ -5,6 +5,7 @@ export type FragmentSide = 'left' | 'right';
 
 export interface EnemySpec {
   kind: EnemyKind;
+  formationId?: string;
   hp: number;
   x: number;
   y: number;
