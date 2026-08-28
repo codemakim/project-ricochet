@@ -6,6 +6,7 @@ import type { EnemyKind, EnemySpec, FragmentSide } from './enemyRules';
 
 export interface FragmentSpec {
   kind: 'fragment';
+  formationId?: string;
   hp: number;
   x: number;
   y: number;
@@ -18,13 +19,14 @@ export interface FragmentSpec {
 }
 
 export function fragmentSpecsFor(
-  parent: Pick<EnemySpec, 'x' | 'y' | 'column' | 'row' | 'speed'>,
+  parent: Pick<EnemySpec, 'x' | 'y' | 'column' | 'row' | 'speed' | 'formationId'>,
 ): readonly [FragmentSpec, FragmentSpec] {
   if ((parent.row ?? -1) < 0) {
     const halfWidth = GAME_TUNING.encounter.grid.cellWidth / 2;
     const center = clamp(parent.x, halfWidth * 2, GAME_WIDTH - halfWidth * 2);
     return [-1, 1].map((direction, index) => ({
       kind: 'fragment',
+      ...(parent.formationId === undefined ? {} : { formationId: parent.formationId }),
       side: index === 0 ? 'left' : 'right',
       hp: GAME_TUNING.enemies.hp.fragment,
       x: center + direction * halfWidth,
@@ -39,6 +41,7 @@ export function fragmentSpecsFor(
   const firstColumn = clamp(parent.column, 0, FORMATION_COLUMNS - 2);
   return [firstColumn, firstColumn + 1].map((column, index) => ({
     kind: 'fragment',
+    ...(parent.formationId === undefined ? {} : { formationId: parent.formationId }),
     side: index === 0 ? 'left' : 'right',
     hp: GAME_TUNING.enemies.hp.fragment,
     x: clamp(footprintWorldRect({

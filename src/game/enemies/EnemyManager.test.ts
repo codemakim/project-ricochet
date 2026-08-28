@@ -3,13 +3,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { GAME_HEIGHT, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import { GAME_TUNING } from '../config/gameTuning';
 import { createDefaultDevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
-import { createInitialFormation } from '../encounters/formationRules';
+import { createAuthoredFormation } from '../encounters/formationRules';
+import { STAGES } from '../encounters/stageDefinitions';
 import type { OrbManager } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
 import { EnemyManager, type EnemyManagerOptions } from './EnemyManager';
 import type { EnemySpec } from './enemyRules';
 
-const INITIAL_FORMATION_SIZE = createInitialFormation(0).enemies.length;
+const DEFAULT_FORMATION = createAuthoredFormation(
+  STAGES[0],
+  STAGES[0].paragraphs[0],
+  STAGES[0].paragraphs[0].formationIds[2],
+).enemies.map((enemy) => ({
+  ...enemy,
+  hp: GAME_TUNING.enemies.hp[enemy.kind],
+  y: enemy.y + 300,
+}));
+const INITIAL_FORMATION_SIZE = DEFAULT_FORMATION.length;
 
 type Callback = (...args: FakeSprite[]) => void;
 type ProcessCallback = (...args: FakeSprite[]) => boolean;
@@ -206,7 +216,7 @@ class FakeCollider {
 }
 
 function createBoundary(
-  formation?: readonly EnemySpec[],
+  formation: readonly EnemySpec[] = DEFAULT_FORMATION,
   withTemporaryOrbs = false,
   getExternalBulletCount: () => number = () => 0,
   options: Partial<Pick<EnemyManagerOptions, 'onSecondaryDamage' | 'developmentBalance'>> = {},
@@ -525,10 +535,10 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().activeShooters).toBe(2);
   });
 
-  it('uses the seed-0 procedural fallback with stable IDs and descent velocities', () => {
+  it('spawns an explicit authored formation with stable IDs and descent velocities', () => {
     const { manager, groups } = createBoundary();
     const snapshot = manager.getSnapshot();
-    const expected = createInitialFormation(0).enemies;
+    const expected = DEFAULT_FORMATION;
 
     expect(snapshot.enemies).toHaveLength(INITIAL_FORMATION_SIZE);
     expect(snapshot.enemies.map((enemy) => enemy.id))
@@ -690,6 +700,43 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().activePopulation).toBe(2);
     colliders[0]!.trigger(orb, groups[0]!.children[0]!);
     expect(manager.getSnapshot().activePopulation).toBe(2);
+  });
+
+  it('reports per-formation survivors and keeps splitter identity after fracture', () => {
+    const formation: EnemySpec[] = [
+      {
+        kind: 'splitter', formationId: 'wave-a', hp: 3,
+        x: 140, y: 120, column: 1, row: 0, width: 2, height: 1, speed: 0,
+      },
+      {
+        kind: 'armored', formationId: 'wave-b', hp: 12,
+        x: 280, y: 180, column: 3, row: 1, width: 2, height: 2, speed: 0,
+      },
+    ];
+    const boundary = createBoundary(formation);
+    boundary.handleEnemyHit.mockReturnValue({
+      charged: true, charges: 0, damage: 3, reflect: false,
+    });
+
+    expect(boundary.manager.getSnapshot()).toMatchObject({
+      formationPopulations: { 'wave-a': 2, 'wave-b': 4 },
+      topmostEnemyTop: 90,
+    });
+    boundary.colliders[0]!.trigger(boundary.orb, boundary.groups[0]!.children[0]!);
+
+    const fractured = boundary.manager.getSnapshot();
+    expect(fractured.enemies.filter(({ kind }) => kind === 'fragment')
+      .map(({ formationId }) => formationId)).toEqual(['wave-a', 'wave-a']);
+    expect(fractured.formationPopulations).toEqual({ 'wave-b': 4, 'wave-a': 2 });
+
+    const fragmentIds = fractured.enemies
+      .filter(({ kind }) => kind === 'fragment')
+      .map(({ id }) => id);
+    boundary.manager.debugRemoveEnemies!([fragmentIds[0]!]);
+    expect(boundary.manager.getSnapshot().formationPopulations)
+      .toEqual({ 'wave-b': 4, 'wave-a': 1 });
+    boundary.manager.debugRemoveEnemies!([fragmentIds[1]!]);
+    expect(boundary.manager.getSnapshot().formationPopulations).toEqual({ 'wave-b': 4 });
   });
 
   it('does not split debug-removed, breached, or destroyed splitters', () => {
@@ -1210,7 +1257,9 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot()).toEqual({
       enemies: [],
       activePopulation: 0,
+      formationPopulations: {},
       topmostEnemyY: Number.POSITIVE_INFINITY,
+      topmostEnemyTop: Number.POSITIVE_INFINITY,
       activeShooters: 0,
       bullets: 0,
     });

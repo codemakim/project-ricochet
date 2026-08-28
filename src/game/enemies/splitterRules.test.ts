@@ -49,4 +49,10 @@ describe('splitter rules', () => {
     expect(populationCostForEnemy('splitter')).toBe(2);
     expect(populationCostForEnemy('fragment')).toBe(1);
   });
+
+  it('copies the parent formation identity to both fragments', () => {
+    expect(fragmentSpecsFor({
+      x: 225, y: 180, column: 3, row: 2, speed: 8, formationId: 'wave-a',
+    }).map(({ formationId }) => formationId)).toEqual(['wave-a', 'wave-a']);
+  });
 });

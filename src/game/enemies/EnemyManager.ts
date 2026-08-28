@@ -16,7 +16,6 @@ import type {
   TemporaryOrbManager,
   TemporaryOrbSprite,
 } from '../orbs/TemporaryOrbManager';
-import { createInitialFormation } from '../encounters/formationRules';
 import {
   canFire,
   type EnemyKind,
@@ -36,6 +35,7 @@ const BULLET_MARGIN = 16;
 type EnemySprite = Phaser.Physics.Arcade.Sprite & {
   enemyId: number;
   kind: EnemyKind;
+  formationId?: string;
   hp: number;
   column: number;
   row: number;
@@ -63,6 +63,7 @@ function actorRoleForEnemy(kind: EnemyKind, side?: FragmentSide): ActorRole {
 export interface EnemySnapshot {
   id: number;
   kind: EnemyKind;
+  formationId?: string;
   hp: number;
   position: Vector;
   warning: boolean;
@@ -78,7 +79,9 @@ export interface EnemySnapshot {
 export interface EnemyManagerSnapshot {
   enemies: EnemySnapshot[];
   activePopulation: number;
+  formationPopulations: Record<string, number>;
   topmostEnemyY: number;
+  topmostEnemyTop: number;
   activeShooters: number;
   bullets: number;
 }
@@ -191,7 +194,7 @@ export class EnemyManager {
     };
     this.bulletTextureKey = this.textureKeys.bullet;
 
-    this.spawnFormation(options.formation ?? createInitialFormation(0).enemies);
+    this.spawnFormation(options.formation ?? []);
 
     for (const orb of options.orbManager.getSprites()) {
       this.addPermanentOrbCollider(orb);
@@ -282,6 +285,7 @@ export class EnemyManager {
       enemy.enemyId = this.nextEnemyId;
       this.nextEnemyId += 1;
       enemy.kind = spec.kind;
+      enemy.formationId = spec.formationId;
       enemy.side = spec.side;
       playActorState(enemy, actorRoleForEnemy(spec.kind, spec.side), 'idle');
       enemy.hp = spec.hp * (spec.kind === 'armored'
@@ -356,7 +360,9 @@ export class EnemyManager {
       return {
         enemies: [],
         activePopulation: 0,
+        formationPopulations: {},
         topmostEnemyY: Number.POSITIVE_INFINITY,
+        topmostEnemyTop: Number.POSITIVE_INFINITY,
         activeShooters: 0,
         bullets: 0,
       };
@@ -366,10 +372,29 @@ export class EnemyManager {
       (topmost, enemy) => Math.min(topmost, enemy.y),
       Number.POSITIVE_INFINITY,
     );
+    const topmostEnemyTop = enemies.reduce(
+      (topmost, enemy) => Math.min(
+        topmost,
+        (enemy.body as Phaser.Physics.Arcade.Body).top,
+      ),
+      Number.POSITIVE_INFINITY,
+    );
+    const formationPopulations = new Map<string, number>();
+    for (const enemy of enemies) {
+      if (enemy.formationId === undefined) continue;
+      const population = enemy.row < 0
+        ? populationCostForEnemy(enemy.kind)
+        : enemy.footprintWidth * enemy.footprintHeight;
+      formationPopulations.set(
+        enemy.formationId,
+        (formationPopulations.get(enemy.formationId) ?? 0) + population,
+      );
+    }
     return {
       enemies: enemies.map((enemy) => ({
         id: enemy.enemyId,
         kind: enemy.kind,
+        ...(enemy.formationId === undefined ? {} : { formationId: enemy.formationId }),
         hp: enemy.hp,
         position: { x: enemy.x, y: enemy.y },
         warning: this.activeShooters.has(enemy.enemyId),
@@ -391,7 +416,9 @@ export class EnemyManager {
         ),
         0,
       ),
+      formationPopulations: Object.fromEntries(formationPopulations),
       topmostEnemyY,
+      topmostEnemyTop,
       activeShooters: this.activeShooters.size,
       bullets: (this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
         .filter((bullet) => bullet.active).length,
@@ -861,6 +888,7 @@ export class EnemyManager {
         column: enemy.column,
         row: enemy.row,
         speed: descentSpeedMultiplier === 0 ? 0 : currentSpeed / descentSpeedMultiplier,
+        formationId: enemy.formationId,
       })
       : [];
     createActorExitVisual(
