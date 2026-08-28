@@ -1,21 +1,15 @@
 import type { BossKind } from '../config/gameTuning';
 import type { EnemyKind } from '../enemies/enemyRules';
 import {
-  FORMATION_COLUMNS,
-  occupyFootprint,
-  reservedPassageCells,
-  type GridFootprint,
-} from './formationGrid';
-import type { FormationStyle } from './formationRules';
+  AUTHORED_FORMATIONS,
+  type AuthoredFormation,
+  type ParagraphId,
+} from './authoredFormations';
+import { FORMATION_COLUMNS, occupyFootprint } from './formationGrid';
 
 export type BattlefieldId = 'default';
 export type StageId = 'default-1' | 'default-2' | 'default-3';
 export type EnemyTag = 'standard' | 'armored' | 'shooter' | 'splitter';
-export type FormationTemplateId =
-  | 'staggered-lanes'
-  | 'side-fort'
-  | 'split-gate'
-  | 'broken-wall';
 
 export interface EnemyCatalogEntry {
   kind: Exclude<EnemyKind, 'fragment'>;
@@ -28,51 +22,17 @@ export interface EnemyCatalogEntry {
   maxPerFormation?: number;
 }
 
-export interface FormationTemplateSlot extends GridFootprint {
-  kind?: Exclude<EnemyKind, 'fragment'>;
-  optional?: boolean;
-}
-
-export interface FormationTemplate {
-  id: string;
-  mode: 'fixed' | 'mixed';
-  rows: number;
-  slots: readonly FormationTemplateSlot[];
-  minStage: number;
-  weight: number;
-}
-
-export interface FormationProfile {
-  id: string;
-  styleWeights: Readonly<Partial<Record<FormationStyle, number>>>;
-  proceduralWeight: number;
-  templateWeights: Readonly<Partial<Record<FormationTemplateId, number>>>;
-  cellMinimum: number;
-  cellMaximum: number;
-  rowMinimum: number;
-  rowMaximum: number;
-  allowedTags: readonly EnemyTag[];
-  excludedKinds?: readonly EnemyKind[];
-}
-
-export interface StagePhaseDefinition {
-  startsAtScore: number;
+export interface StageParagraphDefinition {
+  id: ParagraphId;
+  formationIds: readonly string[];
   activeCap: number;
-  spawnIntervalMs: number;
-  reinforcementReleaseY: number;
-  formationProfileId: string;
-  normalHpMultiplier?: number;
-  eliteHpMultiplier?: number;
-  descentSpeedMultiplier?: number;
-  allowedTags?: readonly EnemyTag[];
-  excludedKinds?: readonly EnemyKind[];
-  enemyWeightMultipliers?: Readonly<Partial<Record<EnemyKind, number>>>;
-  maxPerFormationOverrides?: Readonly<Partial<Record<EnemyKind, number>>>;
+  targetDepthRatio: number;
+  normalHpMultiplier: number;
+  eliteHpMultiplier: number;
 }
 
 export interface StageBossDefinition {
   kind: BossKind;
-  scoreTarget: number;
   warningMs: number;
 }
 
@@ -89,21 +49,11 @@ export interface StageDefinition {
   battlefield: BattlefieldId;
   powerBand: StagePowerBand;
   descentSpeedMultiplier: number;
-  allowedTags?: readonly EnemyTag[];
-  excludedKinds?: readonly EnemyKind[];
-  phases: readonly StagePhaseDefinition[];
+  paragraphs: readonly StageParagraphDefinition[];
   boss: StageBossDefinition;
 }
 
-const STYLE_WEIGHTS = { cluster: 2, pockets: 2, bands: 2, scatter: 2, grid: 1 } as const;
-const TEMPLATE_WEIGHTS = {
-  'staggered-lanes': 2,
-  'side-fort': 2,
-  'broken-wall': 2,
-  'split-gate': 1,
-} as const;
-
-export const ENEMY_CATALOG: readonly EnemyCatalogEntry[] = [
+export const ENEMY_CATALOG = [
   {
     kind: 'basic', minStage: 1, battlefields: ['default'], tags: ['standard'],
     weight: 12, width: 1, height: 1,
@@ -120,120 +70,22 @@ export const ENEMY_CATALOG: readonly EnemyCatalogEntry[] = [
     kind: 'splitter', minStage: 2, battlefields: ['default'], tags: ['splitter'],
     weight: 2, width: 2, height: 1, maxPerFormation: 2,
   },
-] as const;
+] as const satisfies readonly EnemyCatalogEntry[];
 
-export const FORMATION_TEMPLATES = [
-  {
-    id: 'staggered-lanes',
-    mode: 'mixed',
-    rows: 4,
-    minStage: 1,
-    weight: 1,
-    slots: [
-      { column: 0, row: 0, width: 1, height: 1 },
-      { column: 1, row: 0, width: 1, height: 1, optional: true },
-      { column: 4, row: 0, width: 1, height: 1 },
-      { column: 2, row: 1, width: 1, height: 1 },
-      { column: 3, row: 1, width: 1, height: 1, optional: true },
-      { column: 0, row: 2, width: 1, height: 1 },
-      { column: 3, row: 2, width: 1, height: 1 },
-      { column: 4, row: 2, width: 1, height: 1, optional: true },
-    ],
-  },
-  {
-    id: 'side-fort',
-    mode: 'mixed',
-    rows: 4,
-    minStage: 1,
-    weight: 1,
-    slots: [
-      { column: 0, row: 0, width: 2, height: 2 },
-      { column: 3, row: 0, width: 1, height: 1 },
-      { column: 4, row: 1, width: 1, height: 1, optional: true },
-      { column: 2, row: 2, width: 1, height: 1 },
-      { column: 4, row: 3, width: 1, height: 1, optional: true },
-    ],
-  },
-  {
-    id: 'split-gate',
-    mode: 'fixed',
-    rows: 3,
-    minStage: 2,
-    weight: 1,
-    slots: [
-      { kind: 'basic', column: 0, row: 0, width: 1, height: 1 },
-      { kind: 'splitter', column: 1, row: 0, width: 2, height: 1 },
-      { kind: 'basic', column: 4, row: 0, width: 1, height: 1 },
-      { kind: 'shooter', column: 0, row: 2, width: 1, height: 1 },
-      { kind: 'shooter', column: 4, row: 2, width: 1, height: 1 },
-    ],
-  },
-  {
-    id: 'broken-wall',
-    mode: 'mixed',
-    rows: 5,
-    minStage: 1,
-    weight: 1,
-    slots: [
-      { column: 0, row: 0, width: 1, height: 1 },
-      { column: 1, row: 0, width: 1, height: 1 },
-      { column: 3, row: 0, width: 1, height: 1 },
-      { column: 4, row: 0, width: 1, height: 1 },
-      { column: 0, row: 1, width: 1, height: 1, optional: true },
-      { column: 3, row: 1, width: 1, height: 1 },
-      { column: 1, row: 3, width: 1, height: 1 },
-      { column: 4, row: 3, width: 1, height: 1, optional: true },
-      { column: 0, row: 4, width: 1, height: 1 },
-      { column: 1, row: 4, width: 1, height: 1 },
-      { column: 3, row: 4, width: 1, height: 1 },
-      { column: 4, row: 4, width: 1, height: 1 },
-    ],
-  },
-] as const satisfies readonly FormationTemplate[];
-
-export const FORMATION_PROFILES = [
-  {
-    id: 'opening', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 7, cellMaximum: 10,
-    rowMinimum: 2, rowMaximum: 3, allowedTags: [],
-  },
-  {
-    id: 'pressure', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 9, cellMaximum: 13,
-    rowMinimum: 3, rowMaximum: 4, allowedTags: [],
-  },
-  {
-    id: 'assault', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 11, cellMaximum: 16,
-    rowMinimum: 3, rowMaximum: 5, allowedTags: [],
-  },
-  {
-    id: 'onslaught', styleWeights: STYLE_WEIGHTS, proceduralWeight: 3,
-    templateWeights: TEMPLATE_WEIGHTS, cellMinimum: 13, cellMaximum: 19,
-    rowMinimum: 4, rowMaximum: 5, allowedTags: [],
-  },
-] as const satisfies readonly FormationProfile[];
-
-const phase = (
-  startsAtScore: number,
+const paragraph = (
+  id: ParagraphId,
+  formationIds: readonly string[],
   activeCap: number,
-  spawnIntervalMs: number,
-  reinforcementReleaseY: number,
-  formationProfileId: string,
-  enemyWeightMultipliers: Readonly<Partial<Record<EnemyKind, number>>>,
-  maxPerFormationOverrides: Readonly<Partial<Record<EnemyKind, number>>>,
-  scaling: Pick<StagePhaseDefinition,
-    'normalHpMultiplier' | 'eliteHpMultiplier' | 'descentSpeedMultiplier'
-  > = {},
-): StagePhaseDefinition => ({
-  startsAtScore,
+  targetDepthRatio: number,
+  normalHpMultiplier: number,
+  eliteHpMultiplier: number,
+): StageParagraphDefinition => ({
+  id,
+  formationIds,
   activeCap,
-  spawnIntervalMs,
-  reinforcementReleaseY,
-  formationProfileId,
-  enemyWeightMultipliers,
-  maxPerFormationOverrides,
-  ...scaling,
+  targetDepthRatio,
+  normalHpMultiplier,
+  eliteHpMultiplier,
 });
 
 export const STAGES = [
@@ -248,12 +100,19 @@ export const STAGES = [
       largeEnemyRatio: 0.12,
     },
     descentSpeedMultiplier: 1,
-    phases: [
-      phase(0, 16, 5_000, 50, 'opening', { basic: 12, armored: 1, shooter: 1, splitter: 0 }, { armored: 1, shooter: 1, splitter: 0 }),
-      phase(25, 22, 4_800, 0, 'pressure', { basic: 15, armored: 2, shooter: 3, splitter: 0 }, { armored: 2, shooter: 2, splitter: 0 }, { normalHpMultiplier: 1.18, eliteHpMultiplier: 1.12, descentSpeedMultiplier: 1.08 }),
-      phase(50, 26, 4_500, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }, { normalHpMultiplier: 1.28, eliteHpMultiplier: 1.2, descentSpeedMultiplier: 1.12 }),
+    paragraphs: [
+      paragraph('opening', [
+        's1-opening-gate', 's1-opening-banks', 's1-opening-pocket',
+      ], 16, 0.3, 1, 1),
+      paragraph('pressure', [
+        's1-pressure-right-fort', 's1-pressure-center-guard',
+        's1-pressure-twin-fort', 's1-pressure-broken-wall',
+      ], 22, 0.4, 1.6, 1.4),
+      paragraph('climax', [
+        's1-climax-zigzag', 's1-climax-crossfire', 's1-climax-final',
+      ], 26, 0.5, 2.1, 1.8),
     ],
-    boss: { kind: 'sentinel', scoreTarget: 70, warningMs: 2_000 },
+    boss: { kind: 'sentinel', warningMs: 2_000 },
   },
   {
     id: 'default-2',
@@ -266,11 +125,19 @@ export const STAGES = [
       largeEnemyRatio: 0.22,
     },
     descentSpeedMultiplier: 1,
-    phases: [
-      phase(0, 26, 5_000, 0, 'assault', { basic: 18, armored: 2, shooter: 4, splitter: 0 }, { armored: 2, shooter: 3, splitter: 0 }),
-      phase(55, 30, 4_500, 0, 'onslaught', { basic: 21, armored: 3, shooter: 5, splitter: 2 }, { armored: 3, shooter: 4, splitter: 2 }),
+    paragraphs: [
+      paragraph('opening', [
+        's2-opening-split-lanes', 's2-opening-armored-gap', 's2-opening-crossfire',
+      ], 26, 0.3, 1, 1),
+      paragraph('pressure', [
+        's2-pressure-left-pocket', 's2-pressure-split-gate',
+        's2-pressure-twin-armor', 's2-pressure-battery',
+      ], 30, 0.4, 1.6, 1.4),
+      paragraph('climax', [
+        's2-climax-channel', 's2-climax-overlap', 's2-climax-final',
+      ], 30, 0.5, 2.1, 1.8),
     ],
-    boss: { kind: 'hive', scoreTarget: 110, warningMs: 2_000 },
+    boss: { kind: 'hive', warningMs: 2_000 },
   },
   {
     id: 'default-3',
@@ -283,20 +150,21 @@ export const STAGES = [
       largeEnemyRatio: 0.32,
     },
     descentSpeedMultiplier: 1,
-    phases: [
-      phase(0, 28, 5_500, 50, 'onslaught', { basic: 20, armored: 3, shooter: 3, splitter: 2 }, { armored: 3, shooter: 3, splitter: 2 }),
-      phase(50, 32, 5_000, 50, 'onslaught', { basic: 18, armored: 4, shooter: 4, splitter: 3 }, { armored: 4, shooter: 4, splitter: 3 }),
-      phase(100, 34, 4_500, 50, 'onslaught', { basic: 16, armored: 5, shooter: 5, splitter: 4 }, { armored: 5, shooter: 5, splitter: 4 }),
+    paragraphs: [
+      paragraph('opening', [
+        's3-opening-fork', 's3-opening-pockets', 's3-opening-crossfire',
+      ], 28, 0.3, 1, 1),
+      paragraph('pressure', [
+        's3-pressure-maze', 's3-pressure-turrets',
+        's3-pressure-fortress', 's3-pressure-broken-grid',
+      ], 32, 0.4, 1.6, 1.4),
+      paragraph('climax', [
+        's3-climax-serpent', 's3-climax-killbox', 's3-climax-final',
+      ], 34, 0.5, 2.1, 1.8),
     ],
-    boss: { kind: 'siege', scoreTarget: 140, warningMs: 2_000 },
+    boss: { kind: 'siege', warningMs: 2_000 },
   },
 ] as const satisfies readonly StageDefinition[];
-
-function finiteNonNegative(value: number, name: string): void {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`${name} must be finite and non-negative`);
-  }
-}
 
 function positiveInteger(value: number, name: string): void {
   if (!Number.isInteger(value) || value <= 0) {
@@ -304,170 +172,107 @@ function positiveInteger(value: number, name: string): void {
   }
 }
 
-function eligibleEnemies(
-  stage: StageDefinition,
-  profile: FormationProfile,
-  stagePhase: StagePhaseDefinition,
-  catalog: readonly EnemyCatalogEntry[],
-): EnemyCatalogEntry[] {
-  const allowedTags = [
-    ...(stage.allowedTags ?? []),
-    ...profile.allowedTags,
-    ...(stagePhase.allowedTags ?? []),
-  ];
-  const excludedKinds = new Set([
-    ...(stage.excludedKinds ?? []),
-    ...(profile.excludedKinds ?? []),
-    ...(stagePhase.excludedKinds ?? []),
-  ]);
-  return catalog.filter((entry) => (
-    entry.minStage <= stage.number
-    && entry.battlefields.includes(stage.battlefield)
-    && allowedTags.every((tag) => entry.tags.includes(tag))
-    && !excludedKinds.has(entry.kind)
-    && entry.weight * (stagePhase.enemyWeightMultipliers?.[entry.kind] ?? 1) > 0
-    && (stagePhase.maxPerFormationOverrides?.[entry.kind]
-      ?? entry.maxPerFormation
-      ?? Number.POSITIVE_INFINITY) > 0
-  ));
+function positive(value: number, name: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError(`${name} must be finite and positive`);
+  }
 }
 
 export function validateStageContent(
   stages: readonly StageDefinition[] = STAGES,
+  formations: readonly AuthoredFormation[] = AUTHORED_FORMATIONS,
   catalog: readonly EnemyCatalogEntry[] = ENEMY_CATALOG,
-  profiles: readonly FormationProfile[] = FORMATION_PROFILES,
-  templates: readonly FormationTemplate[] = FORMATION_TEMPLATES,
 ): void {
   const catalogByKind = new Map(catalog.map((entry) => [entry.kind, entry]));
-  if (catalogByKind.size !== catalog.length) throw new RangeError('enemy catalog kinds must be unique');
+  if (catalogByKind.size !== catalog.length) {
+    throw new RangeError('enemy catalog kinds must be unique');
+  }
   for (const entry of catalog) {
     positiveInteger(entry.minStage, `${entry.kind}.minStage`);
     positiveInteger(entry.width, `${entry.kind}.width`);
     positiveInteger(entry.height, `${entry.kind}.height`);
-    if (entry.width > FORMATION_COLUMNS) throw new RangeError(`${entry.kind}.width must fit the grid`);
-    if (!Number.isFinite(entry.weight) || entry.weight <= 0) {
-      throw new RangeError(`${entry.kind}.weight must be positive`);
+    if (entry.width > FORMATION_COLUMNS) {
+      throw new RangeError(`${entry.kind}.width must fit the grid`);
     }
   }
 
-  const templateById = new Map(templates.map((template) => [template.id, template]));
-  if (templateById.size !== templates.length) throw new RangeError('formation template IDs must be unique');
-  for (const template of templates) {
-    if (template.rows < 2 || template.rows > 5) {
-      throw new RangeError(`${template.id} rows must stay between two and five`);
-    }
-    positiveInteger(template.minStage, `${template.id}.minStage`);
-    positiveInteger(template.weight, `${template.id}.weight`);
+  const formationById = new Map(formations.map((formation) => [formation.id, formation]));
+  if (formationById.size !== formations.length) {
+    throw new RangeError('formation IDs must be unique');
+  }
+  for (const formation of formations) {
+    positiveInteger(formation.rows, `${formation.id}.rows`);
     const occupied = new Set<string>();
-    for (const slot of template.slots) {
-      occupyFootprint(occupied, slot, template.rows);
-      if (template.mode === 'fixed') {
-        if (!slot.kind) throw new RangeError(`${template.id} fixed slots need kinds`);
-        const entry = catalogByKind.get(slot.kind);
-        if (!entry || entry.width !== slot.width || entry.height !== slot.height) {
-          throw new RangeError(`${template.id} fixed slot must match its enemy footprint`);
-        }
+    for (const slot of formation.slots) {
+      const entry = catalogByKind.get(slot.kind);
+      if (!entry) throw new RangeError(`${formation.id} uses unknown enemy ${slot.kind}`);
+      try {
+        occupyFootprint(occupied, {
+          column: slot.column,
+          row: slot.row,
+          width: entry.width,
+          height: entry.height,
+        }, formation.rows);
+      } catch (error) {
+        throw new RangeError(`${formation.id}: ${(error as Error).message}`);
       }
     }
   }
 
-  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-  if (profileById.size !== profiles.length) throw new RangeError('formation profile IDs must be unique');
-  for (const profile of profiles) {
-    if (profile.rowMinimum < 2 || profile.rowMaximum > 5
-      || profile.rowMinimum > profile.rowMaximum) {
-      throw new RangeError(`${profile.id} rows must stay between two and five`);
-    }
-    positiveInteger(profile.cellMinimum, `${profile.id}.cellMinimum`);
-    positiveInteger(profile.cellMaximum, `${profile.id}.cellMaximum`);
-    if (profile.cellMinimum > profile.cellMaximum) {
-      throw new RangeError(`${profile.id} cell range must be ordered`);
-    }
-    const largestPassage = Math.max(...[0, 2, 4].map((sequence) =>
-      reservedPassageCells(profile.rowMinimum, sequence, 0).size));
-    if (FORMATION_COLUMNS * profile.rowMinimum - largestPassage < profile.cellMinimum) {
-      throw new RangeError(`${profile.id} cannot fit its passage and minimum cells`);
-    }
-    finiteNonNegative(profile.proceduralWeight, `${profile.id}.proceduralWeight`);
-    const totalSourceWeight = profile.proceduralWeight
-      + Object.values(profile.templateWeights).reduce((sum, weight) => sum + (weight ?? 0), 0);
-    if (totalSourceWeight <= 0) throw new RangeError(`${profile.id} needs a formation source`);
-    for (const [id, weight] of Object.entries(profile.templateWeights)) {
-      positiveInteger(weight!, `${profile.id}.${id}`);
-      if (!templateById.has(id as FormationTemplateId)) {
-        throw new RangeError(`${profile.id} template must exist`);
-      }
-    }
-    for (const [style, weight] of Object.entries(profile.styleWeights)) {
-      positiveInteger(weight!, `${profile.id}.${style}`);
-    }
-    if (profile.proceduralWeight > 0 && Object.keys(profile.styleWeights).length === 0) {
-      throw new RangeError(`${profile.id} procedural source needs a style`);
-    }
-  }
-
-  const stageIds = new Set<string>();
+  const allReferences: string[] = [];
   for (const stage of stages) {
-    if (stageIds.has(stage.id)) throw new RangeError('stage IDs must be unique');
-    stageIds.add(stage.id);
     positiveInteger(stage.number, `${stage.id}.number`);
-    positiveInteger(stage.powerBand.expectedOrbCount, `${stage.id}.expectedOrbCount`);
-    for (const [name, multiplier] of Object.entries({
-      normalHpMultiplier: stage.powerBand.normalHpMultiplier,
-      eliteHpMultiplier: stage.powerBand.eliteHpMultiplier,
-    })) {
-      if (!Number.isFinite(multiplier) || multiplier <= 0) {
-        throw new RangeError(`${stage.id}.${name} must be positive`);
+    positive(stage.descentSpeedMultiplier, `${stage.id}.descentSpeedMultiplier`);
+    if (stage.paragraphs.length !== 3
+      || stage.paragraphs.map(({ id }) => id).join(',') !== 'opening,pressure,climax') {
+      throw new RangeError(`${stage.id} paragraphs must be opening, pressure, climax`);
+    }
+    const stageReferences = stage.paragraphs.flatMap(({ formationIds }) => formationIds);
+    if (new Set(stageReferences).size !== stageReferences.length) {
+      throw new RangeError(`${stage.id} formation references must be unique`);
+    }
+    for (const [index, stageParagraph] of stage.paragraphs.entries()) {
+      const requiredCount = index === 1 ? 4 : 3;
+      if (stageParagraph.formationIds.length !== requiredCount) {
+        throw new RangeError(
+          `${stage.id} ${stageParagraph.id} must contain ${requiredCount} formations`,
+        );
       }
-    }
-    if (!Number.isFinite(stage.powerBand.largeEnemyRatio)
-      || stage.powerBand.largeEnemyRatio < 0
-      || stage.powerBand.largeEnemyRatio > 1) {
-      throw new RangeError(`${stage.id}.largeEnemyRatio must be between zero and one`);
-    }
-    if (!Number.isFinite(stage.descentSpeedMultiplier) || stage.descentSpeedMultiplier <= 0) {
-      throw new RangeError(`${stage.id}.descentSpeedMultiplier must be positive`);
-    }
-    positiveInteger(stage.boss.scoreTarget, `${stage.id}.boss.scoreTarget`);
-    finiteNonNegative(stage.boss.warningMs, `${stage.id}.boss.warningMs`);
-    if (stage.phases.length === 0 || stage.phases[0]!.startsAtScore !== 0) {
-      throw new RangeError(`${stage.id} must start at zero`);
-    }
-    let previousStart = -1;
-    for (const stagePhase of stage.phases) {
-      finiteNonNegative(stagePhase.startsAtScore, `${stage.id}.startsAtScore`);
-      finiteNonNegative(
-        stagePhase.reinforcementReleaseY,
-        `${stage.id}.reinforcementReleaseY`,
-      );
-      if (stagePhase.startsAtScore <= previousStart) {
-        throw new RangeError(`${stage.id} phase scores must increase`);
+      positiveInteger(stageParagraph.activeCap, `${stage.id}.${stageParagraph.id}.activeCap`);
+      if (!Number.isFinite(stageParagraph.targetDepthRatio)
+        || stageParagraph.targetDepthRatio <= 0
+        || stageParagraph.targetDepthRatio >= 1) {
+        throw new RangeError(`${stage.id}.${stageParagraph.id}.targetDepthRatio must be inside 0..1`);
       }
-      previousStart = stagePhase.startsAtScore;
-      if (stagePhase.startsAtScore >= stage.boss.scoreTarget) {
-        throw new RangeError(`${stage.id} phase score must precede its boss`);
-      }
-      for (const [name, multiplier] of Object.entries({
-        normalHpMultiplier: stagePhase.normalHpMultiplier,
-        eliteHpMultiplier: stagePhase.eliteHpMultiplier,
-        descentSpeedMultiplier: stagePhase.descentSpeedMultiplier,
-      })) {
-        if (multiplier !== undefined && (!Number.isFinite(multiplier) || multiplier <= 0)) {
-          throw new RangeError(`${stage.id}.${name} must be positive`);
+      positive(stageParagraph.normalHpMultiplier, `${stage.id}.${stageParagraph.id}.normalHpMultiplier`);
+      positive(stageParagraph.eliteHpMultiplier, `${stage.id}.${stageParagraph.id}.eliteHpMultiplier`);
+      for (const formationId of stageParagraph.formationIds) {
+        const formation = formationById.get(formationId);
+        if (!formation) throw new RangeError(`${stage.id} references missing formation ${formationId}`);
+        for (const slot of formation.slots) {
+          const entry = catalogByKind.get(slot.kind)!;
+          if (entry.minStage > stage.number) {
+            throw new RangeError(
+              `${formation.id} cannot use ${entry.kind} in stage ${stage.number}`,
+            );
+          }
+          if (!entry.battlefields.includes(stage.battlefield)) {
+            throw new RangeError(`${formation.id} cannot use ${entry.kind} on ${stage.battlefield}`);
+          }
         }
-      }
-      const profile = profileById.get(stagePhase.formationProfileId);
-      if (!profile) throw new RangeError(`${stage.id} phase profile must exist`);
-      if (stagePhase.activeCap < profile.cellMaximum) {
-        throw new RangeError(`${stage.id} phase cap must fit its profile`);
-      }
-      if (!Number.isFinite(stagePhase.spawnIntervalMs) || stagePhase.spawnIntervalMs <= 0) {
-        throw new RangeError(`${stage.id} spawn interval must be positive`);
-      }
-      if (eligibleEnemies(stage, profile, stagePhase, catalog).length === 0) {
-        throw new RangeError(`${stage.id} phase needs an eligible enemy`);
+        allReferences.push(formationId);
       }
     }
+    const climaxFinal = stage.paragraphs[2]!.formationIds.at(-1);
+    if (climaxFinal !== `s${stage.number}-climax-final`) {
+      throw new RangeError(`${stage.id} climax final formation must be last`);
+    }
+  }
+  if (new Set(allReferences).size !== allReferences.length) {
+    throw new RangeError('formation references must be globally unique');
+  }
+  if (allReferences.length !== formations.length) {
+    throw new RangeError('every authored formation must be referenced exactly once');
   }
 }
 

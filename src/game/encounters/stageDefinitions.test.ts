@@ -1,74 +1,59 @@
 import { describe, expect, it } from 'vitest';
+import { FORMATION_COLUMNS } from './formationGrid';
+import {
+  AUTHORED_FORMATIONS,
+  type AuthoredFormation,
+} from './authoredFormations';
 import {
   ENEMY_CATALOG,
-  FORMATION_PROFILES,
-  FORMATION_TEMPLATES,
   STAGES,
   validateStageContent,
 } from './stageDefinitions';
-import { FORMATION_COLUMNS } from './formationGrid';
 
-describe('stage content', () => {
-  it('defines three ordered boss stages without increasing descent speed', () => {
+describe('authored stage content', () => {
+  it('defines three ten-formation stage scripts with central paragraph tuning', () => {
+    expect(STAGES.map((stage) => stage.paragraphs.map((paragraph) => ({
+      id: paragraph.id,
+      count: paragraph.formationIds.length,
+      activeCap: paragraph.activeCap,
+      targetDepthRatio: paragraph.targetDepthRatio,
+      normalHpMultiplier: paragraph.normalHpMultiplier,
+      eliteHpMultiplier: paragraph.eliteHpMultiplier,
+    })))).toEqual([
+      [
+        { id: 'opening', count: 3, activeCap: 16, targetDepthRatio: 0.3, normalHpMultiplier: 1, eliteHpMultiplier: 1 },
+        { id: 'pressure', count: 4, activeCap: 22, targetDepthRatio: 0.4, normalHpMultiplier: 1.6, eliteHpMultiplier: 1.4 },
+        { id: 'climax', count: 3, activeCap: 26, targetDepthRatio: 0.5, normalHpMultiplier: 2.1, eliteHpMultiplier: 1.8 },
+      ],
+      [
+        { id: 'opening', count: 3, activeCap: 26, targetDepthRatio: 0.3, normalHpMultiplier: 1, eliteHpMultiplier: 1 },
+        { id: 'pressure', count: 4, activeCap: 30, targetDepthRatio: 0.4, normalHpMultiplier: 1.6, eliteHpMultiplier: 1.4 },
+        { id: 'climax', count: 3, activeCap: 30, targetDepthRatio: 0.5, normalHpMultiplier: 2.1, eliteHpMultiplier: 1.8 },
+      ],
+      [
+        { id: 'opening', count: 3, activeCap: 28, targetDepthRatio: 0.3, normalHpMultiplier: 1, eliteHpMultiplier: 1 },
+        { id: 'pressure', count: 4, activeCap: 32, targetDepthRatio: 0.4, normalHpMultiplier: 1.6, eliteHpMultiplier: 1.4 },
+        { id: 'climax', count: 3, activeCap: 34, targetDepthRatio: 0.5, normalHpMultiplier: 2.1, eliteHpMultiplier: 1.8 },
+      ],
+    ]);
     expect(STAGES.map(({ id, number, boss }) => [id, number, boss.kind])).toEqual([
       ['default-1', 1, 'sentinel'],
       ['default-2', 2, 'hive'],
       ['default-3', 3, 'siege'],
     ]);
-    expect(STAGES.every(({ descentSpeedMultiplier }) =>
-      descentSpeedMultiplier === 1)).toBe(true);
-    expect(STAGES.map(({ powerBand }) => powerBand)).toEqual([
-      {
-        expectedOrbCount: 3,
-        normalHpMultiplier: 1.3,
-        eliteHpMultiplier: 1.5,
-        largeEnemyRatio: 0.12,
-      },
-      {
-        expectedOrbCount: 6,
-        normalHpMultiplier: 1.9,
-        eliteHpMultiplier: 2.2,
-        largeEnemyRatio: 0.22,
-      },
-      {
-        expectedOrbCount: 6,
-        normalHpMultiplier: 2.4,
-        eliteHpMultiplier: 2.8,
-        largeEnemyRatio: 0.32,
-      },
-    ]);
-    expect(STAGES[0].phases[1]).toMatchObject({
-      startsAtScore: 25,
-      normalHpMultiplier: expect.any(Number),
-      descentSpeedMultiplier: expect.any(Number),
-    });
-    expect(STAGES[0].phases[1].normalHpMultiplier).toBeGreaterThan(1);
-    expect(STAGES[0].phases[1].descentSpeedMultiplier).toBeGreaterThan(1);
-    expect(STAGES.map(({ phases }) => phases.map((phase) => ({
-      activeCap: phase.activeCap,
-      spawnIntervalMs: phase.spawnIntervalMs,
-      reinforcementReleaseY: phase.reinforcementReleaseY,
-      shooterWeight: phase.enemyWeightMultipliers?.shooter,
-      shooterMaximum: phase.maxPerFormationOverrides?.shooter,
-    })))).toEqual([
-      [
-        { activeCap: 16, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 1, shooterMaximum: 1 },
-        { activeCap: 22, spawnIntervalMs: 4_800, reinforcementReleaseY: 0, shooterWeight: 3, shooterMaximum: 2 },
-        { activeCap: 26, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
-      ],
-      [
-        { activeCap: 26, spawnIntervalMs: 5_000, reinforcementReleaseY: 0, shooterWeight: 4, shooterMaximum: 3 },
-        { activeCap: 30, spawnIntervalMs: 4_500, reinforcementReleaseY: 0, shooterWeight: 5, shooterMaximum: 4 },
-      ],
-      [
-        { activeCap: 28, spawnIntervalMs: 5_500, reinforcementReleaseY: 50, shooterWeight: 3, shooterMaximum: 3 },
-        { activeCap: 32, spawnIntervalMs: 5_000, reinforcementReleaseY: 50, shooterWeight: 4, shooterMaximum: 4 },
-        { activeCap: 34, spawnIntervalMs: 4_500, reinforcementReleaseY: 50, shooterWeight: 5, shooterMaximum: 5 },
-      ],
-    ]);
+    expect(STAGES.every(({ descentSpeedMultiplier }) => descentSpeedMultiplier === 1)).toBe(true);
+    expect(AUTHORED_FORMATIONS).toHaveLength(30);
+    expect(new Set(AUTHORED_FORMATIONS.map(({ id }) => id)).size).toBe(30);
+    const references = STAGES.flatMap(({ paragraphs }) => (
+      paragraphs.flatMap(({ formationIds }) => formationIds)
+    ));
+    expect(references).toHaveLength(30);
+    expect(new Set(references).size).toBe(30);
+    expect(() => validateStageContent()).not.toThrow();
   });
 
-  it('defines approved enemy footprints and reusable chunk profiles', () => {
+  it('keeps catalog footprints on the six-column grid', () => {
+    expect(FORMATION_COLUMNS).toBe(6);
     expect(Object.fromEntries(ENEMY_CATALOG.map(({ kind, width, height }) => (
       [kind, `${width}×${height}`]
     )))).toEqual({
@@ -77,115 +62,88 @@ describe('stage content', () => {
       shooter: '1×1',
       splitter: '2×1',
     });
-    expect(FORMATION_PROFILES.every((profile) => (
-      profile.rowMinimum >= 2
-      && profile.rowMaximum <= 5
-      && profile.cellMinimum <= profile.cellMaximum
-    ))).toBe(true);
-    expect(FORMATION_PROFILES.map(({ cellMinimum, cellMaximum }) => (
-      [cellMinimum, cellMaximum]
-    ))).toEqual([[7, 10], [9, 13], [11, 16], [13, 19]]);
-    expect(FORMATION_TEMPLATES.map(({ id }) => id)).toEqual([
-      'staggered-lanes',
-      'side-fort',
-      'split-gate',
-      'broken-wall',
-    ]);
-    for (const template of FORMATION_TEMPLATES) {
-      const occupied = template.slots.reduce((cells, slot) => {
-        for (let row = slot.row; row < slot.row + slot.height; row += 1) {
-          for (let column = slot.column; column < slot.column + slot.width; column += 1) {
-            cells.add(`${row}:${column}`);
-          }
-        }
-        return cells;
-      }, new Set<string>());
-      expect(Math.max(...template.slots.map((slot) => slot.column + slot.width)))
-        .toBeLessThanOrEqual(FORMATION_COLUMNS);
-      expect(occupied.size).toBeLessThan(template.rows * FORMATION_COLUMNS);
-    }
-    expect(() => validateStageContent()).not.toThrow();
   });
 
-  it('rejects a template footprint outside the configured columns', () => {
-    const invalid = {
-      id: 'invalid',
-      mode: 'fixed',
-      rows: 2,
-      minStage: 1,
-      weight: 1,
-      slots: [{ kind: 'basic', column: FORMATION_COLUMNS, row: 0, width: 1, height: 1 }],
-    } as const;
-
-    expect(() => validateStageContent(
-      STAGES,
-      ENEMY_CATALOG,
-      FORMATION_PROFILES,
-      [...FORMATION_TEMPLATES, invalid],
-    )).toThrow('formation footprint is outside the grid');
+  it.each([
+    ['duplicate formation ID', (formations: readonly AuthoredFormation[]) => [
+      ...formations,
+      formations[0]!,
+    ], 'formation IDs must be unique'],
+    ['out-of-grid slot', (formations: readonly AuthoredFormation[]) => [
+      { ...formations[0]!, id: 'bad-grid', slots: [{ kind: 'basic' as const, column: 6, row: 0 }] },
+      ...formations.slice(1),
+    ], 'bad-grid'],
+    ['overlapping footprints', (formations: readonly AuthoredFormation[]) => [
+      {
+        ...formations[0]!,
+        id: 'bad-overlap',
+        slots: [
+          { kind: 'armored' as const, column: 0, row: 0 },
+          { kind: 'basic' as const, column: 1, row: 1 },
+        ],
+      },
+      ...formations.slice(1),
+    ], 'bad-overlap'],
+  ] as const)('rejects %s', (_label, mutate, message) => {
+    expect(() => validateStageContent(STAGES, mutate(AUTHORED_FORMATIONS), ENEMY_CATALOG))
+      .toThrow(message);
   });
 
-  it('rejects overlapping template slots', () => {
-    const invalid = {
-      id: 'overlap',
-      mode: 'mixed',
-      rows: 3,
-      minStage: 1,
-      weight: 1,
-      slots: [
-        { column: 1, row: 0, width: 2, height: 2 },
-        { column: 2, row: 1, width: 1, height: 1 },
-      ],
-    } as const;
-
-    expect(() => validateStageContent(
-      STAGES,
-      ENEMY_CATALOG,
-      FORMATION_PROFILES,
-      [...FORMATION_TEMPLATES, invalid],
-    )).toThrow('formation footprints overlap');
-  });
-
-  it('rejects profiles outside two-to-five rows', () => {
-    const invalid = { ...FORMATION_PROFILES[0]!, rowMaximum: 6 };
-
-    expect(() => validateStageContent(
-      STAGES,
-      ENEMY_CATALOG,
-      [invalid, ...FORMATION_PROFILES.slice(1)],
-    )).toThrow('opening rows must stay between two and five');
-  });
-
-  it('requires phase capacity to fit its occupied-cell profile', () => {
-    const stage = {
+  it('rejects missing and duplicate script references', () => {
+    const missing = [{
       ...STAGES[0]!,
-      phases: [{ ...STAGES[0]!.phases[0]!, activeCap: 1 }, ...STAGES[0]!.phases.slice(1)],
-    };
+      paragraphs: [{
+        ...STAGES[0]!.paragraphs[0]!,
+        formationIds: ['missing', ...STAGES[0]!.paragraphs[0]!.formationIds.slice(1)],
+      }, ...STAGES[0]!.paragraphs.slice(1)],
+    }, ...STAGES.slice(1)];
+    expect(() => validateStageContent(missing, AUTHORED_FORMATIONS, ENEMY_CATALOG))
+      .toThrow('missing');
 
-    expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
-      .toThrow('default-1 phase cap must fit its profile');
-  });
-
-  it('rejects a non-finite phase reinforcement release line', () => {
-    const stage = {
+    const duplicate = [{
       ...STAGES[0]!,
-      phases: [
-        { ...STAGES[0]!.phases[0]!, reinforcementReleaseY: Number.NaN },
-        ...STAGES[0]!.phases.slice(1),
-      ],
-    };
-
-    expect(() => validateStageContent([stage, STAGES[1]!, STAGES[2]!]))
-      .toThrow('default-1.reinforcementReleaseY must be finite and non-negative');
+      paragraphs: [{
+        ...STAGES[0]!.paragraphs[0]!,
+        formationIds: [
+          STAGES[0]!.paragraphs[0]!.formationIds[0]!,
+          STAGES[0]!.paragraphs[0]!.formationIds[0]!,
+          STAGES[0]!.paragraphs[0]!.formationIds[2]!,
+        ],
+      }, ...STAGES[0]!.paragraphs.slice(1)],
+    }, ...STAGES.slice(1)];
+    expect(() => validateStageContent(duplicate, AUTHORED_FORMATIONS, ENEMY_CATALOG))
+      .toThrow('default-1 formation references must be unique');
   });
 
-  it('rejects profiles whose minimum cells cannot fit around a passage', () => {
-    const invalid = { ...FORMATION_PROFILES[0]!, cellMinimum: 14, cellMaximum: 14 };
+  it('rejects illegal stage enemies and malformed paragraph scripts', () => {
+    const stageOneSplitter = AUTHORED_FORMATIONS.map((formation, index) => index === 0 ? {
+      ...formation,
+      slots: [{ kind: 'splitter' as const, column: 0, row: 0 }],
+    } : formation);
+    expect(() => validateStageContent(STAGES, stageOneSplitter, ENEMY_CATALOG))
+      .toThrow('s1-opening-gate cannot use splitter in stage 1');
 
-    expect(() => validateStageContent(
-      STAGES,
-      ENEMY_CATALOG,
-      [invalid, ...FORMATION_PROFILES.slice(1)],
-    )).toThrow('opening cannot fit its passage and minimum cells');
+    const shortOpening = [{
+      ...STAGES[0]!,
+      paragraphs: [{
+        ...STAGES[0]!.paragraphs[0]!,
+        formationIds: STAGES[0]!.paragraphs[0]!.formationIds.slice(0, 2),
+      }, ...STAGES[0]!.paragraphs.slice(1)],
+    }, ...STAGES.slice(1)];
+    expect(() => validateStageContent(shortOpening, AUTHORED_FORMATIONS, ENEMY_CATALOG))
+      .toThrow('default-1 opening must contain 3 formations');
+
+    const wrongFinal = [{
+      ...STAGES[0]!,
+      paragraphs: [...STAGES[0]!.paragraphs.slice(0, 2), {
+        ...STAGES[0]!.paragraphs[2]!,
+        formationIds: [
+          's1-climax-final',
+          ...STAGES[0]!.paragraphs[2]!.formationIds.slice(0, 2),
+        ],
+      }],
+    }, ...STAGES.slice(1)];
+    expect(() => validateStageContent(wrongFinal, AUTHORED_FORMATIONS, ENEMY_CATALOG))
+      .toThrow('default-1 climax final formation must be last');
   });
 });
