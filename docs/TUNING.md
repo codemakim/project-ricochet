@@ -1,11 +1,12 @@
 # 튜닝 값 관리
 
-밸런스 값을 새로 만들거나 바꿀 때 아래 세 파일 중 한 곳을 단일 원본으로 사용한다.
+밸런스 값을 새로 만들거나 바꿀 때 아래 단일 원본을 사용한다.
 
 | 범위 | 단일 원본 | 예시 |
 | --- | --- | --- |
 | 전투 전반 | `src/game/config/gameTuning.ts`의 `GAME_TUNING` | 적 기본 체력·하강 속도, 능력 배율, 최대 구슬 수, 보상 간격 |
-| 스테이지별 구성 | `src/game/encounters/stageDefinitions.ts`의 `STAGES` | 보스 진입 조건, 편성, 단계별 체력 배율·활성 상한·증원 간격·증원선·적 가중치 |
+| 편대 배치 | `src/game/encounters/authoredFormations.ts`의 `AUTHORED_FORMATIONS` | 6열 기반 적 종류·위치·크기 |
+| 스테이지별 구성 | `src/game/encounters/stageDefinitions.ts`의 `STAGES` | 문단 순서, 편대 ID, 진입 깊이, 체력 배율·활성 상한, 보스 |
 | 런 밖 경제 | `src/game/meta/metaTuning.ts`의 `META_TUNING` | 부품 보상, 코어 해금 비용 |
 
 UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설명은 실제 `BuildState` 결과나 능력 정의를 읽고, 테스트의 숫자는 계약 검증용 기대값으로만 둔다.
@@ -20,9 +21,11 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 스테이지 목표 구슬 수 | `STAGES[].powerBand.expectedOrbCount` |
 | 적 기본 하강 속도와 기본 체력 | `GAME_TUNING.enemies` |
 | 단계별 체력 배율 | `STAGES[].powerBand.normalHpMultiplier`, `eliteHpMultiplier` |
-| 증원 간격·활성 적 상한·증원선·슈터 가중치/상한 | `STAGES[].phases` |
-| 페이즈·보스 진입 처치 점수 | `STAGES[].phases[].startsAtScore`, `STAGES[].boss.scoreTarget` |
-| 빈 전장 재보급 지연·고속 진입 깊이/속도 | `GAME_TUNING.encounter.emptyRespawnMs`, `emergencyIngress` |
+| 편대 배치와 문단 순서 | `AUTHORED_FORMATIONS`, `STAGES[].paragraphs[].formationIds` |
+| 다음 편대 생존율·빈 전장 지연 | `GAME_TUNING.encounter.nextFormationRemainingRatio`, `emptyRespawnMs` |
+| 문단별 진입 깊이·체력·활성 상한 | `STAGES[].paragraphs[]` |
+| 고속 진입 속도 | `GAME_TUNING.encounter.emergencyIngress.speed` |
+| 플레이어 외형·피격 반경 | `GAME_TUNING.player.visual` |
 | 하이브 코어 이동·장애물 여유·펄스 | `GAME_TUNING.hiveBoss.core.enrage` |
 | 하이브 격노 공격 간격·탄 수·탄 상한 | `GAME_TUNING.projectiles.hiveEnrage` |
 | 일반 능력 수치 | `GAME_TUNING.build` |
@@ -80,8 +83,8 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 3. 기본 코어 배열은 5개, 융합 구슬 배열은 9개 값을 둔다.
 4. `expectedOrbCount`는 혼합 XP 보상의 목표 구슬 성장 속도를 반영한다.
 5. 수치 변경 뒤 단위 테스트, 빌드, 관련 E2E 순서로 검증한다.
-6. 최초 편성은 별도 레시피를 사용하므로 단계별 증원 수치 변경의 영향을 받지 않는다.
-7. 일반전 페이즈와 보스 진입은 시간 제한 없이 처치 점수만 사용한다. 기본 적 `1`, 장갑·슈터·분열 적 `2`, 분열 잔체 `0`점이다.
+6. 최초 편성을 포함한 일반전은 `STAGES[].paragraphs[].formationIds`의 10개 편대를 사용한다.
+7. 마지막 편대가 끝나고 일반 적이 모두 사라지면 보스 경고를 시작한다. 처치 점수·시간 게이트는 없다.
 
 ## 융합 레시피
 

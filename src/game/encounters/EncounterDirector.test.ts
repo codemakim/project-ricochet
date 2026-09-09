@@ -193,7 +193,6 @@ describe('EncounterDirector', () => {
       activeCap: STAGES[0].paragraphs[0].activeCap,
     });
     expect(snapshot).not.toHaveProperty('phase');
-    expect(snapshot).not.toHaveProperty('bossScore');
   });
 
   it('rejects invalid clocks and lifecycle calls', () => {

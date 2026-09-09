@@ -16,32 +16,6 @@ export interface WorldRect {
 
 export const FORMATION_COLUMNS = GAME_TUNING.encounter.grid.columns;
 
-export function reservedPassageCells(
-  rows: number,
-  sequence: number,
-  runSeed: number,
-): ReadonlySet<string> {
-  const pair = Math.floor(sequence / 2);
-  const anchors = [1, 3, 2, 0, 4] as const;
-  const column = anchors[(runSeed % anchors.length + pair) % anchors.length]!;
-  const variant = pair % 3;
-  const cells = new Set<string>();
-  if (variant === 0) {
-    for (let row = 0; row < rows; row += 1) cells.add(`${row}:${column}`);
-  } else if (variant === 1) {
-    const turnRow = Math.floor(rows / 2);
-    const next = column < FORMATION_COLUMNS / 2 ? column + 1 : column - 1;
-    for (let row = 0; row <= turnRow; row += 1) cells.add(`${row}:${column}`);
-    for (let row = turnRow; row < rows; row += 1) cells.add(`${row}:${next}`);
-  } else {
-    const pocket = column < FORMATION_COLUMNS / 2 ? column + 1 : column - 1;
-    for (let row = 0; row < rows; row += 1) cells.add(`${row}:${column}`);
-    cells.add(`0:${pocket}`);
-    if (rows > 2) cells.add(`1:${pocket}`);
-  }
-  return cells;
-}
-
 export function validateFootprint(footprint: GridFootprint, rows: number): void {
   const { column, row, width, height } = footprint;
   if (

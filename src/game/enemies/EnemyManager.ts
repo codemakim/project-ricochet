@@ -236,7 +236,12 @@ export class EnemyManager {
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
       this.debugFreezeEnemies = () => {
         if (this.destroyed) return;
-        for (const enemy of this.enemies.values()) enemy.setVelocityY(0);
+        this.rapidIngressBatches.clear();
+        for (const enemy of this.enemies.values()) {
+          delete enemy.rapidIngressTargetY;
+          delete enemy.ingressBatchId;
+          enemy.setVelocityY(0);
+        }
       };
       this.debugRemoveEnemies = (ids) => {
         if (ids.some((id) => !Number.isInteger(id) || id < 0)) {

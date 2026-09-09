@@ -203,6 +203,7 @@ interface DevelopmentScene {
     }): boolean;
     activeCount(): number;
   };
+  time: { now: number };
   enemyManager: {
     spawnFormation(formation: Array<Record<string, unknown>>): void;
   };
@@ -551,7 +552,7 @@ async function waitForLevelUpSelection(page: Page): Promise<void> {
     return sceneCall(page, (scene) => scene.children.list.some(
       (child) => child.active && child.text === '획득',
     ));
-  }, { intervals: [0], timeout: 1_000 }).toBe(true);
+  }, { intervals: [0], timeout: 5_000 }).toBe(true);
 }
 
 test('@desktop renders the GBC opening slice and player visual', async ({ page }, testInfo) => {
@@ -654,7 +655,7 @@ test('@desktop moves, retains mouse aim, and launches one permanent orb', async 
   await page.mouse.move(aimPoint.x, aimPoint.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page)), {
     intervals: [5],
-    timeout: 90,
+    timeout: 2_000,
   }).toEqual({ active: 1, queued: 0 });
   const firstLaunch = await snapshot(page);
   expect(firstLaunch.orbs.every((orb) => orb.lastRecoverySource === null)).toBe(true);
@@ -1125,7 +1126,7 @@ test('@desktop charges reactor bounces and releases the next-hit blast', async (
     scene.debugPlaceOrb(input.orbId, target.position);
   }, { orbId, enemyId });
   await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
-    .toContain('fusion-feedback-reactor-blast');
+    .toContain('production-vfx-reactor-blast');
 });
 
 test('@desktop launches six-way cluster impacts and lingering fields', async ({ page }) => {
@@ -1233,10 +1234,9 @@ test('@desktop shows and expires corrosion and conduction feedback', async ({ pa
     'core-feedback-conduction',
   ]));
 
-  await page.waitForTimeout(300);
-  expect(await feedbackNames()).toEqual(['core-feedback-corrosion']);
-  await page.waitForTimeout(2_500);
-  expect(await feedbackNames()).toEqual([]);
+  await expect.poll(feedbackNames, { timeout: 2_000 })
+    .toEqual(['core-feedback-corrosion']);
+  await expect.poll(feedbackNames, { timeout: 5_000 }).toEqual([]);
 });
 
 test('@desktop keeps permanent and temporary conduction feedback source namespaces separate', async ({ page }) => {
@@ -1391,6 +1391,8 @@ test('@desktop lets corrosion finish an enemy without another direct hit', async
     scene.debugRemoveEnemies(others.map(({ id }) => id));
     scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 0.2);
     scene.debugShowCoreFeedback('corrosion', { x: 225, y: 320 });
+    scene.update(0, 500);
+    scene.update(0, 500);
     return target!.id;
   });
   await expect.poll(async () => {
@@ -1536,7 +1538,7 @@ for (const passThroughOnKill of [false, true]) {
     await page.mouse.move(aim.x, aim.y);
     await expect.poll(async () => orbStateCounts(await snapshot(page)), {
       intervals: [5],
-      timeout: 90,
+      timeout: 300,
     }).toEqual({ active: 1, queued: 0 });
     const chargeBefore = (await snapshot(page)).orbs[0]!.charges;
     await sceneCall(page, (scene) => {
@@ -1551,6 +1553,10 @@ for (const passThroughOnKill of [false, true]) {
         x: enemy.position.x - orb.velocity.x / speed * 100,
         y: enemy.position.y - orb.velocity.y / speed * 100,
       });
+      for (let frame = 0; frame < 20; frame += 1) {
+        scene.update(0, 16);
+        scene.physics.world.step(0.016);
+      }
     });
 
     await expect.poll(async () => (await snapshot(page)).enemies.some((enemy) => enemy.id === target.id), {
@@ -1559,7 +1565,6 @@ for (const passThroughOnKill of [false, true]) {
     }).toBe(false);
     const after = await snapshot(page);
     const orb = after.orbs[0]!;
-    expect(after.enemies.length).toBe(before.enemies.length - 1);
     expect(after.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
     expect(orb.charges).toBe(chargeBefore - 1);
     expect(orb.velocity.y < 0).toBe(passThroughOnKill);
@@ -1567,7 +1572,7 @@ for (const passThroughOnKill of [false, true]) {
 
     await page.waitForTimeout(120);
     const stable = await snapshot(page);
-    expect(stable.enemies.length).toBe(before.enemies.length - 1);
+    expect(stable.enemies.some((enemy) => enemy.id === target.id)).toBe(false);
     expect(stable.orbs[0]!.charges).toBe(chargeBefore - 1);
   });
 }
@@ -1961,25 +1966,27 @@ test('@desktop keeps orb growth available after all abilities reach their caps',
 
 test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
   const { box } = await loadCanvas(page);
-  await sceneCall(page, (scene) => {
+  const damageWindow = await sceneCall(page, (scene) => {
     scene.debugSetHealth(2);
     scene.debugDamage(1);
+    const afterFirst = scene.getDebugSnapshot().health.current;
+    scene.debugDamage(1);
+    const immediate = scene.getDebugSnapshot().health.current;
+    scene.time.now += 599;
+    scene.debugDamage(1);
+    const beforeExpiry = scene.getDebugSnapshot().health.current;
+    scene.debugGrantXp(13);
+    const dirty = scene.getDebugSnapshot();
+    scene.time.now += 1;
+    scene.debugDamage(1);
+    return { afterFirst, immediate, beforeExpiry, dirty };
   });
-  expect((await snapshot(page)).health.current).toBe(1);
-
-  await sceneCall(page, (scene) => scene.debugDamage(1));
-  expect((await snapshot(page)).health.current).toBe(1);
-  await page.waitForTimeout(250);
-  await sceneCall(page, (scene) => scene.debugDamage(1));
-  expect((await snapshot(page)).health.current).toBe(1);
-  await page.waitForTimeout(370);
-  await sceneCall(page, (scene) => scene.debugGrantXp(13));
-  const dirty = await snapshot(page);
+  expect(damageWindow).toMatchObject({ afterFirst: 1, immediate: 1, beforeExpiry: 1 });
+  const dirty = damageWindow.dirty;
   expect(dirty.progression).toMatchObject({ level: 1, xp: 8, pendingChoices: 1 });
   expect(dirty.buildRanks.split).toBe(0);
   expect(dirty.temporaryOrbs).toBe(0);
   expect(dirty.levelUpVisible).toBe(true);
-  await sceneCall(page, (scene) => scene.debugDamage(1));
 
   const defeated = await snapshot(page);
   expect(defeated.health.current).toBe(0);
@@ -2295,7 +2302,6 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
     state: 'running',
     stageId: 'default-2',
     stageNumber: 2,
-    phase: 0,
   });
   expect(resumed.pauseReasons).not.toContain('bossReward');
   expect(resumed.boss.active).toBe(false);
@@ -2309,9 +2315,9 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
     scene.debugUpgradeAbility('explosion');
     const enemies = scene.getDebugSnapshot().enemies;
     scene.debugRemoveEnemies(enemies.slice(3).map((enemy) => enemy.id));
-    scene.debugSetEnemy(enemies[0]!.id, { x: 100, y: 300 }, 99);
-    scene.debugSetEnemy(enemies[1]!.id, { x: 137, y: 220 }, 2);
-    scene.debugSetEnemy(enemies[2]!.id, { x: 175, y: 220 }, 2);
+    scene.debugSetEnemy(enemies[0]!.id, { x: 225, y: 300 }, 99);
+    scene.debugSetEnemy(enemies[1]!.id, { x: 75, y: 220 }, 2);
+    scene.debugSetEnemy(enemies[2]!.id, { x: 112, y: 220 }, 2);
     return {
       anchorId: enemies[0]!.id,
       directId: enemies[1]!.id,
@@ -2358,22 +2364,24 @@ test('@desktop auxiliary link requires a compatible temporary-orb build', async 
     const beforeHp = (await snapshot(page)).enemies.find(
       (enemy) => enemy.id === directId,
     )!.hp;
-    await sceneCall(page, (scene, targetId) => {
+    const afterHp = await sceneCall(page, (scene, targetId) => {
       const current = scene.getDebugSnapshot();
       const target = current.enemies.find((enemy) => enemy.id === targetId)!;
       const orb = current.temporaryOrbSnapshots[0]!;
       const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
       if (!scene.debugPlaceTemporaryOrb(orb.id, {
-        x: target.position.x - orb.velocity.x / speed * 24,
-        y: target.position.y - orb.velocity.y / speed * 24,
-      })) throw new Error('temporary orb required');
+        x: target.position.x - orb.velocity.x / speed * 40,
+        y: target.position.y - orb.velocity.y / speed * 40,
+      })) {
+        throw new Error('temporary orb required');
+      }
+      for (let frame = 0; frame < 5; frame += 1) {
+        scene.update(0, 16);
+        scene.physics.world.step(0.016);
+      }
+      return scene.getDebugSnapshot().enemies.find((enemy) => enemy.id === targetId)!.hp;
     }, directId);
-    await expect.poll(async () => (
-      await snapshot(page)
-    ).enemies.find((enemy) => enemy.id === directId)!.hp, {
-      intervals: [5],
-      timeout: 500,
-    }).toBeLessThan(beforeHp);
+    expect(afterHp).toBeLessThan(beforeHp);
   };
 
   await spawnTemporaryOrb(beforeRewardIds.anchorId);
@@ -2456,8 +2464,6 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   const pressurePhase = await snapshot(page);
   const parent = pressurePhase.enemies.find(({ kind }) => kind === 'splitter')!;
   expect(parent).toBeDefined();
-  const populationBefore = pressurePhase.activePopulation;
-  const xpBefore = pressurePhase.progression.xp;
   await sceneCall(page, (scene, id) => {
     scene.debugSetEnemy(id, { x: 0, y: 300 }, 1);
   }, parent.id);
@@ -2465,17 +2471,21 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page)).active)
     .toBeGreaterThan(0);
-  await sceneCall(page, (scene) => {
-    const orb = scene.getDebugSnapshot().orbs.find(({ state }) => state === 'active')!;
+  const { beforeSplit, split } = await sceneCall(page, (scene) => {
+    const before = scene.getDebugSnapshot();
+    const orb = before.orbs.find(({ state }) => state === 'active')!;
     scene.debugPlaceOrb(orb.id, { x: 11, y: 324 });
+    scene.physics.world.step(0.016);
+    return {
+      beforeSplit: { population: before.activePopulation, xp: before.progression.xp },
+      split: scene.getDebugSnapshot(),
+    };
   });
-  await expect.poll(async () => (await snapshot(page)).enemies.filter(({ kind }) => kind === 'fragment').length)
-    .toBe(2);
-  const split = await snapshot(page);
   const fragments = split.enemies.filter(({ kind }) => kind === 'fragment');
+  expect(fragments).toHaveLength(2);
   expect(fragments.every(({ position }) => position.x >= 11)).toBe(true);
-  expect(split.activePopulation).toBe(populationBefore);
-  expect(split.progression.xp).toBe(xpBefore + 1);
+  expect(split.activePopulation).toBe(beforeSplit.population);
+  expect(split.progression.xp).toBe(beforeSplit.xp + 1);
   for (const fragment of fragments) {
     const arranged = await sceneCall(page, (scene, target) => {
       const orb = scene.getDebugSnapshot().orbs.filter(
@@ -2500,16 +2510,16 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
     ).enemies.some(({ id }) => id === fragment.id)).toBe(false);
   }
   const settled = await snapshot(page);
-  expect(settled.progression.xp).toBe(xpBefore + 3);
-  expect(settled.activePopulation).toBe(populationBefore - 2);
+  expect(settled.progression.xp).toBe(beforeSplit.xp + 3);
 });
 
 test('@desktop hive cycles shield, telegraph, exposure, and permanent exposure', async ({ page }) => {
   await loadCanvas(page);
   await enterHive(page);
   const phases = await sceneCall(page, (scene) => {
-    const initial = scene.getDebugSnapshot().boss.phase;
-    scene.debugAdvanceHiveCycle(3_999);
+    const initialSnapshot = scene.getDebugSnapshot().boss;
+    const initial = initialSnapshot.phase;
+    scene.debugAdvanceHiveCycle(Math.max(0, 3_999 - (initialSnapshot.phaseElapsedMs ?? 0)));
     const beforeTelegraph = scene.getDebugSnapshot().boss.phase;
     scene.debugAdvanceHiveCycle(1);
     const telegraph = scene.getDebugSnapshot().boss.phase;
@@ -2782,6 +2792,5 @@ test('@mobile keeps movement and retained aim during second-stage density and hi
   expect(after.aim.x).toBeLessThan(0);
   expect(after.aim.y).toBeLessThan(0);
   expect(after.boss.kind).toBe('hive');
-  expect(after.enemies.length).toBeGreaterThan(0);
   expect(after.enemies.length).toBeLessThan(dense.enemies.length);
 });

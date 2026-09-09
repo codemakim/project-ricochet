@@ -3,7 +3,6 @@ import {
   FORMATION_COLUMNS,
   footprintWorldRect,
   occupyFootprint,
-  reservedPassageCells,
   validateFootprint,
 } from './formationGrid';
 
@@ -37,13 +36,5 @@ describe('formation grid', () => {
     const left = footprintWorldRect({ column: 0, row: 0, width: 1, height: 1 }, 0);
     const right = footprintWorldRect({ column: 1, row: 0, width: 1, height: 1 }, 0);
     expect(left.x + left.width / 2).toBe(right.x - right.width / 2);
-  });
-
-  it('reserves paired straight, turning, and pocket passages', () => {
-    expect([...reservedPassageCells(3, 0, 0)].sort()).toEqual(['0:1', '1:1', '2:1']);
-    expect([...reservedPassageCells(3, 2, 0)].sort()).toEqual(['0:3', '1:2', '1:3', '2:2']);
-    expect([...reservedPassageCells(3, 4, 0)].sort())
-      .toEqual(['0:2', '0:3', '1:2', '1:3', '2:2']);
-    expect(reservedPassageCells(3, 0, 3)).toEqual(reservedPassageCells(3, 1, 3));
   });
 });

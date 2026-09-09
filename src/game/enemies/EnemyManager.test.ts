@@ -535,6 +535,25 @@ describe('EnemyManager', () => {
     expect(manager.getSnapshot().activeShooters).toBe(2);
   });
 
+  it('keeps debug-positioned rapid-ingress enemies frozen', () => {
+    const { manager, groups } = createBoundary();
+    manager.spawnFormation([{
+      ...DEFAULT_FORMATION[0]!,
+      formationId: 'rapid',
+      y: -100,
+      rapidIngressTargetY: 100,
+    }]);
+    const rapid = groups[0]!.children.at(-1)!;
+    rapid.setPosition(225, 200);
+
+    manager.debugFreezeEnemies!();
+    manager.update();
+
+    expect(rapid.y).toBe(200);
+    expect(manager.nearestSecondaryTargets({ x: 225, y: 200 }, -1, 1, 1))
+      .toMatchObject([{ position: { x: 225, y: 200 } }]);
+  });
+
   it('spawns an explicit authored formation with stable IDs and descent velocities', () => {
     const { manager, groups } = createBoundary();
     const snapshot = manager.getSnapshot();

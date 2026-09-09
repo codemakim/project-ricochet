@@ -188,6 +188,7 @@ const ROLE_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
 
 const ROLE_FRAME_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
   ...ROLE_DIMENSIONS,
+  player: { width: 82, height: 82 },
   'enemy-armored': {
     width: GAME_TUNING.encounter.grid.cellWidth * 2,
     height: GAME_TUNING.encounter.grid.cellHeight * 2,
