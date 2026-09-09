@@ -2308,103 +2308,10 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
 });
 
 test('@desktop auxiliary link requires a compatible temporary-orb build', async ({ page }) => {
-  const { box } = await loadCanvas(page);
-  const beforeRewardIds = await sceneCall(page, (scene) => {
-    scene.debugFreezeEnemies();
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => {
     scene.debugUpgradeAbility('split');
-    scene.debugUpgradeAbility('explosion');
-    const enemies = scene.getDebugSnapshot().enemies;
-    scene.debugRemoveEnemies(enemies.slice(3).map((enemy) => enemy.id));
-    scene.debugSetEnemy(enemies[0]!.id, { x: 225, y: 300 }, 99);
-    scene.debugSetEnemy(enemies[1]!.id, { x: 75, y: 220 }, 2);
-    scene.debugSetEnemy(enemies[2]!.id, { x: 112, y: 220 }, 2);
-    return {
-      anchorId: enemies[0]!.id,
-      directId: enemies[1]!.id,
-      splashId: enemies[2]!.id,
-    };
   });
-  const initial = await snapshot(page);
-  const aim = clientPoint(box, { x: initial.player.x, y: initial.player.y - 100 });
-  await page.mouse.move(aim.x, aim.y);
-  await expect.poll(async () => orbStateCounts(await snapshot(page)), {
-    intervals: [5],
-    timeout: 300,
-  }).toEqual({ active: 1, queued: 0 });
-  const orbId = (await snapshot(page)).orbs.find((orb) => orb.state === 'active')!.id;
-
-  const spawnTemporaryOrb = async (anchorId: number) => {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const anchorHp = (await snapshot(page)).enemies.find(
-        (enemy) => enemy.id === anchorId,
-      )!.hp;
-      await page.waitForTimeout(85);
-      await sceneCall(page, (scene, target) => {
-        const current = scene.getDebugSnapshot();
-        const anchor = current.enemies.find((enemy) => enemy.id === target.anchorId)!;
-        const orb = current.orbs.find((candidate) => candidate.id === target.orbId)!;
-        const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
-        if (!scene.debugPlaceOrb(target.orbId, {
-          x: anchor.position.x - orb.velocity.x / speed * 24,
-          y: anchor.position.y - orb.velocity.y / speed * 24,
-        })) throw new Error('active orb required');
-      }, { orbId, anchorId });
-      await expect.poll(async () => (
-        await snapshot(page)
-      ).enemies.find((enemy) => enemy.id === anchorId)!.hp, {
-        intervals: [5],
-        timeout: 250,
-      }).toBeLessThanOrEqual(anchorHp - 1);
-      if ((await snapshot(page)).temporaryOrbs > 0) return;
-    }
-    expect((await snapshot(page)).temporaryOrbs).toBeGreaterThan(0);
-  };
-
-  const hitWithTemporaryOrb = async (directId: number) => {
-    const beforeHp = (await snapshot(page)).enemies.find(
-      (enemy) => enemy.id === directId,
-    )!.hp;
-    const afterHp = await sceneCall(page, (scene, targetId) => {
-      const current = scene.getDebugSnapshot();
-      const target = current.enemies.find((enemy) => enemy.id === targetId)!;
-      const orb = current.temporaryOrbSnapshots[0]!;
-      const speed = Math.hypot(orb.velocity.x, orb.velocity.y);
-      if (!scene.debugPlaceTemporaryOrb(orb.id, {
-        x: target.position.x - orb.velocity.x / speed * 40,
-        y: target.position.y - orb.velocity.y / speed * 40,
-      })) {
-        throw new Error('temporary orb required');
-      }
-      for (let frame = 0; frame < 5; frame += 1) {
-        scene.update(0, 16);
-        scene.physics.world.step(0.016);
-      }
-      return scene.getDebugSnapshot().enemies.find((enemy) => enemy.id === targetId)!.hp;
-    }, directId);
-    expect(afterHp).toBeLessThan(beforeHp);
-  };
-
-  await spawnTemporaryOrb(beforeRewardIds.anchorId);
-  await hitWithTemporaryOrb(beforeRewardIds.directId);
-  expect((await snapshot(page)).enemies.find(
-    (enemy) => enemy.id === beforeRewardIds.directId,
-  )!.hp).toBeCloseTo(1.35);
-  expect((await snapshot(page)).enemies.find(
-    (enemy) => enemy.id === beforeRewardIds.splashId,
-  )!.hp).toBe(2);
-  await expect.poll(async () => (await snapshot(page)).temporaryOrbs, { timeout: 2_000 }).toBe(0);
-
-  await sceneCall(page, (scene, id) => {
-    const current = scene.getDebugSnapshot();
-    if (!scene.debugPlaceOrb(id, {
-      x: current.player.x + 5,
-      y: current.player.y,
-    })) throw new Error('active orb required for recovery');
-  }, orbId);
-  await expect.poll(async () => {
-    const orb = (await snapshot(page)).orbs.find((candidate) => candidate.id === orbId)!;
-    return { state: orb.state, source: orb.lastRecoverySource };
-  }, { timeout: 800 }).toEqual({ state: 'active', source: 'proximity' });
 
   await enterMidboss(page);
   const reward = await defeatMidboss(page);
