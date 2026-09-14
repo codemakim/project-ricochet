@@ -5,6 +5,8 @@ export const GAME_HEIGHT = GAME_TUNING.world.height;
 export const PLAYER_RADIUS = GAME_TUNING.player.visual.hurtRadius;
 export const PLAYER_SPEED = 420;
 export const PLAYER_MIN_Y = 98;
+// Hostile attacks stay above combat VFX (6) and orb decorations (7).
+export const HOSTILE_ACTION_DEPTH = 8;
 
 export const STARTING_ORB_COUNT = 1;
 export const ORB_SPEED = 520;

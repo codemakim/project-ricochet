@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
-import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
+import { GAME_HEIGHT, GAME_WIDTH, HOSTILE_ACTION_DEPTH } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import { distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
@@ -38,7 +38,7 @@ import {
 } from '../visuals/registerActorAnimations';
 
 const PART_DEPTH = -2;
-const WARNING_DEPTH = 1;
+const WARNING_DEPTH = HOSTILE_ACTION_DEPTH;
 const SHIELDED_TINT = 0x5d72ff;
 const TELEGRAPH_TINT = 0xffd36a;
 const ENRAGE_TINT = 0xff4d5a;

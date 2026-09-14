@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
-import { GAME_HEIGHT, GAME_WIDTH } from '../constants';
+import { GAME_HEIGHT, GAME_WIDTH, HOSTILE_ACTION_DEPTH } from '../constants';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import { clamp, distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
@@ -44,7 +44,7 @@ import {
 
 const BOSS_BODY_DEPTH = -3;
 const BOSS_PART_DEPTH = -2;
-const BOSS_ACTION_DEPTH = 1;
+const BOSS_ACTION_DEPTH = HOSTILE_ACTION_DEPTH;
 
 const setWorldBodySize = (
   sprite: Phaser.Physics.Arcade.Sprite,

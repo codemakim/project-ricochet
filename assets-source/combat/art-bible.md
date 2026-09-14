@@ -7,6 +7,13 @@
 - Rigid pixel machinery contrasts with smooth high-resolution energy effects.
 - The premise stays visual and simple; avoid lore-dependent readability.
 
+## Direction lock
+
+- Characters intentionally use low-resolution pixel art for a retro feel.
+- Combat effects intentionally use high-resolution animation over the pixel characters.
+- Keep this mixed-resolution contrast through the remaining visual, UI, and audio work.
+- Reconsider the direction only after the planned presentation work is complete and an integrated playtest still finds it visually inconsistent.
+
 ## Shared construction
 
 - Every complete character has one paired rectangular or arched eye visor.

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
-import { GAME_HEIGHT, GAME_WIDTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
+import { GAME_HEIGHT, GAME_WIDTH, HOSTILE_ACTION_DEPTH, PLAYER_MIN_Y, PLAYER_RADIUS } from '../constants';
 import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import { clamp, distanceToSegment, normalize, type Vector } from '../math/vector';
 import type {
@@ -838,7 +838,7 @@ export class EnemyManager {
       y: this.options.player.y - shooter.y,
     });
     const visual = GAME_TUNING.visual.hostile.enemyBullet;
-    bullet.setDisplaySize(visual.width, visual.height);
+    bullet.setDisplaySize(visual.width, visual.height).setDepth(HOSTILE_ACTION_DEPTH);
     const sourceRadius = 5 / Math.abs(bullet.scaleX);
     bullet.setCircle(
       sourceRadius,

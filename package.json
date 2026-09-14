@@ -8,11 +8,13 @@
     "node": ">=24"
   },
   "scripts": {
+    "assets:audio": "node scripts/build_combat_audio.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke"
   },
   "dependencies": {
     "phaser": "3.90.0"

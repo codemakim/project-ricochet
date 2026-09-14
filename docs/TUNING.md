@@ -8,6 +8,7 @@
 | 편대 배치 | `src/game/encounters/authoredFormations.ts`의 `AUTHORED_FORMATIONS` | 6열 기반 적 종류·위치·크기 |
 | 스테이지별 구성 | `src/game/encounters/stageDefinitions.ts`의 `STAGES` | 문단 순서, 편대 ID, 진입 깊이, 체력 배율·활성 상한, 보스 |
 | 런 밖 경제 | `src/game/meta/metaTuning.ts`의 `META_TUNING` | 부품 보상, 코어 해금 비용 |
+| 오디오 | `src/game/audio/audioTuning.ts`의 `AUDIO_TUNING`, `COMBAT_SOUNDS` | 음악·효과음 음량, 반복 제한, 동시 재생, 컴프레서, 합성 음색·템포 |
 
 UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설명은 실제 `BuildState` 결과나 능력 정의를 읽고, 테스트의 숫자는 계약 검증용 기대값으로만 둔다.
 
@@ -42,10 +43,17 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 구슬 레이어·파티클·모바일 오브젝트 상한 | `GAME_TUNING.visual.orbAnimation` |
 | 제작 VFX 투명도·전체 상한·최대 수명 | `GAME_TUNING.visual.productionVfx` |
 | VFX별 수명·크기·동시 상한 | `src/game/visuals/combatVfxProfiles.ts`의 `COMBAT_VFX_PROFILES` |
+| HUD 안전 영역·간격·피격 강조 | `src/styles.css`의 `.combat-hud`, `src/game/ui/CombatHud.ts` |
+| 적 공격 표시 순서 | `src/game/constants.ts`의 `HOSTILE_ACTION_DEPTH` |
 
 현재 실제 게임 기준값은 일반 적 HP `3.9/5.2/9.1/2.6`, 장갑 적 HP `12`, 적 하강 `9.6px/s`, 영구 구슬 속도 `520px/s`다. 개발자 모드의 `1`은 이 기준값 그대로를 뜻한다.
 
 ## 모션·VFX 기본값
+
+오디오: 기본 음량 `0.65`, 음악 `0.38`, 보스 레이어 `0.32`, 선택창 음악 배율 `0.3`,
+효과음 동시 상한 `12`. 음색·템포 변경 시 `pnpm assets:audio`로 WAV를 재생성한다.
+재생 음량·반복 제한만 바꾸면 재생성할 필요 없다. 종료음 재생을 위해 결과 화면은
+오디오가 켜져 있을 때 최대 `900ms` 뒤 표시한다.
 
 | 범위 | 값 |
 | --- | --- |
@@ -55,6 +63,13 @@ UI, 매니저, 규칙 코드에 같은 숫자를 다시 적지 않는다. UI 설
 | 구슬 시각 상한 | 구슬당 레이어 4, 파티클 3, 모바일 전체 48 |
 | 제작 VFX | 알파 `0.08~0.9`, 모바일 64, 데스크톱 96, 최대 수명 `2500ms` |
 | VFX 프로필 | 일반 `320ms/동시 8`, 지속형 `640ms/동시 4`; 정식 8프레임 효과별 수명·크기는 `COMBAT_VFX_PROFILES` |
+
+가독성 1차 조정: 발사 `240ms/배율 0.8/알파 0.45/동시 2`, 회수
+`280ms/배율 1/알파 0.48/동시 2`, 직격·적 피격 `200ms/배율 0.9`.
+기본 알파는 일반 `0.68`, 지속형 `0.38`; 보스 격파는 `0.82`를 유지한다.
+적 탄·보스 공격 depth `8`, VFX `6`, 조준선 `9`. 물리 크기·피해·속도는 바꾸지 않는다.
+HUD는 캔버스 밖 `84px` 행을 사용한다. 음소거는 HUD 안에 배치하며 터치 높이 `44px`를 유지한다.
+피격 강조는 HUD만 `280ms` 동안 반응하며 `prefers-reduced-motion: reduce`에서는 생략한다.
 
 액터 모션과 VFX는 판정·피해·발동 타이밍을 소유하지 않는다. 밸런스는 기존 전투 소유자에서, 표현 상한과 수명만 위 위치에서 조정한다.
 

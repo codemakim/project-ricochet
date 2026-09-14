@@ -104,6 +104,14 @@ describe('combat asset manifest', () => {
     }
   });
 
+  it('ships every declared audio file under unique keys', () => {
+    const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/audio/*')));
+    expect(new Set(COMBAT_AUDIO_ASSETS.map(({ key }) => key)).size).toBe(COMBAT_AUDIO_ASSETS.length);
+    for (const { urls } of COMBAT_AUDIO_ASSETS) {
+      for (const url of urls) expect(shippedAssets.has(`/public${url}`), url).toBe(true);
+    }
+  });
+
   it('loads one stable production texture for every fusion orb', () => {
     for (const id of FUSION_ORB_IDS) {
       expect(COMBAT_IMAGE_ASSETS).toContainEqual({

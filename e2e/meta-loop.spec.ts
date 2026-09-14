@@ -168,7 +168,7 @@ async function defeatParts(page: Page, parts: string[]) {
   }, { parts });
 }
 
-test('@desktop completes all three bosses without a final combat reward', async ({ page }) => {
+test('@desktop @smoke completes all three bosses without a final combat reward', async ({ page }) => {
   await page.goto('/?combat=1');
   await expect.poll(async () => (await combatSnapshot(page)).loadoutVisible).toBe(true);
   await page.keyboard.press('Digit1');
@@ -197,7 +197,7 @@ test('@desktop completes all three bosses without a final combat reward', async 
   expect((await combatSnapshot(page)).encounter.stageId).toBe('default-1');
 });
 
-test('@desktop settles, unlocks a core in the workshop, and persists the redeploy loadout', async ({ page }) => {
+test('@desktop @smoke settles, unlocks a core in the workshop, and persists the redeploy loadout', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '출격 준비' })).toBeVisible();
   await page.getByRole('button', { name: '출격', exact: true }).click();

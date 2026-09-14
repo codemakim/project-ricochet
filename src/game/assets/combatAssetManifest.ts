@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { COMBAT_SOUNDS, MUSIC_KEYS } from '../audio/audioTuning';
 import { FUSION_ORB_IDS } from '../orbs/orbFusionRules';
 import { ACTOR_SKIN_PROFILES } from '../visuals/actorVisualProfiles';
 import { COMBAT_VFX_PROFILES } from '../visuals/combatVfxProfiles';
@@ -25,7 +26,7 @@ export type CombatRasterAsset = CombatImageAsset | CombatSheetAsset;
 
 export interface CombatAudioAsset {
   key: string;
-  urls: readonly [ogg: string, mp3: string];
+  urls: readonly string[];
 }
 
 export const COMBAT_STATIC_IMAGE_ASSETS = [
@@ -103,7 +104,10 @@ export const COMBAT_IMAGE_ASSETS: readonly CombatRasterAsset[] = [
   ...COMBAT_VFX_ASSETS,
 ];
 
-export const COMBAT_AUDIO_ASSETS: readonly CombatAudioAsset[] = [];
+export const COMBAT_AUDIO_ASSETS: readonly CombatAudioAsset[] = [
+  ...Object.keys(COMBAT_SOUNDS).map((id) => `sfx-${id}`),
+  ...MUSIC_KEYS,
+].map((key) => ({ key, urls: [`/assets/combat/audio/${key}.wav`] }));
 
 function isSheet(asset: CombatRasterAsset): asset is CombatSheetAsset {
   return 'frameConfig' in asset;

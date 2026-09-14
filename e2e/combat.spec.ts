@@ -155,6 +155,7 @@ interface DevelopmentScene {
       scaleX?: number;
       scaleY?: number;
       alpha?: number;
+      depth?: number;
       frame?: { name?: string | number };
       visible?: boolean;
       texture?: { key?: string };
@@ -190,6 +191,7 @@ interface DevelopmentScene {
     setPosition(x: number, y: number): void;
   };
   physics: { pause(): void; world: { step(deltaSeconds: number): void } };
+  cameras: { main: { flashEffect: { isRunning: boolean } } };
   anims: { exists(key: string): boolean };
   aimGuide: { visible: boolean };
   combatVfx: {
@@ -555,7 +557,7 @@ async function waitForLevelUpSelection(page: Page): Promise<void> {
   }, { intervals: [0], timeout: 5_000 }).toBe(true);
 }
 
-test('@desktop renders the GBC opening slice and player visual', async ({ page }, testInfo) => {
+test('@desktop @smoke renders the GBC opening slice and player visual', async ({ page }, testInfo) => {
   const failedAssets: string[] = [];
   page.on('response', (response) => {
     if (response.url().includes('/assets/combat/') && !response.ok()) {
@@ -618,7 +620,7 @@ test('@desktop renders the GBC opening slice and player visual', async ({ page }
   await page.screenshot({ path: testInfo.outputPath('gbc-sentinel-desktop.png') });
 });
 
-test('@mobile renders the GBC opening slice', async ({ page }, testInfo) => {
+test('@mobile @smoke renders the GBC opening slice', async ({ page }, testInfo) => {
   const failedAssets: string[] = [];
   page.on('response', (response) => {
     if (response.url().includes('/assets/combat/') && !response.ok()) {
@@ -647,7 +649,7 @@ test('@mobile renders the GBC opening slice', async ({ page }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('gbc-combat-mobile.png') });
 });
 
-test('@desktop moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
+test('@desktop @smoke moves, retains mouse aim, and launches one permanent orb', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const before = await snapshot(page);
   const aimPoint = clientPoint(box, { x: before.player.x + 100, y: before.player.y - 100 });
@@ -887,20 +889,83 @@ test('@mobile keeps hostile bullets readable during dense production VFX', async
     const afterBodies = scene.children.list.filter((child) => child.active && child.body)
       .map((child) => ({ width: child.body!.width, height: child.body!.height }));
     return {
-      bullets: bullets.map(({ visible, alpha, body }) => ({ visible, alpha, hasBody: Boolean(body) })),
+      bullets: bullets.map(({ visible, alpha, depth, body }) => ({ visible, alpha, depth, hasBody: Boolean(body) })),
+      vfxDepth: Math.max(...scene.children.list.filter((child) => child.active && child.name?.startsWith('production-vfx-'))
+        .map(({ depth }) => depth ?? 0)),
       aimVisible: scene.aimGuide.visible,
       activeVfx: scene.combatVfx.activeCount(),
       stableBodies: JSON.stringify(bodies) === JSON.stringify(afterBodies),
     };
   });
   expect(result.bullets.length).toBeGreaterThan(0);
-  expect(result.bullets.every(({ visible, alpha, hasBody }) => (
-    visible !== false && (alpha ?? 1) > 0 && hasBody
+  expect(result.bullets.every(({ visible, alpha, depth, hasBody }) => (
+    visible !== false && (alpha ?? 1) > 0 && hasBody && (depth ?? 0) > result.vfxDepth
   ))).toBe(true);
   expect(result.aimVisible).toBe(true);
   expect(result.activeVfx).toBeLessThanOrEqual(GAME_TUNING.visual.productionVfx.mobileMaximumTotal);
   expect(result.stableBodies).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('production-vfx-mobile.png') });
+});
+
+test('@desktop @mobile keeps the combat HUD outside the playfield across bosses and resize', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await loadCanvas(page);
+  const hud = page.getByRole('region', { name: '전투 상태' });
+  const checkLayout = async () => {
+    await expect.poll(async () => {
+      const rail = await hud.boundingBox();
+      const field = await page.locator('canvas').boundingBox();
+      const audio = await page.locator('.combat-audio-toggle').boundingBox();
+      if (!rail || !field || !audio) return false;
+      const width = page.viewportSize()!.width;
+      return rail.y + rail.height <= field.y + 1
+        && audio.y >= rail.y && audio.y + audio.height <= rail.y + rail.height
+        && audio.height >= 44
+        && field.x >= 0 && field.x + field.width <= width + 1
+        && Math.abs(field.x + field.width / 2 - width / 2) < 2
+        && Math.abs(field.width / field.height - 450 / 800) < 0.01;
+    }).toBe(true);
+  };
+  await checkLayout();
+  await expect(hud).toContainText('자동 발사');
+  const health = (await snapshot(page)).health;
+  await expect(hud.locator('[data-health]')).toHaveText(`HP ${health.current}/${health.maximum}`);
+  await sceneCall(page, (scene) => scene.debugGrantXp(1));
+  await expect(hud.locator('[data-xp-bar]')).toHaveJSProperty('value', 0.2);
+
+  // Reduced motion keeps the same health information without a HUD pulse or world flash.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const damaged = await sceneCall(page, (scene) => {
+    scene.debugDamage(1);
+    return { health: scene.getDebugSnapshot().health, flash: scene.cameras.main.flashEffect.isRunning };
+  });
+  expect(damaged.flash).toBe(false);
+  await expect(hud.locator('[data-health]')).toHaveText(`HP ${damaged.health.current}/${damaged.health.maximum}`);
+  expect(await hud.evaluate((element) => element.getAnimations().length)).toBe(0);
+
+  await advanceToBossWarning(page);
+  await expect(hud).toContainText('보스 접근');
+  await checkLayout();
+  await enterMidboss(page);
+  for (const kind of ['sentinel', 'hive', 'siege'] as const) {
+    await sceneCall(page, (scene, boss) => scene.startBoss(boss), kind);
+    await expect(hud.locator('[data-boss-label]')).toHaveText(kind.toUpperCase());
+    await expect(hud.locator('[data-boss-bar]')).toHaveJSProperty('value', 1);
+    await checkLayout();
+    // Let the previous debug boss's exit sprites finish before reviewing the next silhouette.
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: testInfo.outputPath(`hud-${kind}.png`) });
+  }
+  await page.setViewportSize({ width: 320, height: 640 });
+  await checkLayout();
+  await page.screenshot({ path: testInfo.outputPath('hud-small-screen.png') });
+  await sceneCall(page, (scene) => scene.scene.restart());
+  await expect(page.locator('.combat-hud [data-health]')).toHaveCount(1);
+  await confirmCoreLoadout(page);
+  await expect(hud).toContainText('자동 발사');
+  await checkLayout();
+  expect(errors).toEqual([]);
 });
 
 test('@mobile keeps total visual objects under the configured cap', async ({ page }) => {
@@ -935,6 +1000,8 @@ test('@desktop captures production player and boss states', async ({ page }, tes
   await page.screenshot({ path: testInfo.outputPath('production-sentinel-intact.png') });
   await sceneCall(page, (scene) => scene.debugDamageBossPart('leftWeakpoint', 14));
   await page.screenshot({ path: testInfo.outputPath('production-sentinel-damaged.png') });
+  await sceneCall(page, (scene) => scene.debugDamageBossPart('rightWeakpoint', 14));
+  await page.screenshot({ path: testInfo.outputPath('production-sentinel-core-exposed.png') });
 
   await sceneCall(page, (scene) => scene.startBoss('hive'));
   await page.screenshot({ path: testInfo.outputPath('production-hive-intact.png') });
@@ -1405,7 +1472,7 @@ test('@desktop lets corrosion finish an enemy without another direct hit', async
   expect((await snapshot(page)).enemies.some(({ id }) => id === enemyId)).toBe(false);
 });
 
-test('@mobile supports simultaneous touch movement and retained aim', async ({ page }) => {
+test('@mobile @smoke supports simultaneous touch movement and retained aim', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const before = await snapshot(page);
   const touches = {
@@ -1437,7 +1504,7 @@ test('@mobile supports simultaneous touch movement and retained aim', async ({ p
   expect(after.orbs.every((orb) => orb.state === 'active')).toBe(true);
 });
 
-test('@mobile taps a visible level-up card and resumes combat', async ({ page }) => {
+test('@mobile @smoke taps a visible level-up card and resumes combat', async ({ page }) => {
   await page.clock.install();
   const { box } = await loadCanvas(page);
   await sceneCall(page, (scene) => scene.debugGrantXp(5));
@@ -1727,7 +1794,7 @@ test('@desktop admits reinforcement while original enemies remain', async ({ pag
   expect(after.encounter.paragraphId).toBe('opening');
 });
 
-test('@desktop authored formations keep paragraph order and fixed climax ending', async ({ page }) => {
+test('@desktop @smoke authored formations keep paragraph order and fixed climax ending', async ({ page }) => {
   await loadCanvas(page);
   const initial = await snapshot(page);
   const ids = [initial.encounter.lastFormationId!];
@@ -1964,7 +2031,7 @@ test('@desktop keeps orb growth available after all abilities reach their caps',
   expect(completed.pauseReasons).toContain('levelUp');
 });
 
-test('@desktop enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
+test('@desktop @smoke enforces 600ms invulnerability, presents defeat once, and restarts', async ({ page }) => {
   const { box } = await loadCanvas(page);
   const damageWindow = await sceneCall(page, (scene) => {
     scene.debugSetHealth(2);
@@ -2022,7 +2089,7 @@ test('@desktop enforces 600ms invulnerability, presents defeat once, and restart
   });
 });
 
-test('@desktop authored density uses shipped enemy stats and empty refill boundary', async ({ page }) => {
+test('@desktop @smoke authored density uses shipped enemy stats and empty refill boundary', async ({ page }) => {
   await loadCanvas(page);
   const initial = await snapshot(page);
   const { left, cellWidth } = GAME_TUNING.encounter.grid;

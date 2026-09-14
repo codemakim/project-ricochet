@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { CombatAudio } from '../audio/CombatAudio';
 import { createCombatFallbackTextures } from '../assets/createCombatFallbackTextures';
 import {
   applyCombatTextureSampling,
@@ -114,7 +115,7 @@ import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { OrbLoadoutOverlay } from '../ui/OrbLoadoutOverlay';
 import { OrbFusionOverlay } from '../ui/OrbFusionOverlay';
 import { OrbUpgradeOverlay } from '../ui/OrbUpgradeOverlay';
-import { progressionHudState } from '../ui/progressionHud';
+import { CombatHud } from '../ui/CombatHud';
 import { formatDisplayNumber } from '../ui/displayNumber';
 import { RunCompleteOverlay } from '../ui/RunCompleteOverlay';
 import {
@@ -154,7 +155,6 @@ const AIM_REFLECTION_LENGTH = 90;
 const PROGRESSION_SEED = 0x5249434f;
 const BOSS_REWARD_SEED = 0x424f5353;
 let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
-const XP_BAR_WIDTH = 220;
 const PAUSE_REASONS: readonly PauseReason[] = [
   'visibility',
   'loadout',
@@ -166,6 +166,7 @@ const PAUSE_REASONS: readonly PauseReason[] = [
 export const RUN_ENDED_EVENT = 'ricochet:run-ended';
 
 export interface CombatDebugSnapshot {
+  audio: ReturnType<CombatAudio['getSnapshot']> | null;
   player: Vector;
   aim: Vector;
   health: HealthState;
@@ -267,17 +268,11 @@ export class CombatScene extends Phaser.Scene {
   private readonly secondaryFeedback = new Set<Phaser.GameObjects.GameObject>();
   private combatProcs?: CombatProcState;
   private combatVfx?: CombatVfxPlayer;
+  private combatAudio?: CombatAudio;
   private aimGuide!: Phaser.GameObjects.Graphics;
   private orbLevelGraphics!: Phaser.GameObjects.Graphics;
-  private statusHudFrame!: Phaser.GameObjects.Image;
-  private bossHudFrame!: Phaser.GameObjects.Image;
-  private bossHudFill!: Phaser.GameObjects.Rectangle;
-  private bossHudLabel!: Phaser.GameObjects.Text;
-  private controlsText!: Phaser.GameObjects.Text;
+  private combatHud?: CombatHud;
   private bossMaximumHp = 0;
-  private healthText!: Phaser.GameObjects.Text;
-  private progressionText!: Phaser.GameObjects.Text;
-  private progressionBarFill!: Phaser.GameObjects.Rectangle;
   private build?: BuildState;
   private progression?: ProgressionManager;
   private levelUpOverlay?: LevelUpOverlay;
@@ -287,7 +282,6 @@ export class CombatScene extends Phaser.Scene {
   private bossBuild?: BossBuild;
   private bossRewardOverlay?: BossRewardOverlay;
   private runCompleteOverlay?: RunCompleteOverlay;
-  private bossWarning?: Phaser.GameObjects.Text;
   private bossRewardChoices: BossRewardChoice[] = [];
   private bossDefeatPending = false;
   private health: HealthState = createHealth();
@@ -395,6 +389,9 @@ export class CombatScene extends Phaser.Scene {
     applyCombatTextureSampling(this);
     registerActorAnimations(this);
     this.combatVfx = new CombatVfxPlayer(this);
+    const hudRoot = this.game.canvas.parentElement?.previousElementSibling;
+    if (hudRoot instanceof HTMLElement) this.combatHud = new CombatHud(hudRoot);
+    this.combatAudio = new CombatAudio(this);
     if (this.textures.exists('combat-background')) {
       this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
         .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
@@ -437,10 +434,12 @@ export class CombatScene extends Phaser.Scene {
       getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
       getOrbLimit: () => GAME_TUNING.build.basicGrowth.maximumOrbs,
       onLaunch: () => {
+        this.combatAudio?.play('launch');
         playActorState(this.player, 'player', 'launch');
         this.combatVfx?.play('player-launch', { position: this.player });
       },
       onRecovery: (orbId, source) => {
+        this.combatAudio?.play('recover');
         playActorState(this.player, 'player', 'recover');
         this.combatVfx?.play('player-recover', { position: this.player });
         this.combatProcs?.resetOrbFlight(orbId);
@@ -469,10 +468,10 @@ export class CombatScene extends Phaser.Scene {
       onEnemyKilled: (event) => this.handleEnemyKilled(event),
       onDirectHit: (event) => this.handleDirectHit(event),
       onSecondaryDamage: (event) => this.drawSecondaryDamage(event),
-      onShooterState: (state, position) => this.combatVfx?.play(
-        state === 'charge' ? 'shooter-charge' : 'shooter-fire',
-        { position },
-      ),
+      onShooterState: (state, position) => {
+        this.combatAudio?.play(state === 'charge' ? 'charge' : 'shot');
+        this.combatVfx?.play(state === 'charge' ? 'shooter-charge' : 'shooter-fire', { position });
+      },
       getExternalBulletCount: () => this.activeBoss?.getBulletCount() ?? 0,
       textureKeys: {
         splitter: 'enemy-splitter',
@@ -561,29 +560,8 @@ export class CombatScene extends Phaser.Scene {
       };
     }
 
-    this.aimGuide = this.add.graphics().setDepth(5);
+    this.aimGuide = this.add.graphics().setDepth(9);
     this.orbLevelGraphics = this.add.graphics().setDepth(7);
-    this.statusHudFrame = this.add.image(8, 8, 'hud-status-frame')
-      .setOrigin(0, 0).setDisplaySize(180, 64).setDepth(9);
-    this.bossHudFrame = this.add.image(202, 8, 'hud-boss-frame')
-      .setOrigin(0, 0).setDisplaySize(240, 40).setDepth(20).setVisible(false);
-    this.bossHudFill = this.add.rectangle(214, 34, 216, 8, 0xffae2b)
-      .setOrigin(0, 0.5).setDepth(21).setVisible(false);
-    this.bossHudLabel = this.add.text(322, 14, '', {
-      color: '#eee3c8', fontSize: '12px', fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setDepth(22).setVisible(false);
-    this.healthText = this.add.text(16, 16, '', { color: '#dff7ff', fontSize: '20px' }).setDepth(10);
-    this.progressionText = this.add.text(16, 44, '', { color: '#65f6ff', fontSize: '16px' }).setDepth(10);
-    this.add.rectangle(16, 70, XP_BAR_WIDTH, 8, 0x17314a, 0.95)
-      .setOrigin(0, 0.5)
-      .setDepth(10);
-    this.progressionBarFill = this.add.rectangle(16, 70, XP_BAR_WIDTH, 8, 0x65f6ff, 1)
-      .setOrigin(0, 0.5)
-      .setDepth(11);
-    this.controlsText = this.add.text(GAME_WIDTH - 16, 16, 'WASD / MOUSE · TWO TOUCH STICKS', {
-      color: '#6f8aa8',
-      fontSize: '12px',
-    }).setOrigin(1, 0).setDepth(10);
     this.updateHealthText();
     this.updateProgressionText();
     this.drawAimGuide();
@@ -686,6 +664,7 @@ export class CombatScene extends Phaser.Scene {
       bullets: 0,
     };
     return {
+      audio: this.combatAudio?.getSnapshot() ?? null,
       player: { x: this.player?.x ?? 0, y: this.player?.y ?? 0 },
       aim: { ...this.aim },
       health: { ...this.health },
@@ -787,6 +766,7 @@ export class CombatScene extends Phaser.Scene {
 
   private handleEnemyKilled(event: EnemyKilledEvent): void {
     if (this.defeated) return;
+    this.combatAudio?.play('break');
     this.combatVfx?.play(
       event.kind === 'splitter' ? 'splitter-fracture' : 'enemy-break',
       { position: event.position },
@@ -855,6 +835,7 @@ export class CombatScene extends Phaser.Scene {
     excludedBossTargetId?: BossTargetId,
   ): void {
     if (!this.build || !this.bossBuild) return;
+    this.combatAudio?.play('hit');
     this.combatVfx?.play('orb-direct-hit', {
       position: event.position,
       direction: event.direction,
@@ -1338,6 +1319,7 @@ export class CombatScene extends Phaser.Scene {
     segmentStart: Vector;
     echoStacks: number;
   }): void {
+    this.combatAudio?.play('ricochet');
     this.combatVfx?.play('orb-ricochet', { position: event.position });
     if (event.coreType === 'mirror-circuit' && this.build) {
       const profile = mirrorCircuitProfile(event.coreLevel);
@@ -2394,6 +2376,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private drawExplosion(position: Vector, radius: number): void {
+    this.combatAudio?.play('explosion');
     this.combatVfx?.play('explosion-burst', { position, scale: radius * 2 / 64 });
   }
 
@@ -2417,23 +2400,20 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private showBossWarning(): void {
-    this.clearBossWarning();
-    this.bossWarning = this.add.text(GAME_WIDTH / 2, 116, 'WARNING · MIDBOSS APPROACHING', {
-      color: '#ffcf5c',
-      fontSize: '22px',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(18);
+    this.combatAudio?.play('warning');
+    this.combatHud?.setWarning(true);
   }
 
   private clearBossWarning(): void {
-    this.bossWarning?.destroy();
-    this.bossWarning = undefined;
+    this.combatHud?.setWarning(false);
   }
 
   private startBoss(kind: BossKind): void {
     if (!this.player || !this.orbManager || !this.temporaryOrbManager || !this.enemyManager) return;
+    this.combatAudio?.setBoss(true);
     this.clearBossWarning();
     this.activeBoss?.destroy();
+    this.bossMaximumHp = 0;
     const cleanup = bossEntryCleanup(
       kind,
       GAME_TUNING.encounter.bossEntry.cleanupMode,
@@ -2474,6 +2454,8 @@ export class CombatScene extends Phaser.Scene {
 
   private handleBossDefeatSignal(): void {
     if (this.defeated || this.bossDefeatPending) return;
+    this.combatAudio?.play('bossDefeat');
+    this.combatAudio?.setBoss(false);
     const position = this.activeBoss?.getSnapshot().position;
     if (position) this.combatVfx?.play('boss-defeat', { position, scale: 2 });
     this.enemyManager?.clearHostileActions();
@@ -2533,6 +2515,7 @@ export class CombatScene extends Phaser.Scene {
 
   private completeBossReward(): boolean {
     if (!this.encounterDirector) return false;
+    this.combatAudio?.play('reward');
     const advance = this.encounterDirector.resumeAfterBossReward();
     if (advance.type === 'stageStarted') {
       const encounter = this.encounterDirector.getSnapshot();
@@ -2558,6 +2541,7 @@ export class CombatScene extends Phaser.Scene {
     this.pause.add('runComplete');
     this.syncPauseState();
     if (this.emitRunResult(true)) return;
+    this.combatAudio?.play('victory');
     this.runCompleteOverlay?.show(() => {
       this.handleShutdown();
       this.scene.restart();
@@ -2615,6 +2599,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated || !this.build || !this.progression || !this.levelUpOverlay) return;
     const snapshot = this.progression.getSnapshot();
     if (snapshot.pendingChoices === 0 || snapshot.choices.length === 0) return;
+    this.combatAudio?.play('reward');
 
     this.pause.add('levelUp');
     this.syncPauseState();
@@ -2716,6 +2701,7 @@ export class CombatScene extends Phaser.Scene {
 
   private completeRunRewardChoice(): void {
     if (!this.progression) return;
+    this.combatAudio?.play('reward');
     this.updateProgressionText();
     this.levelUpOverlay?.hide();
     this.orbUpgradeOverlay?.hide();
@@ -2739,26 +2725,25 @@ export class CombatScene extends Phaser.Scene {
     if (this.defeated || !canTakeDamage(this.time.now, this.invulnerableUntil)) return;
     this.invulnerableUntil = this.time.now + INVULNERABILITY_MS;
     this.health = applyDamage(this.health, amount);
+    this.combatAudio?.play(this.health.defeated ? 'defeat' : 'hurt');
     playActorState(this.player, 'player', this.health.defeated ? 'defeated' : 'hurt');
     this.combatVfx?.play(this.health.defeated ? 'player-defeat' : 'player-hit', {
       position: this.player,
       scale: this.health.defeated ? 1.5 : 1,
     });
     this.updateHealthText();
-    this.cameras.main.flash(80, 170, 35, 60);
+    this.combatHud?.hit();
     if (this.health.defeated) this.showDefeat();
   }
 
   private updateHealthText(): void {
-    this.healthText.setText(`HP ${this.health.current}/${this.health.maximum}`);
+    this.combatHud?.setHealth(this.health.current, this.health.maximum);
   }
 
   private updateProgressionText(): void {
-    if (!this.progressionText || !this.progressionBarFill || !this.progression) return;
+    if (!this.progression) return;
     const { level, xp, xpRequired } = this.progression.getSnapshot();
-    const hud = progressionHudState(level, xp, xpRequired);
-    this.progressionText.setText(hud.label);
-    this.progressionBarFill.setScale(hud.fillRatio, 1);
+    this.combatHud?.setProgression(level, xp, xpRequired);
   }
 
   private drawOrbLevels(): void {
@@ -2780,22 +2765,17 @@ export class CombatScene extends Phaser.Scene {
 
   private syncBossHud(): void {
     const snapshot = this.activeBoss?.getSnapshot();
+    if (snapshot?.active && snapshot.parts) this.combatAudio?.observeBoss(snapshot.phase, snapshot.parts);
     const parts = snapshot?.active ? snapshot.parts : null;
     if (!snapshot || !parts) {
       this.bossMaximumHp = 0;
-      this.bossHudFrame.setVisible(false);
-      this.bossHudFill.setVisible(false);
-      this.bossHudLabel.setVisible(false);
-      this.controlsText.setVisible(true);
+      this.combatHud?.setBoss('');
       return;
     }
     if (this.bossMaximumHp === 0) {
       this.bossMaximumHp = Object.values(parts).reduce((sum, hp) => sum + hp, 0);
     }
-    this.bossHudFrame.setVisible(true);
-    this.bossHudFill.setVisible(true).setScale(bossHudRatio(parts, this.bossMaximumHp), 1);
-    this.bossHudLabel.setVisible(true).setText(snapshot.kind.toUpperCase());
-    this.controlsText.setVisible(false);
+    this.combatHud?.setBoss(snapshot.kind.toUpperCase(), bossHudRatio(parts, this.bossMaximumHp));
   }
 
   private showDefeat(): void {
@@ -2842,7 +2822,9 @@ export class CombatScene extends Phaser.Scene {
       [...this.discoveredCoreTypes],
       [...this.discoveredFusionTypes],
     );
-    this.game.events.emit(RUN_ENDED_EVENT, result);
+    const emit = () => this.game.events.emit(RUN_ENDED_EVENT, result);
+    if (this.combatAudio) this.combatAudio.finish(success, emit);
+    else emit();
     return result;
   }
 
@@ -2878,6 +2860,11 @@ export class CombatScene extends Phaser.Scene {
   };
 
   private syncPauseState(): void {
+    this.combatAudio?.setPaused(
+      this.pause.isPaused(),
+      this.pause.has('visibility'),
+      this.pause.has('defeated') || this.pause.has('runComplete'),
+    );
     this.playerInput?.setGameplayPointerEnabled(
       !this.pause.has('levelUp')
         && !this.pause.has('loadout')
@@ -2894,6 +2881,10 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private readonly handleShutdown = (): void => {
+    this.combatHud?.destroy();
+    this.combatHud = undefined;
+    this.combatAudio?.destroy();
+    this.combatAudio = undefined;
     const ownsPhaserObjects = this.sys.isActive();
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.massCollapse.clear();

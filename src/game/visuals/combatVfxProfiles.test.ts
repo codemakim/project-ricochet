@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { REQUIRED_COMBAT_VFX_IDS } from './combatVfxIds';
 import { COMBAT_VFX_PROFILES } from './combatVfxProfiles';
+import { HOSTILE_ACTION_DEPTH } from '../constants';
 
 describe('combat VFX profiles', () => {
   it('defines exactly one complete bounded profile for every semantic ID', () => {
@@ -26,24 +27,27 @@ describe('combat VFX profiles', () => {
       expect(COMBAT_VFX_PROFILES[id].durationMs).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].scale).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].maximumConcurrent).toBeGreaterThan(0);
+      expect(COMBAT_VFX_PROFILES[id].depth).toBeLessThan(HOSTILE_ACTION_DEPTH);
+      expect(COMBAT_VFX_PROFILES[id].alpha).toBeGreaterThan(0);
+      expect(COMBAT_VFX_PROFILES[id].alpha).toBeLessThanOrEqual(0.9);
     }
   });
 
   it('gives authored phenomena enough frames for readable motion', () => {
     expect(COMBAT_VFX_PROFILES['player-launch']).toMatchObject({
-      frameCount: 8, durationMs: 420, scale: 1.3,
+      frameCount: 8, durationMs: 240, scale: 0.8, alpha: 0.45, maximumConcurrent: 2,
     });
     expect(COMBAT_VFX_PROFILES['player-recover']).toMatchObject({
-      frameCount: 8, durationMs: 520, scale: 1.4,
+      frameCount: 8, durationMs: 280, scale: 1, alpha: 0.48, maximumConcurrent: 2,
     });
     expect(COMBAT_VFX_PROFILES['player-hit']).toMatchObject({
-      frameCount: 8, durationMs: 480, scale: 1.3,
+      frameCount: 8, durationMs: 320, scale: 1.1,
     });
     expect(COMBAT_VFX_PROFILES['player-defeat']).toMatchObject({
       frameCount: 8, durationMs: 900, scale: 1.8,
     });
     expect(COMBAT_VFX_PROFILES['orb-ricochet']).toMatchObject({
-      frameCount: 8, durationMs: 380, scale: 1.25,
+      frameCount: 8, durationMs: 240, scale: 0.9,
     });
     expect(COMBAT_VFX_PROFILES['enemy-break']).toMatchObject({
       frameCount: 8, durationMs: 680, scale: 1.5,
@@ -67,10 +71,10 @@ describe('combat VFX profiles', () => {
       frameCount: 8, durationMs: 900, scale: 1.5,
     });
     expect(COMBAT_VFX_PROFILES['enemy-hit']).toMatchObject({
-      frameCount: 8, durationMs: 360, scale: 1.25,
+      frameCount: 8, durationMs: 200, scale: 0.9,
     });
     expect(COMBAT_VFX_PROFILES['orb-direct-hit']).toMatchObject({
-      frameCount: 8, durationMs: 400, scale: 1.4,
+      frameCount: 8, durationMs: 200, scale: 0.9,
     });
     expect(COMBAT_VFX_PROFILES['corrosion-cloud']).toMatchObject({
       frameCount: 8, durationMs: 800, scale: 1.6,

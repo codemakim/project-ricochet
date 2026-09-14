@@ -28,11 +28,20 @@ import {
 import { META_TUNING } from './metaTuning';
 
 export function createCombatGame(parent: string, config?: RunConfig): Phaser.Game {
+  const mount = document.getElementById(parent);
+  if (!mount) throw new Error(`Missing combat mount: ${parent}`);
+  const hud = document.createElement('header');
+  hud.className = 'combat-hud';
+  hud.setAttribute('role', 'region');
+  hud.setAttribute('aria-label', '전투 상태');
+  const viewport = document.createElement('div');
+  viewport.className = 'combat-viewport';
+  mount.replaceChildren(hud, viewport);
   const scene = new CombatScene();
   if (config) scene.setRunConfig(config);
   return new Phaser.Game({
     type: Phaser.AUTO,
-    parent,
+    parent: viewport,
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
     backgroundColor: '#050816',
