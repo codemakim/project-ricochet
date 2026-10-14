@@ -27,6 +27,9 @@ import {
 } from './metaProgress';
 import { META_TUNING } from './metaTuning';
 import { COMBAT_TRIAL } from '../run/combatTrial';
+import { renderDevelopmentSandboxPanel } from '../dev/DevelopmentSandboxPanel';
+import { SANDBOX_COMPLETE_EVENT, SANDBOX_SCENARIOS, defaultCombatSandboxSettings, type CombatSandboxSettings } from '../dev/combatSandbox';
+import { isBasicOrbCoreId, orbDefinition } from '../orbs/orbFusionRules';
 
 export function createCombatGame(parent: string, config?: RunConfig): Phaser.Game {
   const mount = document.getElementById(parent);
@@ -62,6 +65,7 @@ export class AppController {
   private developmentBalance?: DevelopmentBalanceSettings;
   private developmentLoadout?: [OrbCoreId];
   private trialCore: OrbCoreId = 'explosion';
+  private sandboxSettings = defaultCombatSandboxSettings();
   private legacyCampaign = developmentBuild() && new URLSearchParams(location.search).has('campaign');
 
   constructor(
@@ -95,6 +99,7 @@ export class AppController {
           `).join('')}
         </div>
         <button class="primary" data-action="deploy">출격</button>
+        ${developmentBuild() ? '<button data-action="sandbox">전투 테스트실</button>' : ''}
         ${this.legacyCampaign ? '<button data-action="workshop">코어 작업장</button><button data-action="development-balance">밸런스 테스트</button>' : ''}
         ${developmentBuild() ? `<button data-action="toggle-campaign">${this.legacyCampaign ? '전투 시험판으로' : '기존 3스테이지 · 개발용'}</button>` : ''}
       </section>
@@ -104,6 +109,7 @@ export class AppController {
       if (select) select.value = this.legacyCampaign ? this.progress.loadout[0] : this.trialCore;
     });
     this.root.querySelector('[data-action="deploy"]')?.addEventListener('click', () => this.deploy());
+    this.root.querySelector('[data-action="sandbox"]')?.addEventListener('click', () => this.renderSandbox());
     this.root.querySelector('[data-action="toggle-campaign"]')?.addEventListener('click', () => {
       this.legacyCampaign = !this.legacyCampaign;
       this.renderDeploy();
@@ -147,6 +153,71 @@ export class AppController {
     renderDevelopmentBalancePanel(this.root, settings, {
       onStart: (next) => this.deployDevelopment(next),
       onBack: () => this.renderDeploy(),
+    });
+  }
+
+  private renderSandbox(): void {
+    if (!developmentBuild()) return;
+    this.game?.destroy(true);
+    this.game = undefined;
+    renderDevelopmentSandboxPanel(this.root, this.sandboxSettings,
+      (settings) => this.deploySandbox(settings), () => this.renderDeploy());
+  }
+
+  private deploySandbox(settings: CombatSandboxSettings): void {
+    if (!developmentBuild()) return;
+    this.game?.destroy(true);
+    this.sandboxSettings = { ...settings };
+    const core = isBasicOrbCoreId(settings.coreType) ? settings.coreType : 'explosion';
+    const config: RunConfig = {
+      ...createRunConfig([core], settings.seed, undefined, ORB_CORE_IDS, ORB_CORE_IDS, FUSION_ORB_IDS),
+      combatTrial: true, developmentSandbox: { ...settings },
+    };
+    this.root.innerHTML = '<main id="game-root" class="development-sandbox-game" aria-label="Project Ricochet test room"></main>';
+    this.game = createCombatGame('game-root', config);
+    this.game.events.once(RUN_ENDED_EVENT, () => this.renderSandbox());
+    exposeDevelopmentGame(this.game);
+    const toolbar = document.createElement('nav');
+    toolbar.className = 'development-toolbar';
+    toolbar.setAttribute('aria-label', '테스트실 조작');
+    toolbar.innerHTML = `<p>${SANDBOX_SCENARIOS[settings.scenario]} · ${orbDefinition(settings.coreType).label} Lv.${settings.orbLevel} ×${settings.orbCount} · 시드 ${settings.seed}</p>
+      <div><button data-sandbox-pause aria-pressed="false">정지</button>
+      <label class="development-toggle"><input data-sandbox-invulnerable type="checkbox" ${settings.invulnerable ? 'checked' : ''}>무적</label>
+      <label class="development-toggle"><input data-sandbox-hitboxes type="checkbox" ${settings.hitboxes ? 'checked' : ''}>판정 표시</label>
+      <button data-sandbox-restart>같은 조건 재시작</button><button data-sandbox-edit>조건 수정</button><button data-sandbox-exit>나가기</button></div>`;
+    this.root.querySelector('#game-root')!.append(toolbar);
+    const pause = toolbar.querySelector<HTMLButtonElement>('[data-sandbox-pause]')!;
+    let paused = false;
+    pause.addEventListener('click', () => {
+      const scene = this.game?.scene.getScene('combat') as CombatScene | undefined;
+      if (!scene?.debugSetPaused) return;
+      paused = !paused;
+      scene.debugSetPaused(paused);
+      pause.textContent = paused ? '계속' : '정지';
+      pause.setAttribute('aria-pressed', String(paused));
+    });
+    for (const [selector, setting, method] of [
+      ['[data-sandbox-invulnerable]', 'invulnerable', 'debugSetInvulnerable'],
+      ['[data-sandbox-hitboxes]', 'hitboxes', 'debugSetHitboxes'],
+    ] as const) {
+      const input = toolbar.querySelector<HTMLInputElement>(selector)!;
+      input.addEventListener('change', () => {
+        this.sandboxSettings[setting] = input.checked;
+        (this.game?.scene.getScene('combat') as CombatScene | undefined)?.[method]?.(input.checked);
+      });
+    }
+    toolbar.querySelector('[data-sandbox-restart]')!.addEventListener('click', () => this.deploySandbox(this.sandboxSettings));
+    toolbar.querySelector('[data-sandbox-edit]')!.addEventListener('click', () => this.renderSandbox());
+    toolbar.querySelector('[data-sandbox-exit]')!.addEventListener('click', () => {
+      this.game?.destroy(true);
+      this.game = undefined;
+      this.renderDeploy();
+    });
+    this.game.events.once(Phaser.Core.Events.READY, () => {
+      this.game?.scene.getScene('combat')?.events.once(SANDBOX_COMPLETE_EVENT, () => {
+        pause.textContent = '격파 완료';
+        pause.disabled = true;
+      });
     });
   }
 

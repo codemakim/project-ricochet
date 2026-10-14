@@ -1,5 +1,6 @@
 import type { BossKind } from '../config/gameTuning';
 import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
+import type { CombatSandboxSettings } from '../dev/combatSandbox';
 import { ORB_CORE_IDS, type OrbCoreId } from '../orbs/orbCoreRules';
 import { FUSION_ORB_IDS, type FusionOrbId } from '../orbs/orbFusionRules';
 import type { AbilityRanks } from '../progression/progressionRules';
@@ -21,6 +22,7 @@ export interface RunConfig {
   discoveredCoreTypes: OrbCoreId[];
   discoveredFusionTypes: FusionOrbId[];
   developmentBalance?: DevelopmentBalanceSettings;
+  developmentSandbox?: CombatSandboxSettings;
 }
 
 export interface RunResult extends RunConfig {
@@ -82,6 +84,7 @@ export function createRunResult(
   }
   return {
     ...(config.combatTrial ? { combatTrial: true as const } : {}),
+    ...(config.developmentSandbox ? { developmentSandbox: { ...config.developmentSandbox } } : {}),
     identity: { ...config.identity },
     loadout: [...config.loadout],
     unlockedCoreTypes: [...config.unlockedCoreTypes],

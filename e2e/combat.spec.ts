@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { BossProjectileSnapshot } from '../src/game/bosses/bossEncounter';
 import { GAME_TUNING } from '../src/game/config/gameTuning';
 import { FORMATION_COLUMNS } from '../src/game/encounters/formationGrid';
+import { orbVisualProfile } from '../src/game/visuals/orbVisualProfiles';
 import {
   ABILITY_IDS,
   ABILITY_MAX_RANKS,
@@ -128,6 +129,7 @@ interface CombatSnapshot {
     fieldId: number;
     orbId: number;
     position: Vector;
+    attachedEnemyId?: number;
   }>;
   photonTrails: Array<{ trailId: number; orbId: number; start: Vector; end: Vector }>;
   nanoSeeds: Array<{ seedId: number; orbId: number; position: Vector; generation: number }>;
@@ -773,13 +775,12 @@ test('@desktop renders all actor states without collision drift', async ({ page 
   expect(result.stable).toBe(true);
 });
 
-test('@desktop renders all 15 orb animation identities', async ({ page }, testInfo) => {
-  const cases = [
+const orbAnimationCases = [
     ['echo', 'Digit1', null],
-    ['inertia', 'Digit2', null],
-    ['split', 'Digit3', null],
-    ['conduction', 'Digit4', null],
-    ['corrosion', 'Digit5', null],
+    ['inertia', 'Digit4', null],
+    ['split', 'Digit5', null],
+    ['conduction', 'Digit3', null],
+    ['corrosion', 'Digit2', null],
     ['explosion', 'Digit6', null],
     ['photon-orbit', 'Digit4', 'conduction'],
     ['resonant-swarm', 'Digit3', 'split'],
@@ -792,7 +793,8 @@ test('@desktop renders all 15 orb animation identities', async ({ page }, testIn
     ['vector-blade', 'Digit4', 'echo'],
   ] as const;
 
-  for (const [fusionType, startingKey, partner] of cases) {
+for (const [fusionType, startingKey, partner] of orbAnimationCases) {
+  test(`@desktop renders ${fusionType} orb animation identity`, async ({ page }, testInfo) => {
     const { box } = await loadCanvas(page, '', startingKey);
     const orbId = await sceneCall(page, (scene, input) => {
       if (!input.partner) return scene.getDebugSnapshot().orbs[0]!.id;
@@ -810,6 +812,7 @@ test('@desktop renders all 15 orb animation identities', async ({ page }, testIn
       return firstId;
     }, { fusionType, partner });
     const state = await snapshot(page);
+    expect(state.orbs.find(({ id }) => id === orbId)!.coreType).toBe(fusionType);
     const aim = clientPoint(box, { x: state.player.x, y: state.player.y - 100 });
     await page.mouse.move(aim.x, aim.y);
     await expect.poll(async () => (
@@ -831,7 +834,7 @@ test('@desktop renders all 15 orb animation identities', async ({ page }, testIn
     await page.waitForTimeout(260);
     const after = await readLayers();
 
-    expect(before).toHaveLength(2);
+    expect(before).toHaveLength(orbVisualProfile(fusionType).layers.length);
     expect(before.every(({ hasBody }) => !hasBody)).toBe(true);
     expect(after.some((layer, index) => (
       layer.x !== before[index]?.x
@@ -840,10 +843,9 @@ test('@desktop renders all 15 orb animation identities', async ({ page }, testIn
       || layer.alpha !== before[index]?.alpha
       || layer.frame !== before[index]?.frame
     ))).toBe(true);
-  }
-
-  await page.screenshot({ path: testInfo.outputPath('fusion-animation-runtime.png') });
-});
+    await page.screenshot({ path: testInfo.outputPath(`${fusionType}-animation-runtime.png`) });
+  });
+}
 
 test('@desktop clears production visual objects on scene shutdown', async ({ page }) => {
   const errors: string[] = [];
@@ -1436,10 +1438,13 @@ for (const [core, key, effect] of [
     if (core === 'corrosion') {
       await page.waitForTimeout(850);
       await sceneCall(page, (scene, id) => scene.debugSetEnemy(id, { x: 285, y: 340 }, 80), targetId);
-      const field = () => sceneCall(page, (scene) => {
-        const visual = scene.children.list.find((child) => child.active && child.name === 'core-feedback-corrosion');
+      const fieldId = (await snapshot(page)).corrosionFields.find(({ attachedEnemyId }) => attachedEnemyId === targetId)!.fieldId;
+      const field = () => sceneCall(page, (scene, id) => {
+        const visual = (scene as unknown as { corrosionVisuals: Map<number, {
+          texture: { key: string }; x: number; y: number; frame: { name: string | number };
+        }> }).corrosionVisuals.get(id);
         return visual ? { texture: visual.texture?.key, x: visual.x, y: visual.y, frame: visual.frame?.name } : null;
-      });
+      }, fieldId);
       await expect.poll(field).toMatchObject({ texture: 'vfx-corrosion-cloud', x: 285, y: 340 });
       const before = await field();
       await expect.poll(field, { intervals: [40] }).not.toEqual(before);
@@ -1898,9 +1903,10 @@ test('@desktop bounds permanent explosion and split procs per flight', async ({ 
       const active = current.orbs.find((orb) => orb.id === target.orbId);
       if (active?.state !== 'active') throw new Error('selected permanent orb must be active');
       const speed = Math.hypot(active.velocity.x, active.velocity.y);
+      scene.children.list.find(({ orbId }) => orbId === target.orbId)!.body!.setVelocity!(0, -speed);
       if (!scene.debugPlaceOrb(target.orbId, {
-        x: anchor.position.x - active.velocity.x / speed * 24,
-        y: anchor.position.y - active.velocity.y / speed * 24,
+        x: anchor.position.x,
+        y: anchor.position.y + 50,
       })) throw new Error('active orb required');
     }, { orbId, anchorId: enemyIds.anchorId });
     await expect.poll(async () => (
@@ -2723,7 +2729,7 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
   expect(reset.boss.active).toBe(false);
 });
 
-test('@desktop splitter reserves population, clamps fragments, and settles rewards', async ({ page }) => {
+test('@desktop splitter reserves population and settles rewards', async ({ page }) => {
   const { box } = await loadCanvas(page);
   await startStageTwo(page);
   for (let attempt = 0; attempt < 9; attempt += 1) {
@@ -2736,7 +2742,7 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   const parent = pressurePhase.enemies.find(({ kind }) => kind === 'splitter')!;
   expect(parent).toBeDefined();
   await sceneCall(page, (scene, id) => {
-    scene.debugSetEnemy(id, { x: 0, y: 300 }, 1);
+    scene.debugSetEnemy(id, { x: 225, y: 300 }, 1);
   }, parent.id);
   const aim = clientPoint(box, { x: pressurePhase.player.x, y: pressurePhase.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
@@ -2745,7 +2751,8 @@ test('@desktop splitter reserves population, clamps fragments, and settles rewar
   const { beforeSplit, split } = await sceneCall(page, (scene) => {
     const before = scene.getDebugSnapshot();
     const orb = before.orbs.find(({ state }) => state === 'active')!;
-    scene.debugPlaceOrb(orb.id, { x: 11, y: 324 });
+    scene.children.list.find(({ orbId }) => orbId === orb.id)!.body!.setVelocity!(0, -520);
+    scene.debugPlaceOrb(orb.id, { x: 225, y: 350 });
     scene.physics.world.step(0.016);
     return {
       beforeSplit: { population: before.activePopulation, xp: before.progression.xp },

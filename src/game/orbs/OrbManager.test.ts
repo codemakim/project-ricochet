@@ -47,6 +47,10 @@ class FakeBody {
   }
 
   updateBounds(): void {}
+  updateFromGameObject(): void {
+    const sprite = this.gameObject as FakeSprite;
+    this.center = { x: sprite.x, y: sprite.y };
+  }
 }
 
 class FakeSprite {

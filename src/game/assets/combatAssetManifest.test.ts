@@ -71,7 +71,9 @@ describe('combat asset manifest', () => {
     for (const asset of COMBAT_IMAGE_ASSETS) {
       if (asset.key.startsWith('actor-')) {
         expect(asset.sampling).toBe(
-          asset.key === 'actor-player-default' || asset.key === 'actor-enemy-basic-default'
+          ['actor-player-default', 'actor-enemy-basic-default', 'actor-enemy-armored-default',
+            'actor-enemy-shooter-default', 'actor-sentinel-body-default', 'actor-sentinel-left-weakpoint-default',
+            'actor-sentinel-right-weakpoint-default', 'actor-sentinel-core-default'].includes(asset.key)
             ? 'linear' : 'nearest',
         );
       }

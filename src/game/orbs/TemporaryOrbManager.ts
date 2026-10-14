@@ -95,6 +95,7 @@ export class TemporaryOrbManager {
         const velocity = { x: body.velocity.x, y: body.velocity.y };
         record.sprite.setPosition(position.x, position.y);
         body.reset(position.x, position.y);
+        body.updateFromGameObject();
         body.setVelocity(velocity.x, velocity.y);
         record.position = { ...position };
         record.velocity = velocity;

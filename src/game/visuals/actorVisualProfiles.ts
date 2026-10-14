@@ -192,10 +192,12 @@ const ROLE_FRAME_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
   ...ROLE_DIMENSIONS,
   player: { width: 256, height: 256 },
   'enemy-basic': { width: 280, height: 240 },
-  'enemy-armored': {
-    width: GAME_TUNING.encounter.grid.cellWidth * 2,
-    height: GAME_TUNING.encounter.grid.cellHeight * 2,
-  },
+  'enemy-armored': { width: 280, height: 240 },
+  'enemy-shooter': { width: 280, height: 240 },
+  'sentinel-body': { width: 504, height: 288 },
+  'sentinel-left-weakpoint': { width: 112, height: 240 },
+  'sentinel-right-weakpoint': { width: 112, height: 240 },
+  'sentinel-core': { width: 256, height: 256 },
 };
 
 function statesFor(role: ActorRole): ActorSkinProfile['states'] {
@@ -219,7 +221,7 @@ export const ACTOR_SKIN_PROFILES: readonly ActorSkinProfile[] = (
     role,
     skinId: 'default',
     textureKey: `actor-${role}-default`,
-    url: `/assets/combat/actors/${role}/${role === 'player' || role === 'enemy-basic' ? 'pc' : 'default'}.png`,
+    url: `/assets/combat/actors/${role}/${role === 'player' || role === 'enemy-basic' || role === 'enemy-armored' || role === 'enemy-shooter' || role.startsWith('sentinel-') ? 'pc' : 'default'}.png`,
     frameWidth: frame.width,
     frameHeight: frame.height,
     displayWidth: display.width,

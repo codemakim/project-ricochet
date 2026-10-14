@@ -19,6 +19,7 @@ class FakeBody {
     this.center = { x, y };
     return this;
   }
+  updateFromGameObject(): void { this.center = { x: this.gameObject.x, y: this.gameObject.y }; }
 }
 
 class FakeSprite {

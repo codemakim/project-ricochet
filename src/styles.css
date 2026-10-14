@@ -186,6 +186,14 @@ button.primary { color: #04101c; background: #65f6ff; border-color: #65f6ff; fon
 .development-field .field-error { color: #ff8792; }
 .development-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+#game-root.development-sandbox-game { grid-template-rows: auto minmax(0, 1fr) auto; }
+.development-toolbar { width: min(760px, 100%); padding: 8px; border: 1px solid #29456d; background: #091525; font-size: 12px; }
+.development-toolbar p { margin: 0 0 8px; color: #9bb3cf; }
+.development-toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.development-toolbar button { min-height: 36px; padding: 0 10px; }
+.development-toggle { display: inline-flex; gap: 6px; align-items: center; min-height: 36px; }
+.development-toggle input { width: 18px; min-height: 18px; height: 18px; padding: 0; accent-color: #65f6ff; }
+
 .workshop-screen {
   width: min(960px, 100%);
   max-height: 100%;

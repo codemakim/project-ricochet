@@ -1,4 +1,4 @@
-# PC combat art — first integration, 2026-10-14
+# PC combat art — integration and expansion, 2026-10-15
 
 User approved `masters/concept.png`: smooth contemporary spacecraft in an orbital
 reflector corridor. Broad manufactured armor, simple silhouettes, restrained light.
@@ -6,15 +6,17 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 
 ## Current scope
 
-- Orbital background; player and basic drone.
+- Orbital background; player, basic drone, armored drone and shooter.
+- SENTINEL main hull, mirrored weapon pods and exposed reactor core.
 - Explosion: contained gold heat core, slow light pulse.
 - Split: blue paired nuclei, counterclockwise energy circulation.
 - Corrosion: mint nanofluid core and orbiting droplets; a planar radial nanite field.
 - Existing logical display sizes, collision shapes, damage and combat rules retained.
-- Other enemies, bosses and VFX still use earlier art and require later visual approval.
+- Splitter/fragments, Hive/Siege and other VFX still use earlier art.
 
 `masters/` contains the original outputs of the built-in `image_gen` tool. The exact
-generation prompts are in `prompts.md`. The source PNG alpha is preserved; no color
+generation prompts are in `prompts.md` and `expansion-prompts.md`. The right pod master
+is a mirrored derivative of the original left pod. The source PNG alpha is preserved; no color
 key, palette quantization or nearest-neighbor enlargement is used.
 
 ```sh
@@ -24,7 +26,8 @@ rtk bash scripts/build_pc_combat_art.sh
 The script checks output dimensions and alpha, exports smooth sheets to the existing
 actor directories as `pc.png`, and copies orb/field assets to `public/assets/combat/pc/`.
 The older pixel builders write `default.png` and cannot overwrite the PC sheets.
-Actor frame sizes are 256×256 (player, 20 frames) and 280×240 (basic, 9 frames).
+Actor frame sizes: player 256×256/20 frames; basic 280×240/9; armored 280×240/11;
+shooter 280×240/15; SENTINEL body 504×288/12, pods 112×240/11 each, core 256×256/14.
 Rigid poses repeat; hurt uses a light tint and destruction fades. These are static
 authored hulls with reaction states, not fully animated spacecraft.
 
@@ -37,3 +40,5 @@ and padded outer edges; its 1.1 presentation scale replaces the previous 1.6 sca
 Verification: `e2e/pc-art.spec.ts` checks the actual normal trial with all three
 starting cores, asset loading, background visibility, and unchanged world hitboxes.
 Screenshots require human visual review; passing tests do not establish art quality.
+`e2e/combat-sandbox.spec.ts` checks the new enemies' 140×120 and 70×60 world bodies,
+SENTINEL's 252×144 hull, 56×120 pods and 56×56 core, actual boss hits and restart.

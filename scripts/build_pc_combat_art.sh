@@ -51,6 +51,15 @@ magick "$SOURCE/masters/background.png" -filter Lanczos -resize 900x1600! \
   -quality 90 -strip "$PUBLIC/pc/orbital-corridor.webp"
 build_actor player 256 256 20 14 16
 build_actor enemy-basic 280 240 9 3 5
+build_actor enemy-armored 280 240 11 5 7
+build_actor enemy-shooter 280 240 15 9 11
+build_actor sentinel-body 504 288 12 6 8
+build_actor sentinel-left-weakpoint 112 240 11 5 7
+magick "$SOURCE/masters/sentinel-left-weakpoint.png" -flop "$TMP/right-pod.png"
+# Mirrored pod shares the generated source; retain the original master unchanged.
+cp "$TMP/right-pod.png" "$SOURCE/masters/sentinel-right-weakpoint.png"
+build_actor sentinel-right-weakpoint 112 240 11 5 7
+build_actor sentinel-core 256 256 14 10 10
 
 for core in explosion split corrosion; do
   input="$SOURCE/masters/$core-components.png"

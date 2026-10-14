@@ -48,6 +48,7 @@ import {
 } from '../combat/CorrosionFieldState';
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import { COMBAT_TRIAL } from '../run/combatTrial';
+import { SANDBOX_COMPLETE_EVENT, parseCombatSandboxSettings, sandboxEnemies } from '../dev/combatSandbox';
 import {
   applyDamage,
   breachDamage,
@@ -158,6 +159,7 @@ const PROGRESSION_SEED = 0x5249434f;
 const BOSS_REWARD_SEED = 0x424f5353;
 let formationRunSeed = (Date.now() ^ 0x5249434f) >>> 0;
 const PAUSE_REASONS: readonly PauseReason[] = [
+  'development',
   'visibility',
   'loadout',
   'levelUp',
@@ -212,6 +214,9 @@ export interface CombatDebugSnapshot {
 }
 
 export class CombatScene extends Phaser.Scene {
+  declare debugSetPaused?: (paused: boolean) => void;
+  declare debugSetInvulnerable?: (enabled: boolean) => void;
+  declare debugSetHitboxes?: (enabled: boolean) => void;
   declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
   declare debugFreezeEnemies?: () => void;
   declare debugSetHealth?: (value: number) => void;
@@ -301,6 +306,7 @@ export class CombatScene extends Phaser.Scene {
   private defeatedBossIds: BossKind[] = [];
   private recoveryFeedbackUntil = 0;
   private lastDamageCause: RunResult['defeatCause'];
+  private developmentInvulnerable = false;
   private discoveredCoreTypes = new Set<OrbCoreId>(ORB_CORE_IDS);
   private discoveredFusionTypes = new Set<FusionOrbId>(FUSION_ORB_IDS);
 
@@ -309,7 +315,9 @@ export class CombatScene extends Phaser.Scene {
   }
 
   setRunConfig(config: RunConfig): this {
+    if (config.developmentSandbox && !import.meta.env.DEV) throw new Error('sandbox is development only');
     this.runConfig = {
+      ...(config.developmentSandbox ? { developmentSandbox: parseCombatSandboxSettings(config.developmentSandbox) } : {}),
       ...(config.combatTrial ? { combatTrial: true as const } : {}),
       identity: { ...config.identity },
       loadout: [...config.loadout],
@@ -333,6 +341,7 @@ export class CombatScene extends Phaser.Scene {
     const combatTrial = Boolean(this.runConfig?.combatTrial);
     if (!this.runConfig) formationRunSeed = (formationRunSeed + 1) >>> 0;
     this.health = createHealth();
+    this.developmentInvulnerable = this.runConfig?.developmentSandbox?.invulnerable ?? false;
     this.experiment = parseExperimentSettings(window.location.search);
     if (combatTrial) this.experiment = {
       passThroughOnKill: true, homeOnBottomHit: true,
@@ -498,6 +507,17 @@ export class CombatScene extends Phaser.Scene {
     this.advanceEncounter(0);
 
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugSetPaused = (paused) => {
+        if (paused) this.pause.add('development');
+        else this.pause.remove('development');
+        this.syncPauseState();
+      };
+      this.debugSetInvulnerable = (enabled) => { this.developmentInvulnerable = enabled; };
+      this.debugSetHitboxes = (enabled) => {
+        if (enabled && !this.physics.world.debugGraphic) this.physics.world.createDebugGraphic();
+        this.physics.world.drawDebug = enabled;
+        this.physics.world.debugGraphic?.setVisible(enabled);
+      };
       this.debugPlaceOrb = (id, position) => {
         return this.orbManager?.debugPlaceOrb?.(id, position) ?? false;
       };
@@ -586,7 +606,15 @@ export class CombatScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
     this.handleVisibilityChange();
-    if (this.runConfig) {
+    if (this.runConfig?.developmentSandbox) {
+      const settings = this.runConfig.developmentSandbox;
+      if (!this.orbManager.debugConfigureOrbs?.(settings.coreType, settings.orbCount, settings.orbLevel)) {
+        throw new Error('sandbox orb configuration failed');
+      }
+      this.enemyManager.spawnFormation(sandboxEnemies(settings));
+      if (settings.scenario === 'sentinel') this.startBoss('sentinel');
+      this.debugSetHitboxes?.(settings.hitboxes);
+    } else if (this.runConfig) {
       if (!this.orbManager.configureStartingCores(this.runConfig.loadout)) {
         throw new Error('run configuration contains an invalid core loadout');
       }
@@ -675,7 +703,8 @@ export class CombatScene extends Phaser.Scene {
     if (this.runConfig?.combatTrial) {
       const encounter = this.encounterDirector.getSnapshot();
       this.combatHud?.setTrialStatus(
-        Math.min(encounter.spawnSequence, encounter.formationCount), encounter.formationCount,
+        this.runConfig.developmentSandbox ? 1 : Math.min(encounter.spawnSequence, encounter.formationCount),
+        this.runConfig.developmentSandbox ? 1 : encounter.formationCount,
         this.orbManager.getSnapshot().length, this.gameplayElapsedMs,
         this.gameplayElapsedMs < this.recoveryFeedbackUntil,
       );
@@ -803,7 +832,7 @@ export class CombatScene extends Phaser.Scene {
       event.kind === 'splitter' ? 'splitter-fracture' : 'enemy-break',
       { position: event.position },
     );
-    this.progression?.gainEnemyKill(event.kind);
+    if (!this.runConfig?.developmentSandbox) this.progression?.gainEnemyKill(event.kind);
     const spread = GAME_TUNING.orbCores.corrosion.deathSpread;
     this.corrosionFields.spreadAttachedOnDeath(
       event.enemyId,
@@ -2375,6 +2404,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private advanceEncounter(deltaMs: number): void {
+    if (this.runConfig?.developmentSandbox) return;
     if (!this.encounterDirector || !this.enemyManager) return;
     const enemies = this.enemyManager.getSnapshot();
     const { formation, transition } = this.encounterDirector.update(deltaMs, {
@@ -2453,7 +2483,10 @@ export class CombatScene extends Phaser.Scene {
     this.activeBoss = createBossForKind<BossEncounter>(kind, {
       sentinel: () => new BossManager(this, {
         ...commonOptions,
-        hp: this.runConfig?.combatTrial ? COMBAT_TRIAL.bossHp : undefined,
+        hp: this.runConfig?.combatTrial ? {
+          weakpoint: COMBAT_TRIAL.bossHp.weakpoint * (this.runConfig.developmentSandbox?.hpMultiplier ?? 1),
+          core: COMBAT_TRIAL.bossHp.core * (this.runConfig.developmentSandbox?.hpMultiplier ?? 1),
+        } : undefined,
       }),
       hive: () => new HiveBossManager(this, commonOptions),
       siege: () => new BossManager(this, {
@@ -2486,6 +2519,13 @@ export class CombatScene extends Phaser.Scene {
     const defeatedBossKind = this.activeBossKind;
     if (!defeatedBossKind) throw new Error('boss defeat has no active boss kind');
     this.defeatedBossIds.push(defeatedBossKind);
+    if (this.runConfig?.developmentSandbox) {
+      this.applyLifecycle('rewardCompleted');
+      this.pause.add('runComplete');
+      this.syncPauseState();
+      this.events.emit(SANDBOX_COMPLETE_EVENT);
+      return;
+    }
     const advance = this.encounterDirector?.markBossDefeated();
     if (advance?.type === 'runCompleted') {
       this.applyLifecycle('rewardCompleted');
@@ -2637,6 +2677,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private openPendingRunReward(): void {
+    if (this.runConfig?.developmentSandbox) return;
     if (this.defeated || this.pause.isPaused() || !this.progression) return;
     const reward = pendingRunRewardKind(
       this.progression.getSnapshot().pendingChoices,
@@ -2757,7 +2798,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private damagePlayer(amount: number, cause: RunResult['defeatCause'] = 'contact'): void {
-    if (this.defeated || !canTakeDamage(this.time.now, this.invulnerableUntil)) return;
+    if (this.developmentInvulnerable || this.defeated || !canTakeDamage(this.time.now, this.invulnerableUntil)) return;
     this.lastDamageCause = cause;
     this.invulnerableUntil = this.time.now + INVULNERABILITY_MS;
     this.health = applyDamage(this.health, amount);
@@ -2912,7 +2953,8 @@ export class CombatScene extends Phaser.Scene {
   };
 
   private syncPauseState(): void {
-    this.combatVfx?.setPaused(this.pause.has('visibility'));
+    this.combatVfx?.setPaused(this.pause.has('visibility') || this.pause.has('development'));
+    this.anims.globalTimeScale = this.pause.has('development') ? 0 : 1;
     if (PAUSE_REASONS.some((reason) => reason !== 'visibility' && this.pause.has(reason))) {
       this.clearSecondaryFeedback();
     }
@@ -2923,6 +2965,7 @@ export class CombatScene extends Phaser.Scene {
     );
     this.playerInput?.setGameplayPointerEnabled(
       !this.pause.has('levelUp')
+        && !this.pause.has('development')
         && !this.pause.has('loadout')
         && !this.pause.has('bossDefeat')
         && !this.pause.has('bossReward')

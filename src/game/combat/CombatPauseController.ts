@@ -1,5 +1,6 @@
 export type PauseReason =
   | 'visibility'
+  | 'development'
   | 'loadout'
   | 'levelUp'
   | 'bossDefeat'

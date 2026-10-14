@@ -175,6 +175,20 @@ export class OrbStore {
     return true;
   }
 
+  configureDevelopmentOrbs(coreType: OrbTypeId, count: number, level: number): boolean {
+    if (this.aimActivated || this.startingCoresConfigured) return false;
+    if (!Number.isInteger(count) || count < 1 || count > this.runtimeOrbLimit()
+      || !Number.isInteger(level) || level < 1 || level > orbMaximumLevel(coreType)) {
+      throw new RangeError('invalid development orb configuration');
+    }
+    this.records.splice(0, this.records.length, ...Array.from({ length: count }, (_, id) => ({
+      ...this.createRecord(id, coreType), level,
+    })));
+    this.nextId = count;
+    this.startingCoresConfigured = true;
+    return true;
+  }
+
   upgradeOrb(id: number, expectedCoreType?: OrbTypeId): boolean {
     const record = this.records.find((candidate) => candidate.id === id);
     if (
@@ -676,6 +690,7 @@ export interface OrbManagerOptions extends OrbCallbacks {
 
 export class OrbManager {
   declare debugPlaceOrb?: (id: number, position: Vector) => boolean;
+  declare debugConfigureOrbs?: (coreType: OrbTypeId, count: number, level: number) => boolean;
 
   private readonly store: OrbStore;
   private sprites: OrbSprite[];
@@ -736,6 +751,20 @@ export class OrbManager {
     this.world.on('worldbounds', this.onWorldBounds);
     this.synchronizeSprites();
     if ((import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV) {
+      this.debugConfigureOrbs = (coreType, count, level) => {
+        if (!this.store.configureDevelopmentOrbs(coreType, count, level)) return false;
+        for (const orb of this.store.getSnapshot()) {
+          if (this.sprites.some((sprite) => this.spriteIds.get(sprite) === orb.id)) {
+            this.replaceVisual(orb.id, coreType);
+          } else {
+            const sprite = this.createSprite(orb.id, coreType);
+            this.sprites.push(sprite);
+            for (const listener of this.orbAddedListeners) listener(sprite);
+          }
+        }
+        this.synchronizeSprites();
+        return true;
+      };
       this.debugPlaceOrb = (id, position) => {
         const owned = this.resolveOwnedOrb(id);
         const state = this.store.getSnapshot().find((candidate) => candidate.id === id);
@@ -744,6 +773,8 @@ export class OrbManager {
         const velocity = { x: body.velocity.x, y: body.velocity.y };
         owned.sprite.setPosition(position.x, position.y);
         body.reset(position.x, position.y);
+        // reset uses the rotated top-left; synchronize the actual unrotated Arcade body.
+        body.updateFromGameObject();
         body.setVelocity(velocity.x, velocity.y);
         this.store.synchronizeActive(id, position, velocity);
         return true;
