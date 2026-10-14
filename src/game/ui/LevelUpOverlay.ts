@@ -39,6 +39,7 @@ export class LevelUpOverlay {
     build: BuildState,
     orbs: readonly OrbSnapshot[],
     onSelect: (choice: RunRewardChoice) => void,
+    quickChoice = false,
   ): void {
     this.hide();
     this.visible = true;
@@ -49,7 +50,7 @@ export class LevelUpOverlay {
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x02050d, 0.88)
         .setDepth(30)
         .setInteractive(),
-      this.scene.add.text(GAME_WIDTH / 2, 154, 'LEVEL UP', {
+      this.scene.add.text(GAME_WIDTH / 2, 154, quickChoice ? '화력 선택' : 'LEVEL UP', {
         color: '#65f6ff',
         fontSize: '30px',
         fontStyle: 'bold',
@@ -60,14 +61,21 @@ export class LevelUpOverlay {
       const card = this.scene.add.rectangle(GAME_WIDTH / 2, CARD_Y[index]!, 360, 76, 0x10213d, 0.98)
         .setDepth(31)
         .setInteractive({ useHandCursor: true });
-      const focus = () => this.focus(choice, card, build, orbs);
+      const focus = () => {
+        if (quickChoice) {
+          this.selected = choice;
+          this.confirm();
+        } else this.focus(choice, card, build, orbs);
+      };
       card.on('pointerup', focus);
       this.cards.push(card);
-      const label = `${index + 1}. ${this.cardLabel(choice, build)}`;
+      const label = quickChoice && (choice.kind === 'orb-add' || choice.kind === 'orb-upgrade')
+        ? `${index + 1}. ${orbDefinition(choice.coreType).label} ${choice.kind === 'orb-add' ? '+1개' : '전체 +1레벨'}\n${orbDefinition(choice.coreType).summary}`
+        : `${index + 1}. ${this.cardLabel(choice, build)}`;
       const text = this.scene.add.text(GAME_WIDTH / 2, CARD_Y[index]!, label, {
         align: 'center',
         color: '#dff7ff',
-        fontSize: '18px',
+        fontSize: quickChoice ? '16px' : '18px',
         lineSpacing: 8,
       }).setOrigin(0.5).setDepth(32);
       this.objects.push(card, text);
@@ -79,6 +87,11 @@ export class LevelUpOverlay {
       }
     });
 
+    if (quickChoice) {
+      this.objects.push(this.scene.add.text(GAME_WIDTH / 2, 500,
+        '1–3 또는 카드 선택 · 즉시 적용', { color: '#9eb9c9', fontSize: '16px' })
+        .setOrigin(0.5).setDepth(32));
+    }
     const enter = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     if (enter) {
       const confirm = () => this.confirm();

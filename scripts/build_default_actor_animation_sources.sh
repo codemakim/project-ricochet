@@ -29,6 +29,11 @@ begin_seed() {
 add_frame() {
   local dx="$1" dy="$2" scale_x="$3" scale_y="$4"
   local tint="$5" colorize="$6" opacity="$7" geometry
+  # Sentinel uses rigid armor: keep the pixel grid stable through every pose.
+  if [[ "$role" == sentinel-* ]]; then
+    scale_x=100
+    scale_y=100
+  fi
   last_frame="$FRAMES/${role}-$(printf '%03d' "$frame_index").png"
   geometry="$(printf '%+d%+d' "$dx" "$dy")"
   if [[ "$tint" == '-' ]]; then
@@ -157,12 +162,12 @@ done
 BOSS_SEEDS="$FRAMES/boss-seeds"
 mkdir -p "$BOSS_SEEDS"
 
-magick "$SEEDS/sentinel-body-v2.png" -depth 8 -strip "$BOSS_SEEDS/sentinel-body.png"
-magick "$SEEDS/sentinel-weakpoint-v2.png" -depth 8 -strip \
+magick "$SEEDS/sentinel-body-v3.png" -depth 8 -strip "$BOSS_SEEDS/sentinel-body.png"
+magick "$SEEDS/sentinel-weakpoint-v3.png" -depth 8 -strip \
   "$BOSS_SEEDS/sentinel-left-weakpoint.png"
 magick "$BOSS_SEEDS/sentinel-left-weakpoint.png" -flop -depth 8 -strip \
   "$BOSS_SEEDS/sentinel-right-weakpoint.png"
-magick "$SEEDS/sentinel-core-v2.png" -depth 8 -strip "$BOSS_SEEDS/sentinel-core.png"
+magick "$SEEDS/sentinel-core-v3.png" -depth 8 -strip "$BOSS_SEEDS/sentinel-core.png"
 
 magick "$SEEDS/hive-core-v2.png" -depth 8 -strip "$BOSS_SEEDS/hive-core.png"
 magick "$SEEDS/hive-shooter-v2.png" -depth 8 -strip \

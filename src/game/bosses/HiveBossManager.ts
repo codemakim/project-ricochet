@@ -35,6 +35,7 @@ import type { ActorRole } from '../visuals/actorVisualProfiles';
 import {
   createActorExitVisual,
   playActorState,
+  playBossEntrance,
 } from '../visuals/registerActorAnimations';
 
 const PART_DEPTH = -2;
@@ -107,6 +108,7 @@ export interface HiveBossManagerOptions {
   playerDamageMultiplier?: number;
   onPlayerHit(damage: number): void;
   onDirectHit(event: BossDirectHitEvent): void;
+  onPartDestroyed?(position: Vector): void;
   onPhaseChanged?(phase: HivePhase): void;
   onDefeated(): void;
 }
@@ -207,6 +209,7 @@ export class HiveBossManager implements BossEncounter {
     };
 
     this.synchronizeParts();
+    playBossEntrance(scene, Object.values(this.parts));
     for (const orb of options.orbManager.getSprites()) this.addPermanentOrbColliders(orb);
     this.unsubscribeOrbAdded = options.orbManager.onOrbAdded((orb) => {
       this.addPermanentOrbColliders(orb);
@@ -593,6 +596,9 @@ export class HiveBossManager implements BossEncounter {
         actorRoleForHivePart(partId),
         partId === 'core' ? 'defeated' : 'broken',
       );
+      if (partId !== 'core') {
+        this.options.onPartDestroyed?.({ x: this.parts[partId].x, y: this.parts[partId].y });
+      }
     }
     if (this.state.phase !== previousPhase) {
       this.lastGameplayElapsedMs = this.options.getGameplayElapsedMs();

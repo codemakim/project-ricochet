@@ -2,8 +2,8 @@
 export const AUDIO_TUNING = {
   storageKey: 'project-ricochet.audio-muted',
   masterGain: 0.65,
-  musicGain: 0.38,
-  bossGain: 0.32,
+  musicGain: 0.26,
+  bossGain: 0.24,
   menuMusicScale: 0.3,
   fadeSeconds: 0.12,
   maximumVoices: 12,
@@ -16,7 +16,7 @@ export const AUDIO_TUNING = {
 } as const;
 
 export const COMBAT_SOUNDS = {
-  launch: { gain: 0.55, cooldownMs: 70, priority: 0, hz: 620, endHz: 160, seconds: 0.18, noise: 0.16 },
+  launch: { gain: 0.32, cooldownMs: 100, priority: 0, hz: 620, endHz: 160, seconds: 0.18, noise: 0.16 },
   recover: { gain: 0.38, cooldownMs: 120, priority: 0, hz: 320, endHz: 880, seconds: 0.22, noise: 0.02 },
   ricochet: { gain: 0.25, cooldownMs: 80, priority: 0, hz: 1100, endHz: 640, seconds: 0.1, noise: 0.08 },
   hit: { gain: 0.4, cooldownMs: 65, priority: 0, hz: 220, endHz: 65, seconds: 0.12, noise: 0.42 },

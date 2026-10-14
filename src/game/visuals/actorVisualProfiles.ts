@@ -1,5 +1,7 @@
 import { GAME_TUNING } from '../config/gameTuning';
 
+export const BOSS_ENTRANCE = { durationMs: 420, alpha: 0.7 } as const;
+
 export type ActorRole =
   | 'player'
   | 'enemy-basic' | 'enemy-armored' | 'enemy-shooter'
@@ -63,16 +65,16 @@ const CORE_CAST_STATE_FRAMES: Partial<
   'enemy-fragment-left': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
   'enemy-fragment-right': { idle: [0, 1], hurt: [2, 3], destroyed: [4, 5, 6] },
   'sentinel-body': {
-    idle: [0, 1, 2], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
+    idle: [0], attack: [3, 4, 5], hurt: [6, 7], broken: [8, 9, 10, 11],
   },
   'sentinel-left-weakpoint': {
-    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+    idle: [0], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
   },
   'sentinel-right-weakpoint': {
-    idle: [0, 1], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
+    idle: [0], attack: [2, 3, 4], hurt: [5, 6], broken: [7, 8, 9, 10],
   },
   'sentinel-core': {
-    idle: [0, 1, 2], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
+    idle: [0], exposed: [3, 4, 5], enraged: [6, 7, 8, 9],
     defeated: [10, 11, 12, 13],
   },
   'hive-core': {

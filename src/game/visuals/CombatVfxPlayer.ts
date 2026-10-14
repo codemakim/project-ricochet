@@ -19,12 +19,12 @@ interface PlayCombatVfxOptions {
 interface ActiveVfx {
   id: CombatVfxId;
   sprite: Phaser.GameObjects.Sprite;
-  timer: Phaser.Time.TimerEvent;
 }
 
 export class CombatVfxPlayer {
   private readonly active = new Set<ActiveVfx>();
   private destroyed = false;
+  private paused = false;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -75,11 +75,20 @@ export class CombatVfxPlayer {
       .setAlpha(alpha)
       .setRotation(rotation)
       .play(animationKey);
-    const entry = {} as ActiveVfx;
-    const timer = this.scene.time.delayedCall(profile.durationMs, () => this.remove(entry));
-    Object.assign(entry, { id, sprite, timer });
+    const entry = { id, sprite };
     this.active.add(entry);
+    // Cosmetic effects finish during choice pauses; hidden tabs pause both frames and cleanup.
+    sprite.once('animationcomplete', () => this.remove(entry));
+    if (this.paused) sprite.anims.pause();
     return true;
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    for (const { sprite } of this.active) {
+      if (paused) sprite.anims.pause();
+      else sprite.anims.resume();
+    }
   }
 
   activeCount(id?: CombatVfxId): number {
@@ -92,12 +101,15 @@ export class CombatVfxPlayer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.clear();
+  }
+
+  clear(): void {
     for (const effect of [...this.active]) this.remove(effect);
   }
 
   private remove(effect: ActiveVfx): void {
     if (!this.active.delete(effect)) return;
-    effect.timer.remove(false);
     effect.sprite.destroy();
   }
 }

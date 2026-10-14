@@ -4,11 +4,12 @@
 
 ## 실행 단계
 
-1. 작업 중에는 변경한 모듈의 focused unit test만 실행한다.
-2. 씬·UI 경계를 바꿨을 때만 관련 E2E 1~3개를 `--grep`으로 실행한다.
-3. 핵심 출격·전투·보상 흐름은 짧은 smoke 묶음으로 확인한다.
-4. 병합 직전에 전체 unit, production build, 전체 E2E를 각각 한 번 실행한다.
-5. 실패 분석 중에는 전체 E2E를 반복하지 않는다. `--last-failed`, `--grep`, `--workers=1`로 재현하고 수정 완료 뒤 전체 E2E를 한 번만 다시 실행한다.
+사용자 지시(2026-09-16): 모듈별 개발·검증 반복을 중단하고 최종 통합 시 한 번만 검증한다.
+
+1. 구현 중에는 테스트·타입 검사·E2E를 돌리지 않는다.
+2. 구현 완료 후 `pnpm build`(타입 검사 포함)와 이번 변경을 대표하는 브라우저 시나리오 하나만 실행한다.
+3. 같은 경로를 검사하는 unit·smoke·전체 E2E 묶음은 추가 실행하지 않는다. 아래 명령은 필요할 때 고르는 목록이며 전부 실행하는 체크리스트가 아니다.
+4. 실제 실패가 있으면 수정 후 실패한 검사만 다시 실행한다. 통과한 검사는 반복하지 않는다.
 
 목표 시간은 focused 수초, smoke 20초 이내, 전체 E2E 60초 이내다.
 
@@ -23,12 +24,37 @@
 
 ## 수동 플레이테스트
 
+현재 시험판 대표 경로: `pnpm exec playwright test e2e/combat-trial.spec.ts --project=desktop-chromium --workers=1`.
+실제 입력으로 출격·성장·회수·SENTINEL 전투·결과·재도전을 한 번 통과한다. 피해/체력/XP/시간을 조작하지 않는다.
+320px 화면 캡처는 같은 출격 도중 한 번 수행하며 모바일 터치 조작 테스트를 대신하지 않는다.
+기존 메타 E2E는 개발용 `?campaign=1` 경로 사용.
+
 HUD·VFX 변경: `pnpm test:e2e -- e2e/combat.spec.ts --grep 'keeps the combat HUD|hostile bullets readable' --workers=1`.
 HUD와 캔버스가 겹치지 않는지, 세 보스·320px 축소·재시작에서도 중앙 정렬과 450:800 비율을
 유지하는지 확인한다. HP·XP 반영, 경고 문구, reduced-motion, 44px 음소거 영역과 적 탄 depth도 검사한다.
-스크린샷에서 실제 보스 실루엣·탄 대비·임시 VFX를 직접 확인한다.
+스크린샷에서 실제 보스 실루엣·탄 대비·VFX 겹침을 직접 확인한다.
 
-오디오 변경: `pnpm test -- src/game/audio/CombatAudio.test.ts src/game/assets/combatAssetManifest.test.ts`
+VFX 원화 교체: `pnpm exec vitest run src/game/visuals/combatVfxProfiles.test.ts src/game/visuals/CombatVfxPlayer.test.ts`, `bash scripts/combat_art_assets.test.sh`, `bash scripts/verify_gbc_combat_art.sh --animation-scope vfx`.
+원화 36종의 격자·시트 프레임 수·소스와 배포 파일 일치 및 런타임 프레임 설정을 검사한다.
+실제 화면: `pnpm exec playwright test e2e/combat.spec.ts --grep 'final seventeen authored VFX|hostile bullets readable' --workers=1`.
+마지막 17종의 재생·정리와 데스크톱·모바일 캡처, 밀집 화면의 적 탄 가독성을 확인한다.
+이 검사는 제작 시트의 재생 검증이며 실제 구슬 발동 경로의 연결을 대신하지 않는다.
+
+실제 구슬→VFX 연결: `pnpm exec playwright test e2e/combat.spec.ts --grep 'connects (corrosion|split|explosion) art to real orb hits' --workers=1`.
+발동 난수만 고정하고 실제 발사·충돌·피해·렌더를 사용한다. 데스크톱·모바일에서 독 장판·분열 자탄·폭발을 캡처하고,
+독 장판의 부착 위치·프레임 진행·숨긴 탭 정지·만료, 자탄 원화와 기존 충돌 크기를 확인한다.
+융합 장판: `pnpm exec playwright test e2e/combat.spec.ts --project=desktop-chromium --grep 'grows authored nano|six-way cluster|persistent meltdown' --workers=1`.
+실제 발동 후 텍스처를 확인하고 클러스터 장판의 선택창 정지와 패배 시 독·클러스터 장판 제거를 검사한다.
+방향성 효과: `pnpm exec playwright test e2e/combat.spec.ts --project=desktop-chromium --grep 'fuses a selected orb pair|six-way cluster|connects mirror circuit|replays stored wall' --workers=1`.
+광자 직격·반사 잔상, 거울 연결선, 벡터 칼날, 실제 이동하는 클러스터 탄체의 텍스처·위치·길이를 확인한다.
+
+보스 전환: `pnpm exec playwright test e2e/combat.spec.ts --grep 'presents boss warning|holds hidden boss defeat' --workers=1`.
+경고 진행률·코어 노출·격파 후 보상 지연을 데스크톱·모바일에서 캡처한다. 숨긴 탭의 격파 정지,
+동시 레벨업의 우선 처리, 선택창에서 제작 VFX와 순간 선의 제거도 확인한다.
+focused unit 실행은 `pnpm exec vitest run <test-file...>`을 사용한다.
+`pnpm test -- <test-file...>`은 현재 환경에서 파일 필터가 적용되지 않아 전체 테스트를 실행한다.
+
+오디오 변경: `pnpm exec vitest run src/game/audio/CombatAudio.test.ts src/game/assets/combatAssetManifest.test.ts`
 후 `pnpm test:e2e -- e2e/audio.spec.ts --workers=1`로 데스크톱·모바일 브라우저의
 출력 신호, 첫 입력 해제, 음소거 저장, 보스 전환, 탭 복귀와 종료·재출격을 확인한다.
 `assets-source/combat/audio/combat-preview.wav`와 실제 전체 런을 들어 음색·피로도를 별도로 판단한다.

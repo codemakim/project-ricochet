@@ -5,14 +5,6 @@ import { HOSTILE_ACTION_DEPTH } from '../constants';
 
 describe('combat VFX profiles', () => {
   it('defines exactly one complete bounded profile for every semantic ID', () => {
-    const authoredIds = new Set([
-      'player-launch', 'player-recover', 'player-hit', 'player-defeat',
-      'orb-ricochet', 'enemy-break',
-      'shooter-charge', 'shooter-fire', 'armored-brace', 'splitter-fracture',
-      'boss-module-break', 'boss-core-rage',
-      'enemy-hit', 'orb-direct-hit', 'corrosion-cloud', 'split-burst', 'boss-defeat',
-      'conduction-arc', 'explosion-burst',
-    ]);
     expect(Object.keys(COMBAT_VFX_PROFILES).sort())
       .toEqual([...REQUIRED_COMBAT_VFX_IDS].sort());
     for (const id of REQUIRED_COMBAT_VFX_IDS) {
@@ -21,7 +13,7 @@ describe('combat VFX profiles', () => {
         textureKey: `vfx-${id}`,
         frameWidth: 256,
         frameHeight: 256,
-        frameCount: authoredIds.has(id) ? 8 : 4,
+        frameCount: 8,
       });
       expect(COMBAT_VFX_PROFILES[id].frameRate).toBeGreaterThan(0);
       expect(COMBAT_VFX_PROFILES[id].durationMs).toBeGreaterThan(0);
@@ -83,7 +75,7 @@ describe('combat VFX profiles', () => {
       frameCount: 8, durationMs: 520, scale: 1.5,
     });
     expect(COMBAT_VFX_PROFILES['boss-defeat']).toMatchObject({
-      frameCount: 8, durationMs: 900, scale: 2.5,
+      frameCount: 8, durationMs: 900, scale: 3.75,
     });
     expect(COMBAT_VFX_PROFILES['conduction-arc']).toMatchObject({
       frameCount: 8, durationMs: 500, scale: 1.25,

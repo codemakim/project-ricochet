@@ -1,6 +1,6 @@
 import { GAME_TUNING } from '../config/gameTuning';
 import type { FormationEnemySpec } from '../enemies/enemyRules';
-import { AUTHORED_FORMATIONS, type ParagraphId } from './authoredFormations';
+import { AUTHORED_FORMATIONS, type AuthoredFormation, type ParagraphId } from './authoredFormations';
 import { footprintWorldRect } from './formationGrid';
 import {
   ENEMY_CATALOG,
@@ -83,8 +83,9 @@ export function createAuthoredFormation(
   stage: StageDefinition,
   paragraph: StageParagraphDefinition,
   formationId: string,
+  formations: readonly AuthoredFormation[] = AUTHORED_FORMATIONS,
 ): FormationResult {
-  const formation = AUTHORED_FORMATIONS.find(({ id }) => id === formationId);
+  const formation = formations.find(({ id }) => id === formationId);
   if (!formation) throw new RangeError(`authored formation ${formationId} does not exist`);
   const catalogByKind = new Map(ENEMY_CATALOG.map((entry) => [entry.kind, entry]));
   const originY = -formation.rows * GAME_TUNING.encounter.grid.cellHeight;

@@ -47,6 +47,7 @@ import {
   type CorrosionFieldSnapshot,
 } from '../combat/CorrosionFieldState';
 import { GAME_TUNING, type BossKind } from '../config/gameTuning';
+import { COMBAT_TRIAL } from '../run/combatTrial';
 import {
   applyDamage,
   breachDamage,
@@ -144,6 +145,7 @@ import {
   playActorState,
   registerActorAnimations,
 } from '../visuals/registerActorAnimations';
+import type { CombatVfxId } from '../visuals/combatVfxIds';
 import { CombatVfxPlayer } from '../visuals/CombatVfxPlayer';
 import {
   COMBAT_VFX_DISPLAY_FRAME_SIZE,
@@ -159,6 +161,7 @@ const PAUSE_REASONS: readonly PauseReason[] = [
   'visibility',
   'loadout',
   'levelUp',
+  'bossDefeat',
   'bossReward',
   'runComplete',
   'defeated',
@@ -248,21 +251,21 @@ export class CombatScene extends Phaser.Scene {
   private activeBossKind?: BossKind;
   private bossRewardTier: BossRewardTier | null = null;
   private readonly corrosionFields = new CorrosionFieldState();
-  private readonly corrosionVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly corrosionVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly photonTrails = new PhotonTrailState();
-  private readonly photonTrailVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly photonTrailVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly nanoSeeds = new NanoSeedState();
-  private readonly nanoSeedVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly nanoSeedVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly massCollapse = new MassCollapseState();
   private readonly reactorCharges = new ReactorChargeState();
   private readonly clusterFields = new ClusterFieldState();
-  private readonly clusterFieldVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly clusterFieldVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly mirrors = new MirrorCircuitState();
-  private readonly mirrorVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly mirrorVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly meltdownZones = new MeltdownZoneState();
-  private readonly meltdownVisuals = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly meltdownVisuals = new Map<number, Phaser.GameObjects.Image>();
   private readonly vectorBlades = new VectorBladeState();
-  private readonly clusterProjectiles = new Set<Phaser.GameObjects.Graphics>();
+  private readonly clusterProjectiles = new Set<Phaser.GameObjects.Image>();
   private readonly clusterTimers = new Set<Phaser.Time.TimerEvent>();
   private readonly feedbackFrames = new Map<string, number>();
   private readonly secondaryFeedback = new Set<Phaser.GameObjects.GameObject>();
@@ -296,6 +299,8 @@ export class CombatScene extends Phaser.Scene {
   private runConfig?: RunConfig;
   private runResultEmitted = false;
   private defeatedBossIds: BossKind[] = [];
+  private recoveryFeedbackUntil = 0;
+  private lastDamageCause: RunResult['defeatCause'];
   private discoveredCoreTypes = new Set<OrbCoreId>(ORB_CORE_IDS);
   private discoveredFusionTypes = new Set<FusionOrbId>(FUSION_ORB_IDS);
 
@@ -305,6 +310,7 @@ export class CombatScene extends Phaser.Scene {
 
   setRunConfig(config: RunConfig): this {
     this.runConfig = {
+      ...(config.combatTrial ? { combatTrial: true as const } : {}),
       identity: { ...config.identity },
       loadout: [...config.loadout],
       unlockedCoreTypes: [...config.unlockedCoreTypes],
@@ -324,9 +330,14 @@ export class CombatScene extends Phaser.Scene {
   create(): void {
     const runSeed = this.runConfig?.identity.seed ?? formationRunSeed;
     const developmentBalance = this.runConfig?.developmentBalance;
+    const combatTrial = Boolean(this.runConfig?.combatTrial);
     if (!this.runConfig) formationRunSeed = (formationRunSeed + 1) >>> 0;
     this.health = createHealth();
     this.experiment = parseExperimentSettings(window.location.search);
+    if (combatTrial) this.experiment = {
+      passThroughOnKill: true, homeOnBottomHit: true,
+      autoReturnAfterMs: COMBAT_TRIAL.autoReturnAfterMs,
+    };
     this.aim = { x: 0, y: -1 };
     this.invulnerableUntil = 0;
     this.aimQueueActivated = false;
@@ -355,6 +366,8 @@ export class CombatScene extends Phaser.Scene {
     this.bossRewardChoices = [];
     this.pause = new CombatPauseController();
     this.gameplayElapsedMs = 0;
+    this.recoveryFeedbackUntil = 0;
+    this.lastDamageCause = undefined;
     this.nextRunRewardAtMs = 0;
     this.runResultEmitted = false;
     this.defeatedBossIds = [];
@@ -378,6 +391,7 @@ export class CombatScene extends Phaser.Scene {
           coreTypes: orbs.map(({ coreType }) => coreType).filter(isBasicOrbCoreId),
         };
       },
+      combatTrial,
     );
     this.levelUpOverlay = new LevelUpOverlay(this);
     this.orbLoadoutOverlay = new OrbLoadoutOverlay(this);
@@ -395,6 +409,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.textures.exists('combat-background')) {
       this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
         .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+        .setAlpha(combatTrial ? 0.38 : 1)
         .setDepth(-100);
     }
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -422,17 +437,18 @@ export class CombatScene extends Phaser.Scene {
         * (developmentBalance?.orbSpeedMultiplier ?? 1),
       getConditionalDirectDamageBonus: (context) => (
         build.conditionalDirectDamageBonus(context)
+        + (combatTrial && context.firstHitAfterProximity ? COMBAT_TRIAL.recoveryDamageBonus : 0)
       ),
       getWallSpeedMultiplier: (wallHits) => build.wallSpeedMultiplier(wallHits),
       getOrbRadius: () => build.orbRadius(),
-      getRecoveryRadius: () => build.recoveryRadius(),
+      getRecoveryRadius: () => combatTrial ? COMBAT_TRIAL.recoveryRadius : build.recoveryRadius(),
       getFlightSpeedMultiplier: (killActive, collisionActive) => (
         build.flightSpeedMultiplier(killActive, collisionActive)
       ),
       getTrackingRadiusBonus: (active) => build.trackingRadiusBonus(active),
       getTimedDurationMs: (baseMs) => build.durationMs(baseMs),
       getInertiaHitLimit: () => this.bossBuild?.inertiaHitLimit() ?? 1,
-      getOrbLimit: () => GAME_TUNING.build.basicGrowth.maximumOrbs,
+      getOrbLimit: () => combatTrial ? COMBAT_TRIAL.maximumOrbs : GAME_TUNING.build.basicGrowth.maximumOrbs,
       onLaunch: () => {
         this.combatAudio?.play('launch');
         playActorState(this.player, 'player', 'launch');
@@ -455,16 +471,17 @@ export class CombatScene extends Phaser.Scene {
       getLifetimeMs: () => build.temporaryLifetimeMs(GAME_TUNING.temporaryOrbs.lifetimeMs),
       onExpired: (event) => this.handleTemporaryOrbExpired(event),
     });
-    this.encounterDirector = new EncounterDirector(runSeed, developmentBalance);
+    this.encounterDirector = new EncounterDirector(runSeed, developmentBalance, combatTrial);
     this.enemyManager = new EnemyManager(this, {
       player: this.player,
       orbManager: this.orbManager,
       temporaryOrbManager: this.temporaryOrbManager,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
       developmentBalance,
-      onContact: (damage) => this.damagePlayer(damage),
-      onBreach: (kind) => this.damagePlayer(breachDamage(kind)),
-      onBulletHit: (damage) => this.damagePlayer(damage),
+      shooterTuning: combatTrial ? COMBAT_TRIAL.shooter : undefined,
+      onContact: (damage) => this.damagePlayer(damage, 'contact'),
+      onBreach: (kind) => this.damagePlayer(breachDamage(kind), 'breach'),
+      onBulletHit: (damage) => this.damagePlayer(damage, 'bullet'),
       onEnemyKilled: (event) => this.handleEnemyKilled(event),
       onDirectHit: (event) => this.handleDirectHit(event),
       onSecondaryDamage: (event) => this.drawSecondaryDamage(event),
@@ -574,7 +591,8 @@ export class CombatScene extends Phaser.Scene {
       if (!this.orbManager.configureStartingCores(this.runConfig.loadout)) {
         throw new Error('run configuration contains an invalid core loadout');
       }
-      for (let count = 1; count < (developmentBalance?.startingOrbCount ?? 1); count += 1) {
+      const startingCount = combatTrial ? COMBAT_TRIAL.startingOrbCount : (developmentBalance?.startingOrbCount ?? 1);
+      for (let count = 1; count < startingCount; count += 1) {
         if (!this.orbManager.addOrb(this.runConfig.loadout[0])) {
           throw new Error('development starting orb count exceeds the runtime limit');
         }
@@ -600,6 +618,13 @@ export class CombatScene extends Phaser.Scene {
       || !this.encounterDirector
     ) return;
 
+    if (this.pause.has('visibility')) return;
+    if (this.pause.has('bossDefeat')) {
+      if (this.combatVfx?.activeCount('boss-defeat')) return;
+      this.pause.remove('bossDefeat');
+      this.syncPauseState();
+    }
+    if (this.pause.isPaused()) return;
     if (shouldFinalizeBossReward(
       this.bossDefeatPending,
       this.defeated,
@@ -608,8 +633,6 @@ export class CombatScene extends Phaser.Scene {
       this.finalizeBossDefeat();
       return;
     }
-    if (this.pause.isPaused()) return;
-
     const gameplayDelta = this.pause.consumeGameplayDelta(delta);
     this.gameplayElapsedMs += gameplayDelta;
     const next = movePlayer(
@@ -650,6 +673,14 @@ export class CombatScene extends Phaser.Scene {
     this.syncBossHud();
     this.drainCorrosionFields();
     this.advanceEncounter(gameplayDelta);
+    if (this.runConfig?.combatTrial) {
+      const encounter = this.encounterDirector.getSnapshot();
+      this.combatHud?.setTrialStatus(
+        Math.min(encounter.spawnSequence, encounter.formationCount), encounter.formationCount,
+        this.orbManager.getSnapshot().length, this.gameplayElapsedMs,
+        this.gameplayElapsedMs < this.recoveryFeedbackUntil,
+      );
+    }
     this.openPendingRunReward();
   }
 
@@ -719,6 +750,8 @@ export class CombatScene extends Phaser.Scene {
         stageElapsedMs: 0,
         warningElapsedMs: 0,
         pendingBossKind: null,
+        bossWarningMs: STAGES[0].boss.warningMs,
+        formationCount: 10,
         bossesDefeated: 0,
       },
       progression: this.progression?.getSnapshot() ?? {
@@ -806,7 +839,6 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleBossDirectHit(event: BossDirectHitEvent): void {
-    if (event.killed) this.combatVfx?.play('boss-module-break', { position: event.position });
     this.handlePostDirectHit(event, -1, event.targetId);
   }
 
@@ -1038,7 +1070,6 @@ export class CombatScene extends Phaser.Scene {
       );
     }
     if (corePlan.spawnCorrosion) {
-      this.combatVfx?.play('corrosion-cloud', { position: event.position });
       this.corrosionFields.spawn(
         event.sourceOrbId,
         event.position,
@@ -1563,17 +1594,10 @@ export class CombatScene extends Phaser.Scene {
       );
       if (this.acceptsFeedbackFrame('photon', event.source, event.sourceOrbId)) {
         this.combatVfx?.play('photon-beam', {
-          position: event.position,
+          position: { x: (event.position.x + end.x) / 2, y: (event.position.y + end.y) / 2 },
           direction: event.direction,
-          scale: beam.length / 64,
+          scaleX: beam.length / COMBAT_VFX_DISPLAY_FRAME_SIZE,
         });
-        const line = this.add.graphics()
-          .setData('sourceOrbId', event.sourceOrbId)
-          .lineStyle(thickness, GAME_TUNING.orbFusions.photonOrbit.accent, 0.85)
-          .lineBetween(event.position.x, event.position.y, end.x, end.y)
-          .setDepth(4)
-          .setName('fusion-feedback-photon-beam');
-        this.time.delayedCall(GAME_TUNING.visual.triggerFeedback.durationMs, () => line.destroy());
       }
     }
     if (plan.resonantSwarm) {
@@ -1670,20 +1694,11 @@ export class CombatScene extends Phaser.Scene {
           damage,
           excludedBossTargetId,
         );
-        const line = this.add.graphics()
-          .lineStyle(thickness, GAME_TUNING.orbFusions.vectorBlade.accent, 0.9)
-          .lineBetween(event.position.x, event.position.y, end.x, end.y)
-          .setDepth(4)
-          .setName('fusion-feedback-vector-blade');
         this.combatVfx?.play('vector-blade', {
-          position: event.position,
+          position: { x: (event.position.x + end.x) / 2, y: (event.position.y + end.y) / 2 },
           direction: vector.direction,
-          scale: plan.vectorBlade.length / 64,
+          scaleX: plan.vectorBlade.length / COMBAT_VFX_DISPLAY_FRAME_SIZE,
         });
-        this.time.delayedCall(
-          GAME_TUNING.visual.triggerFeedback.durationMs,
-          () => line.destroy(),
-        );
       }
     }
   }
@@ -1743,6 +1758,7 @@ export class CombatScene extends Phaser.Scene {
     origin: Vector,
     profile: ReturnType<typeof clusterBombardmentProfile>,
   ): void {
+    const visualProfile = COMBAT_VFX_PROFILES['cluster-projectile'];
     const available = Math.max(
       0,
       profile.maximumActiveProjectiles - this.clusterProjectiles.size,
@@ -1753,27 +1769,30 @@ export class CombatScene extends Phaser.Scene {
         x: clamp(origin.x + Math.cos(radians) * profile.distance, profile.radius, GAME_WIDTH - profile.radius),
         y: clamp(origin.y + Math.sin(radians) * profile.distance, profile.radius, GAME_HEIGHT - profile.radius),
       };
-      const projectile = this.add.graphics()
-        .fillStyle(GAME_TUNING.orbFusions.clusterBombardment.fill, 0.95)
-        .fillCircle(origin.x, origin.y, 4)
+      const projectile = this.add.image(origin.x, origin.y, visualProfile.textureKey)
+        .setOrigin(0.75, 0.5)
+        .setDisplaySize(COMBAT_VFX_DISPLAY_FRAME_SIZE * visualProfile.scale, COMBAT_VFX_DISPLAY_FRAME_SIZE * visualProfile.scale)
+        .setBlendMode(visualProfile.blendMode)
+        .setAlpha(visualProfile.alpha)
+        .setRotation(Math.atan2(landing.y - origin.y, landing.x - origin.x))
         .setDepth(5)
         .setName('fusion-feedback-cluster-projectile');
-      this.combatVfx?.play('cluster-projectile', {
-        position: origin,
-        direction: { x: landing.x - origin.x, y: landing.y - origin.y },
-      });
       this.clusterProjectiles.add(projectile);
       this.tweens.add({
         targets: projectile,
-        x: landing.x - origin.x,
-        y: landing.y - origin.y,
+        x: landing.x,
+        y: landing.y,
         duration: profile.travelMs,
         ease: 'Quad.easeOut',
+        onUpdate: (tween: Phaser.Tweens.Tween) => projectile.setFrame(
+          Math.min(visualProfile.frameCount - 1, Math.floor(tween.progress * visualProfile.frameCount)),
+        ),
       });
       let timer!: Phaser.Time.TimerEvent;
       timer = this.time.delayedCall(profile.travelMs, () => {
         this.clusterTimers.delete(timer);
         this.clusterProjectiles.delete(projectile);
+        this.tweens.killTweensOf(projectile);
         projectile.destroy();
         const radius = this.build?.circularRadius(profile.radius) ?? profile.radius;
         const damage = this.build?.secondaryDamage(profile.damage) ?? profile.damage;
@@ -1800,17 +1819,6 @@ export class CombatScene extends Phaser.Scene {
 
   private drawCollapseFeedback(position: Vector, radius: number): void {
     this.combatVfx?.play('mass-collapse', { position, scale: radius * 2 / 64 });
-    const graphic = this.add.graphics()
-      .lineStyle(4, GAME_TUNING.orbFusions.massCollapse.accent, 0.9)
-      .strokeCircle(position.x, position.y, radius)
-      .lineStyle(2, GAME_TUNING.orbFusions.massCollapse.fill, 0.9)
-      .strokeCircle(position.x, position.y, radius * 0.45)
-      .setDepth(5)
-      .setName('fusion-feedback-mass-collapse');
-    this.time.delayedCall(
-      GAME_TUNING.visual.triggerFeedback.durationMs,
-      () => graphic.destroy(),
-    );
   }
 
   private handleTemporaryOrbExpired(event: TemporaryOrbExpiredEvent): void {
@@ -1936,13 +1944,8 @@ export class CombatScene extends Phaser.Scene {
       this.photonTrailVisuals.delete(trailId);
     }
     for (const trail of trails) {
-      if (this.photonTrailVisuals.has(trail.trailId)) continue;
-      const visual = this.add.graphics()
-        .lineStyle(trail.thickness, GAME_TUNING.orbFusions.photonOrbit.fill, 0.42)
-        .lineBetween(trail.start.x, trail.start.y, trail.end.x, trail.end.y)
-        .setDepth(3)
-        .setName('fusion-feedback-photon-trail');
-      this.photonTrailVisuals.set(trail.trailId, visual);
+      this.syncBeamVfx(this.photonTrailVisuals, trail.trailId,
+        'fusion-feedback-photon-trail', trail.start, trail.end);
     }
   }
 
@@ -1955,15 +1958,8 @@ export class CombatScene extends Phaser.Scene {
       this.nanoSeedVisuals.delete(seedId);
     }
     for (const seed of seeds) {
-      if (this.nanoSeedVisuals.has(seed.seedId)) continue;
-      const visual = this.add.graphics()
-        .fillStyle(GAME_TUNING.orbFusions.nanoProliferator.fill, 0.18)
-        .fillCircle(seed.position.x, seed.position.y, seed.radius)
-        .lineStyle(2, GAME_TUNING.orbFusions.nanoProliferator.accent, 0.5)
-        .strokeCircle(seed.position.x, seed.position.y, seed.radius)
-        .setDepth(3)
-        .setName('fusion-feedback-nano-seed');
-      this.nanoSeedVisuals.set(seed.seedId, visual);
+      this.syncFieldVfx(this.nanoSeedVisuals, seed.seedId, 'nano-seed',
+        'fusion-feedback-nano-seed', seed.position, seed.radius);
     }
   }
 
@@ -1976,15 +1972,8 @@ export class CombatScene extends Phaser.Scene {
       this.clusterFieldVisuals.delete(fieldId);
     }
     for (const field of fields) {
-      if (this.clusterFieldVisuals.has(field.fieldId)) continue;
-      const visual = this.add.graphics()
-        .fillStyle(GAME_TUNING.orbFusions.clusterBombardment.fill, 0.14)
-        .fillCircle(field.position.x, field.position.y, field.radius)
-        .lineStyle(2, GAME_TUNING.orbFusions.clusterBombardment.accent, 0.45)
-        .strokeCircle(field.position.x, field.position.y, field.radius)
-        .setDepth(3)
-        .setName('fusion-feedback-cluster-field');
-      this.clusterFieldVisuals.set(field.fieldId, visual);
+      this.syncFieldVfx(this.clusterFieldVisuals, field.fieldId, 'cluster-impact',
+        'fusion-feedback-cluster-field', field.position, field.radius);
     }
   }
 
@@ -1997,13 +1986,8 @@ export class CombatScene extends Phaser.Scene {
       this.mirrorVisuals.delete(mirrorId);
     }
     for (const mirror of mirrors) {
-      if (this.mirrorVisuals.has(mirror.mirrorId)) continue;
-      const visual = this.add.graphics()
-        .lineStyle(mirror.thickness, GAME_TUNING.orbFusions.mirrorCircuit.fill, 0.48)
-        .lineBetween(mirror.start.x, mirror.start.y, mirror.end.x, mirror.end.y)
-        .setDepth(3)
-        .setName('fusion-feedback-mirror-beam');
-      this.mirrorVisuals.set(mirror.mirrorId, visual);
+      this.syncBeamVfx(this.mirrorVisuals, mirror.mirrorId,
+        'fusion-feedback-mirror-beam', mirror.start, mirror.end);
     }
   }
 
@@ -2016,22 +2000,18 @@ export class CombatScene extends Phaser.Scene {
       this.meltdownVisuals.delete(zoneId);
     }
     for (const zone of zones) {
-      if (this.meltdownVisuals.has(zone.zoneId)) continue;
-      const visual = this.add.graphics()
-        .fillStyle(GAME_TUNING.orbFusions.meltdownCore.fill, 0.18)
-        .fillCircle(zone.position.x, zone.position.y, zone.radius)
-        .lineStyle(2, GAME_TUNING.orbFusions.meltdownCore.accent, 0.6)
-        .strokeCircle(zone.position.x, zone.position.y, zone.radius)
-        .setDepth(3)
-        .setName('fusion-feedback-meltdown-zone');
-      this.meltdownVisuals.set(zone.zoneId, visual);
+      this.syncFieldVfx(this.meltdownVisuals, zone.zoneId, 'meltdown-eruption',
+        'fusion-feedback-meltdown-zone', zone.position, zone.radius);
     }
   }
 
   private clearClusterProjectiles(): void {
     for (const timer of this.clusterTimers) timer.remove(false);
     this.clusterTimers.clear();
-    for (const projectile of this.clusterProjectiles) projectile.destroy();
+    for (const projectile of this.clusterProjectiles) {
+      this.tweens.killTweensOf(projectile);
+      projectile.destroy();
+    }
     this.clusterProjectiles.clear();
   }
 
@@ -2061,7 +2041,7 @@ export class CombatScene extends Phaser.Scene {
     line.moveTo(points[0]!.x, points[0]!.y);
     for (const point of points.slice(1)) line.lineTo(point.x, point.y);
     line.strokePath();
-    this.time.delayedCall(GAME_TUNING.visual.triggerFeedback.durationMs, () => line.destroy());
+    this.trackSecondaryFeedback(line, GAME_TUNING.visual.triggerFeedback.durationMs);
   }
 
   private applyCutter(
@@ -2094,7 +2074,7 @@ export class CombatScene extends Phaser.Scene {
       .setName(`trigger-feedback-${axis}-cutter`);
     if (axis === 'horizontal') line.lineBetween(0, coordinate, GAME_WIDTH, coordinate);
     else line.lineBetween(coordinate, 0, coordinate, GAME_HEIGHT);
-    this.time.delayedCall(feedback.durationMs, () => line.destroy());
+    this.trackSecondaryFeedback(line, feedback.durationMs);
   }
 
   private applyAreaEffects(
@@ -2160,30 +2140,51 @@ export class CombatScene extends Phaser.Scene {
       this.corrosionVisuals.delete(fieldId);
     }
     for (const field of fields) {
-      if (this.corrosionVisuals.has(field.fieldId)) continue;
-      const tuning = GAME_TUNING.orbCores.corrosion;
-      const feedback = GAME_TUNING.visual.coreFeedback;
-      const visual = this.add.graphics()
-        .fillStyle(tuning.fill, feedback.corrosionFieldAlpha)
-        .fillCircle(field.position.x, field.position.y, field.radius)
-        .lineStyle(2, tuning.accent, feedback.corrosionLineAlpha)
-        .strokeCircle(field.position.x, field.position.y, field.radius)
-        .setDepth(3)
-        .setName('core-feedback-corrosion');
-      this.corrosionVisuals.set(field.fieldId, visual);
+      this.syncFieldVfx(this.corrosionVisuals, field.fieldId, 'corrosion-cloud',
+        'core-feedback-corrosion', field.position, field.radius);
     }
   }
 
+  private syncFieldVfx(
+    visuals: Map<number, Phaser.GameObjects.Image>,
+    key: number,
+    id: CombatVfxId,
+    name: string,
+    position: Vector,
+    radius: number,
+  ): Phaser.GameObjects.Image {
+    const profile = COMBAT_VFX_PROFILES[id];
+    let visual = visuals.get(key);
+    if (!visual) {
+      visual = this.add.image(position.x, position.y, profile.textureKey)
+        .setBlendMode(profile.blendMode).setAlpha(profile.alpha).setDepth(3).setName(name);
+      visuals.set(key, visual);
+    }
+    // State-owned fields animate and move on gameplay time, so choice pauses freeze them too.
+    visual.setPosition(position.x, position.y)
+      .setDisplaySize(radius * 2 * profile.scale, radius * 2 * profile.scale)
+      .setFrame(Math.floor(this.gameplayElapsedMs / 1000 * profile.frameRate + key) % profile.frameCount);
+    return visual;
+  }
+
+  private syncBeamVfx(
+    visuals: Map<number, Phaser.GameObjects.Image>,
+    key: number,
+    name: string,
+    start: Vector,
+    end: Vector,
+  ): void {
+    const direction = { x: end.x - start.x, y: end.y - start.y };
+    this.syncFieldVfx(visuals, key, 'photon-beam', name,
+      { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }, COMBAT_VFX_DISPLAY_FRAME_SIZE / 2)
+      .setDisplaySize(Math.hypot(direction.x, direction.y), COMBAT_VFX_DISPLAY_FRAME_SIZE)
+      .setRotation(Math.atan2(direction.y, direction.x));
+  }
+
   private drawCorrosionTick(position: Vector, radius: number): void {
-    const pulse = this.add.graphics()
-      .lineStyle(3, GAME_TUNING.orbCores.corrosion.accent, 0.8)
-      .strokeCircle(position.x, position.y, radius * 0.72)
-      .setDepth(4)
-      .setName('core-feedback-corrosion-tick');
-    this.time.delayedCall(
-      GAME_TUNING.visual.coreFeedback.corrosionTickDurationMs,
-      () => pulse.destroy(),
-    );
+    this.combatVfx?.play('corrosion-cloud', {
+      position, scale: radius * 2 / COMBAT_VFX_DISPLAY_FRAME_SIZE, intensity: 0.5,
+    });
   }
 
   private drawConductionFeedback(
@@ -2215,9 +2216,9 @@ export class CombatScene extends Phaser.Scene {
     for (const target of targets) {
       pulse.strokeCircle(target.x, target.y, 5);
     }
-    this.time.delayedCall(
+    this.trackSecondaryFeedback(
+      pulse,
       GAME_TUNING.visual.coreFeedback.conductionDurationMs,
-      () => pulse.destroy(),
     );
   }
 
@@ -2237,6 +2238,10 @@ export class CombatScene extends Phaser.Scene {
     object: Phaser.GameObjects.GameObject,
     durationMs: number,
   ): void {
+    if (this.pause.isPaused()) {
+      object.destroy();
+      return;
+    }
     while (
       this.secondaryFeedback.size
         >= GAME_TUNING.visual.coreFeedback.maximumDamageLabels
@@ -2268,17 +2273,6 @@ export class CombatScene extends Phaser.Scene {
       label,
       GAME_TUNING.visual.coreFeedback.damageNumberDurationMs,
     );
-    if (event.killed) {
-      const flash = this.add.graphics()
-        .lineStyle(3, color, 0.9)
-        .strokeCircle(event.position.x, event.position.y, 12)
-        .setDepth(5)
-        .setName('secondary-kill-feedback');
-      this.trackSecondaryFeedback(
-        flash,
-        GAME_TUNING.visual.triggerFeedback.durationMs,
-      );
-    }
   }
 
   private clearSecondaryFeedback(): void {
@@ -2287,6 +2281,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleOrbRecovery(source: RecoverySource): void {
+    if (source === 'proximity') this.recoveryFeedbackUntil = this.gameplayElapsedMs + 900;
     const shockwave = this.build?.recoveryShockwave();
     if (
       source === 'proximity'
@@ -2389,19 +2384,29 @@ export class CombatScene extends Phaser.Scene {
       formationPopulations: enemies.formationPopulations,
     });
     if (formation) this.enemyManager.spawnFormation(formation);
+    const encounter = this.encounterDirector.getSnapshot();
+    if (encounter.state === 'bossWarning') {
+      this.combatHud?.setWarning(true, encounter.pendingBossKind?.toUpperCase(),
+        encounter.warningElapsedMs / encounter.bossWarningMs);
+    }
     if (transition) {
       this.activeBossKind = bossKindAfterTransition(
         this.activeBossKind ?? null,
         transition,
       );
-      if (transition.type === 'bossWarningStarted') this.showBossWarning();
+      if (transition.type === 'bossWarningStarted') {
+        if (this.runConfig?.combatTrial) {
+          this.enemyManager.clearEnemies();
+          this.enemyManager.clearHostileActions();
+        }
+        this.showBossWarning();
+      }
       else this.startBoss(transition.bossKind);
     }
   }
 
   private showBossWarning(): void {
     this.combatAudio?.play('warning');
-    this.combatHud?.setWarning(true);
   }
 
   private clearBossWarning(): void {
@@ -2413,6 +2418,7 @@ export class CombatScene extends Phaser.Scene {
     this.combatAudio?.setBoss(true);
     this.clearBossWarning();
     this.activeBoss?.destroy();
+    this.activeBossKind = kind;
     this.bossMaximumHp = 0;
     const cleanup = bossEntryCleanup(
       kind,
@@ -2432,35 +2438,47 @@ export class CombatScene extends Phaser.Scene {
       getEnemyBulletCount: () => this.enemyManager?.getBulletCount() ?? 0,
       getGameplayElapsedMs: () => this.gameplayElapsedMs,
       playerDamageMultiplier: this.runConfig?.developmentBalance?.playerDamageMultiplier,
-      onPlayerHit: (damage: number) => this.damagePlayer(damage),
+      onPlayerHit: (damage: number) => this.damagePlayer(damage, 'boss'),
       onDirectHit: (event: BossDirectHitEvent) => this.handleBossDirectHit(event),
+      onPartDestroyed: (position: Vector) => {
+        this.combatVfx?.play('boss-module-break', { position });
+      },
       onPhaseChanged: (phase: string) => {
-        if (phase === 'permanentlyExposed') {
+        if (phase === 'core' || phase === 'exposed' || phase === 'permanentlyExposed') {
           const position = this.activeBoss?.getSnapshot().position;
-          if (position) this.combatVfx?.play('boss-core-rage', { position, scale: 1.5 });
+          if (position) this.combatVfx?.play('boss-core-rage', { position });
         }
       },
       onDefeated: () => this.handleBossDefeatSignal(),
     };
     this.activeBoss = createBossForKind<BossEncounter>(kind, {
-      sentinel: () => new BossManager(this, commonOptions),
+      sentinel: () => new BossManager(this, {
+        ...commonOptions,
+        hp: this.runConfig?.combatTrial ? COMBAT_TRIAL.bossHp : undefined,
+      }),
       hive: () => new HiveBossManager(this, commonOptions),
       siege: () => new BossManager(this, {
         ...commonOptions,
         kind: 'siege',
       }),
     });
+    this.syncBossHud();
   }
 
   private handleBossDefeatSignal(): void {
     if (this.defeated || this.bossDefeatPending) return;
+    this.bossDefeatPending = true;
     this.combatAudio?.play('bossDefeat');
     this.combatAudio?.setBoss(false);
     const position = this.activeBoss?.getSnapshot().position;
-    if (position) this.combatVfx?.play('boss-defeat', { position, scale: 2 });
+    this.combatVfx?.clear();
+    if (position) this.combatVfx?.play('boss-defeat', { position });
+    this.clearClusterProjectiles();
     this.enemyManager?.clearHostileActions();
     this.activeBoss?.clearHostileActions();
-    this.bossDefeatPending = true;
+    this.pause.add('bossDefeat');
+    this.syncBossHud();
+    this.syncPauseState();
   }
 
   private finalizeBossDefeat(): void {
@@ -2558,17 +2576,24 @@ export class CombatScene extends Phaser.Scene {
   private applyLifecycle(
     reason: Parameters<typeof finalizeCombatLifecycle>[0],
   ): void {
+    this.pause.remove('bossDefeat');
     this.clearSecondaryFeedback();
+    this.clearClusterProjectiles();
     this.corrosionFields.clear();
     this.photonTrails.clear();
     this.nanoSeeds.clear();
+    this.clusterFields.clear();
     this.mirrors.clear();
     this.meltdownZones.clear();
     this.vectorBlades.clear();
+    for (const visual of this.corrosionVisuals.values()) visual.destroy();
+    for (const visual of this.clusterFieldVisuals.values()) visual.destroy();
     for (const visual of this.photonTrailVisuals.values()) visual.destroy();
     for (const visual of this.nanoSeedVisuals.values()) visual.destroy();
     for (const visual of this.mirrorVisuals.values()) visual.destroy();
     for (const visual of this.meltdownVisuals.values()) visual.destroy();
+    this.corrosionVisuals.clear();
+    this.clusterFieldVisuals.clear();
     this.photonTrailVisuals.clear();
     this.nanoSeedVisuals.clear();
     this.mirrorVisuals.clear();
@@ -2608,6 +2633,7 @@ export class CombatScene extends Phaser.Scene {
       this.build,
       this.orbManager?.getSnapshot() ?? [],
       (choice) => this.chooseRunReward(choice),
+      Boolean(this.runConfig?.combatTrial),
     );
   }
 
@@ -2679,6 +2705,16 @@ export class CombatScene extends Phaser.Scene {
       return true;
     }
 
+    if (this.runConfig?.combatTrial) {
+      const targets = this.orbManager.getSnapshot().filter((orb) => (
+        orb.coreType === choice.coreType && orb.level < 5
+      ));
+      if (targets.length === 0) return false;
+      for (const orb of targets) this.orbManager.upgradeOrb(orb.id, choice.coreType);
+      if (!this.progression.consume(choice)) return false;
+      this.completeRunRewardChoice();
+      return true;
+    }
     this.levelUpOverlay.hide();
     const reopen = () => this.openNextLevelUp();
     this.orbUpgradeOverlay?.show(
@@ -2721,8 +2757,9 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private damagePlayer(amount: number): void {
+  private damagePlayer(amount: number, cause: RunResult['defeatCause'] = 'contact'): void {
     if (this.defeated || !canTakeDamage(this.time.now, this.invulnerableUntil)) return;
+    this.lastDamageCause = cause;
     this.invulnerableUntil = this.time.now + INVULNERABILITY_MS;
     this.health = applyDamage(this.health, amount);
     this.combatAudio?.play(this.health.defeated ? 'defeat' : 'hurt');
@@ -2775,7 +2812,16 @@ export class CombatScene extends Phaser.Scene {
     if (this.bossMaximumHp === 0) {
       this.bossMaximumHp = Object.values(parts).reduce((sum, hp) => sum + hp, 0);
     }
-    this.combatHud?.setBoss(snapshot.kind.toUpperCase(), bossHudRatio(parts, this.bossMaximumHp));
+    const coreExposed = snapshot.phase === 'exposed' || snapshot.phase === 'permanentlyExposed'
+      || (snapshot.phase === 'core' && !parts.defenseModule);
+    const status = snapshot.phase === 'defeated' ? '격파 완료'
+      : snapshot.phase === 'permanentlyExposed' ? '코어 노출 · 격노'
+        : coreExposed ? (this.runConfig?.combatTrial ? '코어 노출 · 중앙을 공격' : '코어 노출')
+          : snapshot.phase === 'telegraph' ? '코어 개방 임박'
+            : this.runConfig?.combatTrial
+              ? `양옆 주황 약점 · ${Object.entries(parts).filter(([id, hp]) => id !== 'core' && hp > 0).length}개 남음`
+              : `방어 부위 ${Object.entries(parts).filter(([id, hp]) => id !== 'core' && hp > 0).length}`;
+    this.combatHud?.setBoss(snapshot.kind.toUpperCase(), bossHudRatio(parts, this.bossMaximumHp), status);
   }
 
   private showDefeat(): void {
@@ -2823,6 +2869,7 @@ export class CombatScene extends Phaser.Scene {
       [...this.discoveredFusionTypes],
     );
     const emit = () => this.game.events.emit(RUN_ENDED_EVENT, result);
+    if (!success) result.defeatCause = this.lastDamageCause;
     if (this.combatAudio) this.combatAudio.finish(success, emit);
     else emit();
     return result;
@@ -2831,6 +2878,12 @@ export class CombatScene extends Phaser.Scene {
   private drawAimGuide(): void {
     const points = traceFirstBounce(this.player, this.aim, ORB_RADIUS, AIM_REFLECTION_LENGTH);
     this.aimGuide.clear().lineStyle(2, 0x65f6ff, 0.55);
+    if (this.runConfig?.combatTrial) {
+      const recovered = this.gameplayElapsedMs < this.recoveryFeedbackUntil;
+      this.aimGuide.lineStyle(2, recovered ? 0xffd18a : 0x65f6ff, recovered ? 0.65 : 0.16);
+      this.aimGuide.strokeCircle(this.player.x, this.player.y, COMBAT_TRIAL.recoveryRadius);
+      this.aimGuide.lineStyle(2, 0x65f6ff, 0.35);
+    }
     this.drawDashedSegment(points[0], points[1]);
     this.drawDashedSegment(points[1], points[2]);
   }
@@ -2860,6 +2913,10 @@ export class CombatScene extends Phaser.Scene {
   };
 
   private syncPauseState(): void {
+    this.combatVfx?.setPaused(this.pause.has('visibility'));
+    if (PAUSE_REASONS.some((reason) => reason !== 'visibility' && this.pause.has(reason))) {
+      this.clearSecondaryFeedback();
+    }
     this.combatAudio?.setPaused(
       this.pause.isPaused(),
       this.pause.has('visibility'),
@@ -2868,15 +2925,18 @@ export class CombatScene extends Phaser.Scene {
     this.playerInput?.setGameplayPointerEnabled(
       !this.pause.has('levelUp')
         && !this.pause.has('loadout')
+        && !this.pause.has('bossDefeat')
         && !this.pause.has('bossReward')
         && !this.pause.has('runComplete'),
     );
     if (this.pause.isPaused()) {
       this.physics.pause();
+      this.tweens.pauseAll();
       this.time.paused = true;
       return;
     }
     this.physics.resume();
+    this.tweens.resumeAll();
     this.time.paused = false;
   }
 

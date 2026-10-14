@@ -165,6 +165,7 @@ interface DevelopmentScene {
         play?(key: string): void;
       };
       orbId?: number;
+      temporaryOrbId?: number;
       bossProjectileKind?: string;
       text?: string;
       destroy?(): void;
@@ -203,7 +204,8 @@ interface DevelopmentScene {
       scaleX?: number;
       scaleY?: number;
     }): boolean;
-    activeCount(): number;
+    activeCount(id?: string): number;
+    setPaused(paused: boolean): void;
   };
   time: { now: number };
   enemyManager: {
@@ -349,7 +351,7 @@ async function prepareDebugFusion(
   startingKey: string,
   partner: 'inertia' | 'explosion' | 'split' | 'conduction' | 'corrosion' | 'echo',
   fusionType:
-    | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment'
+    | 'nano-proliferator' | 'mass-collapse' | 'reactor-orb' | 'cluster-bombardment'
     | 'mirror-circuit' | 'meltdown-core' | 'vector-blade',
 ): Promise<{ box: { x: number; y: number; width: number; height: number }; orbId: number; enemyId: number }> {
   const { box } = await loadCanvas(page, '', startingKey);
@@ -1074,7 +1076,7 @@ test('@desktop chooses permanent orb cores', async ({ page }) => {
 
 });
 
-test('@desktop fuses a selected orb pair and renders the fusion core', async ({ page }) => {
+test('@desktop fuses a selected orb pair and renders the fusion core', async ({ page }, testInfo) => {
   const { box } = await preparePhotonFusion(page);
   await choosePhotonFusionWithPointer(page, box, false);
 
@@ -1097,15 +1099,28 @@ test('@desktop fuses a selected orb pair and renders the fusion core', async ({ 
     scene.debugRemoveEnemies(others.map(({ id }) => id));
     scene.debugFreezeEnemies();
     scene.debugSetEnemy(target!.id, { x: 225, y: 320 }, 100);
-    scene.debugPlaceOrb(orbId, { x: 225, y: 320 });
+    scene.children.list.find((child) => child.orbId === orbId)!.body!.setVelocity!(0, -520);
+    scene.debugPlaceOrb(orbId, { x: 225, y: 400 });
   }, photon.id);
-  await expect.poll(async () => sceneCall(page, (scene, sourceOrbId) => (
+  await expect.poll(async () => sceneCall(page, (scene) => (
     scene.children.list.some(
       (child) => child.active
-        && child.name === 'fusion-feedback-photon-beam'
-        && child.getData?.('sourceOrbId') === sourceOrbId,
+        && child.texture?.key === 'vfx-photon-beam'
+        && child.displayWidth! > child.displayHeight!,
     )
-  ), photon.id), { intervals: [10], timeout: 500 }).toBe(true);
+  )), { intervals: [10], timeout: 1_000 }).toBe(true);
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: testInfo.outputPath('photon-hit-live.png') });
+  await sceneCall(page, (scene, id) => {
+    for (let level = 1; level < 9; level += 1) scene.debugUpgradeOrb(id);
+    scene.children.list.find((child) => child.orbId === id)!.body!.setVelocity!(0, -300);
+    scene.debugPlaceOrb(id, { x: 120, y: 10 });
+  }, photon.id);
+  await expect.poll(async () => (await snapshot(page)).photonTrails.length).toBeGreaterThan(0);
+  expect(await sceneCall(page, (scene) => scene.children.list.find(
+    (child) => child.active && child.name === 'fusion-feedback-photon-trail',
+  )?.texture?.key)).toBe('vfx-photon-beam');
+  await page.screenshot({ path: testInfo.outputPath('photon-trail-live.png') });
 });
 
 test('@desktop keeps the unfused conduction orb and moving hive modules', async ({ page }) => {
@@ -1149,7 +1164,7 @@ test('@desktop keeps the unfused conduction orb and moving hive modules', async 
   ).orbs.find(({ id }) => id === photon.id)!.velocity.x).toBeGreaterThan(0);
 });
 
-test('@desktop triggers mass collapse on a high-speed precision hit', async ({ page }) => {
+test('@desktop triggers mass collapse on a high-speed precision hit', async ({ page }, testInfo) => {
   const { orbId, enemyId } = await prepareDebugFusion(
     page,
     'Digit2',
@@ -1164,10 +1179,13 @@ test('@desktop triggers mass collapse on a high-speed precision hit', async ({ p
   });
   await sceneCall(page, (scene, input) => {
     const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
-    scene.debugPlaceOrb(input.orbId, target.position);
+    // Enter from outside the body: teleporting inside an armored enemy can skip separation.
+    scene.debugPlaceOrb(input.orbId, { x: target.position.x, y: target.position.y + 80 });
   }, { orbId, enemyId });
   await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
-    .toContain('fusion-feedback-mass-collapse');
+    .toContain('production-vfx-mass-collapse');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: testInfo.outputPath('mass-collapse-live.png') });
 });
 
 test('@desktop charges reactor bounces and releases the next-hit blast', async ({ page }) => {
@@ -1196,7 +1214,26 @@ test('@desktop charges reactor bounces and releases the next-hit blast', async (
     .toContain('production-vfx-reactor-blast');
 });
 
-test('@desktop launches six-way cluster impacts and lingering fields', async ({ page }) => {
+test('@desktop grows authored nano seeds after a real orb hit', async ({ page }, testInfo) => {
+  const { orbId, enemyId } = await prepareDebugFusion(page, 'Digit5', 'corrosion', 'nano-proliferator');
+  await sceneCall(page, (scene, input) => {
+    (scene as unknown as { combatProcs: { states: Record<string, { random: number }> } })
+      .combatProcs.states['nano-proliferator']!.random = 2048;
+    const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+    scene.children.list.find((child) => child.orbId === input.orbId)!.body!.setVelocity!(0, -520);
+    scene.debugPlaceOrb(input.orbId, { x: target.position.x, y: target.position.y + 80 });
+  }, { orbId, enemyId });
+  await expect.poll(async () => (await snapshot(page)).nanoSeeds.length).toBeGreaterThan(0);
+  const textures = await sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name === 'fusion-feedback-nano-seed')
+    .map((child) => child.texture?.key));
+  expect(textures.length).toBeGreaterThan(0);
+  expect(textures.every((texture) => texture === 'vfx-nano-seed')).toBe(true);
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: testInfo.outputPath('nano-field-live.png') });
+});
+
+test('@desktop launches six-way cluster impacts and lingering fields', async ({ page }, testInfo) => {
   const { orbId, enemyId } = await prepareDebugFusion(
     page,
     'Digit6',
@@ -1206,20 +1243,55 @@ test('@desktop launches six-way cluster impacts and lingering fields', async ({ 
   expect(await sceneCall(page, (scene) => scene.children.list.some(
     (child) => child.active && child.texture?.key === 'orb-cluster-bombardment',
   ))).toBe(true);
-  for (let hit = 0; hit < 6; hit += 1) {
-    await sceneCall(page, (scene, input) => {
-      const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
-      scene.debugPlaceOrb(input.orbId, target.position);
-    }, { orbId, enemyId });
-    await page.waitForTimeout(90);
-  }
+  await sceneCall(page, (scene, input) => {
+    (scene as unknown as { combatProcs: { states: Record<string, { random: number }> } })
+      .combatProcs.states['cluster-bombardment']!.random = 2048;
+    const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
+    scene.children.list.find((child) => child.orbId === input.orbId)!.body!.setVelocity!(0, -520);
+    scene.debugPlaceOrb(input.orbId, { x: target.position.x, y: target.position.y + 80 });
+  }, { orbId, enemyId });
+  const projectiles = () => sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name === 'fusion-feedback-cluster-projectile')
+    .map((child) => ({ texture: child.texture?.key, x: child.x, y: child.y, frame: child.frame?.name })));
+  await expect.poll(projectiles, { intervals: [10] }).toHaveLength(6);
+  const launched = await projectiles();
+  expect(launched.every(({ texture }) => texture === 'vfx-cluster-projectile')).toBe(true);
+  await expect.poll(projectiles, { intervals: [20] }).not.toEqual(launched);
+  await page.waitForTimeout(80);
+  await page.screenshot({ path: testInfo.outputPath('cluster-projectiles-live.png') });
   await expect.poll(async () => (await snapshot(page)).clusterFields.length)
     .toBeGreaterThan(0);
   await expect.poll(async () => activeSceneNames(page), { timeout: 1_000 })
     .toContain('fusion-feedback-cluster-field');
+  const fields = () => sceneCall(page, (scene) => scene.children.list
+    .filter((child) => child.active && child.name === 'fusion-feedback-cluster-field')
+    .map((child) => ({ texture: child.texture?.key, frame: child.frame?.name })));
+  expect((await fields()).every(({ texture }) => texture === 'vfx-cluster-impact')).toBe(true);
+  const before = await fields();
+  await expect.poll(fields, { intervals: [40] }).not.toEqual(before);
+  await page.screenshot({ path: testInfo.outputPath('cluster-field-live.png') });
+  await sceneCall(page, (scene) => {
+    scene.debugShowCoreFeedback('corrosion', { x: 120, y: 300 });
+    scene.debugGrantXp(5);
+  });
+  expect((await snapshot(page)).levelUpVisible).toBe(true);
+  const paused = await fields();
+  await page.waitForTimeout(200);
+  expect(await fields()).toEqual(paused);
+  const remaining = await sceneCall(page, (scene) => {
+    scene.debugSetHealth(1);
+    scene.debugDamage(1);
+    return {
+      fields: scene.getDebugSnapshot().clusterFields.length + scene.getDebugSnapshot().corrosionFields.length,
+      visuals: scene.children.list.filter((child) => child.active && (
+        child.name === 'fusion-feedback-cluster-field' || child.name === 'core-feedback-corrosion'
+      )).length,
+    };
+  });
+  expect(remaining).toEqual({ fields: 0, visuals: 0 });
 });
 
-test('@desktop connects mirror circuit wall nodes into a live beam', async ({ page }) => {
+test('@desktop connects mirror circuit wall nodes into a live beam', async ({ page }, testInfo) => {
   const { orbId } = await prepareDebugFusion(
     page,
     'Digit1',
@@ -1239,9 +1311,21 @@ test('@desktop connects mirror circuit wall nodes into a live beam', async ({ pa
   }
   await expect.poll(async () => (await snapshot(page)).mirrors.length).toBeGreaterThan(0);
   expect(await activeSceneNames(page)).toContain('fusion-feedback-mirror-beam');
+  const beam = await sceneCall(page, (scene) => {
+    const visual = scene.children.list.find((child) => child.active && child.name === 'fusion-feedback-mirror-beam')!;
+    const mirror = scene.getDebugSnapshot().mirrors[0]!;
+    return { texture: visual.texture?.key, x: visual.x, y: visual.y, width: visual.displayWidth,
+      expectedX: (mirror.start.x + mirror.end.x) / 2, expectedY: (mirror.start.y + mirror.end.y) / 2,
+      expectedWidth: Math.hypot(mirror.end.x - mirror.start.x, mirror.end.y - mirror.start.y) };
+  });
+  expect(beam.texture).toBe('vfx-photon-beam');
+  expect(beam.x).toBeCloseTo(beam.expectedX);
+  expect(beam.y).toBeCloseTo(beam.expectedY);
+  expect(beam.width).toBeCloseTo(beam.expectedWidth);
+  await page.screenshot({ path: testInfo.outputPath('mirror-beam-live.png') });
 });
 
-test('@desktop heats a persistent meltdown core zone', async ({ page }) => {
+test('@desktop heats a persistent meltdown core zone', async ({ page }, testInfo) => {
   const { orbId, enemyId } = await prepareDebugFusion(
     page,
     'Digit6',
@@ -1260,9 +1344,14 @@ test('@desktop heats a persistent meltdown core zone', async ({ page }) => {
   }
   await expect.poll(async () => (await snapshot(page)).meltdownZones.length).toBeGreaterThan(0);
   expect(await activeSceneNames(page)).toContain('fusion-feedback-meltdown-zone');
+  expect(await sceneCall(page, (scene) => scene.children.list.find(
+    (child) => child.active && child.name === 'fusion-feedback-meltdown-zone',
+  )?.texture?.key)).toBe('vfx-meltdown-eruption');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: testInfo.outputPath('meltdown-field-live.png') });
 });
 
-test('@desktop replays stored wall vectors as vector blades', async ({ page }) => {
+test('@desktop replays stored wall vectors as vector blades', async ({ page }, testInfo) => {
   const { orbId, enemyId } = await prepareDebugFusion(
     page,
     'Digit4',
@@ -1280,11 +1369,93 @@ test('@desktop replays stored wall vectors as vector blades', async ({ page }) =
   await page.waitForTimeout(70);
   await sceneCall(page, (scene, input) => {
     const target = scene.getDebugSnapshot().enemies.find(({ id }) => id === input.enemyId)!;
-    scene.debugPlaceOrb(input.orbId, target.position);
+    scene.children.list.find((child) => child.orbId === input.orbId)!.body!.setVelocity!(0, -520);
+    scene.debugPlaceOrb(input.orbId, { x: target.position.x, y: target.position.y + 80 });
   }, { orbId, enemyId });
-  await expect.poll(async () => activeSceneNames(page), { timeout: 500 })
-    .toContain('fusion-feedback-vector-blade');
+  await expect.poll(async () => sceneCall(page, (scene) => scene.children.list.some(
+    (child) => child.active && child.texture?.key === 'vfx-vector-blade'
+      && child.displayWidth! > child.displayHeight!,
+  )), { intervals: [10], timeout: 1_000 }).toBe(true);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: testInfo.outputPath('vector-blade-live.png') });
 });
+
+for (const [core, key, effect] of [
+  ['corrosion', 'Digit2', 'corrosion-cloud'],
+  ['split', 'Digit5', 'split-burst'],
+  ['explosion', 'Digit6', 'explosion-burst'],
+] as const) {
+  test(`@desktop @mobile connects ${core} art to real orb hits`, async ({ page, isMobile }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const { box } = await loadCanvas(page, '', key);
+    expect((await snapshot(page)).orbs[0]!.coreType).toBe(core);
+    const targetId = await sceneCall(page, (scene, core) => {
+      scene.debugFreezeEnemies();
+      const target = scene.getDebugSnapshot().enemies.find(({ kind }) => kind === 'basic')!;
+      scene.debugSetEnemy(target.id, { x: 225, y: 320 }, 100);
+      // Seed only the proc roll; launch, collision, damage and rendering run normally.
+      (scene as unknown as { combatProcs: { states: Record<string, { random: number }> } })
+        .combatProcs.states[core]!.random = 2048;
+      if (core === 'corrosion') {
+        scene.debugUpgradeOrb(0);
+        scene.debugUpgradeOrb(0);
+      }
+      return target.id;
+    }, core);
+    const aim = clientPoint(box, { x: 340, y: 550 });
+    if (isMobile) {
+      await dispatchTouchPointers(page, [
+        { type: 'pointerdown', pointerId: 77, point: { x: aim.x, y: aim.y + 30 } },
+        { type: 'pointermove', pointerId: 77, point: aim },
+      ]);
+    } else await page.mouse.move(aim.x, aim.y);
+    await expect.poll(async () => (await snapshot(page)).orbs[0]!.state).toBe('active');
+    if (isMobile) await dispatchTouchPointers(page, [
+      { type: 'pointerup', pointerId: 77, point: aim },
+    ]);
+    await sceneCall(page, (scene) => {
+      scene.children.list.find((child) => child.orbId === 0)!.body!.setVelocity!(0, -520);
+      scene.debugPlaceOrb(0, { x: 225, y: 365 });
+    });
+    const textureCount = () => sceneCall(page, (scene, effect) => scene.children.list.filter(
+      (child) => child.active && child.texture?.key === `vfx-${effect}`,
+    ).length, effect);
+    await expect.poll(textureCount, { intervals: [10] }).toBeGreaterThan(0);
+    expect((await snapshot(page)).enemies.find(({ id }) => id === targetId)!.hp).toBeLessThan(100);
+    await page.waitForTimeout(180);
+    if (core === 'split') {
+      const children = await sceneCall(page, (scene) => scene.children.list
+        .filter((child) => child.active && child.temporaryOrbId !== undefined)
+        .map(({ texture, body }) => ({ texture: texture?.key, diameter: body!.width })));
+      expect(children.length).toBeGreaterThan(0);
+      expect(children.every(({ texture }) => texture === 'orb-visual-split')).toBe(true);
+      expect(children.every(({ diameter }) => Math.abs(diameter! - GAME_TUNING.temporaryOrbs.radius * 2) < 0.01)).toBe(true);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`${core}-real-hit.png`) });
+    if (core === 'corrosion') {
+      await page.waitForTimeout(850);
+      await sceneCall(page, (scene, id) => scene.debugSetEnemy(id, { x: 285, y: 340 }, 80), targetId);
+      const field = () => sceneCall(page, (scene) => {
+        const visual = scene.children.list.find((child) => child.active && child.name === 'core-feedback-corrosion');
+        return visual ? { texture: visual.texture?.key, x: visual.x, y: visual.y, frame: visual.frame?.name } : null;
+      });
+      await expect.poll(field).toMatchObject({ texture: 'vfx-corrosion-cloud', x: 285, y: 340 });
+      const before = await field();
+      await expect.poll(field, { intervals: [40] }).not.toEqual(before);
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      const hidden = await field();
+      await page.waitForTimeout(200);
+      expect(await field()).toEqual(hidden);
+      await revealAndRunFirstFrame(page, 0);
+      await expect.poll(field, { timeout: 5_000 }).toBeNull();
+    }
+    expect(errors).toEqual([]);
+  });
+}
 
 test('@desktop shows and expires corrosion and conduction feedback', async ({ page }) => {
   await loadCanvas(page);
@@ -1448,6 +1619,43 @@ test('@desktop renders enemy role and boss state VFX in live combat', async ({ p
     'production-vfx-boss-core-rage',
   ]));
   await page.screenshot({ path: testInfo.outputPath('authored-vfx-batch-4.png') });
+});
+
+test('@desktop @mobile renders and clears the final seventeen authored VFX', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await loadCanvas(page);
+  await sceneCall(page, (scene) => scene.debugFreezeEnemies());
+  const batches = [
+    ['echo-ring', 'inertia-compression', 'resonant-spawn', 'resonant-final', 'nano-seed'],
+    ['reactor-charge', 'cluster-projectile', 'cluster-impact', 'mirror-node', 'vector-blade'],
+    ['photon-beam', 'photon-intersection', 'nano-spread', 'mass-collapse'],
+    ['reactor-blast', 'mirror-intersection', 'meltdown-eruption'],
+  ];
+  for (const [index, ids] of batches.entries()) {
+    const played = await sceneCall(page, (scene, ids) => ids.map((id, index) => (
+      scene.combatVfx.play(id, {
+        position: { x: 95 + index % 3 * 130, y: 330 + Math.floor(index / 3) * 180 },
+      })
+    )), ids);
+    expect(played.every(Boolean)).toBe(true);
+    await page.waitForTimeout(index < 2 ? 140 : 280);
+    const effects = await sceneCall(page, (scene, ids) => {
+      scene.combatVfx.setPaused(true);
+      return scene.children.list
+        .filter((child) => child.active && ids.some((id) => child.name === `production-vfx-${id}`))
+        .map((child) => ({ name: child.name, frame: Number(child.frame?.name) }));
+    }, ids);
+    expect(effects.map(({ name }) => name).sort())
+      .toEqual(ids.map((id) => `production-vfx-${id}`).sort());
+    expect(effects.every(({ frame }) => frame > 0 && frame < 8)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`authored-vfx-final-${index + 1}.png`) });
+    await sceneCall(page, (scene) => scene.combatVfx.setPaused(false));
+    await expect.poll(() => sceneCall(page, (scene, ids) => (
+      ids.reduce((count, id) => count + scene.combatVfx.activeCount(id), 0)
+    ), ids)).toBe(0);
+  }
+  expect(errors).toEqual([]);
 });
 
 test('@desktop lets corrosion finish an enemy without another direct hit', async ({ page }) => {
@@ -2372,6 +2580,95 @@ test('@desktop midboss enforces weakpoint order, pauses reward, and starts stage
   });
   expect(resumed.pauseReasons).not.toContain('bossReward');
   expect(resumed.boss.active).toBe(false);
+});
+
+test('@desktop @mobile presents boss warning, core exposure, and defeat before rewards', async ({ page }, testInfo) => {
+  await page.clock.install();
+  await loadCanvas(page);
+  const hud = page.getByRole('region', { name: '전투 상태' });
+  await advanceToBossWarning(page);
+  await sceneCall(page, (scene) => scene.debugAdvanceEncounter(1000));
+  await expect(hud).toContainText('SENTINEL 보스 접근');
+  expect(await hud.locator('.combat-notice').evaluate((element) =>
+    parseFloat((element as HTMLElement).style.getPropertyValue('--warning-progress')),
+  )).toBeGreaterThanOrEqual(50);
+  await page.screenshot({ path: testInfo.outputPath('boss-warning.png') });
+  await enterMidboss(page);
+  await expect(hud.locator('[data-boss-state]')).toHaveText('방어 부위 2');
+  await page.clock.runFor(450);
+  await page.screenshot({ path: testInfo.outputPath('boss-arrival.png') });
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftWeakpoint', 14);
+    scene.debugDamageBossPart('rightWeakpoint', 14);
+    scene.update(0, 0);
+  });
+  await expect(hud.locator('[data-boss-state]')).toHaveText('코어 노출');
+  expect(await sceneCall(page, (scene) => scene.combatVfx.activeCount('boss-module-break'))).toBe(2);
+  expect(await sceneCall(page, (scene) => scene.combatVfx.activeCount('boss-core-rage'))).toBe(1);
+  await page.clock.runFor(180);
+  await page.screenshot({ path: testInfo.outputPath('boss-core-exposure.png') });
+  const defeated = await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('core', 36);
+    scene.update(0, 0);
+    return scene.getDebugSnapshot();
+  });
+  expect(defeated.pauseReasons).toContain('bossDefeat');
+  expect(defeated.bossRewardVisible).toBe(false);
+  await page.keyboard.press('Digit1');
+  await page.clock.runFor(250);
+  expect((await snapshot(page)).bossRewardVisible).toBe(false);
+  expect((await snapshot(page)).gameplayElapsedMs).toBe(defeated.gameplayElapsedMs);
+  await expect(hud.locator('[data-boss-state]')).toHaveText('격파 완료');
+  await page.screenshot({ path: testInfo.outputPath('boss-defeat.png') });
+  await page.clock.runFor(1000);
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  expect(await sceneCall(page, (scene) => scene.combatVfx.activeCount('boss-defeat'))).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('boss-reward.png') });
+  await chooseBossReward(page);
+  expect((await snapshot(page)).encounter.stageNumber).toBe(2);
+});
+
+test('@desktop holds hidden boss defeat and finishes cosmetic VFX during level-up pauses', async ({ page }) => {
+  await page.clock.install();
+  await loadCanvas(page);
+  await enterMidboss(page);
+  const before = await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftWeakpoint', 14);
+    scene.debugDamageBossPart('rightWeakpoint', 14);
+    scene.debugDamageBossPart('core', 36);
+    scene.debugGrantXp(5);
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    return scene.getDebugSnapshot();
+  });
+  await page.clock.runFor(2000);
+  const hidden = await snapshot(page);
+  expect(hidden.gameplayElapsedMs).toBe(before.gameplayElapsedMs);
+  expect(hidden.pauseReasons).toEqual(['visibility', 'bossDefeat']);
+  expect(hidden.bossRewardVisible).toBe(false);
+  expect(hidden.levelUpVisible).toBe(false);
+  expect(await sceneCall(page, (scene) => scene.combatVfx.activeCount('boss-defeat'))).toBe(1);
+  await revealAndRunFirstFrame(page, 2000);
+  expect((await snapshot(page)).bossRewardVisible).toBe(false);
+  await page.clock.runFor(1100);
+  await expect.poll(async () => (await snapshot(page)).levelUpVisible).toBe(true);
+  expect((await snapshot(page)).bossRewardVisible).toBe(false);
+  await sceneCall(page, (scene) => {
+    scene.combatVfx.play('boss-module-break', { position: { x: 225, y: 120 } });
+    scene.debugShowCoreFeedback('conduction', { x: 225, y: 120 });
+  });
+  const paused = await snapshot(page);
+  await page.clock.runFor(1100);
+  expect(await sceneCall(page, (scene) => scene.combatVfx.activeCount())).toBe(0);
+  expect(await activeSceneNames(page)).not.toContain('core-feedback-conduction');
+  expect((await snapshot(page)).gameplayElapsedMs).toBe(paused.gameplayElapsedMs);
+  const choiceIndex = paused.progression.choices.findIndex((choice) => choice.kind === 'ability');
+  expect(choiceIndex).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press(`Digit${choiceIndex + 1}`);
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(32);
+  await expect.poll(async () => (await snapshot(page)).bossRewardVisible).toBe(true);
+  expect((await snapshot(page)).pauseReasons).toEqual(['bossReward']);
 });
 
 test('@desktop auxiliary link requires a compatible temporary-orb build', async ({ page }) => {

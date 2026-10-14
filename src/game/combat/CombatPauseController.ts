@@ -2,6 +2,7 @@ export type PauseReason =
   | 'visibility'
   | 'loadout'
   | 'levelUp'
+  | 'bossDefeat'
   | 'bossReward'
   | 'runComplete'
   | 'defeated';

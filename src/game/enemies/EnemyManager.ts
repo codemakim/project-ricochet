@@ -131,6 +131,7 @@ export interface EnemyAreaDamageEffect {
 }
 
 export interface EnemyManagerOptions {
+  shooterTuning?: { intervalMs: number; warningMs: number; bulletSpeed: number; damage: number };
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
   temporaryOrbManager?: TemporaryOrbManager;
@@ -229,7 +230,7 @@ export class EnemyManager {
     ));
 
     this.shooterTimer = scene.time.addEvent({
-      delay: GAME_TUNING.enemies.shooter.intervalMs,
+      delay: (options.shooterTuning ?? GAME_TUNING.enemies.shooter).intervalMs,
       loop: true,
       callback: () => this.beginShooterWarnings(),
     });
@@ -795,7 +796,7 @@ export class EnemyManager {
   private handleBulletHit(bullet: Phaser.Physics.Arcade.Sprite): void {
     if (!bullet.active) return;
     bullet.destroy();
-    this.options.onBulletHit(GAME_TUNING.enemies.shooter.damage);
+    this.options.onBulletHit((this.options.shooterTuning ?? GAME_TUNING.enemies.shooter).damage);
   }
 
   private beginShooterWarnings(): void {
@@ -814,7 +815,7 @@ export class EnemyManager {
       playActorState(shooter, 'enemy-shooter', 'charge');
       this.options.onShooterState?.('charge', { x: shooter.x, y: shooter.y });
       const timer = this.scene.time.delayedCall(
-        GAME_TUNING.enemies.shooter.warningMs,
+        (this.options.shooterTuning ?? GAME_TUNING.enemies.shooter).warningMs,
         () => this.finishShooterAttack(shooter),
       );
       this.warningTimers.set(shooter.enemyId, timer);
@@ -845,8 +846,8 @@ export class EnemyManager {
       (bullet.width - sourceRadius * 2) / 2,
       (bullet.height - sourceRadius * 2) / 2,
     ).setVelocity(
-      direction.x * GAME_TUNING.enemies.shooter.bulletSpeed,
-      direction.y * GAME_TUNING.enemies.shooter.bulletSpeed,
+      direction.x * (this.options.shooterTuning ?? GAME_TUNING.enemies.shooter).bulletSpeed,
+      direction.y * (this.options.shooterTuning ?? GAME_TUNING.enemies.shooter).bulletSpeed,
     );
   }
 

@@ -14,6 +14,7 @@ export interface RunIdentity {
 }
 
 export interface RunConfig {
+  combatTrial?: true;
   identity: RunIdentity;
   loadout: CoreLoadout;
   unlockedCoreTypes: OrbCoreId[];
@@ -23,6 +24,7 @@ export interface RunConfig {
 }
 
 export interface RunResult extends RunConfig {
+  defeatCause?: 'contact' | 'breach' | 'bullet' | 'boss';
   success: boolean;
   durationMs: number;
   defeatedBossIds: BossKind[];
@@ -74,10 +76,12 @@ export function createRunResult(
   if (!Number.isFinite(durationMs) || durationMs < 0) {
     throw new RangeError('run duration must be finite and non-negative');
   }
-  if (success && !defeatedBossIds.includes('siege')) {
-    throw new Error('successful run must defeat siege');
+  const finalBoss = config.combatTrial ? 'sentinel' : 'siege';
+  if (success && !defeatedBossIds.includes(finalBoss)) {
+    throw new Error(`successful run must defeat ${finalBoss}`);
   }
   return {
+    ...(config.combatTrial ? { combatTrial: true as const } : {}),
     identity: { ...config.identity },
     loadout: [...config.loadout],
     unlockedCoreTypes: [...config.unlockedCoreTypes],

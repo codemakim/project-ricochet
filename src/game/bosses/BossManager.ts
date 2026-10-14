@@ -40,6 +40,7 @@ import type { ActorRole } from '../visuals/actorVisualProfiles';
 import {
   createActorExitVisual,
   playActorState,
+  playBossEntrance,
 } from '../visuals/registerActorAnimations';
 
 const BOSS_BODY_DEPTH = -3;
@@ -101,6 +102,7 @@ interface PendingHit {
 export type { BossDirectHitEvent } from './bossEncounter';
 
 export interface BossManagerOptions {
+  hp?: { weakpoint: number; core: number };
   kind?: 'sentinel' | 'siege';
   player: Phaser.Physics.Arcade.Sprite;
   orbManager: OrbManager;
@@ -111,6 +113,8 @@ export interface BossManagerOptions {
   playerDamageMultiplier?: number;
   onPlayerHit(damage: number): void;
   onDirectHit(event: BossDirectHitEvent): void;
+  onPartDestroyed?(position: Vector): void;
+  onPhaseChanged?(phase: BossPhase): void;
   onDefeated(): void;
 }
 
@@ -163,6 +167,10 @@ export class BossManager implements BossEncounter {
     private readonly options: BossManagerOptions,
   ) {
     const now = options.getGameplayElapsedMs();
+    if (options.hp) this.state = {
+      ...this.state, leftWeakpointHp: options.hp.weakpoint,
+      rightWeakpointHp: options.hp.weakpoint, coreHp: options.hp.core,
+    };
     this.defenseHp = options.kind === 'siege' ? GAME_TUNING.siegeBoss.defenseHp : 0;
     this.lastGameplayElapsedMs = now;
     this.nextAttackAt = now + nextBossAttack(this.state).intervalMs;
@@ -221,6 +229,7 @@ export class BossManager implements BossEncounter {
       .setDepth(BOSS_PART_DEPTH)
       .setVisible(false);
     (this.partSprites.core.body as Phaser.Physics.Arcade.Body).enable = false;
+    playBossEntrance(scene, [this.body, ...Object.values(this.partSprites)]);
 
     this.aimedBulletGroup = scene.physics.add.group({ allowGravity: false });
     this.fallingHazardGroup = scene.physics.add.group({ allowGravity: false });
@@ -654,6 +663,7 @@ export class BossManager implements BossEncounter {
   }
 
   private damagePart(partId: ManagedPartId, damage: number, reportDefeat = true): boolean {
+    const coreWasExposed = this.exposedParts().includes('core');
     const scaledDamage = damage
       * (this.options.playerDamageMultiplier ?? 1)
       * (this.options.kind === 'siege' ? GAME_TUNING.siegeBoss.damageTakenScale : 1);
@@ -664,8 +674,10 @@ export class BossManager implements BossEncounter {
         playActorState(this.body, 'siege-body', 'hurt');
       } else if (previousHp > 0 && this.defenseHp === 0) {
         createActorExitVisual(this.scene, this.body, 'siege-body', 'broken');
+        this.options.onPartDestroyed?.({ x: this.body.x, y: this.body.y });
       }
       this.synchronizePartBodies();
+      if (!coreWasExposed && this.exposedParts().includes('core')) this.showCoreExposure();
       return false;
     }
     const previousPhase = bossPhase(this.state);
@@ -683,17 +695,24 @@ export class BossManager implements BossEncounter {
         role,
         partId === 'core' ? 'defeated' : 'broken',
       );
+      if (partId !== 'core') this.options.onPartDestroyed?.({ x: sprite.x, y: sprite.y });
+      else if (this.options.kind !== 'siege') {
+        createActorExitVisual(this.scene, this.body, this.bodyActorRole(), 'broken');
+      }
     }
     this.synchronizePartBodies();
-    if (phase === 'core' && previousPhase !== 'core') {
-      playActorState(this.partSprites.core, this.partActorRole('core'), 'exposed');
-    }
+    if (!coreWasExposed && this.exposedParts().includes('core')) this.showCoreExposure();
     if (phase !== previousPhase && phase !== 'defeated') {
       this.nextAttackAt = this.options.getGameplayElapsedMs() + nextBossAttack(this.state).intervalMs;
     }
     const defeated = phase === 'defeated';
     if (defeated && reportDefeat) this.reportDefeat();
     return defeated;
+  }
+
+  private showCoreExposure(): void {
+    playActorState(this.partSprites.core, this.partActorRole('core'), 'exposed');
+    this.options.onPhaseChanged?.('core');
   }
 
   private reportDefeat(): void {
@@ -717,6 +736,7 @@ export class BossManager implements BossEncounter {
       this.body.setVisible(defenseEnabled);
     } else {
       const coreExposed = bossPhase(this.state) === 'core';
+      this.body.setVisible(bossPhase(this.state) !== 'defeated');
       (this.body.body as Phaser.Physics.Arcade.Body).enable = !coreExposed
         && bossPhase(this.state) !== 'defeated';
     }

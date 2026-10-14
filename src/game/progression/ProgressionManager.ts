@@ -14,6 +14,7 @@ import {
   type RunRewardChoice,
 } from './runRewardRules';
 import { BuildState } from './BuildState';
+import { COMBAT_TRIAL } from '../run/combatTrial';
 
 export interface ProgressionContext extends AbilityEligibilityContext {
   readonly orbs: readonly Pick<OrbSnapshot, 'coreType' | 'level'>[];
@@ -42,6 +43,7 @@ export class ProgressionManager {
     private readonly seed: number,
     private readonly build: BuildState = new BuildState(),
     private readonly getContext: () => ProgressionContext = () => DEFAULT_CONTEXT,
+    private readonly combatTrial = false,
   ) {
     this.level = ABILITY_IDS.reduce((total, id) => total + build.rank(id), 0);
     this.normalizeCompletedProgression();
@@ -54,8 +56,8 @@ export class ProgressionManager {
     if (this.isComplete()) return;
 
     this.xp += amount;
-    while (this.xp >= xpRequiredForLevel(this.level)) {
-      this.xp -= xpRequiredForLevel(this.level);
+    while (this.xp >= this.xpRequired()) {
+      this.xp -= this.xpRequired();
       this.level += 1;
       this.pendingChoices += 1;
     }
@@ -99,7 +101,7 @@ export class ProgressionManager {
     return {
       level: this.level,
       xp: this.xp,
-      xpRequired: this.isComplete() ? null : xpRequiredForLevel(this.level),
+      xpRequired: this.isComplete() ? null : this.xpRequired(),
       pendingChoices: this.pendingChoices,
       choices: this.getChoices(),
     };
@@ -108,10 +110,17 @@ export class ProgressionManager {
   private rewardContext() {
     const context = this.getContext();
     return {
+      combatTrial: this.combatTrial,
       orbs: context.orbs,
       abilityRanks: this.build.getRanks(),
       abilityEligibility: context,
     };
+  }
+
+  private xpRequired(): number {
+    return this.combatTrial
+      ? COMBAT_TRIAL.xpSteps[Math.min(this.level, COMBAT_TRIAL.xpSteps.length - 1)]!
+      : xpRequiredForLevel(this.level);
   }
 
   private generateChoices(): void {

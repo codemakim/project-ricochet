@@ -204,6 +204,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel', playerDamageMul
     physics: { add },
     add: { sprite: add.sprite },
     time: { now: 50_000 },
+    tweens: { add: vi.fn() },
   } as unknown as Phaser.Scene;
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 120, 'orb') as FakeSprite & { orbId: number };
@@ -238,6 +239,8 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel', playerDamageMul
   const onPlayerHit = vi.fn();
   const onDirectHit = vi.fn();
   const onDefeated = vi.fn();
+  const onPartDestroyed = vi.fn();
+  const onPhaseChanged = vi.fn();
   const manager = new BossManager(scene, {
     kind,
     player: player as unknown as Phaser.Physics.Arcade.Sprite,
@@ -249,6 +252,8 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel', playerDamageMul
     onPlayerHit,
     onDirectHit,
     onDefeated,
+    onPartDestroyed,
+    onPhaseChanged,
     playerDamageMultiplier,
   });
   const colliderFor = (texture: string, first: unknown = orb) => colliders.find(
@@ -257,7 +262,7 @@ function createBoundary(kind: 'sentinel' | 'siege' = 'sentinel', playerDamageMul
   return {
     manager, gameplay, enemies, player, orb, temporaryOrb, temporaryGroup, sprites, groups,
     colliders, overlaps, handleEnemyHit, handleTemporaryHit, synchronizeOrb,
-    synchronizeTemporary, onPlayerHit, onDirectHit, onDefeated,
+    synchronizeTemporary, onPlayerHit, onDirectHit, onDefeated, onPartDestroyed, onPhaseChanged,
     setExternalBullets: (count: number) => { externalBullets = count; }, colliderFor,
     addRuntimeOrb: () => {
       const runtimeOrb = new FakeSprite(225, 120, 'orb-runtime') as FakeSprite & { orbId: number };
@@ -277,6 +282,25 @@ function updateAt(boundary: ReturnType<typeof createBoundary>, now: number) {
 }
 
 describe('BossManager', () => {
+  it.each(['sentinel', 'siege'] as const)('reports %s part breaks from secondary damage and only exposes an unshielded core', (kind) => {
+    const { manager, onPartDestroyed, onPhaseChanged } = createBoundary(kind);
+    for (const id of ['leftWeakpoint', 'rightWeakpoint']) {
+      const position = manager.getTargetPosition(id)!;
+      manager.applyAreaDamage(position, 1, 1000);
+      manager.applyDirectDamage(id, 1000);
+    }
+    expect(onPartDestroyed).toHaveBeenCalledTimes(2);
+    expect(onPhaseChanged).toHaveBeenCalledTimes(kind === 'siege' ? 0 : 1);
+    if (kind === 'siege') {
+      manager.applyDirectDamage('defenseModule', 1000);
+      expect(onPartDestroyed).toHaveBeenCalledTimes(3);
+    }
+    expect(onPhaseChanged).toHaveBeenCalledExactlyOnceWith('core');
+    manager.applyDirectDamage('core', 1000);
+    expect(onPhaseChanged).toHaveBeenCalledOnce();
+    expect(onPartDestroyed).toHaveBeenCalledTimes(kind === 'siege' ? 3 : 2);
+  });
+
   it('runs the siege variant with a moving laser warning', () => {
     const boundary = createBoundary('siege');
     expect(boundary.manager.getSnapshot()).toMatchObject({

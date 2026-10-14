@@ -15,7 +15,7 @@ html, body, #app-root, #game-root {
 
 #game-root {
   display: grid;
-  grid-template-rows: 84px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   justify-items: center;
   touch-action: none;
 }
@@ -28,6 +28,7 @@ html, body, #app-root, #game-root {
 }
 
 .combat-hud {
+  min-height: 84px;
   position: relative;
   width: min(450px, 100%);
   padding: 9px 12px;
@@ -57,10 +58,19 @@ html, body, #app-root, #game-root {
 .combat-health progress { color: #83e6b5; }
 .combat-hud[data-danger="true"] .combat-health,
 .combat-hud[data-danger="true"] .combat-health progress { color: #ff8792; }
-.combat-notice { margin: 10px 0 0; color: #a4b8c9; font-size: 11px; text-align: center; }
+.combat-notice { position: relative; margin: 10px 0 0; color: #a4b8c9; font-size: 11px; text-align: center; }
+.combat-trial-status { margin: 7px 0 0; color: #9fc9d4; text-align: center; font-size: 11px; }
+.combat-trial-status[data-recovered="true"] { color: #ffd18a; }
 .combat-notice[data-warning="true"] { color: #ffcf5c; letter-spacing: .08em; }
-.combat-boss { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 9px; color: #ffcf5c; font-size: 11px; letter-spacing: .1em; }
+.combat-notice[data-warning="true"]::after { content: ''; position: absolute; left: 0; bottom: -5px; width: var(--warning-progress); height: 2px; background: #ffcf5c; }
+.combat-boss { display: grid; grid-template-columns: auto minmax(20px, 1fr) auto; align-items: center; gap: 8px; margin-top: 9px; color: #ffcf5c; font-size: 11px; letter-spacing: .03em; }
 .combat-boss progress { color: #ffbc60; }
+.combat-boss[data-exposed="true"], .combat-boss[data-exposed="true"] progress { color: #ff8792; }
+.combat-boss[data-defeated="true"] { color: #a9f5cf; }
+@media (prefers-reduced-motion: no-preference) {
+  .combat-boss { animation: boss-arrival 420ms ease-out; }
+  @keyframes boss-arrival { from { opacity: .45; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}
 .combat-hud [hidden] { display: none; }
 
 canvas {

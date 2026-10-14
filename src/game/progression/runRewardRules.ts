@@ -1,4 +1,5 @@
 import { GAME_TUNING } from '../config/gameTuning';
+import { COMBAT_TRIAL } from '../run/combatTrial';
 import {
   ORB_CORE_IDS,
   type OrbCoreId,
@@ -24,6 +25,7 @@ export type RunRewardChoice =
   | { kind: 'orb-fusion'; fusionType: FusionOrbId };
 
 export interface RunRewardContext {
+  readonly combatTrial?: boolean;
   readonly orbs: readonly { coreType: OrbTypeId; level: number }[];
   readonly abilityRanks: Readonly<AbilityRanks>;
   readonly abilityEligibility: AbilityEligibilityContext;
@@ -34,6 +36,13 @@ export function selectRunRewardOptions(
   choiceLevel: number,
   seed: number,
 ): RunRewardChoice[] {
+  if (context.combatTrial) {
+    return COMBAT_TRIAL.coreTypes.flatMap((coreType): RunRewardChoice[] => {
+      if (context.orbs.length < COMBAT_TRIAL.maximumOrbs) return [{ kind: 'orb-add', coreType }];
+      return context.orbs.some((orb) => orb.coreType === coreType && orb.level < orbMaximumLevel(coreType))
+        ? [{ kind: 'orb-upgrade', coreType }] : [];
+    });
+  }
   const tuning = GAME_TUNING.rewardFlow.mixedCards;
   const abilityChoices = selectAbilityOptions(
     context.abilityRanks,
@@ -90,6 +99,7 @@ export function runRewardChoiceKey(choice: RunRewardChoice): string {
 }
 
 export function hasEligibleRunReward(context: RunRewardContext): boolean {
+  if (context.combatTrial) return selectRunRewardOptions(context, 0, 0).length > 0;
   if (eligibleAbilityIds(
     context.abilityRanks,
     context.abilityEligibility,

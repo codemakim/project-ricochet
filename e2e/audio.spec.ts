@@ -27,7 +27,7 @@ test('@desktop @mobile plays combat audio, persists mute and clears it on game d
     if (new URL(response.url()).pathname.startsWith('/assets/combat/audio/')
       && !response.ok() && response.status() !== 304) failures.push(response.url());
   });
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '출격', exact: true }).click();
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
@@ -76,7 +76,7 @@ test('@desktop @mobile plays combat audio, persists mute and clears it on game d
 });
 
 test('@desktop keeps boss music synchronized through rewards and hidden-tab pause', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '출격', exact: true }).click();
   await expect.poll(() => state(page)).toMatchObject({ available: true });
   await page.keyboard.press('ArrowUp');

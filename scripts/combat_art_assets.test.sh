@@ -33,6 +33,20 @@ while IFS='|' read -r key runtime_path _master_size _runtime_size _colors _alpha
     || fail "$key runtime asset must equal its authored source"
 done < <(select_art_assets)
 
+vfx_count=0
+while IFS='|' read -r _kind source_path runtime_path; do
+  id="${source_path#vfx/}"
+  id="${id%.png}"
+  [[ "$(magick identify -format '%wx%h' "$ROOT/assets-source/combat/vfx-masters/$id-grid.png")" == '1536x1024' ]] \
+    || fail "$id must have a 4x2 authored master"
+  [[ "$(magick identify -format '%wx%h' "$ROOT/public/assets/combat/$runtime_path")" == '2048x256' ]] \
+    || fail "$id must ship eight 256px frames"
+  cmp "$ROOT/assets-source/combat/$source_path" "$ROOT/public/assets/combat/$runtime_path" \
+    || fail "$id runtime VFX must equal its authored source"
+  vfx_count=$((vfx_count + 1))
+done < <(select_animation_assets "$ROOT/assets-source/combat" vfx)
+[[ "$vfx_count" == 36 ]] || fail 'all 36 VFX must have authored sheets'
+
 if select_art_assets unknown >/dev/null 2>&1; then
   fail 'unknown asset key must fail'
 fi

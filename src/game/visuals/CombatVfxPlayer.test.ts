@@ -3,12 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { COMBAT_VFX_PROFILES } from './combatVfxProfiles';
 import { CombatVfxPlayer } from './CombatVfxPlayer';
 
-class FakeTimer {
-  removed = false;
-  constructor(readonly dueAt: number, readonly callback: () => void) {}
-  remove(): void { this.removed = true; }
-}
-
 class FakeSprite {
   active = true;
   destroyed = false;
@@ -18,6 +12,12 @@ class FakeSprite {
   scaleY = 0;
   name = '';
   animation = '';
+  complete?: () => void;
+  paused = false;
+  anims = {
+    pause: () => { this.paused = true; },
+    resume: () => { this.paused = false; },
+  };
   constructor(public x: number, public y: number, readonly textureKey: string) {}
   setName(value: string): this { this.name = value; return this; }
   setDepth(): this { return this; }
@@ -26,13 +26,12 @@ class FakeSprite {
   setAlpha(value: number): this { this.alpha = value; return this; }
   setRotation(value: number): this { this.rotation = value; return this; }
   play(value: string): this { this.animation = value; return this; }
+  once(_event: string, callback: () => void): this { this.complete = callback; return this; }
   destroy(): void { this.active = false; this.destroyed = true; }
 }
 
 function boundary() {
   const objects: FakeSprite[] = [];
-  const timers: FakeTimer[] = [];
-  let now = 0;
   const animationKeys = new Set<string>();
   const scene = {
     add: {
@@ -46,30 +45,14 @@ function boundary() {
       exists: (key: string) => animationKeys.has(key),
       create: ({ key }: { key: string }) => animationKeys.add(key),
     },
-    time: {
-      delayedCall: (delay: number, callback: () => void) => {
-        const timer = new FakeTimer(now + delay, callback);
-        timers.push(timer);
-        return timer;
-      },
-    },
     game: { device: { os: { desktop: false } } },
   } as unknown as Phaser.Scene;
-  const advance = (deltaMs: number) => {
-    now += deltaMs;
-    for (const timer of timers) {
-      if (!timer.removed && timer.dueAt <= now) {
-        timer.removed = true;
-        timer.callback();
-      }
-    }
-  };
-  return { scene, objects, timers, advance };
+  return { scene, objects };
 }
 
 describe('CombatVfxPlayer', () => {
   it('creates no physics body, enforces per-effect cap, and expires', () => {
-    const { scene, objects, advance } = boundary();
+    const { scene, objects } = boundary();
     const player = new CombatVfxPlayer(scene);
     for (let index = 0; index < 20; index += 1) {
       player.play('orb-direct-hit', {
@@ -81,22 +64,39 @@ describe('CombatVfxPlayer', () => {
     expect(player.activeCount('orb-direct-hit')).toBe(
       COMBAT_VFX_PROFILES['orb-direct-hit'].maximumConcurrent,
     );
-    advance(COMBAT_VFX_PROFILES['orb-direct-hit'].durationMs);
+    objects.forEach((sprite) => sprite.complete?.());
     expect(player.activeCount()).toBe(0);
     expect(objects.every(({ destroyed }) => destroyed)).toBe(true);
   });
 
-  it('clears active timers and refuses work after destroy', () => {
-    const { scene, objects, timers } = boundary();
+  it('clears effects for a transition, remains usable, and refuses work after destroy', () => {
+    const { scene, objects } = boundary();
     const player = new CombatVfxPlayer(scene);
     expect(player.play('player-hit', { position: { x: 1, y: 2 }, intensity: 0.5 })).toBe(true);
 
-    player.destroy();
+    player.clear();
 
     expect(player.activeCount()).toBe(0);
     expect(objects[0]?.destroyed).toBe(true);
-    expect(timers[0]?.removed).toBe(true);
+    expect(player.play('boss-defeat', { position: { x: 1, y: 2 } })).toBe(true);
+    objects[0]?.complete?.();
+    expect(player.activeCount('boss-defeat')).toBe(1);
+    player.destroy();
+    expect(player.activeCount()).toBe(0);
     expect(player.play('player-hit', { position: { x: 1, y: 2 }, intensity: 1 })).toBe(false);
+  });
+
+  it('pauses current and newly created animations while hidden', () => {
+    const { scene, objects } = boundary();
+    const player = new CombatVfxPlayer(scene);
+    player.play('boss-defeat', { position: { x: 1, y: 2 } });
+    player.setPaused(true);
+    player.play('boss-core-rage', { position: { x: 1, y: 2 } });
+    expect(objects.every((sprite) => sprite.paused)).toBe(true);
+    player.setPaused(false);
+    expect(objects.every((sprite) => !sprite.paused)).toBe(true);
+    objects.forEach((sprite) => sprite.complete?.());
+    expect(player.activeCount()).toBe(0);
   });
 
   it('stretches directional lightning without thickening it', () => {

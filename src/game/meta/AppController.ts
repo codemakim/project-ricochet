@@ -26,6 +26,7 @@ import {
   type Settlement,
 } from './metaProgress';
 import { META_TUNING } from './metaTuning';
+import { COMBAT_TRIAL } from '../run/combatTrial';
 
 export function createCombatGame(parent: string, config?: RunConfig): Phaser.Game {
   const mount = document.getElementById(parent);
@@ -60,6 +61,8 @@ export class AppController {
   private workshopMediaCleanup?: () => void;
   private developmentBalance?: DevelopmentBalanceSettings;
   private developmentLoadout?: [OrbCoreId];
+  private trialCore: OrbCoreId = 'explosion';
+  private legacyCampaign = developmentBuild() && new URLSearchParams(location.search).has('campaign');
 
   constructor(
     private readonly root: HTMLElement,
@@ -75,31 +78,36 @@ export class AppController {
   private renderDeploy(): void {
     this.workshopMediaCleanup?.();
     this.workshopMediaCleanup = undefined;
-    const options = this.progress.unlockedCores
+    const options = (this.legacyCampaign ? this.progress.unlockedCores : COMBAT_TRIAL.coreTypes)
       .map((id) => `<option value="${id}">${ORB_CORE_DEFINITIONS[id].label}</option>`)
       .join('');
     this.root.innerHTML = `
       <section class="meta-screen">
         <p class="eyebrow">PROJECT RICOCHET</p>
-        <h1>출격 준비</h1>
-        <p class="parts">부품 <strong>${this.progress.parts}</strong></p>
+        <h1>${this.legacyCampaign ? '출격 준비' : '리코셰 전투 시험판'}</h1>
+        ${this.legacyCampaign ? `<p class="parts">부품 <strong>${this.progress.parts}</strong></p>`
+          : '<p>6개 편대 · SENTINEL 격파</p><p>조준해 발사하고, 돌아오는 구슬을 가까이서 회수하세요.<br>근접 회수 뒤 첫 타격은 50% 강해집니다.</p>'}
         <div class="loadout" aria-label="시작 코어 구성">
           ${this.progress.loadout.map((_, index) => `
-            <label>시작 코어
+            <label>${this.legacyCampaign ? '시작 코어' : '시작 구슬 · 3개'}
               <select data-loadout-slot="${index}">${options}</select>
             </label>
           `).join('')}
         </div>
         <button class="primary" data-action="deploy">출격</button>
-        <button data-action="workshop">코어 작업장</button>
-        ${developmentBuild() ? '<button data-action="development-balance">밸런스 테스트</button>' : ''}
+        ${this.legacyCampaign ? '<button data-action="workshop">코어 작업장</button><button data-action="development-balance">밸런스 테스트</button>' : ''}
+        ${developmentBuild() ? `<button data-action="toggle-campaign">${this.legacyCampaign ? '전투 시험판으로' : '기존 3스테이지 · 개발용'}</button>` : ''}
       </section>
     `;
-    this.progress.loadout.forEach((core, index) => {
+    this.progress.loadout.forEach((_, index) => {
       const select = this.root.querySelector<HTMLSelectElement>(`[data-loadout-slot="${index}"]`);
-      if (select) select.value = core;
+      if (select) select.value = this.legacyCampaign ? this.progress.loadout[0] : this.trialCore;
     });
     this.root.querySelector('[data-action="deploy"]')?.addEventListener('click', () => this.deploy());
+    this.root.querySelector('[data-action="toggle-campaign"]')?.addEventListener('click', () => {
+      this.legacyCampaign = !this.legacyCampaign;
+      this.renderDeploy();
+    });
     this.root.querySelector('[data-action="workshop"]')?.addEventListener('click', () => this.renderWorkshop());
     this.root.querySelector('[data-action="development-balance"]')
       ?.addEventListener('click', () => {
@@ -110,16 +118,18 @@ export class AppController {
 
   private deploy(): void {
     const loadout = this.selectedLoadout();
-    this.progress = setLoadout(this.progress, loadout);
-    this.store.save(this.progress);
-    const config = createRunConfig(
-      this.progress.loadout,
+    if (this.legacyCampaign) {
+      this.progress = setLoadout(this.progress, loadout);
+      this.store.save(this.progress);
+    } else this.trialCore = loadout[0];
+    const config: RunConfig = { ...createRunConfig(
+      loadout,
       undefined,
       undefined,
-      this.progress.unlockedCores,
-      this.progress.discoveredCores,
-      this.progress.discoveredFusions,
-    );
+      this.legacyCampaign ? this.progress.unlockedCores : COMBAT_TRIAL.coreTypes,
+      this.legacyCampaign ? this.progress.discoveredCores : COMBAT_TRIAL.coreTypes,
+      this.legacyCampaign ? this.progress.discoveredFusions : [],
+    ), ...(this.legacyCampaign ? {} : { combatTrial: true as const }) };
     this.root.innerHTML = '<main id="game-root" aria-label="Project Ricochet game"></main>';
     this.game = createCombatGame('game-root', config);
     this.game.events.once(RUN_ENDED_EVENT, (result: RunResult) => this.finish(result));
@@ -128,7 +138,7 @@ export class AppController {
 
   private selectedLoadout(): [OrbCoreId] {
     const selected = this.root.querySelector<HTMLSelectElement>('[data-loadout-slot]')?.value;
-    return [(selected as OrbCoreId | undefined) ?? this.progress.loadout[0]];
+    return [(selected as OrbCoreId | undefined) ?? this.trialCore];
   }
 
   private renderDevelopmentBalance(): void {
@@ -189,6 +199,29 @@ export class AppController {
   }
 
   private finish(result: RunResult): void {
+    if (result.combatTrial) {
+      this.game?.destroy(true);
+      this.game = undefined;
+      const seconds = Math.floor(result.durationMs / 1000);
+      const defeatReason = {
+        contact: '적과 충돌했습니다. 접근하는 적을 피하면서 회수하세요.',
+        breach: '적이 방어선을 돌파했습니다. 화면 아래쪽 적부터 처리하세요.',
+        bullet: '적 탄환에 격추됐습니다. 발사 예고 뒤 옆으로 이동하세요.',
+        boss: '보스 공격에 격추됐습니다. 공격 예고 범위를 먼저 벗어나세요.',
+      }[result.defeatCause ?? 'contact'];
+      this.root.innerHTML = `
+        <section class="meta-screen result">
+          <p class="eyebrow">RICOCHET · COMBAT TRIAL</p>
+          <h1>${result.success ? 'SENTINEL 격파' : '기체 파괴'}</h1>
+          <p>전투 시간 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}</p>
+          <p>${result.success ? '다른 구슬로 다시 도전해 보세요.' : defeatReason}</p>
+          <button class="primary" data-action="retry-trial">같은 구슬로 재도전</button>
+          <button data-action="continue">구슬 바꾸기</button>
+        </section>`;
+      this.root.querySelector('[data-action="retry-trial"]')?.addEventListener('click', () => this.deploy());
+      this.root.querySelector('[data-action="continue"]')?.addEventListener('click', () => this.renderDeploy());
+      return;
+    }
     const settlement = settleRun(this.progress, result);
     this.progress = settlement.progress;
     this.store.save(this.progress);

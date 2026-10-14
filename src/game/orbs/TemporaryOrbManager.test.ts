@@ -39,6 +39,7 @@ class FakeSprite {
     this.body.center = { x, y };
   }
 
+  setRotation(): this { return this; }
   setCircle(radius: number): this { this.circle = radius; return this; }
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
@@ -156,7 +157,7 @@ describe('TemporaryOrbManager', () => {
     expect(group.children.every((sprite) => (
       sprite.x === 10
       && sprite.y === 20
-      && sprite.texture === 'orb-temporary'
+      && sprite.texture === 'orb-visual-split'
       && sprite.circle! * sprite.scaleX === GAME_TUNING.temporaryOrbs.radius
       && sprite.displayWidth === GAME_TUNING.visual.friendly.temporaryOrb.width
       && sprite.bounce?.[0] === 1
@@ -311,6 +312,7 @@ describe('TemporaryOrbManager', () => {
     });
 
     expect(manager.getSnapshot()[0]).toMatchObject({ fusionSource });
+    expect(group.children[0]?.texture).toBe('orb-visual-resonant-swarm');
     expect(manager.handleEnemyHit(group.children[0] as never, 1, 9, 200))
       .toMatchObject({ fusionSource });
     manager.update(999);

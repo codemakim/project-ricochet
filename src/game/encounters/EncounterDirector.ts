@@ -2,6 +2,7 @@ import { GAME_TUNING, type BossKind } from '../config/gameTuning';
 import { GAME_HEIGHT } from '../constants';
 import type { DevelopmentBalanceSettings } from '../dev/developmentBalanceSettings';
 import type { EnemySpec } from '../enemies/enemyRules';
+import { COMBAT_TRIAL, TRIAL_FORMATIONS, TRIAL_STAGE } from '../run/combatTrial';
 import { canReleaseFormation, formationDepleted } from './encounterRules';
 import {
   type BossDefeatAdvance,
@@ -50,10 +51,12 @@ export class EncounterDirector {
   private lastFormationId: string | null = null;
   private lastFormationRemainingRatio: number | null = null;
   private activePopulation = 0;
+  private formationElapsedMs = 0;
 
   constructor(
     private readonly runSeed = 0,
     private readonly developmentBalance?: DevelopmentBalanceSettings,
+    private readonly combatTrial = false,
   ) {
     this.stageOrder = resolveStageFormationOrder(this.activeStage(), runSeed);
   }
@@ -78,6 +81,10 @@ export class EncounterDirector {
     if (this.state !== 'running') return NO_UPDATE;
 
     this.stageElapsedMs += deltaMs;
+    this.formationElapsedMs += deltaMs;
+    if (this.combatTrial && this.stageElapsedMs >= COMBAT_TRIAL.bossAtMs) {
+      return this.beginBossWarning();
+    }
     if (this.formationIndex < 0) return this.releaseFormation(0, enemyState);
 
     const remaining = enemyState.formationPopulations[this.lastFormationId!] ?? 0;
@@ -85,7 +92,12 @@ export class EncounterDirector {
     if (this.formationIndex === this.stageOrder.length - 1) {
       return enemyState.activePopulation === 0 ? this.beginBossWarning() : NO_UPDATE;
     }
-    if (!formationDepleted(this.lastFormationInitialPopulation, remaining)) {
+    if (this.combatTrial && enemyState.activePopulation > 0
+      && this.formationElapsedMs < COMBAT_TRIAL.waveMinimumMs) {
+      return NO_UPDATE;
+    }
+    if (!formationDepleted(this.lastFormationInitialPopulation, remaining)
+      && !(this.combatTrial && this.formationElapsedMs >= COMBAT_TRIAL.waveMaximumMs)) {
       if (enemyState.activePopulation > 0) this.emptyElapsedMs = 0;
       return NO_UPDATE;
     }
@@ -93,7 +105,8 @@ export class EncounterDirector {
     if (enemyState.activePopulation === 0) {
       this.emptyElapsedMs += deltaMs;
       const multiplier = this.developmentBalance?.reinforcementIntervalMultiplier ?? 1;
-      if (this.emptyElapsedMs < GAME_TUNING.encounter.emptyRespawnMs * multiplier) {
+      const breather = this.combatTrial ? COMBAT_TRIAL.clearBreatherMs : GAME_TUNING.encounter.emptyRespawnMs;
+      if (this.emptyElapsedMs < breather * multiplier) {
         return NO_UPDATE;
       }
     } else {
@@ -116,7 +129,7 @@ export class EncounterDirector {
       throw new Error(`cannot mark boss defeated while encounter state is ${this.state}`);
     }
     this.bossesDefeated += 1;
-    if (this.stageIndex + 1 >= STAGES.length) {
+    if (this.combatTrial || this.stageIndex + 1 >= STAGES.length) {
       this.state = 'runComplete';
       this.pendingBossKind = null;
       return { type: 'runCompleted' };
@@ -170,12 +183,14 @@ export class EncounterDirector {
       stageElapsedMs: this.stageElapsedMs,
       warningElapsedMs: this.warningElapsedMs,
       pendingBossKind: this.pendingBossKind,
+      bossWarningMs: stage.boss.warningMs,
+      formationCount: this.stageOrder.length,
       bossesDefeated: this.bossesDefeated,
     } as const;
   }
 
   private activeStage(): StageDefinition {
-    return STAGES[this.stageIndex]!;
+    return this.combatTrial ? TRIAL_STAGE : STAGES[this.stageIndex]!;
   }
 
   private paragraphAt(index: number): StageParagraphDefinition {
@@ -184,7 +199,8 @@ export class EncounterDirector {
 
   private createFormation(index: number): FormationResult {
     const order = this.stageOrder[index]!;
-    return createAuthoredFormation(this.activeStage(), this.paragraphAt(index), order.id);
+    return createAuthoredFormation(this.activeStage(), this.paragraphAt(index), order.id,
+      this.combatTrial ? TRIAL_FORMATIONS : undefined);
   }
 
   private releaseFormation(
@@ -193,6 +209,7 @@ export class EncounterDirector {
     formation = this.createFormation(index),
   ): EncounterUpdate {
     this.formationIndex = index;
+    this.formationElapsedMs = 0;
     this.emptyElapsedMs = 0;
     this.lastFormationId = formation.id;
     this.lastFormationInitialPopulation = formation.populationCost;

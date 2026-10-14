@@ -100,4 +100,14 @@ describe('combat audio lifecycle', () => {
     vi.runAllTimers();
     expect(finished).not.toHaveBeenCalled();
   });
+
+  it('waits for the siege defense module before sounding core exposure', () => {
+    const { audio } = setup();
+    audio.setBoss(true);
+    audio.observeBoss('core', { core: 36, defenseModule: 20 });
+    expect(audio.getSnapshot().played.core).toBeUndefined();
+    audio.observeBoss('core', { core: 36, defenseModule: 0 });
+    expect(audio.getSnapshot().played.core).toBe(1);
+    audio.destroy();
+  });
 });

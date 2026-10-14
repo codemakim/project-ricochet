@@ -39,7 +39,10 @@ mkdir -p "$SOURCE"
 for id in \
   player-launch player-recover player-hit player-defeat orb-ricochet enemy-break \
   shooter-charge shooter-fire armored-brace splitter-fracture boss-module-break boss-core-rage \
-  explosion-burst conduction-arc enemy-hit orb-direct-hit corrosion-cloud split-burst boss-defeat
+  explosion-burst conduction-arc enemy-hit orb-direct-hit corrosion-cloud split-burst boss-defeat \
+  echo-ring inertia-compression photon-beam photon-intersection resonant-spawn resonant-final \
+  nano-seed nano-spread mass-collapse reactor-charge reactor-blast cluster-projectile cluster-impact \
+  mirror-node mirror-intersection meltdown-eruption vector-blade
 do
   build_strip "$id"
 done

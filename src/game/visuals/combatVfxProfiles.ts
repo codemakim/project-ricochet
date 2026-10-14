@@ -9,7 +9,7 @@ export interface CombatVfxProfile {
   url: string;
   frameWidth: 256;
   frameHeight: 256;
-  frameCount: 4 | 8;
+  frameCount: 8;
   frameRate: number;
   durationMs: number;
   scale: number;
@@ -30,28 +30,28 @@ const LARGE = new Set<CombatVfxId>([
 ]);
 
 const AUTHORED_MOTION = {
-  'player-launch': { frameCount: 8, durationMs: 240, scale: 0.8, alpha: 0.45, maximumConcurrent: 2 },
-  'player-recover': { frameCount: 8, durationMs: 280, scale: 1, alpha: 0.48, maximumConcurrent: 2 },
-  'player-hit': { frameCount: 8, durationMs: 320, scale: 1.1, alpha: 0.75 },
-  'player-defeat': { frameCount: 8, durationMs: 900, scale: 1.8 },
-  'orb-ricochet': { frameCount: 8, durationMs: 240, scale: 0.9, alpha: 0.7 },
-  'enemy-break': { frameCount: 8, durationMs: 680, scale: 1.5 },
-  'shooter-charge': { frameCount: 8, durationMs: 720, scale: 1.6 },
-  'shooter-fire': { frameCount: 8, durationMs: 420, scale: 1.4 },
-  'armored-brace': { frameCount: 8, durationMs: 600, scale: 1.6 },
-  'splitter-fracture': { frameCount: 8, durationMs: 600, scale: 1.5 },
-  'boss-module-break': { frameCount: 8, durationMs: 760, scale: 1.8 },
-  'boss-core-rage': { frameCount: 8, durationMs: 900, scale: 1.5 },
-  'enemy-hit': { frameCount: 8, durationMs: 200, scale: 0.9, alpha: 0.55 },
-  'orb-direct-hit': { frameCount: 8, durationMs: 200, scale: 0.9, alpha: 0.62 },
-  'corrosion-cloud': { frameCount: 8, durationMs: 800, scale: 1.6 },
-  'split-burst': { frameCount: 8, durationMs: 520, scale: 1.5 },
-  'boss-defeat': { frameCount: 8, durationMs: 900, scale: 2.5, alpha: 0.82 },
-  'conduction-arc': { frameCount: 8, durationMs: 500, scale: 1.25 },
-  'explosion-burst': { frameCount: 8, durationMs: 560, scale: 1.5 },
+  'player-launch': { durationMs: 240, scale: 0.8, alpha: 0.45, maximumConcurrent: 2 },
+  'player-recover': { durationMs: 280, scale: 1, alpha: 0.48, maximumConcurrent: 2 },
+  'player-hit': { durationMs: 320, scale: 1.1, alpha: 0.75 },
+  'player-defeat': { durationMs: 900, scale: 1.8 },
+  'orb-ricochet': { durationMs: 240, scale: 0.9, alpha: 0.7 },
+  'enemy-break': { durationMs: 680, scale: 1.5 },
+  'shooter-charge': { durationMs: 720, scale: 1.6 },
+  'shooter-fire': { durationMs: 420, scale: 1.4 },
+  'armored-brace': { durationMs: 600, scale: 1.6 },
+  'splitter-fracture': { durationMs: 600, scale: 1.5 },
+  'boss-module-break': { durationMs: 760, scale: 1.8 },
+  'boss-core-rage': { durationMs: 900, scale: 1.5 },
+  'enemy-hit': { durationMs: 200, scale: 0.9, alpha: 0.55 },
+  'orb-direct-hit': { durationMs: 200, scale: 0.9, alpha: 0.62 },
+  'corrosion-cloud': { durationMs: 800, scale: 1.6 },
+  'split-burst': { durationMs: 520, scale: 1.5 },
+  'boss-defeat': { durationMs: 900, scale: 3.75, alpha: 0.82 },
+  'conduction-arc': { durationMs: 500, scale: 1.25 },
+  'explosion-burst': { durationMs: 560, scale: 1.5 },
 } as const satisfies Partial<Record<
   CombatVfxId,
-  Pick<CombatVfxProfile, 'frameCount' | 'durationMs' | 'scale'>
+  Pick<CombatVfxProfile, 'durationMs' | 'scale'>
     & Partial<Pick<CombatVfxProfile, 'alpha' | 'maximumConcurrent'>>
 >>;
 
@@ -59,7 +59,7 @@ export const COMBAT_VFX_PROFILES = Object.fromEntries(
   REQUIRED_COMBAT_VFX_IDS.map((id): [CombatVfxId, CombatVfxProfile] => {
     const authored: Partial<CombatVfxProfile> | undefined = AUTHORED_MOTION[id as keyof typeof AUTHORED_MOTION];
     const durationMs = authored?.durationMs ?? (LONG_LIVED.has(id) ? 640 : 320);
-    const frameCount = authored?.frameCount ?? 4;
+    const frameCount = 8;
     return [id, {
       id,
       textureKey: `vfx-${id}`,

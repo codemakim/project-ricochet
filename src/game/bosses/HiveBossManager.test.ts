@@ -171,7 +171,7 @@ function createBoundary(playerDamageMultiplier = 1) {
       return overlap;
     },
   };
-  const scene = { physics: { add }, add: { sprite: add.sprite } } as unknown as Phaser.Scene;
+  const scene = { physics: { add }, add: { sprite: add.sprite }, tweens: { add: vi.fn() } } as unknown as Phaser.Scene;
   const player = new FakeSprite(225, 700, 'player');
   const orb = new FakeSprite(225, 140, 'orb') as FakeSprite & { orbId: number };
   orb.orbId = 0;
@@ -210,6 +210,7 @@ function createBoundary(playerDamageMultiplier = 1) {
   const onDirectHit = vi.fn();
   const onPhaseChanged = vi.fn();
   const onDefeated = vi.fn();
+  const onPartDestroyed = vi.fn();
   const enemyBullets = { count: 0 };
   const enemies = { current: [] as EnemySnapshot[] };
   const manager = new HiveBossManager(scene, {
@@ -223,6 +224,7 @@ function createBoundary(playerDamageMultiplier = 1) {
     onDirectHit,
     onPhaseChanged,
     onDefeated,
+    onPartDestroyed,
     playerDamageMultiplier,
   });
   const sprite = (texture: string) => (
@@ -240,7 +242,7 @@ function createBoundary(playerDamageMultiplier = 1) {
   return {
     manager, gameplay, player, orb, temporaryOrb, temporaryGroup, sprites, groups, colliders,
     overlaps, handleEnemyHit, handleTemporaryHit, synchronizeOrb, synchronizeTemporary,
-    onPlayerHit, onDirectHit, onPhaseChanged, onDefeated, orbAddedListeners, permanentResult,
+    onPlayerHit, onDirectHit, onPhaseChanged, onDefeated, onPartDestroyed, orbAddedListeners, permanentResult,
     temporaryResult, sprite, colliderFor, updateAt,
     setEnemyBulletCount: (count: number) => { enemyBullets.count = count; },
     setEnemies: (next: EnemySnapshot[]) => { enemies.current = next; },
@@ -269,6 +271,18 @@ function destroyHiveStructures(boundary: ReturnType<typeof createBoundary>): voi
 }
 
 describe('HiveBossManager', () => {
+  it('reports secondary module destruction once before permanent core exposure', () => {
+    const { manager, onPartDestroyed, onPhaseChanged } = createBoundary();
+    for (const id of ['leftShooter', 'rightShooter', 'leftReflector', 'rightReflector']) {
+      manager.applyAreaDamage(manager.getTargetPosition(id)!, 1, 1000);
+      manager.applyDirectDamage(id, 1000);
+    }
+    expect(onPartDestroyed).toHaveBeenCalledTimes(4);
+    expect(onPhaseChanged).toHaveBeenCalledExactlyOnceWith('permanentlyExposed');
+    manager.applyDirectDamage('core', 1000);
+    expect(onPartDestroyed).toHaveBeenCalledTimes(4);
+  });
+
   it('creates the configured core and four module bodies under the common contract', () => {
     const boundary = createBoundary();
     const encounter: BossEncounter = boundary.manager;

@@ -1,11 +1,22 @@
 import type Phaser from 'phaser';
 import {
   ACTOR_SKIN_PROFILES,
+  BOSS_ENTRANCE,
   actorAnimationKey,
   actorSkinProfile,
   type ActorRole,
   type ActorState,
 } from './actorVisualProfiles';
+
+export function playBossEntrance(scene: Phaser.Scene, sprites: Phaser.GameObjects.Sprite[]): void {
+  if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  scene.tweens.add({
+    targets: sprites,
+    alpha: { from: BOSS_ENTRANCE.alpha, to: 1 },
+    duration: BOSS_ENTRANCE.durationMs,
+    ease: 'Sine.Out',
+  });
+}
 
 export function registerActorAnimations(scene: Phaser.Scene): void {
   for (const profile of ACTOR_SKIN_PROFILES) {

@@ -40,7 +40,7 @@ async function combatSnapshot(page: Page) {
 }
 
 test('@desktop configures and repeats an isolated development balance run', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   const metaBefore = await page.evaluate(() => localStorage.getItem('project-ricochet.meta'));
   await page.getByRole('button', { name: '밸런스 테스트' }).click();
   await page.getByLabel('일반 적 HP').fill('2');
@@ -99,7 +99,7 @@ test('@desktop configures and repeats an isolated development balance run', asyn
 
 test('@mobile development balance form stays scrollable and validates ranges', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '밸런스 테스트' }).click();
   await page.getByLabel('시작 구슬 수').fill('9');
   await expect(page.getByRole('button', { name: '테스트 시작' })).toBeDisabled();
@@ -198,7 +198,7 @@ test('@desktop @smoke completes all three bosses without a final combat reward',
 });
 
 test('@desktop @smoke settles, unlocks a core in the workshop, and persists the redeploy loadout', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await expect(page.getByRole('heading', { name: '출격 준비' })).toBeVisible();
   await page.getByRole('button', { name: '출격', exact: true }).click();
   await expect(page.locator('#game-root canvas')).toBeVisible();
@@ -290,7 +290,7 @@ test('@desktop @smoke settles, unlocks a core in the workshop, and persists the 
 });
 
 test('@desktop workshop uses a card grid and side detail', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '코어 작업장' }).click();
   await expect(page.locator('[data-workshop-card]')).toHaveCount(6);
   await page.locator('[data-workshop-card]').first().click();
@@ -301,7 +301,7 @@ test('@desktop workshop uses a card grid and side detail', async ({ page }) => {
 });
 
 test('@desktop workshop tabs expose a complete keyboard tab pattern', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '코어 작업장' }).click();
   const core = page.getByRole('tab', { name: '기본 구슬' });
   const fusion = page.getByRole('tab', { name: '융합 기록' });
@@ -341,7 +341,7 @@ test('@desktop workshop tabs expose a complete keyboard tab pattern', async ({ p
 
 test('@mobile workshop opens a visible bottom sheet without scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   await page.getByRole('button', { name: '코어 작업장' }).click();
   const card = page.locator('[data-workshop-card]').first();
   await card.click();
@@ -411,7 +411,7 @@ test('@desktop removes the workshop media listener across rerenders and exit', a
     window as typeof window & { workshopMediaListenerCount(): number }
   ).workshopMediaListenerCount());
 
-  await page.goto('/');
+  await page.goto('/?campaign=1');
   expect(await listenerCount()).toBe(0);
   await page.getByRole('button', { name: '코어 작업장' }).click();
   expect(await listenerCount()).toBe(1);
@@ -437,7 +437,7 @@ test('@desktop migrates a schema 1 loadout without losing parts or unlocks', asy
       firstValidRunClaimed: true,
     }));
   });
-  await page.goto('/');
+  await page.goto('/?campaign=1');
 
   await expect(page.locator('[data-loadout-slot]')).toHaveCount(1);
   await expect(page.locator('[data-loadout-slot]')).toHaveValue('inertia');

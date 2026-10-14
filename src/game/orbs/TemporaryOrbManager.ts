@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { GAME_TUNING } from '../config/gameTuning';
+import { orbVisualProfile } from '../visuals/orbVisualProfiles';
 import { normalize, type Vector } from '../math/vector';
 import type { HitResult } from './orbRules';
 
@@ -205,6 +206,7 @@ export class TemporaryOrbManager {
     if (this.destroyed) return;
     for (const [sprite, record] of this.records) {
       if (sprite.active) {
+        sprite.setRotation(nowMs / 1000);
         const body = sprite.body as Phaser.Physics.Arcade.Body;
         record.position = { x: body.center.x, y: body.center.y };
         record.velocity = { x: body.velocity.x, y: body.velocity.y };
@@ -286,7 +288,7 @@ export class TemporaryOrbManager {
     const sprite = this.group.create(
       position.x,
       position.y,
-      this.options.textureKey ?? 'orb-temporary',
+      this.options.textureKey ?? orbVisualProfile(modifiers.fusionSource ? 'resonant-swarm' : 'split').bodyTextureKey,
     ) as TemporaryOrbSprite;
     sprite.temporaryOrbId = this.nextId;
     sprite.expiresAt = expiresAt;

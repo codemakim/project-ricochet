@@ -132,10 +132,11 @@ export class CombatAudio {
 
   observeBoss(phase: string | null, parts: Record<string, number>): void {
     if (!this.boss) return;
+    if (phase === 'core' && (parts.defenseModule ?? 0) > 0) phase = 'shielded';
     for (const [part, hp] of Object.entries(parts)) {
       if (part !== 'core' && hp === 0 && (this.bossParts[part] ?? 0) > 0) this.play('module');
     }
-    if (phase !== this.bossPhase && (phase === 'core' || phase === 'permanentlyExposed')) this.play('core');
+    if (phase !== this.bossPhase && (phase === 'core' || phase === 'exposed' || phase === 'permanentlyExposed')) this.play('core');
     this.bossPhase = phase;
     this.bossParts = { ...parts };
   }
