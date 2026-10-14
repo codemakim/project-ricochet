@@ -68,3 +68,13 @@ focused unit 실행은 `pnpm exec vitest run <test-file...>`을 사용한다.
 
 완료: 핵심 E2E 10개에 `@smoke` 태그와 `pnpm test:e2e:smoke`를 추가했고,
 Playwright trace는 최초 실행 실패 시 보존하도록 설정했다.
+
+## PC 아트 첫 적용 검증
+
+`pnpm exec playwright test e2e/pc-art.spec.ts --project desktop-chromium --workers 1`
+은 일반 시험판의 폭발·분열·부식 출격을 각각 실행한다. 에셋 로딩,
+플레이어 40px 원·기본 적 70×60px 판정, 배경 표시를 검사하고 실제 비행 중
+`pc-trial-*.png`를 저장한다. 그림의 완성도는 캡처를 직접 검토한다.
+
+원화 변환 및 출력 크기·알파 검사는 `rtk bash scripts/build_pc_combat_art.sh`.
+원화와 결과물은 이전 픽셀 파이프라인과 별도 경로를 사용한다.

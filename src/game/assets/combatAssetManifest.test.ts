@@ -51,8 +51,8 @@ describe('combat asset manifest', () => {
 
     expect(spritesheet).toHaveBeenCalledWith(
       'actor-player-default',
-      '/assets/combat/actors/player/default.png',
-      { frameWidth: 82, frameHeight: 82 },
+      '/assets/combat/actors/player/pc.png',
+      { frameWidth: 256, frameHeight: 256 },
     );
     expect(spritesheet).toHaveBeenCalledWith(
       'orb-conduction-arc',
@@ -65,11 +65,16 @@ describe('combat asset manifest', () => {
     );
   });
 
-  it('uses nearest actor sheets and linear permanent-orb presentation', () => {
+  it('uses linear PC actors and orbs while preserving legacy pixel sampling', () => {
     expect(COMBAT_TEXTURE_FILTER).toEqual({ linear: 0, nearest: 1 });
     const permanentKeys = new Set([...ORB_CORE_IDS, ...FUSION_ORB_IDS].map((id) => `orb-${id}`));
     for (const asset of COMBAT_IMAGE_ASSETS) {
-      if (asset.key.startsWith('actor-')) expect(asset.sampling).toBe('nearest');
+      if (asset.key.startsWith('actor-')) {
+        expect(asset.sampling).toBe(
+          asset.key === 'actor-player-default' || asset.key === 'actor-enemy-basic-default'
+            ? 'linear' : 'nearest',
+        );
+      }
       if (asset.key.startsWith('orb-visual-') || permanentKeys.has(asset.key)) {
         expect(asset.sampling).toBe('linear');
       }
@@ -88,7 +93,7 @@ describe('combat asset manifest', () => {
     applyCombatTextureSampling({ textures: { exists, get } } as never);
     expect(get).toHaveBeenCalledOnce();
     expect(get).toHaveBeenCalledWith('player');
-    expect(setFilter).toHaveBeenCalledWith(COMBAT_TEXTURE_FILTER.nearest);
+    expect(setFilter).toHaveBeenCalledWith(COMBAT_TEXTURE_FILTER.linear);
   });
 
   it('returns only missing fallback keys', () => {

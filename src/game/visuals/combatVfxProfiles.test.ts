@@ -69,7 +69,7 @@ describe('combat VFX profiles', () => {
       frameCount: 8, durationMs: 200, scale: 0.9,
     });
     expect(COMBAT_VFX_PROFILES['corrosion-cloud']).toMatchObject({
-      frameCount: 8, durationMs: 800, scale: 1.6,
+      frameCount: 8, durationMs: 800, scale: 1.1,
     });
     expect(COMBAT_VFX_PROFILES['split-burst']).toMatchObject({
       frameCount: 8, durationMs: 520, scale: 1.5,

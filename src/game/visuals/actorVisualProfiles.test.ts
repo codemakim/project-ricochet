@@ -94,10 +94,10 @@ describe('actor visual profiles', () => {
       hurt: [8, 9], broken: [10, 11, 12, 13],
     } as const;
     const expected = {
-      'sentinel-body': body,
-      'sentinel-left-weakpoint': weakpoint,
-      'sentinel-right-weakpoint': weakpoint,
-      'sentinel-core': core,
+      'sentinel-body': { ...body, idle: [0] },
+      'sentinel-left-weakpoint': { ...weakpoint, idle: [0] },
+      'sentinel-right-weakpoint': { ...weakpoint, idle: [0] },
+      'sentinel-core': { ...core, idle: [0] },
       'hive-core': core,
       'hive-left-shooter': hiveShooter,
       'hive-right-shooter': hiveShooter,

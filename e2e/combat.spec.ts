@@ -559,7 +559,7 @@ async function waitForLevelUpSelection(page: Page): Promise<void> {
   }, { intervals: [0], timeout: 5_000 }).toBe(true);
 }
 
-test('@desktop @smoke renders the GBC opening slice and player visual', async ({ page }, testInfo) => {
+test('@desktop @smoke renders the PC opening slice and preserves collision geometry', async ({ page }, testInfo) => {
   const failedAssets: string[] = [];
   page.on('response', (response) => {
     if (response.url().includes('/assets/combat/') && !response.ok()) {
@@ -579,8 +579,8 @@ test('@desktop @smoke renders the GBC opening slice and player visual', async ({
     })
   ));
   expect(dimensions).toEqual([
-    { key: 'player', width: 82, height: 82 },
-    { key: 'enemy-basic', width: 70, height: 60 },
+    { key: 'player', width: 256, height: 256 },
+    { key: 'enemy-basic', width: 280, height: 240 },
     { key: 'enemy-armored', width: 140, height: 120 },
     { key: 'enemy-shooter', width: 70, height: 60 },
     { key: 'boss-body', width: 252, height: 144 },
@@ -615,11 +615,11 @@ test('@desktop @smoke renders the GBC opening slice and player visual', async ({
     orb: { width: 42, height: 42, bodyWidth: 32, bodyHeight: 32 },
   });
   expect(failedAssets).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('gbc-opening-desktop.png') });
+  await page.screenshot({ path: testInfo.outputPath('pc-opening-desktop.png') });
   await enterMidboss(page);
   await expect.poll(async () => (await snapshot(page)).boss.active).toBe(true);
   await page.waitForTimeout(1_000);
-  await page.screenshot({ path: testInfo.outputPath('gbc-sentinel-desktop.png') });
+  await page.screenshot({ path: testInfo.outputPath('pc-sentinel-desktop.png') });
 });
 
 test('@mobile @smoke renders the GBC opening slice', async ({ page }, testInfo) => {

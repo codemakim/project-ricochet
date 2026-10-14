@@ -36,15 +36,17 @@ function profile(
   procVfx: CombatVfxId,
   layers: readonly Layer[],
 ): OrbVisualProfile {
+  const directory = id === 'explosion' || id === 'split' || id === 'corrosion'
+    ? '/assets/combat/pc/orbs' : '/assets/combat/orbs';
   return {
     id,
     identity,
     bodyTextureKey: `orb-visual-${id}`,
-    bodyUrl: `/assets/combat/orbs/${id}/body.png`,
+    bodyUrl: `${directory}/${id}/body.png`,
     layers: layers.map((layer) => ({
       ...layer,
       textureKey: `orb-${id}-${layer.id}`,
-      url: `/assets/combat/orbs/${id}/${layer.id}.png`,
+      url: `${directory}/${id}/${layer.id}.png`,
     })),
     trailVfx: 'orb-ricochet',
     hitVfx: 'orb-direct-hit',
@@ -85,9 +87,8 @@ const echoProfile = profile('echo', 'alternating-lens-ring', 'echo-ring', [
   pulse('lens', 720),
   pulse('ring', 720),
 ]);
-const corrosionProfile = profile('corrosion', 'rising-bubbles-gas', 'corrosion-cloud', [
-  frames('bubbles', 8),
-  spin('gas', 1, 0.7),
+const corrosionProfile = profile('corrosion', 'orbiting-liquid-nanites', 'corrosion-cloud', [
+  spin('energy', 1, 0.7),
 ]);
 const conductionProfile = profile('conduction', 'clockwise-surface-arcs', 'conduction-arc', [
   frames('arc', 12),
@@ -98,12 +99,10 @@ const inertiaProfile = profile('inertia', 'counter-rotating-flywheel', 'inertia-
   spin('shell', -1, 1.1),
 ]);
 const splitProfile = profile('split', 'dual-orbiting-nuclei', 'split-burst', [
-  orbit('nucleus-a', 760, 0),
-  orbit('nucleus-b', 760, Math.PI),
+  spin('energy', -1, 1.2),
 ]);
 const explosionProfile = profile('explosion', 'breathing-heat-core', 'explosion-burst', [
-  pulse('heat', 520),
-  frames('sparks', 9),
+  pulse('energy', 620),
 ]);
 const photonOrbitProfile = profile('photon-orbit', 'orbiting-halo-axis', 'photon-beam', [
   spin('halo', 1, 1.8),

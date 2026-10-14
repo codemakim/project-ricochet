@@ -30,9 +30,9 @@ export interface CombatAudioAsset {
 }
 
 export const COMBAT_STATIC_IMAGE_ASSETS = [
-  { key: 'combat-background', url: '/assets/combat/backgrounds/scrapyard-arena.webp', sampling: 'nearest' },
-  { key: 'player', url: '/assets/combat/sprites/player.png', sampling: 'nearest' },
-  { key: 'enemy-basic', url: '/assets/combat/sprites/enemy-basic.png', sampling: 'nearest' },
+  { key: 'combat-background', url: '/assets/combat/pc/orbital-corridor.webp', sampling: 'linear' },
+  { key: 'player', url: '/assets/combat/pc/player.png', sampling: 'linear' },
+  { key: 'enemy-basic', url: '/assets/combat/pc/enemy-basic.png', sampling: 'linear' },
   { key: 'enemy-armored', url: '/assets/combat/sprites/enemy-armored.png', sampling: 'nearest' },
   { key: 'enemy-shooter', url: '/assets/combat/sprites/enemy-shooter.png', sampling: 'nearest' },
   { key: 'enemy-splitter', url: '/assets/combat/sprites/enemy-splitter.png', sampling: 'nearest' },
@@ -65,7 +65,7 @@ export const COMBAT_STATIC_IMAGE_ASSETS = [
 const ACTOR_SHEET_ASSETS: readonly CombatSheetAsset[] = ACTOR_SKIN_PROFILES.map((profile) => ({
   key: profile.textureKey,
   url: profile.url,
-  sampling: 'nearest',
+  sampling: profile.role === 'player' || profile.role === 'enemy-basic' ? 'linear' : 'nearest',
   frameConfig: {
     frameWidth: profile.frameWidth,
     frameHeight: profile.frameHeight,

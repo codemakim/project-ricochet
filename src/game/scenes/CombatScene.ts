@@ -409,7 +409,6 @@ export class CombatScene extends Phaser.Scene {
     if (this.textures.exists('combat-background')) {
       this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'combat-background')
         .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
-        .setAlpha(combatTrial ? 0.38 : 1)
         .setDepth(-100);
     }
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);

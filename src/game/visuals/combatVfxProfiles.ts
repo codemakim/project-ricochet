@@ -44,7 +44,7 @@ const AUTHORED_MOTION = {
   'boss-core-rage': { durationMs: 900, scale: 1.5 },
   'enemy-hit': { durationMs: 200, scale: 0.9, alpha: 0.55 },
   'orb-direct-hit': { durationMs: 200, scale: 0.9, alpha: 0.62 },
-  'corrosion-cloud': { durationMs: 800, scale: 1.6 },
+  'corrosion-cloud': { durationMs: 800, scale: 1.1, alpha: 0.6 },
   'split-burst': { durationMs: 520, scale: 1.5 },
   'boss-defeat': { durationMs: 900, scale: 3.75, alpha: 0.82 },
   'conduction-arc': { durationMs: 500, scale: 1.25 },
@@ -63,7 +63,7 @@ export const COMBAT_VFX_PROFILES = Object.fromEntries(
     return [id, {
       id,
       textureKey: `vfx-${id}`,
-      url: `/assets/combat/vfx/${id}.png`,
+      url: id === 'corrosion-cloud' ? '/assets/combat/pc/vfx/corrosion-cloud.png' : `/assets/combat/vfx/${id}.png`,
       frameWidth: 256,
       frameHeight: 256,
       frameCount,
