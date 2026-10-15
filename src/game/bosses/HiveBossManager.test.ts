@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { GAME_TUNING } from '../config/gameTuning';
+import { actorSkinProfile, type ActorRole } from '../visuals/actorVisualProfiles';
 import type { EnemySnapshot } from '../enemies/EnemyManager';
 import type { OrbManager, PermanentHitResult } from '../orbs/OrbManager';
 import type { TemporaryOrbManager } from '../orbs/TemporaryOrbManager';
@@ -26,6 +27,7 @@ class FakeBody {
   get right(): number { return this.center.x + this.halfWidth; }
   get top(): number { return this.center.y - this.halfHeight; }
   get bottom(): number { return this.center.y + this.halfHeight; }
+  updateFromGameObject(): void { this.center = { x: this.gameObject.x, y: this.gameObject.y }; }
 }
 
 class FakeSprite {
@@ -34,6 +36,10 @@ class FakeSprite {
   visible = true;
   tint?: number;
   scale = 1;
+  scaleX = 1;
+  scaleY = 1;
+  width = 32;
+  height = 32;
   depth = 0;
   angle = 0;
   displayWidth = 32;
@@ -57,17 +63,24 @@ class FakeSprite {
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
     this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
     return this;
   }
   setSize(width: number, height: number): this {
     this.body.isCircle = false;
-    this.body.halfWidth = width / 2;
-    this.body.halfHeight = height / 2;
+    this.body.halfWidth = width * this.scaleX / 2;
+    this.body.halfHeight = height * this.scaleY / 2;
     return this;
   }
   setTint(tint: number): this { this.tint = tint; return this; }
   clearTint(): this { this.tint = undefined; return this; }
-  setScale(scale: number): this { this.scale = scale; return this; }
+  setScale(scale: number): this {
+    this.scale = this.scaleX = this.scaleY = scale;
+    this.displayWidth = this.width * scale;
+    this.displayHeight = this.height * scale;
+    return this;
+  }
   setVisible(visible: boolean): this { this.visible = visible; return this; }
   setVelocity(x: number, y: number): this {
     this.body.velocity = { x, y };
@@ -79,7 +92,13 @@ class FakeSprite {
     this.body.center = { x, y };
     return this;
   }
-  play(key: string): this { this.animationKey = key; return this; }
+  play(key: string): this {
+    this.animationKey = key;
+    const profile = actorSkinProfile(key.split(':')[1] as ActorRole);
+    this.width = profile.frameWidth;
+    this.height = profile.frameHeight;
+    return this;
+  }
   once(): this { return this; }
   destroy(): void {
     this.active = false;
@@ -305,6 +324,17 @@ describe('HiveBossManager', () => {
     expect(boundary.sprite('hive-core').animationKey).toBe('actor:hive-core:default:idle');
     expect(boundary.sprite('hive-left-shooter').animationKey)
       .toBe('actor:hive-left-shooter:default:idle');
+    for (const [texture, visualWidth, visualHeight, hitWidth, hitHeight] of [
+      ['hive-core', 112, 112, 96, 96],
+      ['hive-left-shooter', 70, 56, 70, 56],
+      ['hive-right-shooter', 70, 56, 70, 56],
+      ['hive-left-reflector', 36, 192, 36, 192],
+      ['hive-right-reflector', 36, 192, 36, 192],
+    ] as const) {
+      const sprite = boundary.sprite(texture);
+      expect([sprite.displayWidth, sprite.displayHeight]).toEqual([visualWidth, visualHeight]);
+      expect([sprite.body.halfWidth * 2, sprite.body.halfHeight * 2]).toEqual([hitWidth, hitHeight]);
+    }
   });
 
   it('keeps modules deployed and moving through the whole shield cycle', () => {
@@ -921,7 +951,8 @@ describe('HiveBossManager', () => {
     });
     expect(boundary.sprite('hive-core').tint).toBeDefined();
     boundary.updateAt(40);
-    expect(boundary.sprite('hive-core').scale).toBeCloseTo(1.1);
+    expect(boundary.sprite('hive-core').scale).toBeCloseTo(0.275);
+    expect(boundary.sprite('hive-core').displayWidth).toBeCloseTo(123.2);
     expect(boundary.updateAt(1099).warnings).toBe(0);
     expect(boundary.updateAt(1100).warningKinds).toEqual(['hiveEnrageAimedBurst']);
 

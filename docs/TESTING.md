@@ -104,3 +104,8 @@ production 빌드에는 진입 메뉴와 개발 훅이 없다.
 테스트실은 실제 발사로 분열 전후를 캡처하고 좌우 정렬을 확인한다. 캠페인 경로는
 조각70×60 판정·개체 수·XP 보상을 확인한다.
 부식 만료는 첫 시각 객체가 아니라 원래 `fieldId`로 확인한다. 구슬 15종은 각각 별도 테스트로 실행한다.
+
+Hive/Siege PC 아트: `rtk pnpm exec playwright test e2e/combat.spec.ts --project desktop-chromium --workers 1 --grep 'keeps PC Hive and Siege art|hive cycles shield|hive permanent exposure|hive reflector changes'`.
+Hive5개 파츠의 표시/판정 치수와 광폭화 맥동, Siege 본체/약점과 장갑 파괴 후 활성 코어의56×56 판정을 검사한다.
+보스 실루엣·기존 반사/주기/광폭화 공격도 확인한다. 장갑 피해에는0.45 배율이 적용되므로 코어 노출 검사는 방어부와 양쪽 약점을 모두 파괴한다.
+기존4173 서버가 사용 중이면 임시 설정의 포트만4183으로 바꾸고 검사 후 제거한다. 동작 캡처는 `output/playwright/pc-bosses-verified/`, 최종 크롭 후 캡처는 `output/playwright/pc-bosses-final/`.

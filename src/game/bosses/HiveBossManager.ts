@@ -31,7 +31,7 @@ import {
   type HivePartId,
   type HivePhase,
 } from './hiveBossRules';
-import type { ActorRole } from '../visuals/actorVisualProfiles';
+import { actorSkinProfile, type ActorRole } from '../visuals/actorVisualProfiles';
 import {
   createActorExitVisual,
   playActorState,
@@ -200,9 +200,6 @@ export class HiveBossManager implements BossEncounter {
         reflectors.rightReflector.height,
       ),
     };
-    for (const partId of PART_ORDER) {
-      playActorState(this.parts[partId], actorRoleForHivePart(partId), 'idle');
-    }
     this.reflectorMotion = {
       leftReflector: { x: leftReflectorX, direction: 1 },
       rightReflector: { x: rightReflectorX, direction: -1 },
@@ -397,14 +394,19 @@ export class HiveBossManager implements BossEncounter {
     group: Phaser.Physics.Arcade.Group,
     x: number,
     y: number,
-    texture: string,
+    texture: ActorRole,
     width: number,
     height: number,
   ): BossSprite {
-    return (group.create(x, y, texture) as BossSprite)
-      .setImmovable(true)
-      .setSize(width, height)
+    const sprite = group.create(x, y, texture) as BossSprite;
+    const profile = actorSkinProfile(texture);
+    playActorState(sprite, texture, 'idle');
+    sprite.setDisplaySize(profile.displayWidth, profile.displayHeight);
+    sprite.setImmovable(true)
+      .setSize(width / Math.abs(sprite.scaleX), height / Math.abs(sprite.scaleY))
       .setDepth(PART_DEPTH);
+    (sprite.body as Phaser.Physics.Arcade.Body).updateFromGameObject();
+    return sprite;
   }
 
   private addPermanentOrbColliders(orb: OrbSprite): void {
@@ -649,7 +651,8 @@ export class HiveBossManager implements BossEncounter {
         this.state.phaseElapsedMs * Math.PI * 2 / enrage.pulsePeriodMs,
       ) * enrage.pulseScale
       : 1;
-    this.parts.core.setScale(scale);
+    const profile = actorSkinProfile('hive-core');
+    this.parts.core.setScale(profile.displayWidth / profile.frameWidth * scale);
   }
 
   private onPhaseTransition(previousPhase: HivePhase): void {

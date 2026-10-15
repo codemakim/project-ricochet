@@ -201,6 +201,15 @@ const ROLE_FRAME_DIMENSIONS: Record<ActorRole, ActorDimensions> = {
   'sentinel-left-weakpoint': { width: 112, height: 240 },
   'sentinel-right-weakpoint': { width: 112, height: 240 },
   'sentinel-core': { width: 256, height: 256 },
+  'hive-core': { width: 448, height: 448 },
+  'hive-left-shooter': { width: 280, height: 224 },
+  'hive-right-shooter': { width: 280, height: 224 },
+  'hive-left-reflector': { width: 144, height: 768 },
+  'hive-right-reflector': { width: 144, height: 768 },
+  'siege-body': { width: 504, height: 288 },
+  'siege-left-weakpoint': { width: 112, height: 240 },
+  'siege-right-weakpoint': { width: 112, height: 240 },
+  'siege-core': { width: 256, height: 256 },
 };
 
 function statesFor(role: ActorRole): ActorSkinProfile['states'] {
@@ -224,7 +233,7 @@ export const ACTOR_SKIN_PROFILES: readonly ActorSkinProfile[] = (
     role,
     skinId: 'default',
     textureKey: `actor-${role}-default`,
-    url: `/assets/combat/actors/${role}/${role === 'player' || role.startsWith('enemy-') || role.startsWith('sentinel-') ? 'pc' : 'default'}.png`,
+    url: `/assets/combat/actors/${role}/pc.png`,
     frameWidth: frame.width,
     frameHeight: frame.height,
     displayWidth: display.width,

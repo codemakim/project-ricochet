@@ -174,6 +174,7 @@ interface DevelopmentScene {
       getData?(key: string): unknown;
       setPosition?(x: number, y: number): void;
       body?: {
+        enable?: boolean;
         x?: number;
         y?: number;
         width?: number;
@@ -1022,6 +1023,85 @@ test('@desktop captures production player and boss states', async ({ page }, tes
   await page.screenshot({ path: testInfo.outputPath('production-siege-intact.png') });
   await sceneCall(page, (scene) => scene.debugDamageBossPart('defenseModule', 60));
   await page.screenshot({ path: testInfo.outputPath('production-siege-damaged.png') });
+});
+
+test('@desktop keeps PC Hive and Siege art at authored world bounds', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('response', (response) => {
+    if (response.url().includes('/assets/combat/') && !response.ok()) {
+      errors.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  await loadCanvas(page);
+  const parts = (family: string) => sceneCall(page, (scene, prefix) => (
+    scene.children.list.filter((child) => child.active && child.body
+      && child.texture?.key?.startsWith(`actor-${prefix}-`))
+      .map((child) => ({
+        key: child.texture!.key!, visible: child.visible, enabled: child.body!.enable,
+        width: child.displayWidth!, height: child.displayHeight!,
+        hitWidth: child.body!.width!, hitHeight: child.body!.height!,
+      }))
+  ), family);
+
+  await sceneCall(page, (scene) => {
+    scene.debugRemoveEnemies(scene.getDebugSnapshot().enemies.map(({ id }) => id));
+    scene.startBoss('hive');
+  });
+  await expect.poll(async () => (await parts('hive')).find(({ key }) => key.includes('core'))!.hitWidth)
+    .toBeCloseTo(96);
+  const hive = await parts('hive');
+  expect(hive).toHaveLength(5);
+  for (const part of hive) {
+    const core = part.key.includes('core');
+    const reflector = part.key.includes('reflector');
+    expect(part.width).toBe(core ? 112 : reflector ? 36 : 70);
+    expect(part.height).toBe(core ? 112 : reflector ? 192 : 56);
+    expect(part.hitWidth).toBe(core ? 96 : part.width);
+    expect(part.hitHeight).toBe(core ? 96 : part.height);
+    expect(part.enabled).toBe(true);
+  }
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: testInfo.outputPath('pc-hive-intact.png') });
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftShooter', 20);
+    scene.debugDamageBossPart('rightShooter', 20);
+    scene.debugDamageBossPart('leftReflector', 24);
+    scene.debugDamageBossPart('rightReflector', 24);
+  });
+  await page.waitForTimeout(500);
+  const enraged = (await parts('hive')).find(({ key }) => key.includes('core'))!;
+  expect(enraged.width).toBeGreaterThanOrEqual(100.8);
+  expect(enraged.width).toBeLessThanOrEqual(123.2);
+  // Physics reads the pulse on its next frame; source resolution must never become world size.
+  expect(enraged.hitWidth).toBeGreaterThanOrEqual(86.4);
+  expect(enraged.hitWidth).toBeLessThanOrEqual(105.6);
+  await page.screenshot({ path: testInfo.outputPath('pc-hive-enraged.png') });
+
+  await sceneCall(page, (scene) => scene.startBoss('siege'));
+  await page.waitForTimeout(500);
+  const siege = await parts('siege');
+  expect(siege).toHaveLength(4);
+  for (const part of siege.filter(({ key }) => !key.includes('core'))) {
+    const hull = part.key.includes('body');
+    expect([part.width, part.height, part.hitWidth, part.hitHeight])
+      .toEqual(hull ? [252, 144, 252, 144] : [56, 120, 56, 120]);
+    expect(part.enabled).toBe(true);
+  }
+  expect(siege.find(({ key }) => key.includes('core'))!.enabled).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath('pc-siege-intact.png') });
+  await sceneCall(page, (scene) => {
+    scene.debugDamageBossPart('leftWeakpoint', 1_000);
+    scene.debugDamageBossPart('rightWeakpoint', 1_000);
+    scene.debugDamageBossPart('defenseModule', 1_000);
+  });
+  await expect.poll(async () => {
+    const core = (await parts('siege')).find(({ key, enabled }) => key.includes('core') && enabled);
+    return core && [core.width, core.height, core.hitWidth, core.hitHeight];
+  }).toEqual([64, 64, 56, 56]);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: testInfo.outputPath('pc-siege-core-exposed.png') });
+  expect(errors).toEqual([]);
 });
 
 test('@desktop aligns enemy physics bodies with their visible bounds', async ({ page }) => {

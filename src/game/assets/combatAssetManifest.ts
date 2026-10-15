@@ -42,6 +42,11 @@ export const COMBAT_STATIC_IMAGE_ASSETS = [
   { key: 'boss-left-weakpoint', url: '/assets/combat/pc/sentinel-left-weakpoint.png', sampling: 'linear' },
   { key: 'boss-right-weakpoint', url: '/assets/combat/pc/sentinel-right-weakpoint.png', sampling: 'linear' },
   { key: 'boss-core', url: '/assets/combat/pc/sentinel-core.png', sampling: 'linear' },
+  ...['hive-core', 'hive-left-shooter', 'hive-right-shooter', 'hive-left-reflector',
+    'hive-right-reflector', 'siege-body', 'siege-left-weakpoint', 'siege-right-weakpoint',
+    'siege-core'].map((role) => ({
+    key: role, url: `/assets/combat/pc/${role}.png`, sampling: 'linear' as const,
+  })),
   { key: 'orb-echo', url: '/assets/combat/sprites/orb-echo.png', sampling: 'linear' },
   { key: 'orb-corrosion', url: '/assets/combat/sprites/orb-corrosion.png', sampling: 'linear' },
   { key: 'orb-conduction', url: '/assets/combat/sprites/orb-conduction.png', sampling: 'linear' },

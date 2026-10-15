@@ -69,13 +69,8 @@ describe('combat asset manifest', () => {
     const permanentKeys = new Set([...ORB_CORE_IDS, ...FUSION_ORB_IDS].map((id) => `orb-${id}`));
     for (const asset of COMBAT_IMAGE_ASSETS) {
       if (asset.key.startsWith('actor-')) {
-        expect(asset.sampling).toBe(
-          ['actor-player-default', 'actor-enemy-basic-default', 'actor-enemy-armored-default',
-            'actor-enemy-splitter-default', 'actor-enemy-fragment-left-default', 'actor-enemy-fragment-right-default',
-            'actor-enemy-shooter-default', 'actor-sentinel-body-default', 'actor-sentinel-left-weakpoint-default',
-            'actor-sentinel-right-weakpoint-default', 'actor-sentinel-core-default'].includes(asset.key)
-            ? 'linear' : 'nearest',
-        );
+        expect(asset.sampling).toBe('linear');
+        expect(asset.url.endsWith('/pc.png')).toBe(true);
       }
       if (asset.key.startsWith('orb-visual-') || permanentKeys.has(asset.key)) {
         expect(asset.sampling).toBe('linear');

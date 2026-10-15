@@ -8,6 +8,8 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 
 - Orbital background; player, basic drone, armored drone, shooter and splitter/fragments.
 - SENTINEL main hull, mirrored weapon pods and exposed reactor core.
+- HIVE command hub, mirrored gun modules and tall flat reflectors; SIEGE armored hull,
+  mirrored artillery capacitors and square exposed reactor.
 - Echo: blue single optical lens and slowly pulsing wavefronts.
 - Conduction: violet diamond nucleus and rapidly flickering electrical arcs.
 - Inertia: dense amber pearl with an equatorial belt and rotating speed strokes.
@@ -16,12 +18,13 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 - Corrosion: mint nanofluid core and orbiting droplets; a planar radial nanite field.
 - All nine fusion bodies and energy layers now use the same compact PC pipeline.
 - Existing logical display sizes, collision shapes, damage and combat rules retained.
-- Hive/Siege and other VFX still use earlier art.
+- Other proc VFX and UI still use earlier art.
 
 `masters/` contains the original outputs of the built-in `image_gen` tool. The exact
 generation prompts are in `prompts.md`, `expansion-prompts.md`, `base-orb-prompts.md`
-and `fusion-orb-prompts.md`, `splitter-prompts.md`. The right pod master
-is a mirrored derivative of the original left pod. The source PNG alpha is preserved; no color
+and `fusion-orb-prompts.md`, `splitter-prompts.md`, `boss-expansion-prompts.md`.
+Right pods, Hive shooter and reflector masters are mirrored derivatives of their
+original left parts. The source PNG alpha is preserved; no color
 key, palette quantization or nearest-neighbor enlargement is used.
 
 ```sh
@@ -37,6 +40,12 @@ Splitter 560×240/14; left and right fragments 280×240/7 each. The fragment mas
 are crops of the normalized parent with the central joining neck removed.
 `SPLITTER_COUPLING_HALF_WIDTH=28` controls the crop. Parent fracture frames3–5
 fade to75/50/25% alpha and split frames6–9 to80/60/40/20%, revealing the live children.
+HIVE core448×448/14; shooters280×224/14 each; reflectors144×768/12 each.
+SIEGE body504×288/12; pods112×240/11 each; core256×256/14.
+Hive/Siege exports crop to the5% alpha bounds (ignoring stray near-transparent
+pixels) and normalize to the authored part ratio with4px padding. An assert checks
+that the visible hull spans at least90% of each frame dimension. Original masters
+retain their alpha. This prevents a long reflector shrinking inside its hitbox.
 Rigid poses repeat; hurt uses a light tint and destruction fades. These are static
 authored hulls with reaction states, not fully animated spacecraft.
 
@@ -58,6 +67,10 @@ SENTINEL's 252×144 hull, 56×120 pods and 56×56 core, actual boss hits and res
 The splitter room case also fires a real orb, checks the parent140×60 body and
 two children at aligned left/right positions. The campaign splitter case
 checks both70×60 fragment bodies, population reservation and XP settlement.
+The combat case `keeps PC Hive and Siege art at authored world bounds` checks all
+five Hive parts, its existing1±0.1 core pulse, Siege armor/pods and the enabled core
+after armor and weakpoint destruction. Existing Hive cycle, enrage and real-orb
+reflection cases check behavior separately. Passing these does not approve balance.
 
 ## Fusion identities
 

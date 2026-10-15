@@ -21,13 +21,27 @@ check_image() {
 
 build_actor() {
   local role="$1" width="$2" height="$3" count="$4" hurt="$5" death="$6"
-  local frame opacity file
+  local frame opacity file bounds ink_width ink_height input="$SOURCE/masters/$1.png"
+  local resize="$((width - 8))x$((height - 8))"
   local frames=()
   mkdir -p "$SOURCE/actors" "$PUBLIC/actors/$role" "$PUBLIC/pc"
-  magick "$SOURCE/masters/$role.png" -trim +repage \
-    -filter Lanczos -resize "$((width - 8))x$((height - 8))" \
+  if [[ "$role" == hive-* || "$role" == siege-* ]]; then
+    # Faint stray pixels must not shrink the hull inside its authored collision envelope.
+    bounds="$(magick "$input" -alpha extract -threshold 5% -format '%@' info:)"
+    magick "$input" -crop "$bounds" +repage "$TMP/$role-source.png"
+    input="$TMP/$role-source.png"; resize+="!"
+  fi
+  magick "$input" -trim +repage \
+    -filter Lanczos -resize "$resize" \
     -background none -gravity center -extent "${width}x${height}" \
     -depth 8 -strip "$TMP/$role.png"
+  if [[ "$role" == hive-* || "$role" == siege-* ]]; then
+    read -r ink_width ink_height < <(magick "$TMP/$role.png" -alpha extract \
+      -threshold 5% -trim -format '%w %h\n' info:)
+    ((ink_width * 10 >= width * 9 && ink_height * 10 >= height * 9)) || {
+      echo "$role: visible hull is too small for its frame" >&2; exit 1;
+    }
+  fi
   cp "$TMP/$role.png" "$PUBLIC/pc/$role.png"
   for ((frame = 0; frame < count; frame++)); do
     file="$TMP/$role-$(printf '%03d' "$frame").png"
@@ -76,6 +90,19 @@ magick "$SOURCE/masters/sentinel-left-weakpoint.png" -flop "$TMP/right-pod.png"
 cp "$TMP/right-pod.png" "$SOURCE/masters/sentinel-right-weakpoint.png"
 build_actor sentinel-right-weakpoint 112 240 11 5 7
 build_actor sentinel-core 256 256 14 10 10
+build_actor hive-core 448 448 14 10 10
+build_actor hive-left-shooter 280 224 14 8 10
+build_actor hive-left-reflector 144 768 12 6 8
+build_actor siege-body 504 288 12 6 8
+build_actor siege-left-weakpoint 112 240 11 5 7
+build_actor siege-core 256 256 14 10 10
+for spec in 'hive-shooter 280 224 14 8 10' 'hive-reflector 144 768 12 6 8' 'siege-weakpoint 112 240 11 5 7'; do
+  read -r role width height count hurt death <<< "$spec"
+  family="${role%%-*}"; part="${role#*-}"
+  magick "$SOURCE/masters/$family-left-$part.png" -flop -strip \
+    "$SOURCE/masters/$family-right-$part.png"
+  build_actor "$family-right-$part" "$width" "$height" "$count" "$hurt" "$death"
+done
 
 for core in echo corrosion conduction inertia split explosion \
   photon-orbit resonant-swarm nano-proliferator mass-collapse reactor-orb \
