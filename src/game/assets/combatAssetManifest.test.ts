@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   COMBAT_AUDIO_ASSETS,
   COMBAT_IMAGE_ASSETS,
-  COMBAT_STATIC_IMAGE_ASSETS,
   COMBAT_TEXTURE_FILTER,
   applyCombatTextureSampling,
   preloadCombatAssets,
@@ -55,13 +54,13 @@ describe('combat asset manifest', () => {
       { frameWidth: 256, frameHeight: 256 },
     );
     expect(spritesheet).toHaveBeenCalledWith(
-      'orb-conduction-arc',
-      '/assets/combat/orbs/conduction/arc.png',
+      'orb-nano-proliferator-branches',
+      '/assets/combat/orbs/nano-proliferator/branches.png',
       { frameWidth: 256, frameHeight: 256 },
     );
     expect(image).toHaveBeenCalledWith(
-      'orb-conduction-flow',
-      '/assets/combat/orbs/conduction/flow.png',
+      'orb-conduction-energy',
+      '/assets/combat/pc/orbs/conduction/energy.png',
     );
   });
 
@@ -106,7 +105,7 @@ describe('combat asset manifest', () => {
 
   it('ships every declared production image', () => {
     const shippedAssets = new Set(Object.keys(import.meta.glob('/public/assets/combat/**/*')));
-    for (const { url } of COMBAT_STATIC_IMAGE_ASSETS) {
+    for (const { url } of COMBAT_IMAGE_ASSETS) {
       expect(shippedAssets.has(`/public${url}`), url).toBe(true);
     }
   });

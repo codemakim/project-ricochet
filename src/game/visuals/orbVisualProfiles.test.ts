@@ -43,10 +43,10 @@ describe('orb visual profiles', () => {
   });
 
   it.each([
-    ['echo', [['lens', 'pulse'], ['ring', 'pulse']]],
+    ['echo', [['energy', 'pulse']]],
     ['corrosion', [['energy', 'spin']]],
-    ['conduction', [['arc', 'frames'], ['flow', 'spin']]],
-    ['inertia', [['flywheel', 'spin'], ['shell', 'spin']]],
+    ['conduction', [['energy', 'pulse']]],
+    ['inertia', [['energy', 'spin']]],
     ['split', [['energy', 'spin']]],
     ['explosion', [['energy', 'pulse']]],
   ] as const)('locks %s to its readable base motion identity', (id, expected) => {

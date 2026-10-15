@@ -1,4 +1,4 @@
-import type { OrbTypeId } from '../orbs/orbFusionRules';
+import { isBasicOrbCoreId, type OrbTypeId } from '../orbs/orbFusionRules';
 import type { CombatVfxId } from './combatVfxIds';
 
 export type OrbLayerMotion =
@@ -36,7 +36,7 @@ function profile(
   procVfx: CombatVfxId,
   layers: readonly Layer[],
 ): OrbVisualProfile {
-  const directory = id === 'explosion' || id === 'split' || id === 'corrosion'
+  const directory = isBasicOrbCoreId(id)
     ? '/assets/combat/pc/orbs' : '/assets/combat/orbs';
   return {
     id,
@@ -83,20 +83,17 @@ const frames = (id: string, frameRate = 10): Layer => ({
   scale: 1,
 });
 
-const echoProfile = profile('echo', 'alternating-lens-ring', 'echo-ring', [
-  pulse('lens', 720),
-  pulse('ring', 720),
+const echoProfile = profile('echo', 'pulsing-optical-lens', 'echo-ring', [
+  pulse('energy', 720),
 ]);
 const corrosionProfile = profile('corrosion', 'orbiting-liquid-nanites', 'corrosion-cloud', [
   spin('energy', 1, 0.7),
 ]);
-const conductionProfile = profile('conduction', 'clockwise-surface-arcs', 'conduction-arc', [
-  frames('arc', 12),
-  spin('flow', 1, 1.6),
+const conductionProfile = profile('conduction', 'flickering-electric-nucleus', 'conduction-arc', [
+  pulse('energy', 340),
 ]);
-const inertiaProfile = profile('inertia', 'counter-rotating-flywheel', 'inertia-compression', [
-  spin('flywheel', 1, 2.2),
-  spin('shell', -1, 1.1),
+const inertiaProfile = profile('inertia', 'rotating-kinetic-belt', 'inertia-compression', [
+  spin('energy', -1, 2.2),
 ]);
 const splitProfile = profile('split', 'dual-orbiting-nuclei', 'split-burst', [
   spin('energy', -1, 1.2),

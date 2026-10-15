@@ -931,7 +931,7 @@ describe('OrbManager Phaser adapter', () => {
 
   it('animates collision-free body and declared layers around every active energy orb', () => {
     const { manager, sprites, auras } = createManager();
-    expect(auras).toHaveLength(3);
+    expect(auras).toHaveLength(2);
     expect(auras.every(({ visible }) => !visible)).toBe(true);
 
     manager.activateAim();
@@ -939,7 +939,7 @@ describe('OrbManager Phaser adapter', () => {
     manager.update(200, 200, player, up);
 
     expect(auras.map(({ textureKey }) => textureKey)).toEqual([
-      'orb-visual-echo', 'orb-echo-lens', 'orb-echo-ring',
+      'orb-visual-echo', 'orb-echo-energy',
     ]);
     expect(auras.every((visual) => (
       visual.visible

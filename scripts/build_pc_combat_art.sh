@@ -61,7 +61,7 @@ cp "$TMP/right-pod.png" "$SOURCE/masters/sentinel-right-weakpoint.png"
 build_actor sentinel-right-weakpoint 112 240 11 5 7
 build_actor sentinel-core 256 256 14 10 10
 
-for core in explosion split corrosion; do
+for core in echo corrosion conduction inertia split explosion; do
   input="$SOURCE/masters/$core-components.png"
   read -r width height < <(magick identify -format '%w %h\n' "$input")
   ((width == height * 2)) || { echo "$input: expected two square cells" >&2; exit 1; }

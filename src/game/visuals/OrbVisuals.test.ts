@@ -51,11 +51,11 @@ describe('OrbVisuals', () => {
   it('tracks body and layers to the owner without physics bodies', () => {
     const { scene, owner, children } = boundary();
     const visuals = new OrbVisuals(scene);
-    visuals.add(7, owner, orbVisualProfile('conduction'));
+    visuals.add(7, owner, orbVisualProfile('inertia'));
 
     visuals.update(260, [{ id: 7, visible: true, rotation: 0.5 }]);
 
-    expect(children).toHaveLength(3);
+    expect(children).toHaveLength(2);
     expect(children.every((child) => !('body' in child))).toBe(true);
     expect(children.every((child) => child.x === owner.x && child.y === owner.y)).toBe(true);
     expect(children.some((child) => child.rotation !== 0.5)).toBe(true);
@@ -70,8 +70,8 @@ describe('OrbVisuals', () => {
     visuals.add(2, owner, orbVisualProfile('conduction'));
 
     visuals.remove(2);
-    expect(visuals.activeObjectCount()).toBe(3);
-    expect(children.filter(({ destroyed }) => destroyed)).toHaveLength(3);
+    expect(visuals.activeObjectCount()).toBe(2);
+    expect(children.filter(({ destroyed }) => destroyed)).toHaveLength(2);
 
     visuals.clear();
     expect(visuals.activeObjectCount()).toBe(0);
