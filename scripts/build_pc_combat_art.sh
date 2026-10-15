@@ -6,6 +6,7 @@ SOURCE="$ROOT/assets-source/combat/pc"
 PUBLIC="$ROOT/public/assets/combat"
 TMP="$(mktemp -d -t ricochet-pc-art.XXXXXX)"
 ORB_BODY_SIZE=160
+SPLITTER_COUPLING_HALF_WIDTH=28
 trap 'rm -rf "$TMP"' EXIT
 
 check_image() {
@@ -31,7 +32,12 @@ build_actor() {
   for ((frame = 0; frame < count; frame++)); do
     file="$TMP/$role-$(printf '%03d' "$frame").png"
     # shortcut: rigid poses use tint/fade; author thruster and weapon frames after visual approval.
-    if ((frame >= death)); then
+    if [[ "$role" == enemy-splitter ]] && ((frame >= hurt && frame < death)); then
+      # The retiring parent fades quickly so the two live fragments remain legible.
+      opacity="$(awk -v frame="$frame" 'BEGIN { print (frame <= 5 ? 1 - (frame - 2) * 0.25 : 1 - (frame - 5) * 0.2) }')"
+      magick "$TMP/$role.png" -fill '#e8ffff' -colorize 20 \
+        -channel A -evaluate multiply "$opacity" +channel "$file"
+    elif ((frame >= death)); then
       opacity="$(awk -v frame="$frame" -v death="$death" 'BEGIN { print 1 - (frame - death + 1) * 0.2 }')"
       magick "$TMP/$role.png" -channel A -evaluate multiply "$opacity" +channel "$file"
     elif ((frame >= hurt)); then
@@ -53,6 +59,16 @@ build_actor player 256 256 20 14 16
 build_actor enemy-basic 280 240 9 3 5
 build_actor enemy-armored 280 240 11 5 7
 build_actor enemy-shooter 280 240 15 9 11
+build_actor enemy-splitter 560 240 14 3 10
+for side in left right; do
+  width=$((280 - SPLITTER_COUPLING_HALF_WIDTH))
+  x=0; [[ "$side" == left ]] || x=$((280 + SPLITTER_COUPLING_HALF_WIDTH))
+  # Discard the joining neck so adjacent children read as independent drones.
+  magick "$TMP/enemy-splitter.png" -crop "${width}x240+$x+0" +repage \
+    -background none -gravity center -extent 280x240 \
+    -depth 8 -strip "$SOURCE/masters/enemy-fragment-$side.png"
+  build_actor "enemy-fragment-$side" 280 240 7 2 4
+done
 build_actor sentinel-body 504 288 12 6 8
 build_actor sentinel-left-weakpoint 112 240 11 5 7
 magick "$SOURCE/masters/sentinel-left-weakpoint.png" -flop "$TMP/right-pod.png"

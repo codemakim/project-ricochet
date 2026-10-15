@@ -137,10 +137,14 @@ test('sandbox Sentinel completes through real hits and restarts cleanly @desktop
   expect(errors).toEqual([]);
 });
 
-for (const enemy of ['armored', 'shooter'] as const) {
+for (const enemy of ['armored', 'shooter', 'splitter'] as const) {
   test(`sandbox preserves ${enemy} PC art hitboxes @desktop`, async ({ page }, testInfo) => {
     const errors = await openRoom(page);
     await page.getByRole('combobox', { name: '단일 적 종류', exact: true }).selectOption(enemy);
+    if (enemy === 'splitter') {
+      await page.getByRole('combobox', { name: '구슬 종류', exact: true }).selectOption('echo');
+      await page.getByLabel('구슬 개수', { exact: true }).fill('1');
+    }
     await page.getByRole('button', { name: '테스트 시작' }).click();
     await expect.poll(async () => (await state(page)).enemies[0]?.kind).toBe(enemy);
     const geometry = await page.evaluate((kind) => {
@@ -150,8 +154,23 @@ for (const enemy of ['armored', 'shooter'] as const) {
         .texture?.key === `actor-enemy-${kind}-default`) as Phaser.Physics.Arcade.Sprite;
       return [sprite.body!.width, sprite.body!.height];
     }, enemy);
-    expect(geometry).toEqual(enemy === 'armored' ? [140, 120] : [70, 60]);
+    expect(geometry).toEqual([enemy === 'shooter' ? 70 : 140, enemy === 'armored' ? 120 : 60]);
     await page.screenshot({ path: testInfo.outputPath(`sandbox-${enemy}-pc.png`) });
+    if (enemy === 'splitter') {
+      const canvas = (await page.locator('canvas').boundingBox())!;
+      await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height * 220 / 800);
+      await expect.poll(async () => (await state(page)).enemies.filter(({ kind }) => kind === 'fragment').length,
+        { timeout: 15000 }).toBe(2);
+      await expect.poll(() => page.evaluate(() => ((window as unknown as { __RICHOCHET_GAME__: Phaser.Game })
+        .__RICHOCHET_GAME__.scene.getScene('combat') as CombatScene).children.list.filter((child) => {
+          const sprite = child as Phaser.Physics.Arcade.Sprite;
+          return sprite.active && !sprite.body && sprite.texture?.key === 'actor-enemy-splitter-default';
+        }).length)).toBe(0);
+      await page.getByRole('button', { name: '정지', exact: true }).click();
+      expect((await state(page)).enemies.map(({ position }) => position.x).sort((a, b) => a - b))
+        .toEqual([190, 260]);
+      await page.screenshot({ path: testInfo.outputPath('sandbox-splitter-separated-pc.png') });
+    }
     expect(errors).toEqual([]);
   });
 }

@@ -6,7 +6,7 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 
 ## Current scope
 
-- Orbital background; player, basic drone, armored drone and shooter.
+- Orbital background; player, basic drone, armored drone, shooter and splitter/fragments.
 - SENTINEL main hull, mirrored weapon pods and exposed reactor core.
 - Echo: blue single optical lens and slowly pulsing wavefronts.
 - Conduction: violet diamond nucleus and rapidly flickering electrical arcs.
@@ -16,11 +16,11 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 - Corrosion: mint nanofluid core and orbiting droplets; a planar radial nanite field.
 - All nine fusion bodies and energy layers now use the same compact PC pipeline.
 - Existing logical display sizes, collision shapes, damage and combat rules retained.
-- Splitter/fragments, Hive/Siege and other VFX still use earlier art.
+- Hive/Siege and other VFX still use earlier art.
 
 `masters/` contains the original outputs of the built-in `image_gen` tool. The exact
 generation prompts are in `prompts.md`, `expansion-prompts.md`, `base-orb-prompts.md`
-and `fusion-orb-prompts.md`. The right pod master
+and `fusion-orb-prompts.md`, `splitter-prompts.md`. The right pod master
 is a mirrored derivative of the original left pod. The source PNG alpha is preserved; no color
 key, palette quantization or nearest-neighbor enlargement is used.
 
@@ -33,6 +33,10 @@ actor directories as `pc.png`, and copies orb/field assets to `public/assets/com
 The older pixel builders write `default.png` and cannot overwrite the PC sheets.
 Actor frame sizes: player 256×256/20 frames; basic 280×240/9; armored 280×240/11;
 shooter 280×240/15; SENTINEL body 504×288/12, pods 112×240/11 each, core 256×256/14.
+Splitter 560×240/14; left and right fragments 280×240/7 each. The fragment masters
+are crops of the normalized parent with the central joining neck removed.
+`SPLITTER_COUPLING_HALF_WIDTH=28` controls the crop. Parent fracture frames3–5
+fade to75/50/25% alpha and split frames6–9 to80/60/40/20%, revealing the live children.
 Rigid poses repeat; hurt uses a light tint and destruction fades. These are static
 authored hulls with reaction states, not fully animated spacecraft.
 
@@ -51,6 +55,9 @@ For the remaining base cores, `e2e/combat.spec.ts` cases `renders (echo|conducti
 orb animation identity` check actual flight and each declared energy motion.
 `e2e/combat-sandbox.spec.ts` checks the new enemies' 140×120 and 70×60 world bodies,
 SENTINEL's 252×144 hull, 56×120 pods and 56×56 core, actual boss hits and restart.
+The splitter room case also fires a real orb, checks the parent140×60 body and
+two children at aligned left/right positions. The campaign splitter case
+checks both70×60 fragment bodies, population reservation and XP settlement.
 
 ## Fusion identities
 

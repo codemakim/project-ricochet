@@ -710,7 +710,7 @@ test('@desktop animates combat art without changing collision bodies', async ({ 
     const enemy = scene.children.list.find((child) => (
       child.texture?.key?.startsWith('actor-enemy-') && child.body
     ))!;
-    const layer = scene.children.list.find((child) => child.name === 'orb-layer-0-lens')!;
+    const layer = scene.children.list.find((child) => child.name === 'orb-layer-0-energy')!;
     return {
       playerAngle: scene.player.angle,
       enemyAngle: enemy.angle,
@@ -2729,7 +2729,7 @@ test('@desktop midboss rewards and encounter state reset on restart', async ({ p
   expect(reset.boss.active).toBe(false);
 });
 
-test('@desktop splitter reserves population and settles rewards', async ({ page }) => {
+test('@desktop splitter reserves population and settles rewards', async ({ page }, testInfo) => {
   const { box } = await loadCanvas(page);
   await startStageTwo(page);
   for (let attempt = 0; attempt < 9; attempt += 1) {
@@ -2744,6 +2744,7 @@ test('@desktop splitter reserves population and settles rewards', async ({ page 
   await sceneCall(page, (scene, id) => {
     scene.debugSetEnemy(id, { x: 225, y: 300 }, 1);
   }, parent.id);
+  await page.screenshot({ path: testInfo.outputPath('splitter-pc-before.png') });
   const aim = clientPoint(box, { x: pressurePhase.player.x, y: pressurePhase.player.y - 100 });
   await page.mouse.move(aim.x, aim.y);
   await expect.poll(async () => orbStateCounts(await snapshot(page)).active)
@@ -2764,6 +2765,16 @@ test('@desktop splitter reserves population and settles rewards', async ({ page 
   expect(fragments.every(({ position }) => position.x >= 11)).toBe(true);
   expect(split.activePopulation).toBe(beforeSplit.population);
   expect(split.progression.xp).toBe(beforeSplit.xp + 1);
+  await expect.poll(() => sceneCall(page, (scene) => scene.children.list
+    .filter(({ active, texture, body }) => active && body && (
+      texture?.key === 'actor-enemy-fragment-left-default'
+      || texture?.key === 'actor-enemy-fragment-right-default'
+    )).map(({ texture, body }) => ({ texture: texture!.key, width: body!.width, height: body!.height }))))
+    .toEqual([
+      { texture: 'actor-enemy-fragment-left-default', width: 70, height: 60 },
+      { texture: 'actor-enemy-fragment-right-default', width: 70, height: 60 },
+    ]);
+  await page.screenshot({ path: testInfo.outputPath('splitter-pc-fragments.png') });
   for (const fragment of fragments) {
     const arranged = await sceneCall(page, (scene, target) => {
       const orb = scene.getDebugSnapshot().orbs.filter(

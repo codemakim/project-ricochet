@@ -100,4 +100,7 @@ production 빌드에는 진입 메뉴와 개발 훅이 없다.
 개발용 순간 배치 뒤에는 Arcade body도 동기화한다. 충돌 테스트는 적 내부나 월드 바깥에서
 시작하지 않는다. 합산 반경 바깥에서 일정 방향으로 진입시켜 벽 충돌과 후속 조각 타격을 분리한다.
 분열 조각의 가장자리 제한 계산은 `splitterRules.test.ts`에서 확인한다.
+분열 적 PC 아트: `rtk pnpm exec playwright test e2e/combat-sandbox.spec.ts e2e/combat.spec.ts --project desktop-chromium --workers 1 --grep 'sandbox preserves splitter|splitter reserves population|animates combat art without changing collision bodies'`.
+테스트실은 실제 발사로 분열 전후를 캡처하고 좌우 정렬을 확인한다. 캠페인 경로는
+조각70×60 판정·개체 수·XP 보상을 확인한다.
 부식 만료는 첫 시각 객체가 아니라 원래 `fieldId`로 확인한다. 구슬 15종은 각각 별도 테스트로 실행한다.
