@@ -80,6 +80,11 @@ Playwright trace는 최초 실행 실패 시 보존하도록 설정했다.
 원화 변환 및 출력 크기·알파 검사는 `rtk bash scripts/build_pc_combat_art.sh`.
 원화와 결과물은 이전 픽셀 파이프라인과 별도 경로를 사용한다.
 
+융합9종: `rtk pnpm exec playwright test e2e/combat.spec.ts --project desktop-chromium --workers 1 --grep 'renders (photon-orbit|resonant-swarm|nano-proliferator|mass-collapse|reactor-orb|cluster-bombardment|mirror-circuit|meltdown-core|vector-blade) orb animation identity'`.
+각 종류의 실제 비행과 현재 선언된 에너지층 움직임을 확인한다. 42px 종류 구분은
+`output/playwright/pc-fusion-orbs-board.png` 비교판과 실제 비행 캡처를 직접 검토한다.
+비교판은 본체/빛 합성 검수용이며 적·탄·VFX가 겹치는 전투 가독성 검수를 대신하지 않는다.
+
 ## 개발 전투 테스트실
 
 개발 서버 출격 화면 → **전투 테스트실**. 적 1체(기본·장갑·사수·분열), 밀집 편대,

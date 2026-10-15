@@ -43,7 +43,7 @@ describe('combat asset manifest', () => {
     expect(audio).toHaveBeenCalledTimes(COMBAT_AUDIO_ASSETS.length);
   });
 
-  it('loads actors and framed orb layers as sheets while static layers stay images', () => {
+  it('loads actors and VFX as sheets while orb energy layers stay images', () => {
     const image = vi.fn();
     const spritesheet = vi.fn();
     preloadCombatAssets({ load: { image, spritesheet, audio: vi.fn() } } as never);
@@ -54,8 +54,8 @@ describe('combat asset manifest', () => {
       { frameWidth: 256, frameHeight: 256 },
     );
     expect(spritesheet).toHaveBeenCalledWith(
-      'orb-nano-proliferator-branches',
-      '/assets/combat/orbs/nano-proliferator/branches.png',
+      'vfx-corrosion-cloud',
+      '/assets/combat/pc/vfx/corrosion-cloud.png',
       { frameWidth: 256, frameHeight: 256 },
     );
     expect(image).toHaveBeenCalledWith(

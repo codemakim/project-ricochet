@@ -22,13 +22,14 @@ describe('orb visual profiles', () => {
     }
   });
 
-  it('loads animated orb layers at authored 256px frame resolution', () => {
+  it('uses one compact PC body and energy image for every orb', () => {
     for (const profile of Object.values(ORB_VISUAL_PROFILES)) {
-      for (const layer of profile.layers) {
-        if (layer.motion.kind === 'frames') {
-          expect(layer.frameConfig).toEqual({ frameWidth: 256, frameHeight: 256 });
-        }
-      }
+      expect(profile.bodyUrl).toBe(`/assets/combat/pc/orbs/${profile.id}/body.png`);
+      expect(profile.layers).toHaveLength(1);
+      expect(profile.layers[0]).toMatchObject({
+        id: 'energy', url: `/assets/combat/pc/orbs/${profile.id}/energy.png`, scale: 1,
+      });
+      expect(profile.layers[0]!.frameConfig).toBeUndefined();
     }
   });
 
@@ -55,21 +56,21 @@ describe('orb visual profiles', () => {
     ))).toEqual(expected);
   });
 
-  it('locks every fusion core to its own declared layer pair', () => {
+  it('locks every fusion core to its declared energy motion', () => {
     const required = {
-      'photon-orbit': ['halo', 'axis'],
-      'resonant-swarm': ['nuclei', 'phase'],
-      'nano-proliferator': ['branches', 'growth'],
-      'mass-collapse': ['gravity-ring', 'shadow'],
-      'reactor-orb': ['channels', 'charge'],
-      'cluster-bombardment': ['pods', 'sequence'],
-      'mirror-circuit': ['mirror', 'circuit'],
-      'meltdown-core': ['molten-band', 'heat'],
-      'vector-blade': ['blade-axis', 'direction'],
+      'photon-orbit': { kind: 'spin', direction: 1, radiansPerSecond: 1.8 },
+      'resonant-swarm': { kind: 'spin', direction: -1, radiansPerSecond: 1.3 },
+      'nano-proliferator': { kind: 'pulse', periodMs: 840, alphaMinimum: 0.24, alphaMaximum: 0.72 },
+      'mass-collapse': { kind: 'pulse', periodMs: 620, alphaMinimum: 0.24, alphaMaximum: 0.72 },
+      'reactor-orb': { kind: 'pulse', periodMs: 540, alphaMinimum: 0.24, alphaMaximum: 0.72 },
+      'cluster-bombardment': { kind: 'spin', direction: 1, radiansPerSecond: 0.8 },
+      'mirror-circuit': { kind: 'pulse', periodMs: 900, alphaMinimum: 0.24, alphaMaximum: 0.72 },
+      'meltdown-core': { kind: 'spin', direction: 1, radiansPerSecond: 1.1 },
+      'vector-blade': { kind: 'pulse', periodMs: 380, alphaMinimum: 0.24, alphaMaximum: 0.72 },
     } as const;
-    expect(Object.fromEntries(Object.entries(required).map(([id, layerIds]) => [
+    expect(Object.fromEntries(Object.keys(required).map((id) => [
       id,
-      orbVisualProfile(id as keyof typeof required).layers.map(({ id: layerId }) => layerId),
+      orbVisualProfile(id as keyof typeof required).layers[0]!.motion,
     ]))).toEqual(required);
     expect(new Set(Object.keys(required).map((id) => (
       orbVisualProfile(id as keyof typeof required).identity
