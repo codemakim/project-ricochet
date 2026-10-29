@@ -49,8 +49,11 @@ type EnemySprite = Phaser.Physics.Arcade.Sprite & {
 
 interface RapidIngressBatch {
   enemyIds: number[];
-  top: number;
   bottom: number;
+}
+
+function canDamageEnemy(enemy: EnemySprite): boolean {
+  return enemy.active && (enemy.rapidIngressTargetY === undefined || enemy.y + enemy.displayHeight / 2 > 0);
 }
 
 function actorRoleForEnemy(kind: EnemyKind, side?: FragmentSide): ActorRole {
@@ -166,6 +169,7 @@ export class EnemyManager {
     direction: Vector;
     source: DirectHitEvent['source'];
     sourceOrbId: number;
+    preHitSpeed?: number;
   }>();
   private readonly shooterTimer: Phaser.Time.TimerEvent;
   private readonly textureKeys: Record<EnemyKind | 'fragmentLeft' | 'fragmentRight' | 'bullet', string>;
@@ -280,7 +284,6 @@ export class EnemyManager {
     )) ? this.nextIngressBatchId++ : undefined;
     const ingressBatch: RapidIngressBatch = {
       enemyIds: [],
-      top: Number.POSITIVE_INFINITY,
       bottom: Number.NEGATIVE_INFINITY,
     };
     for (const spec of formation) {
@@ -315,7 +318,6 @@ export class EnemyManager {
         enemy.rapidIngressTargetY = spec.rapidIngressTargetY;
         enemy.ingressBatchId = ingressBatchId;
         ingressBatch.enemyIds.push(enemy.enemyId);
-        ingressBatch.top = Math.min(ingressBatch.top, spec.rapidIngressTargetY - pixelHeight / 2);
         ingressBatch.bottom = Math.max(
           ingressBatch.bottom,
           spec.rapidIngressTargetY + pixelHeight / 2,
@@ -535,8 +537,7 @@ export class EnemyManager {
   ): EnemySnapshot[] {
     return [...this.enemies.values()]
       .filter((enemy) => (
-        enemy.active
-        && enemy.rapidIngressTargetY === undefined
+        canDamageEnemy(enemy)
         && enemy.enemyId !== excludedEnemyId
         && Math.hypot(enemy.x - origin.x, enemy.y - origin.y) <= radius
       ))
@@ -567,7 +568,7 @@ export class EnemyManager {
   ): void {
     for (const enemyId of new Set(enemyIds)) {
       const enemy = this.enemies.get(enemyId);
-      if (!enemy?.active || enemy.rapidIngressTargetY !== undefined) continue;
+      if (!enemy || !canDamageEnemy(enemy)) continue;
       this.vulnerabilityStacks.set(
         enemyId,
         Math.min(maximumStacks, (this.vulnerabilityStacks.get(enemyId) ?? 0) + 1),
@@ -658,7 +659,7 @@ export class EnemyManager {
   }
 
   private processOrbHit(orb: OrbSprite, enemy: EnemySprite): boolean {
-    if (!enemy.active || !orb.active || enemy.rapidIngressTargetY !== undefined) return false;
+    if (!canDamageEnemy(enemy) || !orb.active) return false;
     const result = this.options.orbManager.handleEnemyHit(
       orb,
       enemy.enemyId,
@@ -693,7 +694,7 @@ export class EnemyManager {
 
   private processTemporaryOrbHit(orb: TemporaryOrbSprite, enemy: EnemySprite): boolean {
     const manager = this.options.temporaryOrbManager;
-    if (!manager || !enemy.active || !orb.active || enemy.rapidIngressTargetY !== undefined) {
+    if (!manager || !canDamageEnemy(enemy) || !orb.active) {
       return false;
     }
     const result = manager.handleEnemyHit(
@@ -710,6 +711,9 @@ export class EnemyManager {
       direction,
       source: 'temporary',
       sourceOrbId: orb.temporaryOrbId,
+      ...(enemy.rapidIngressTargetY === undefined ? {} : {
+        preHitSpeed: Math.hypot(orb.body!.velocity.x, orb.body!.velocity.y),
+      }),
     });
     return true;
   }
@@ -719,6 +723,14 @@ export class EnemyManager {
     const pending = this.pendingReflections.get(key);
     if (!pending) return;
     this.pendingReflections.delete(key);
+    if (pending.preHitSpeed !== undefined) {
+      const body = orb.body as Phaser.Physics.Arcade.Body;
+      const speed = Math.hypot(body.velocity.x, body.velocity.y);
+      if (speed > 0) body.setVelocity(
+        body.velocity.x * pending.preHitSpeed / speed,
+        body.velocity.y * pending.preHitSpeed / speed,
+      );
+    }
     this.options.temporaryOrbManager?.synchronizeOrb(orb);
     this.applyHit(enemy, pending.result, pending.source, pending.sourceOrbId, pending.direction);
   }
@@ -886,7 +898,8 @@ export class EnemyManager {
 
   private killEnemy(enemy: EnemySprite, event: EnemyKilledEvent): void {
     const descentSpeedMultiplier = this.options.developmentBalance?.descentSpeedMultiplier ?? 1;
-    const currentSpeed = (enemy.body as Phaser.Physics.Arcade.Body).velocity.y;
+    const currentSpeed = enemy.rapidIngressTargetY === undefined
+      ? (enemy.body as Phaser.Physics.Arcade.Body).velocity.y : enemy.normalDescentSpeed;
     const fragments = enemy.kind === 'splitter'
       ? fragmentSpecsFor({
         x: enemy.x,
@@ -895,7 +908,11 @@ export class EnemyManager {
         row: enemy.row,
         speed: descentSpeedMultiplier === 0 ? 0 : currentSpeed / descentSpeedMultiplier,
         formationId: enemy.formationId,
-      })
+      }).map((fragment) => ({
+        ...fragment,
+        ...(enemy.rapidIngressTargetY === undefined || enemy.y >= enemy.rapidIngressTargetY
+          ? {} : { rapidIngressTargetY: enemy.rapidIngressTargetY }),
+      }))
       : [];
     createActorExitVisual(
       this.scene,
@@ -925,7 +942,7 @@ export class EnemyManager {
   }
 
   private damageEnemy(enemy: EnemySprite, damage: number): number {
-    if (enemy.rapidIngressTargetY !== undefined) return 0;
+    if (!canDamageEnemy(enemy)) return 0;
     const vulnerability = GAME_TUNING.orbCores.corrosion.vulnerability;
     const stacks = this.vulnerabilityStacks.get(enemy.enemyId) ?? 0;
     const previousHp = Math.max(0, enemy.hp);
@@ -963,21 +980,21 @@ export class EnemyManager {
         delete enemy.rapidIngressTargetY;
         delete enemy.ingressBatchId;
       }
-      this.ejectOrbsBelow(batch.top, batch.bottom);
+      this.ejectOrbsBelow(enemies, batch.bottom);
       this.rapidIngressBatches.delete(batchId);
     }
   }
 
-  private ejectOrbsBelow(top: number, bottom: number): void {
+  private ejectOrbsBelow(enemies: readonly EnemySprite[], bottom: number): void {
     for (const orb of this.options.orbManager.getSprites()) {
-      this.ejectOrb(orb, top, bottom, this.options.orbManager.orbRadius(), () => {
+      this.ejectOrb(orb, enemies, bottom, this.options.orbManager.orbRadius(), () => {
         this.options.orbManager.synchronizeOrb(orb);
       });
     }
     const temporary = this.options.temporaryOrbManager;
     if (!temporary) return;
     for (const orb of temporary.getGroup().getChildren() as TemporaryOrbSprite[]) {
-      this.ejectOrb(orb, top, bottom, GAME_TUNING.temporaryOrbs.radius, () => {
+      this.ejectOrb(orb, enemies, bottom, GAME_TUNING.temporaryOrbs.radius, () => {
         temporary.synchronizeOrb(orb);
       });
     }
@@ -985,13 +1002,18 @@ export class EnemyManager {
 
   private ejectOrb(
     orb: Phaser.Physics.Arcade.Sprite,
-    top: number,
+    enemies: readonly EnemySprite[],
     bottom: number,
     radius: number,
     synchronize: () => void,
   ): void {
     const body = orb.body as Phaser.Physics.Arcade.Body;
-    if (!orb.active || !body.enable || orb.y < top - radius || orb.y > bottom + radius) return;
+    if (!orb.active || !body.enable || !enemies.some((enemy) => {
+      const target = enemy.body as Phaser.Physics.Arcade.Body;
+      const x = clamp(orb.x, target.left, target.right);
+      const y = clamp(orb.y, target.top, target.bottom);
+      return Math.hypot(orb.x - x, orb.y - y) < radius;
+    })) return;
     const velocity = { x: body.velocity.x, y: Math.abs(body.velocity.y) };
     const y = bottom + radius + 2;
     orb.setPosition(orb.x, y);

@@ -84,6 +84,7 @@ class FakeBody {
   get left(): number { return this.center.x - this.width / 2; }
   get right(): number { return this.center.x + this.width / 2; }
   get top(): number { return this.center.y - this.height / 2; }
+  get bottom(): number { return this.center.y + this.height / 2; }
 
   constructor(readonly gameObject: FakeSprite) {}
 
@@ -206,6 +207,9 @@ class FakeCollider {
     if (!accepted) return false;
     // Model a vertical face: reverse normal x, preserve tangential y.
     first.body.velocity.x *= -1;
+    if (first.texture === 'orb-temporary' && second.body.velocity.y === 260) {
+      first.body.velocity.y = second.body.velocity.y - first.body.velocity.y;
+    }
     this.callback?.(first, second);
     return true;
   }
@@ -429,7 +433,7 @@ describe('EnemyManager', () => {
     expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(4);
   });
 
-  it('ghosts a rapid ingress wave, then ejects orbs and restores normal descent', () => {
+  it('accepts visible rapid ingress hits, then ejects only overlapping orbs', () => {
     const boundary = createBoundary([
       {
         kind: 'basic', hp: 10, x: 160, y: -40, column: 0, speed: 8,
@@ -439,9 +443,7 @@ describe('EnemyManager', () => {
     const enemy = boundary.groups[0]!.children[0]!;
     boundary.orb.setPosition(160, 100);
     boundary.orb.body.enable = true;
-    boundary.handleEnemyHit.mockReturnValue({
-      charged: true, charges: 0, damage: 10, reflect: false,
-    });
+    boundary.handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 2, reflect: true });
 
     expect(boundary.colliders[0]!.trigger(boundary.orb, enemy)).toBe(false);
     expect(boundary.handleEnemyHit).not.toHaveBeenCalled();
@@ -451,11 +453,60 @@ describe('EnemyManager', () => {
       speed: GAME_TUNING.encounter.emergencyIngress.speed,
     });
 
+    enemy.y = 50;
+    expect(boundary.colliders[0]!.trigger(boundary.orb, enemy)).toBe(true);
+    expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(8);
+
     enemy.y = 130;
     boundary.manager.update();
 
-    expect(boundary.manager.getSnapshot().enemies[0]).toMatchObject({ hp: 10, speed: 8 });
+    expect(boundary.manager.getSnapshot().enemies[0]).toMatchObject({ hp: 8, speed: 8 });
     expect(boundary.orb.y).toBeGreaterThan(160);
+  });
+
+  it('does not move an orb in an empty column when ingress ends', () => {
+    const boundary = createBoundary([{ kind: 'basic', hp: 10, x: 160, y: -40, column: 0,
+      speed: 8, rapidIngressTargetY: 130 }]);
+    boundary.orb.setPosition(350, 130);
+    boundary.groups[0]!.children[0]!.y = 130;
+    boundary.manager.update();
+    expect(boundary.orb.y).toBe(130);
+  });
+
+  it('accepts temporary orb hits and secondary damage once an ingress enemy is visible', () => {
+    const boundary = createBoundary([{ kind: 'basic', hp: 10, x: 160, y: -40, column: 0,
+      speed: 8, rapidIngressTargetY: 130 }], true);
+    const enemy = boundary.groups[0]!.children[0]!;
+    const temporary = boundary.colliders[1]!;
+    boundary.temporaryOrb.setVelocity(0, -440);
+    boundary.handleTemporaryEnemyHit.mockReturnValue({ charged: false, charges: 0, damage: 1 });
+    expect(temporary.trigger(boundary.temporaryOrb, enemy)).toBe(false);
+    enemy.y = 20;
+    expect(temporary.trigger(boundary.temporaryOrb, enemy)).toBe(true);
+    expect(boundary.temporaryOrb.body.velocity.y).toBe(440);
+    boundary.manager.applyAreaDamage({ x: 160, y: 20 }, 10, 2, -1);
+    expect(boundary.manager.getSnapshot().enemies[0]!.hp).toBe(7);
+  });
+
+  it('keeps split fragments in rapid ingress and restores their normal speed on arrival', () => {
+    const boundary = createBoundary([{ kind: 'splitter', hp: 3, x: 225, y: 50, column: 2,
+      width: 2, speed: 8, rapidIngressTargetY: 130 }]);
+    boundary.handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+    boundary.colliders[0]!.trigger(boundary.orb, boundary.groups[0]!.children[0]!);
+    expect(boundary.manager.getSnapshot().enemies.map(({ speed }) => speed)).toEqual([260, 260]);
+    for (const child of boundary.groups[0]!.children.filter(({ active }) => active)) child.y = 130;
+    boundary.manager.update();
+    expect(boundary.manager.getSnapshot().enemies.map(({ speed }) => speed)).toEqual([8, 8]);
+  });
+
+  it('does not snap split fragments upward after passing their ingress target', () => {
+    const boundary = createBoundary([{ kind: 'splitter', hp: 3, x: 225, y: 132, column: 2,
+      width: 2, speed: 8, rapidIngressTargetY: 130 }]);
+    boundary.handleEnemyHit.mockReturnValue({ charged: true, charges: 0, damage: 3, reflect: false });
+    boundary.colliders[0]!.trigger(boundary.orb, boundary.groups[0]!.children[0]!);
+    boundary.manager.update();
+    expect(boundary.manager.getSnapshot().enemies.map(({ position, speed }) => [position.y, speed]))
+      .toEqual([[132, 8], [132, 8]]);
   });
 
   it('clears all live enemies without destroying the manager', () => {
