@@ -109,3 +109,6 @@ Hive/Siege PC 아트: `rtk pnpm exec playwright test e2e/combat.spec.ts --projec
 Hive5개 파츠의 표시/판정 치수와 광폭화 맥동, Siege 본체/약점과 장갑 파괴 후 활성 코어의56×56 판정을 검사한다.
 보스 실루엣·기존 반사/주기/광폭화 공격도 확인한다. 장갑 피해에는0.45 배율이 적용되므로 코어 노출 검사는 방어부와 양쪽 약점을 모두 파괴한다.
 기존4173 서버가 사용 중이면 임시 설정의 포트만4183으로 바꾸고 검사 후 제거한다. 동작 캡처는 `output/playwright/pc-bosses-verified/`, 최종 크롭 후 캡처는 `output/playwright/pc-bosses-final/`.
+
+직격·적 파괴·폭발 PC 효과: `rtk pnpm exec playwright test e2e/combat.spec.ts --project desktop-chromium --workers 1 --grep 'connects explosion art to real orb hits|renders player feedback and break VFX|renders the second authored VFX batch|animates combat art without changing collision bodies'`.
+실제 폭발 구슬 타격과 효과 재생·프레임·충돌 크기 유지를 확인한다. 파괴와 직격의 별도 효과 화면은 직접 효과를 재생한 캡처이며 실제 처치 장면을 대신하지 않는다.

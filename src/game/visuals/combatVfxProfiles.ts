@@ -29,6 +29,10 @@ const LARGE = new Set<CombatVfxId>([
   'resonant-final', 'mass-collapse', 'reactor-blast', 'meltdown-eruption',
 ]);
 
+const PC_VFX = new Set<CombatVfxId>([
+  'corrosion-cloud', 'orb-direct-hit', 'enemy-break', 'explosion-burst',
+]);
+
 const AUTHORED_MOTION = {
   'player-launch': { durationMs: 240, scale: 0.8, alpha: 0.45, maximumConcurrent: 2 },
   'player-recover': { durationMs: 280, scale: 1, alpha: 0.48, maximumConcurrent: 2 },
@@ -63,7 +67,7 @@ export const COMBAT_VFX_PROFILES = Object.fromEntries(
     return [id, {
       id,
       textureKey: `vfx-${id}`,
-      url: id === 'corrosion-cloud' ? '/assets/combat/pc/vfx/corrosion-cloud.png' : `/assets/combat/vfx/${id}.png`,
+      url: PC_VFX.has(id) ? `/assets/combat/pc/vfx/${id}.png` : `/assets/combat/vfx/${id}.png`,
       frameWidth: 256,
       frameHeight: 256,
       frameCount,
@@ -72,7 +76,7 @@ export const COMBAT_VFX_PROFILES = Object.fromEntries(
       scale: authored?.scale ?? (LARGE.has(id) ? 1.5 : 1),
       alpha: authored?.alpha ?? (LONG_LIVED.has(id) ? 0.38 : 0.68),
       depth: 6,
-      blendMode: 'ADD',
+      blendMode: id === 'enemy-break' ? 'NORMAL' : 'ADD',
       maximumConcurrent: authored?.maximumConcurrent ?? (LONG_LIVED.has(id) ? 4 : 8),
     }];
   }),

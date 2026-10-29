@@ -84,4 +84,11 @@ describe('combat VFX profiles', () => {
       frameCount: 8, durationMs: 560, scale: 1.5,
     });
   });
+
+  it('uses PC impact sheets and keeps opaque fragments visible', () => {
+    for (const id of ['orb-direct-hit', 'enemy-break', 'explosion-burst'] as const) {
+      expect(COMBAT_VFX_PROFILES[id].url).toBe(`/assets/combat/pc/vfx/${id}.png`);
+    }
+    expect(COMBAT_VFX_PROFILES['enemy-break'].blendMode).toBe('NORMAL');
+  });
 });

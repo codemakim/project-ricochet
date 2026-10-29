@@ -18,11 +18,13 @@ No pixel constraint, tiny ornament, alien/Protoss motifs, ancient statues or run
 - Corrosion: mint nanofluid core and orbiting droplets; a planar radial nanite field.
 - All nine fusion bodies and energy layers now use the same compact PC pipeline.
 - Existing logical display sizes, collision shapes, damage and combat rules retained.
-- Other proc VFX and UI still use earlier art.
+- Direct-hit, enemy-break and explosion VFX use planar PC artwork; other proc VFX
+  and UI still use earlier art.
 
 `masters/` contains the original outputs of the built-in `image_gen` tool. The exact
 generation prompts are in `prompts.md`, `expansion-prompts.md`, `base-orb-prompts.md`
-and `fusion-orb-prompts.md`, `splitter-prompts.md`, `boss-expansion-prompts.md`.
+and `fusion-orb-prompts.md`, `splitter-prompts.md`, `boss-expansion-prompts.md`,
+`impact-vfx-prompts.md`.
 Right pods, Hive shooter and reflector masters are mirrored derivatives of their
 original left parts. The source PNG alpha is preserved; no color
 key, palette quantization or nearest-neighbor enlargement is used.
@@ -56,6 +58,9 @@ Their compact center and outer energy rim together describe the
 existing 32px hit diameter inside the 42px presentation envelope. No extra layers
 extend beyond that envelope. Corrosion has eight 256px frames, transparent centers,
 and padded outer edges; its 1.1 presentation scale replaces the previous 1.6 scale.
+The three impact effects use eight256×256 frames, padded to avoid seams, with the
+last frame at20% alpha. Direct hit and explosion use additive blending; enemy break
+uses normal blending so its dark metal fragments remain visible.
 
 Verification: `e2e/pc-art.spec.ts` checks the actual normal trial with all three
 starting cores, asset loading, background visibility, and unchanged world hitboxes.

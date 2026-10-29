@@ -136,4 +136,21 @@ done
 magick "${frames[@]}" +append -depth 8 -strip "$SOURCE/vfx/corrosion-cloud.png"
 check_image "$SOURCE/vfx/corrosion-cloud.png" 2048x256
 cp "$SOURCE/vfx/corrosion-cloud.png" "$PUBLIC/pc/vfx/corrosion-cloud.png"
+
+for effect in orb-direct-hit enemy-break explosion-burst; do
+  magick "$SOURCE/masters/$effect-grid.png" -filter Lanczos -resize 2048x1024! "$TMP/$effect-grid.png"
+  frames=()
+  for frame in {0..7}; do
+    x=$((frame % 4 * 512)); y=$((frame / 4 * 512))
+    opacity=1; ((frame != 7)) || opacity=0.2
+    magick "$TMP/$effect-grid.png" -crop "512x512+$x+$y" +repage \
+      -filter Lanczos -resize 230x230 -background none -gravity center -extent 256x256 \
+      -channel A -evaluate multiply "$opacity" +channel \
+      -depth 8 -strip "$TMP/$effect-$frame.png"
+    frames+=("$TMP/$effect-$frame.png")
+  done
+  magick "${frames[@]}" +append -depth 8 -strip "$SOURCE/vfx/$effect.png"
+  check_image "$SOURCE/vfx/$effect.png" 2048x256
+  cp "$SOURCE/vfx/$effect.png" "$PUBLIC/pc/vfx/$effect.png"
+done
 echo 'PC combat art exported and dimensions/alpha checked'
